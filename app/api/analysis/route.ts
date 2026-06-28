@@ -17,6 +17,7 @@ import {
 import { enrichWallets } from "@/lib/onchain/enrich-wallet"
 import { mergeEnrichment } from "@/lib/onchain/merge"
 import type { AnalysisMode, EnrichmentMeta } from "@/types"
+import type { Prisma } from "@prisma/client"
 
 export const runtime = "nodejs"
 
@@ -130,7 +131,7 @@ export async function POST(request: Request) {
   let analysis: { id: string }
 
   try {
-    analysis = await db.$transaction(async (tx) => {
+    analysis = await db.$transaction(async (tx: Prisma.TransactionClient) => {
       const project = await tx.project.create({
         data: {
           userId: user.id,
