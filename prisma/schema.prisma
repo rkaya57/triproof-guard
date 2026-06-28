@@ -1,0 +1,204 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AnalysisStatus {
+  pending
+  processing
+  enriching
+  analyzing
+  completed
+  failed
+}
+
+enum AnalysisMode {
+  csv_only
+  onchain
+  hybrid
+}
+
+enum EnrichmentStatus {
+  pending
+  processing
+  completed
+  failed
+  skipped
+}
+
+enum RiskLevel {
+  low
+  medium
+  high
+  critical
+}
+
+enum WalletStatus {
+  approved
+  manual_review
+  rejected
+}
+
+enum SuggestedAction {
+  approve
+  manual_review
+  reject
+}
+
+enum EntityType {
+  exchange
+  service
+  bridge
+  contract
+  protocol
+  unknown
+  user
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  projects     Project[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Project {
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  campaignType String
+  chain        String
+  notes        String?
+  analyses     Analysis[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([userId])
+}
+
+model Analysis {
+  id                      String           @id @default(cuid())
+  projectId               String
+  project                 Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status                  AnalysisStatus   @default(pending)
+  totalWallets            Int              @default(0)
+  approvedCount           Int              @default(0)
+  manualReviewCount       Int              @default(0)
+  rejectedCount           Int              @default(0)
+  averageRiskScore        Float            @default(0)
+  suspiciousClustersCount Int              @default(0)
+  csvFileName             String?
+  analysisMode            AnalysisMode     @default(csv_only)
+  enrichmentStatus        EnrichmentStatus?
+  enrichmentProvider      String?
+  enrichedWalletCount     Int              @default(0)
+  failedEnrichmentCount   Int              @default(0)
+  cacheHitCount           Int              @default(0)
+  usedMockFallback        Boolean          @default(false)
+  enrichmentWarnings      Json?
+  enrichedAt              DateTime?
+  wallets                 WalletAnalysis[]
+  clusters                Cluster[]
+  enrichments             WalletEnrichment[]
+  createdAt               DateTime         @default(now())
+  completedAt             DateTime?
+
+  @@index([projectId])
+  @@index([createdAt])
+}
+
+model WalletAnalysis {
+  id                   String       @id @default(cuid())
+  analysisId           String
+  analysis             Analysis     @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  walletAddress        String
+  chain                String
+  entityLabel          String?
+  entityType           EntityType    @default(user)
+  entityRiskReason     String?
+  riskScore            Int
+  riskLevel            RiskLevel
+  status               WalletStatus
+  recommendedAction    SuggestedAction @default(approve)
+  statusExplanation    String?
+  fundingSource        String?
+  txCount              Int?
+  walletAgeDays        Int?
+  totalVolume          Float?
+  contractsCount       Int?
+  campaignActionsCount Int?
+  clusterId            String?
+  reasons              Json
+  firstSeen            DateTime?
+  lastSeen             DateTime?
+  nativeBalance        Float?
+  tokenCount           Int?
+  uniqueCounterparties Int?
+  lastActiveDaysAgo    Int?
+  isContract           Boolean?
+  enrichmentProvider   String?
+  enrichmentStatus     EnrichmentStatus?
+  createdAt            DateTime     @default(now())
+
+  @@index([analysisId])
+  @@index([walletAddress])
+  @@index([clusterId])
+  @@unique([analysisId, walletAddress])
+}
+
+model WalletEnrichment {
+  id                   String           @id @default(cuid())
+  walletAnalysisId     String?
+  analysisId           String
+  analysis             Analysis         @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  walletAddress        String
+  chain                String
+  provider             String
+  txCount              Int?
+  walletAgeDays        Int?
+  firstSeen            DateTime?
+  lastSeen             DateTime?
+  totalVolume          Float?
+  nativeBalance        Float?
+  tokenCount           Int?
+  contractsCount       Int?
+  campaignActionsCount Int?
+  uniqueCounterparties Int?
+  fundingSource        String?
+  isContract           Boolean?
+  knownEntityLabel     String?
+  knownEntityType      String?
+  enrichmentStatus     EnrichmentStatus @default(pending)
+  errorMessage         String?
+  rawData              Json?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@index([analysisId])
+  @@index([walletAddress])
+  @@index([chain, walletAddress])
+}
+
+model Cluster {
+  id                      String          @id @default(cuid())
+  analysisId              String
+  analysis                Analysis        @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  clusterLabel            String
+  walletCount             Int
+  averageRiskScore        Float
+  sharedFundingSource     String?
+  behaviorSimilarityScore Int
+  suggestedAction         SuggestedAction
+  reasons                 Json
+  createdAt               DateTime        @default(now())
+
+  @@index([analysisId])
+  @@unique([analysisId, clusterLabel])
+}

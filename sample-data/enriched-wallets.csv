@@ -1,0 +1,6 @@
+wallet_address,chain,tx_count,wallet_age_days,funding_source,total_volume,contracts_count,campaign_actions_count
+0x1111111111111111111111111111111111111111,Base,4,6,0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,3.2,1,5
+0x2222222222222222222222222222222222222222,Base,5,7,0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,2.8,1,5
+0x3333333333333333333333333333333333333333,Base,42,380,0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,920.5,18,3
+0x4444444444444444444444444444444444444444,Base,18,96,0xcccccccccccccccccccccccccccccccccccccccc,85.1,7,4
+0x5555555555555555555555555555555555555555,Base,2,4,0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,1.4,0,6

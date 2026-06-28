@@ -1,26 +1,423 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-geist-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  --background: #050816;
+  --foreground: #f8fafc;
+  --card: #0b1220;
+  --card-foreground: #f8fafc;
+  --popover: #0b1220;
+  --popover-foreground: #f8fafc;
+  --primary: #38bdf8;
+  --primary-foreground: #03111f;
+  --secondary: #111827;
+  --secondary-foreground: #f8fafc;
+  --muted: #111827;
+  --muted-foreground: #94a3b8;
+  --accent: #1e293b;
+  --accent-foreground: #f8fafc;
+  --destructive: #ef4444;
+  --border: #1e3a5f;
+  --input: #1e3a5f;
+  --ring: #38bdf8;
+  --chart-1: #22c55e;
+  --chart-2: #facc15;
+  --chart-3: #fb923c;
+  --chart-4: #ef4444;
+  --chart-5: #8b5cf6;
+  --radius: 0.5rem;
+  --sidebar: #07111f;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-primary: #38bdf8;
+  --sidebar-primary-foreground: #03111f;
+  --sidebar-accent: #0b1220;
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: #1e3a5f;
+  --sidebar-ring: #38bdf8;
+  --guard-cyan: #38bdf8;
+  --guard-purple: #8b5cf6;
+  --guard-green: #22c55e;
+  --guard-yellow: #facc15;
+  --guard-orange: #fb923c;
+  --guard-red: #ef4444;
+}
+
+.dark {
+  --background: #050816;
+  --foreground: #f8fafc;
+  --card: #0b1220;
+  --card-foreground: #f8fafc;
+  --popover: #0b1220;
+  --popover-foreground: #f8fafc;
+  --primary: #38bdf8;
+  --primary-foreground: #03111f;
+  --secondary: #111827;
+  --secondary-foreground: #f8fafc;
+  --muted: #111827;
+  --muted-foreground: #94a3b8;
+  --accent: #1e293b;
+  --accent-foreground: #f8fafc;
+  --destructive: #ef4444;
+  --border: #1e3a5f;
+  --input: #1e3a5f;
+  --ring: #38bdf8;
+  --chart-1: #22c55e;
+  --chart-2: #facc15;
+  --chart-3: #fb923c;
+  --chart-4: #ef4444;
+  --chart-5: #8b5cf6;
+  --sidebar: #07111f;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-primary: #38bdf8;
+  --sidebar-primary-foreground: #03111f;
+  --sidebar-accent: #0b1220;
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: #1e3a5f;
+  --sidebar-ring: #38bdf8;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    background-image:
+      radial-gradient(
+        58% 48% at 12% -4%,
+        color-mix(in oklab, var(--guard-cyan), transparent 86%),
+        transparent 60%
+      ),
+      radial-gradient(
+        48% 46% at 102% 6%,
+        color-mix(in oklab, var(--guard-purple), transparent 88%),
+        transparent 55%
+      ),
+      radial-gradient(
+        60% 55% at 50% 108%,
+        color-mix(in oklab, var(--guard-cyan), transparent 92%),
+        transparent 62%
+      );
+    background-attachment: fixed;
+  }
+
+  html {
+    @apply font-sans;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--guard-cyan), transparent 72%);
+  }
+
+  /* Modern, technological scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--guard-cyan), transparent 55%) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--guard-cyan), transparent 62%);
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--guard-cyan), transparent 40%);
+    background-clip: padding-box;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes grid-drift {
+  from {
+    background-position: 0 0, 0 0;
+  }
+  to {
+    background-position: 44px 44px, 44px 44px;
+  }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes sheen {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(220%);
+  }
+}
+
+.security-grid {
+  position: relative;
+  background-image:
+    linear-gradient(color-mix(in oklab, var(--guard-cyan), transparent 90%) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--guard-cyan), transparent 90%) 1px, transparent 1px);
+  background-size: 44px 44px;
+  -webkit-mask-image: radial-gradient(120% 90% at 50% 0%, #000 35%, transparent 92%);
+  mask-image: radial-gradient(120% 90% at 50% 0%, #000 35%, transparent 92%);
+  animation: grid-drift 14s linear infinite;
+}
+
+.security-grid::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    70% 60% at 50% -10%,
+    color-mix(in oklab, var(--guard-cyan), transparent 84%),
+    transparent 60%
+  );
+}
+
+.glass-panel {
+  position: relative;
+  background:
+    linear-gradient(135deg, color-mix(in oklab, var(--card), var(--guard-cyan) 7%), var(--card)),
+    var(--card);
+  border: 1px solid color-mix(in oklab, var(--border), var(--guard-cyan) 20%);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 18px 64px color-mix(in oklab, #000, transparent 42%),
+    inset 0 1px 0 color-mix(in oklab, #fff, transparent 92%),
+    inset 0 0 0 1px color-mix(in oklab, var(--guard-cyan), transparent 94%);
+  backdrop-filter: blur(10px) saturate(135%);
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.glass-panel:hover {
+  border-color: color-mix(in oklab, var(--guard-cyan), transparent 55%);
+  box-shadow:
+    0 24px 80px color-mix(in oklab, #000, transparent 35%),
+    0 0 0 1px color-mix(in oklab, var(--guard-cyan), transparent 70%),
+    0 0 36px color-mix(in oklab, var(--guard-cyan), transparent 80%);
+}
+
+/* Gradient cyber heading text */
+.text-gradient {
+  background: linear-gradient(
+    100deg,
+    var(--foreground) 0%,
+    color-mix(in oklab, var(--guard-cyan), #fff 10%) 45%,
+    var(--guard-purple) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Neon glow for primary CTAs / accents */
+.glow-primary {
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--guard-cyan), transparent 60%),
+    0 8px 30px color-mix(in oklab, var(--guard-cyan), transparent 68%);
+}
+
+.glow-primary:hover {
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--guard-cyan), transparent 35%),
+    0 10px 40px color-mix(in oklab, var(--guard-cyan), transparent 52%);
+}
+
+/* HUD-style status pill */
+.cyber-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid color-mix(in oklab, var(--guard-cyan), transparent 60%);
+  background: color-mix(in oklab, var(--guard-cyan), transparent 90%);
+  color: color-mix(in oklab, var(--guard-cyan), #fff 22%);
+  border-radius: 999px;
+  padding: 0.3rem 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cyber-chip::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--guard-cyan);
+  box-shadow: 0 0 10px var(--guard-cyan);
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+/* Animated top accent line for hero/section surfaces */
+.scan-accent {
+  position: relative;
+  overflow: hidden;
+}
+
+.scan-accent::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 1px;
+  width: 40%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--guard-cyan), #fff 10%),
+    transparent
+  );
+  animation: sheen 4.5s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes bar-pulse {
+  0%,
+  100% {
+    transform: scaleY(0.82);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes gradient-pan {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+@keyframes orb-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(20px, -24px, 0) scale(1.08);
+  }
+}
+
+.float {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* Soft blurred background light source */
+.glow-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(100px);
+  opacity: 0.22;
+  pointer-events: none;
+  animation: orb-drift 16s ease-in-out infinite;
+}
+
+/* Animated gradient sweep — pair with .text-gradient */
+.animate-gradient-text {
+  background-size: 220% auto;
+  animation: gradient-pan 6s linear infinite;
+}
+
+.bar-pulse {
+  transform-origin: bottom;
+  animation: bar-pulse 2.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .security-grid,
+  .cyber-chip::before,
+  .scan-accent::before,
+  .float,
+  .glow-orb,
+  .animate-gradient-text,
+  .bar-pulse {
+    animation: none;
+  }
+}
+
+.risk-low {
+  color: var(--guard-green);
+}
+
+.risk-medium {
+  color: var(--guard-yellow);
+}
+
+.risk-high {
+  color: var(--guard-orange);
+}
+
+.risk-critical {
+  color: var(--guard-red);
 }

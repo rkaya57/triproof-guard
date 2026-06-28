@@ -1,0 +1,27 @@
+<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Tri-Proof Guard">
+  <defs>
+    <linearGradient id="tpg-cyan" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38bdf8" />
+      <stop offset="1" stop-color="#22d3ee" />
+    </linearGradient>
+    <linearGradient id="tpg-purple" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8b5cf6" />
+      <stop offset="1" stop-color="#a855f7" />
+    </linearGradient>
+    <linearGradient id="tpg-blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3b82f6" />
+      <stop offset="1" stop-color="#6366f1" />
+    </linearGradient>
+  </defs>
+  <!-- left shield (network) -->
+  <path d="M16 16 L28 21 V33 C28 41 22 46 16 49 C10 46 4 41 4 33 V21 Z"
+    fill="url(#tpg-purple)" fill-opacity="0.16" stroke="url(#tpg-purple)" stroke-width="2.5" stroke-linejoin="round" />
+  <!-- right shield (verify) -->
+  <path d="M48 16 L60 21 V33 C60 41 54 46 48 49 C42 46 36 41 36 33 V21 Z"
+    fill="url(#tpg-cyan)" fill-opacity="0.16" stroke="url(#tpg-cyan)" stroke-width="2.5" stroke-linejoin="round" />
+  <!-- center shield (front) -->
+  <path d="M32 5 L47 11 V28 C47 38.5 40.5 45.5 32 50 C23.5 45.5 17 38.5 17 28 V11 Z"
+    fill="#0b1220" stroke="url(#tpg-blue)" stroke-width="3" stroke-linejoin="round" />
+  <!-- check mark -->
+  <path d="M25 27.5 l5 5 l9 -11" fill="none" stroke="#38bdf8" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

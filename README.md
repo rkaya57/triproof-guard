@@ -1,36 +1,181 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Tri-Proof Guard
 
-## Getting Started
+Tri-Proof Guard is a Web3 campaign wallet risk analysis and Sybil detection dashboard. It lets projects upload wallet CSVs, run heuristic risk scoring, review suspicious clusters, and export clean reward lists before airdrops, testnets, whitelists, quests, or reward campaigns.
 
-First, run the development server:
+## Tech Stack
+
+- Next.js App Router, TypeScript, Tailwind CSS
+- shadcn/ui with Lucide React icons
+- PostgreSQL with Prisma ORM
+- Simple email/password auth with bcrypt and signed HTTP-only JWT cookies
+- PapaParse CSV parsing, Recharts charts, Zod validation
+- CSV exports and PDF reports with pdf-lib
+
+## Setup
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Copy environment variables:
+
+```bash
+copy .env.example .env
+```
+
+3. Set `DATABASE_URL` to a PostgreSQL database and set `NEXTAUTH_SECRET`.
+
+4. Generate Prisma Client and migrate:
+
+```bash
+npm run db:generate
+npm run db:migrate
+```
+
+5. Run locally:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## CSV Formats
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Basic:
 
-## Learn More
+```csv
+wallet_address
+0x123...
+0x456...
+```
 
-To learn more about Next.js, take a look at the following resources:
+Enriched:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```csv
+wallet_address,chain,tx_count,wallet_age_days,funding_source,first_seen,last_seen,total_volume,contracts_count,campaign_actions_count
+0x123...,Base,12,45,0xabc...,2026-01-10,2026-02-12,102.5,5,8
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Basic CSVs are supported with deterministic demo heuristics and show a limited analysis mode note.
 
-## Deploy on Vercel
+## On-Chain Enrichment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The **On-Chain Enrichment Engine** lets you upload a CSV containing only
+`wallet_address` and have Tri-Proof Guard fetch real on-chain data
+(transaction count, wallet age, funding source, balances, contract interactions
+and more) from blockchain APIs before running the risk engine.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Analysis modes
+
+Pick a mode on the **New Analysis** page:
+
+- **CSV Only** — use only the fields provided in the uploaded CSV (default; the
+  original behaviour, no API calls).
+- **On-Chain Enrichment** — fetch wallet activity, age, funding source and
+  interaction data from blockchain APIs. API data is authoritative; CSV values
+  only fill gaps the API could not resolve.
+- **Hybrid** — use uploaded CSV fields first and enrich only the missing data
+  from blockchain APIs.
+
+### How it works
+
+1. The CSV is parsed and validated as usual.
+2. For On-Chain / Hybrid modes, wallets are enriched in batches
+   (`ONCHAIN_BATCH_SIZE`, default 25) with a delay between batches
+   (`ONCHAIN_REQUEST_DELAY_MS`, default 250ms) to stay within API rate limits.
+3. Transient failures retry with exponential backoff (up to 3 times). A wallet
+   that still fails falls back to mock data or is marked `failed` — **a single
+   failed wallet never fails the whole analysis**.
+4. Results are merged into the wallet records and fed to the existing risk
+   engine, cluster detection and known-entity detection.
+5. The funding source for each wallet is derived from its **first incoming
+   native transfer**, which powers shared-funding cluster detection.
+
+### Supported chains
+
+EVM chains share a single adapter: **Ethereum, Base, Arbitrum, Optimism,
+Polygon, BNB Chain**. Solana is shown in the UI but on-chain enrichment is
+*coming soon* (Solana still works in CSV Only mode).
+
+### Providers
+
+Providers are selected per chain following `ONCHAIN_PROVIDER_PRIORITY`
+(default `alchemy,etherscan,blockscout,mock`):
+
+1. **Alchemy** — JSON-RPC + `alchemy_getAssetTransfers` (needs `ALCHEMY_API_KEY`).
+2. **Etherscan-compatible** — Etherscan, Basescan, Arbiscan, Optimism Etherscan,
+   Polygonscan, BscScan (needs the matching `*_API_KEY`).
+3. **Blockscout-compatible** — any Blockscout instance via `BLOCKSCOUT_API_URL`.
+4. **Mock provider** — deterministic, realistic fallback used when no key is
+   configured, in local/demo runs and in tests. It can generate shared funding
+   groups, known entities, contract wallets, brand-new wallets and dormant
+   high-activity wallets, so the full pipeline works **without any API key**.
+
+If no provider is configured for a chain the engine automatically falls back to
+the mock provider and surfaces the warning *“API key not configured. Mock
+enrichment data was used for this analysis.”*
+
+### Environment variables
+
+```env
+ALCHEMY_API_KEY=""
+ETHERSCAN_API_KEY=""
+BASESCAN_API_KEY=""
+ARBISCAN_API_KEY=""
+OPTIMISTIC_ETHERSCAN_API_KEY=""
+POLYGONSCAN_API_KEY=""
+BSCSCAN_API_KEY=""
+BLOCKSCOUT_API_URL=""
+
+ONCHAIN_ENRICHMENT_ENABLED="true"
+ONCHAIN_PROVIDER_PRIORITY="alchemy,etherscan,blockscout,mock"
+ONCHAIN_MAX_WALLETS_PER_ANALYSIS="1000"
+ONCHAIN_BATCH_SIZE="25"
+ONCHAIN_REQUEST_DELAY_MS="250"
+ONCHAIN_CACHE_TTL_HOURS="24"
+```
+
+### Caching, limits and security
+
+- Enriched wallets are cached for `ONCHAIN_CACHE_TTL_HOURS` (default 24h) per
+  chain+address to avoid repeat API calls.
+- On-chain enrichment is capped at `ONCHAIN_MAX_WALLETS_PER_ANALYSIS`
+  (default 1000) per analysis. Larger files should use CSV Only mode.
+- All provider calls run **server-side only**. API keys never reach the browser,
+  raw API responses are never shown in the UI (only processed data), and keys
+  are never written to logs.
+
+### Campaign actions
+
+Campaign action counts require the campaign's contract addresses. On the New
+Analysis page (On-Chain / Hybrid modes) you can paste campaign contract
+addresses (one per line); wallet interactions with those contracts are counted
+as `campaign_actions_count`. Without them, campaign-only behaviour signals are
+only applied when the value is present in the CSV.
+
+## Demo Mode
+
+Use `/dashboard/demo` or the landing page “View Demo Report” button. Demo mode includes 500 wallets, 320 approved, 110 manual review, 70 rejected, 8 suspicious clusters, and exportable CSV/PDF reports.
+
+## Sample Data
+
+See `sample-data/`:
+
+- `basic-wallets.csv`
+- `enriched-wallets.csv`
+- `suspicious-cluster-demo.csv`
+
+## Roadmap
+
+- USDC payment integration for pricing plans
+- API beta access for Pro accounts
+- Background queue + live progress polling for very large on-chain enrichment jobs
+- Solana on-chain enrichment support
+- Tri-Proof Human: adaptive human challenge and wallet-bound human signal, after Guard MVP
+
+## Disclaimer
+
+Tri-Proof Guard provides risk analysis and decision support. It does not guarantee that a wallet is definitively a bot or a human. Final reward decisions should be made by the project team.
