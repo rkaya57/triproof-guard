@@ -23,7 +23,7 @@ export const supportedChains: Chain[] = [
   "Other",
 ]
 
-export const analysisModes = ["csv_only", "onchain", "hybrid"] as const
+export const analysisModes = ["onchain", "hybrid"] as const
 
 export const newAnalysisSchema = z.object({
   projectName: z.preprocess(
@@ -41,7 +41,7 @@ export const newAnalysisSchema = z.object({
   chain: z.enum(supportedChains as [Chain, ...Chain[]]),
   notes: z.string().trim().max(2000).optional().or(z.literal("")),
   analysisMode: z.preprocess(
-    (value) => (value == null || value === "" ? "csv_only" : value),
+    (value) => (value == null || value === "" || value === "csv_only" ? "onchain" : value),
     z.enum(analysisModes)
   ),
   campaignContracts: z.string().trim().max(5000).optional().or(z.literal("")),
