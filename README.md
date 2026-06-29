@@ -96,20 +96,26 @@ Pick a mode on the **New Analysis** page:
 
 ### Supported chains
 
-EVM chains share a single adapter: **Ethereum, Base, Arbitrum, Optimism,
+EVM chains share provider adapters: **Ethereum, Base, Arbitrum, Optimism,
 Polygon, BNB Chain**. Solana is shown in the UI but on-chain enrichment is
 *coming soon* (Solana still works in CSV Only mode).
 
 ### Providers
 
-Providers are selected per chain following `ONCHAIN_PROVIDER_PRIORITY`
-(default `alchemy,etherscan,blockscout,mock`):
+Providers are selected per chain following `ONCHAIN_PROVIDER_PRIORITY`.
+Recommended MVP order:
 
-1. **Alchemy** — JSON-RPC + `alchemy_getAssetTransfers` (needs `ALCHEMY_API_KEY`).
-2. **Etherscan-compatible** — Etherscan, Basescan, Arbiscan, Optimism Etherscan,
-   Polygonscan, BscScan (needs the matching `*_API_KEY`).
-3. **Blockscout-compatible** — any Blockscout instance via `BLOCKSCOUT_API_URL`.
-4. **Mock provider** — deterministic, realistic fallback used when no key is
+```env
+ONCHAIN_PROVIDER_PRIORITY="etherscan,alchemy,blockscout,mock"
+```
+
+1. **Etherscan V2** — recommended primary provider. One `ETHERSCAN_API_KEY`
+   works across supported EVM chains through `chainid` routing.
+2. **Alchemy** — JSON-RPC + `alchemy_getAssetTransfers`. Add
+   `ALCHEMY_API_KEY` as an optional second provider/fallback.
+3. **Blockscout-compatible** — optional fallback for a specific public/self-hosted
+   explorer through `BLOCKSCOUT_API_URL`.
+4. **Mock provider** — deterministic, realistic fallback used when no real key is
    configured, in local/demo runs and in tests. It can generate shared funding
    groups, known entities, contract wallets, brand-new wallets and dormant
    high-activity wallets, so the full pipeline works **without any API key**.
@@ -121,22 +127,28 @@ enrichment data was used for this analysis.”*
 ### Environment variables
 
 ```env
-ALCHEMY_API_KEY=""
 ETHERSCAN_API_KEY=""
+ALCHEMY_API_KEY=""
+BLOCKSCOUT_API_URL=""
+
+# Backward-compatible per-chain explorer keys. Usually not needed if ETHERSCAN_API_KEY is set.
 BASESCAN_API_KEY=""
 ARBISCAN_API_KEY=""
 OPTIMISTIC_ETHERSCAN_API_KEY=""
 POLYGONSCAN_API_KEY=""
 BSCSCAN_API_KEY=""
-BLOCKSCOUT_API_URL=""
 
 ONCHAIN_ENRICHMENT_ENABLED="true"
-ONCHAIN_PROVIDER_PRIORITY="alchemy,etherscan,blockscout,mock"
-ONCHAIN_MAX_WALLETS_PER_ANALYSIS="1000"
-ONCHAIN_BATCH_SIZE="25"
-ONCHAIN_REQUEST_DELAY_MS="250"
+ONCHAIN_PROVIDER_PRIORITY="etherscan,alchemy,blockscout,mock"
+ONCHAIN_MAX_WALLETS_PER_ANALYSIS="100"
+ONCHAIN_BATCH_SIZE="10"
+ONCHAIN_REQUEST_DELAY_MS="500"
 ONCHAIN_CACHE_TTL_HOURS="24"
 ```
+
+For the first production tests, keep `ONCHAIN_MAX_WALLETS_PER_ANALYSIS` around
+`100`, `ONCHAIN_BATCH_SIZE` around `10`, and `ONCHAIN_REQUEST_DELAY_MS` around
+`500` to reduce rate-limit risk.
 
 ### Caching, limits and security
 
