@@ -1,4 +1,5 @@
 import { AnalysisDetail } from "@/components/analysis/analysis-detail"
+import { AnalysisProcessing } from "@/components/analysis/analysis-processing"
 import { getCurrentUser } from "@/lib/auth/session"
 import { serializeAnalysis } from "@/lib/analysis/serializers"
 import { getDevAnalysisForUser } from "@/lib/dev-store/store"
@@ -43,6 +44,30 @@ export default async function Page({
   }
 
   const initialAnalysis = await getInitialAnalysis(id, user.id)
+
+  if (
+    initialAnalysis &&
+    initialAnalysis.status !== "completed" &&
+    initialAnalysis.status !== "failed"
+  ) {
+    return (
+      <AnalysisProcessing
+        analysisId={id}
+        initialStatus={{
+          analysisId: id,
+          status: initialAnalysis.status,
+          totalWallets: initialAnalysis.totalWallets,
+          processedWalletCount: 0,
+          progressPercent: 0,
+          batchCount: 0,
+          completedBatchCount: 0,
+          processingBatchCount: 0,
+          failedBatchCount: 0,
+          failedEnrichmentCount: 0,
+        }}
+      />
+    )
+  }
 
   return <AnalysisDetail analysisId={id} initialAnalysis={initialAnalysis} />
 }
