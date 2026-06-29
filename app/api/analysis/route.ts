@@ -6,16 +6,9 @@ import { saveDevAnalysis } from "@/lib/dev-store/store"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
 import { analyzeWallets } from "@/lib/risk-engine"
-import {
-  newAnalysisSchema,
-  parseCampaignContracts,
-} from "@/lib/validators/wallet"
-import {
-  getOnChainConfig,
-  isEnrichableChain,
-} from "@/lib/onchain/enrichment-types"
-import { enrichWallets } from "@/lib/onchain/enrich-wallet"
-import { mergeEnrichment } from "@/lib/onchain/merge"
+import { newAnalysisSchema } from "@/lib/validators/wallet"
+import { getOnChainConfig, isEnrichableChain } from "@/lib/onchain/enrichment-types"
+import { createAnalysisBatches } from "@/lib/analysis/batch-worker"
 import type { AnalysisMode, EnrichmentMeta } from "@/types"
 import type { Prisma } from "@prisma/client"
 
@@ -72,57 +65,11 @@ export async function POST(request: Request) {
   const mode = parsedForm.data.analysisMode as AnalysisMode
   const config = getOnChainConfig()
   const warnings: string[] = []
-
-  // Decide whether on-chain enrichment runs for this request.
   const wantsEnrichment = mode === "onchain" || mode === "hybrid"
   const chainEnrichable = isEnrichableChain(parsedForm.data.chain)
-
-  // Optional app-level wallet cap. Set ONCHAIN_MAX_WALLETS_PER_ANALYSIS=0
-  // or leave it unset to disable the hard cap. Provider rate limits and Vercel
-  // function duration still apply, so very large lists should move to a queue.
-  if (wantsEnrichment && config.enabled && chainEnrichable && config.maxWalletsPerAnalysis !== null) {
-    const maxWallets = config.maxWalletsPerAnalysis
-    if (parsedCsv.wallets.length > maxWallets) {
-      return NextResponse.json(
-        {
-          error: `On-chain enrichment is limited to ${maxWallets.toLocaleString()} wallets. Please reduce the file size, raise ONCHAIN_MAX_WALLETS_PER_ANALYSIS, or use CSV Only mode.`,
-        },
-        { status: 400 }
-      )
-    }
-  }
-
-  let walletsForAnalysis = parsedCsv.wallets
-  let enrichmentMeta: EnrichmentMeta | null = null
-
-  if (wantsEnrichment && config.enabled && chainEnrichable) {
-    const campaignContracts = parseCampaignContracts(
-      parsedForm.data.campaignContracts ?? ""
-    )
-
-    const { results, summary } = await enrichWallets({
-      addresses: parsedCsv.wallets.map((wallet) => wallet.walletAddress),
-      chain: parsedForm.data.chain,
-      mode,
-      options: { campaignContracts },
-    })
-
-    walletsForAnalysis = mergeEnrichment(parsedCsv.wallets, results, mode)
-    enrichmentMeta = summary
-    warnings.push(...summary.warnings)
-  } else if (wantsEnrichment && !chainEnrichable) {
-    warnings.push(
-      `On-chain enrichment is not available for ${parsedForm.data.chain} yet. CSV Only analysis was used.`
-    )
-  } else if (wantsEnrichment && !config.enabled) {
-    warnings.push("On-chain enrichment is disabled. CSV Only analysis was used.")
-  }
-
-  const result = analyzeWallets(walletsForAnalysis, enrichmentMeta)
   const projectName =
     parsedForm.data.projectName ||
     `${parsedForm.data.chain} ${parsedForm.data.campaignType} Wallet Audit`
-
   const notes = [
     parsedForm.data.notes || "",
     parsedCsv.mode === "basic" ? "Basic CSV used, limited analysis mode" : "",
@@ -130,6 +77,72 @@ export async function POST(request: Request) {
     .filter(Boolean)
     .join("\n")
 
+  if (wantsEnrichment && config.enabled && chainEnrichable) {
+    try {
+      const created = await db.$transaction(async (tx: Prisma.TransactionClient) => {
+        const project = await tx.project.create({
+          data: {
+            userId: user.id,
+            name: projectName,
+            campaignType: parsedForm.data.campaignType,
+            chain: parsedForm.data.chain,
+            notes: notes || null,
+          },
+        })
+
+        return tx.analysis.create({
+          data: {
+            projectId: project.id,
+            status: "processing",
+            totalWallets: parsedCsv.wallets.length,
+            csvFileName: file.name,
+            analysisMode: mode,
+            enrichmentStatus: "pending",
+          },
+        })
+      })
+
+      const batchCount = await createAnalysisBatches(
+        created.id,
+        parsedCsv.wallets,
+        config.batchSize
+      )
+
+      return NextResponse.json({
+        analysisId: created.id,
+        status: "processing",
+        batchCount,
+        parseSummary: {
+          mode: parsedCsv.mode,
+          analysisMode: mode,
+          validWallets: parsedCsv.wallets.length,
+          issues: parsedCsv.issues,
+          duplicates: parsedCsv.duplicates,
+          warnings,
+          note: `On-chain analysis queued in ${batchCount.toLocaleString()} batches. Report will update when processing completes.`,
+        },
+      })
+    } catch (error) {
+      if (isDatabaseConnectionError(error)) {
+        return NextResponse.json(
+          { error: "Database is required for background on-chain processing." },
+          { status: 503 }
+        )
+      }
+      throw error
+    }
+  }
+
+  if (wantsEnrichment && !chainEnrichable) {
+    warnings.push(
+      `On-chain enrichment is not available for ${parsedForm.data.chain} yet. CSV Only analysis was used.`
+    )
+  } else if (wantsEnrichment && !config.enabled) {
+    warnings.push("On-chain enrichment is disabled. CSV Only analysis was used.")
+  }
+
+  const enrichmentMeta: EnrichmentMeta | null = null
+  const result = analyzeWallets(parsedCsv.wallets, enrichmentMeta)
   let analysis: { id: string }
 
   try {
@@ -156,14 +169,6 @@ export async function POST(request: Request) {
           suspiciousClustersCount: result.clusters.length,
           csvFileName: file.name,
           analysisMode: mode,
-          enrichmentStatus: enrichmentMeta ? "completed" : null,
-          enrichmentProvider: enrichmentMeta?.provider ?? null,
-          enrichedWalletCount: enrichmentMeta?.enrichedCount ?? 0,
-          failedEnrichmentCount: enrichmentMeta?.failedCount ?? 0,
-          cacheHitCount: enrichmentMeta?.cacheHits ?? 0,
-          usedMockFallback: enrichmentMeta?.usedMockFallback ?? false,
-          enrichmentWarnings: enrichmentMeta?.warnings ?? [],
-          enrichedAt: enrichmentMeta ? new Date() : null,
           completedAt: new Date(),
         },
       })
@@ -201,32 +206,6 @@ export async function POST(request: Request) {
         })),
       })
 
-      if (enrichmentMeta) {
-        await tx.walletEnrichment.createMany({
-          data: result.wallets.map((wallet) => ({
-            analysisId: createdAnalysis.id,
-            walletAddress: wallet.walletAddress,
-            chain: wallet.chain,
-            provider: wallet.enrichmentProvider ?? enrichmentMeta!.provider,
-            txCount: wallet.txCount,
-            walletAgeDays: wallet.walletAgeDays,
-            firstSeen: toDate(wallet.firstSeen),
-            lastSeen: toDate(wallet.lastSeen),
-            totalVolume: wallet.totalVolume,
-            nativeBalance: wallet.nativeBalance ?? null,
-            tokenCount: wallet.tokenCount ?? null,
-            contractsCount: wallet.contractsCount,
-            campaignActionsCount: wallet.campaignActionsCount,
-            uniqueCounterparties: wallet.uniqueCounterparties ?? null,
-            fundingSource: wallet.fundingSource,
-            isContract: wallet.isContract ?? null,
-            knownEntityLabel: wallet.entityLabel,
-            knownEntityType: wallet.entityType,
-            enrichmentStatus: wallet.enrichmentStatus ?? "completed",
-          })),
-        })
-      }
-
       if (result.clusters.length) {
         await tx.cluster.createMany({
           data: result.clusters.map((cluster) => ({
@@ -263,17 +242,16 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     analysisId: analysis.id,
+    status: "completed",
     parseSummary: {
       mode: parsedCsv.mode,
       analysisMode: mode,
       validWallets: parsedCsv.wallets.length,
       issues: parsedCsv.issues,
       duplicates: parsedCsv.duplicates,
-      enrichment: enrichmentMeta,
       warnings,
-      note: enrichmentMeta
-        ? `On-chain enrichment completed via ${enrichmentMeta.provider} provider`
-        : parsedCsv.mode === "basic"
+      note:
+        parsedCsv.mode === "basic"
           ? "Basic CSV used, limited analysis mode"
           : "Enriched CSV used",
     },
