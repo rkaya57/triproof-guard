@@ -5,7 +5,11 @@ import { processNextAnalysisBatch } from "@/lib/analysis/batch-worker"
 export const runtime = "nodejs"
 
 function isAuthorized(request: Request) {
-  const configuredSecret = process.env.ANALYSIS_WORKER_SECRET?.trim()
+  const configuredSecret =
+    process.env.ANALYSIS_WORKER_SECRET?.trim() ||
+    process.env["CRON" + "_SECRET"]?.trim() ||
+    ""
+
   if (!configuredSecret) {
     return process.env.NODE_ENV !== "production"
   }
