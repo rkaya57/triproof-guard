@@ -37,7 +37,9 @@ import { campaignTypes, supportedChains } from "@/lib/validators/wallet"
 
 type CreateResponse = {
   analysisId?: string
+  code?: string
   error?: string
+  checkoutUrl?: string
   parseSummary?: {
     note: string
     validWallets: number
@@ -213,7 +215,6 @@ export function NewAnalysisForm() {
   function startProgress(stepCount: number) {
     if (progressTimer.current) window.clearInterval(progressTimer.current)
     progressTimer.current = window.setInterval(() => {
-      // advance up to the last step, which stays active until completion
       setProgressIndex((current) => Math.min(current + 1, stepCount - 1))
     }, 850)
   }
@@ -263,6 +264,14 @@ export function NewAnalysisForm() {
       if (response.status === 401) {
         stopProgress()
         router.push("/login")
+        return
+      }
+
+      if (response.status === 402 || body.code === "PAYMENT_REQUIRED") {
+        stopProgress()
+        setPending(false)
+        toast("Free trial limit reached. Continue with checkout.", "info")
+        router.push(body.checkoutUrl ?? "/checkout")
         return
       }
 
