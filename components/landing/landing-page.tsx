@@ -32,6 +32,7 @@ import {
 const navLinks = [
   ["Workflow", "#workflow"],
   ["Features", "#features"],
+  ["Blog", "/blog"],
   ["Pricing", "/pricing"],
   ["Demo", "/dashboard/demo"],
 ]
