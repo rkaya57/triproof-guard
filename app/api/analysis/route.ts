@@ -2,16 +2,14 @@ import { NextResponse } from "next/server"
 
 import { getCurrentUser } from "@/lib/auth/session"
 import { parseWalletCsv } from "@/lib/csv/parser"
-import { saveDevAnalysis } from "@/lib/dev-store/store"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
-import { analyzeWallets } from "@/lib/risk-engine"
 import { newAnalysisSchema } from "@/lib/validators/wallet"
 import { getOnChainConfig, isEnrichableChain } from "@/lib/onchain/enrichment-types"
 import { getOnChainProvider } from "@/lib/onchain/provider-router"
 import { createAnalysisBatches } from "@/lib/analysis/batch-worker"
 import { getAccessPassForUser } from "@/lib/billing/access-pass"
-import type { AnalysisMode, EnrichmentMeta } from "@/types"
+import type { AnalysisMode } from "@/types"
 import type { Prisma } from "@prisma/client"
 
 export const runtime = "nodejs"
@@ -20,12 +18,6 @@ const freeTrialWalletLimit = Number.parseInt(
   process.env.FREE_TRIAL_WALLET_LIMIT ?? "100",
   10
 )
-
-function toDate(value: string | null | undefined) {
-  if (!value) return null
-  const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime()) ? null : parsed
-}
 
 async function getUsedWalletCount(userId: string) {
   const result = await db.analysis.aggregate({
@@ -216,32 +208,4 @@ export async function POST(request: Request) {
     }
     throw error
   }
-
-  // Unreachable fallback kept only for TypeScript safety if future code paths change.
-  const enrichmentMeta: EnrichmentMeta | null = null
-  const result = analyzeWallets(parsedCsv.wallets, enrichmentMeta)
-  const analysis = await saveDevAnalysis({
-    userId: user.id,
-    projectName,
-    campaignType: parsedForm.data.campaignType,
-    chain: parsedForm.data.chain,
-    notes: notes || null,
-    csvFileName: file.name,
-    analysisMode: mode,
-    result,
-  })
-
-  return NextResponse.json({
-    analysisId: analysis.id,
-    status: "completed",
-    parseSummary: {
-      mode: parsedCsv.mode,
-      analysisMode: mode,
-      validWallets: parsedCsv.wallets.length,
-      issues: parsedCsv.issues,
-      duplicates: parsedCsv.duplicates,
-      warnings,
-      note: "Fallback analysis completed without synthetic wallet history.",
-    },
-  })
 }
