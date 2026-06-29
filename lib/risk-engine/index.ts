@@ -21,13 +21,12 @@ type StatusDecision = {
 type EnrichedWallet = {
   walletAddress: string
   chain: string
-  txCount: number
-  walletAgeDays: number
-  fundingSource: string
-  totalVolume: number
-  contractsCount: number
-  campaignActionsCount: number
-  // Pass-through on-chain enrichment fields (null when enrichment did not run).
+  txCount: number | null
+  walletAgeDays: number | null
+  fundingSource: string | null
+  totalVolume: number | null
+  contractsCount: number | null
+  campaignActionsCount: number | null
   firstSeen: string | null
   lastSeen: string | null
   nativeBalance: number | null
@@ -47,46 +46,16 @@ type ClusterDraft = {
   reasons: string[]
 }
 
-function hashString(value: string) {
-  let hash = 2166136261
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index)
-    hash = Math.imul(hash, 16777619)
-  }
-
-  return hash >>> 0
-}
-
-function pickNumber(hash: number, min: number, max: number, salt: number) {
-  const mixed = (hash ^ Math.imul(salt + 17, 2654435761)) >>> 0
-  return min + (mixed % (max - min + 1))
-}
-
-function mockFundingSource(hash: number, index: number) {
-  const clusterSeed = index % 11 === 0 ? 1 : index % 17 === 0 ? 2 : hash % 23
-  const hex = clusterSeed.toString(16).padStart(40, "0")
-  return `0x${hex}`
-}
-
-function hydrateWallet(wallet: ParsedWallet, index: number): EnrichedWallet {
-  const hash = hashString(`${wallet.walletAddress}:${index}`)
-  const txCount = wallet.txCount ?? pickNumber(hash, 1, 48, 1)
-  const walletAgeDays = wallet.walletAgeDays ?? pickNumber(hash, 2, 540, 2)
-  const campaignActionsCount =
-    wallet.campaignActionsCount ?? pickNumber(hash, 1, 12, 3)
-  const contractsCount = wallet.contractsCount ?? pickNumber(hash, 0, 20, 4)
-  const totalVolume =
-    wallet.totalVolume ?? Number((pickNumber(hash, 1, 150000, 5) / 100).toFixed(2))
-
+function hydrateWallet(wallet: ParsedWallet): EnrichedWallet {
   return {
     walletAddress: wallet.walletAddress,
     chain: wallet.chain,
-    txCount,
-    walletAgeDays,
-    fundingSource: wallet.fundingSource ?? mockFundingSource(hash, index),
-    totalVolume,
-    contractsCount,
-    campaignActionsCount,
+    txCount: wallet.txCount ?? null,
+    walletAgeDays: wallet.walletAgeDays ?? null,
+    fundingSource: wallet.fundingSource ?? null,
+    totalVolume: wallet.totalVolume ?? null,
+    contractsCount: wallet.contractsCount ?? null,
+    campaignActionsCount: wallet.campaignActionsCount ?? null,
     firstSeen: wallet.firstSeen ?? null,
     lastSeen: wallet.lastSeen ?? null,
     nativeBalance: wallet.nativeBalance ?? null,
@@ -99,6 +68,22 @@ function hydrateWallet(wallet: ParsedWallet, index: number): EnrichedWallet {
   }
 }
 
+function hasEvidence(wallet: EnrichedWallet, entityType: EntityType) {
+  return (
+    entityType !== "user" ||
+    wallet.txCount !== null ||
+    wallet.walletAgeDays !== null ||
+    wallet.fundingSource !== null ||
+    wallet.totalVolume !== null ||
+    wallet.contractsCount !== null ||
+    wallet.campaignActionsCount !== null ||
+    wallet.uniqueCounterparties !== null ||
+    wallet.lastActiveDaysAgo !== null ||
+    wallet.isContract !== null ||
+    wallet.enrichmentStatus === "completed"
+  )
+}
+
 function riskLevelFromScore(score: number): RiskLevel {
   if (score <= 30) return "low"
   if (score <= 60) return "medium"
@@ -108,13 +93,8 @@ function riskLevelFromScore(score: number): RiskLevel {
 
 function explainContextualSignals(clusterId: string | null, fundingGroupSize: number) {
   const signals: string[] = []
-  if (clusterId) {
-    signals.push(`part of suspicious cluster ${clusterId}`)
-  }
-  if (fundingGroupSize >= 5) {
-    signals.push(`shares funding source with ${fundingGroupSize} wallets`)
-  }
-
+  if (clusterId) signals.push(`part of suspicious cluster ${clusterId}`)
+  if (fundingGroupSize >= 5) signals.push(`shares funding source with ${fundingGroupSize} wallets`)
   return signals.join(" and ")
 }
 
@@ -124,12 +104,22 @@ function statusFromSignals(
   clusterId: string | null,
   clusterSize: number,
   fundingGroupSize: number,
-  entityType: EntityType
+  entityType: EntityType,
+  evidenceAvailable: boolean
 ): StatusDecision {
   const contextualSignals = explainContextualSignals(clusterId, fundingGroupSize)
   const hasClusterSignal = Boolean(clusterId)
   const hasSharedFundingSignal = fundingGroupSize >= 5
   const isSevereCluster = hasClusterSignal && clusterSize >= 6
+
+  if (!evidenceAvailable) {
+    return {
+      status: "manual_review",
+      recommendedAction: "manual_review",
+      statusExplanation:
+        "Only a wallet address was available. No on-chain or enriched CSV signals were evaluated, so this wallet requires manual review instead of automatic approval.",
+    }
+  }
 
   if (isReviewOnlyEntityType(entityType)) {
     return {
@@ -162,10 +152,9 @@ function statusFromSignals(
     return {
       status: "manual_review",
       recommendedAction: "manual_review",
-      statusExplanation:
-        contextualSignals
-          ? `High risk score with contextual signal: wallet is ${contextualSignals}.`
-          : "High risk score requires project team review before reward inclusion.",
+      statusExplanation: contextualSignals
+        ? `High risk score with contextual signal: wallet is ${contextualSignals}.`
+        : "High risk score requires project team review before reward inclusion.",
     }
   }
 
@@ -219,6 +208,14 @@ function nextClusterLabel(index: number) {
   return `CL-${String(index + 1).padStart(3, "0")}`
 }
 
+function hasBehaviorClusterInputs(wallet: EnrichedWallet) {
+  return (
+    wallet.walletAgeDays !== null &&
+    wallet.txCount !== null &&
+    wallet.campaignActionsCount !== null
+  )
+}
+
 function createClusters(wallets: EnrichedWallet[]) {
   const drafts: ClusterDraft[] = []
   const assigned = new Map<number, string>()
@@ -249,12 +246,12 @@ function createClusters(wallets: EnrichedWallet[]) {
 
   const secondaryGroups = new Map<string, number[]>()
   wallets.forEach((wallet, index) => {
-    if (assigned.has(index)) return
+    if (assigned.has(index) || !hasBehaviorClusterInputs(wallet)) return
     const key = [
       wallet.chain,
-      bucket(wallet.walletAgeDays, 14),
-      bucket(wallet.txCount, 5),
-      bucket(wallet.campaignActionsCount, 3),
+      bucket(wallet.walletAgeDays as number, 14),
+      bucket(wallet.txCount as number, 5),
+      bucket(wallet.campaignActionsCount as number, 3),
     ].join(":")
     secondaryGroups.set(key, [...(secondaryGroups.get(key) ?? []), index])
   })
@@ -288,28 +285,15 @@ function suggestedActionFromCluster(
   sharedFundingSource: string | null,
   reasons: string[]
 ): SuggestedAction {
-  // Severe cluster: high risk + strong similarity + enough wallets
-  if (averageRiskScore >= 86 && behaviorSimilarityScore >= 80 && walletCount >= 5) {
-    return "reject"
-  }
-  // High risk band
-  if (averageRiskScore >= 61) {
-    return "manual_review"
-  }
-  // Lower risk but shared funding with 3+ wallets
-  if (walletCount >= 3 && sharedFundingSource !== null) {
-    return "manual_review"
-  }
-  // Very low risk but carries a suspicious signal reason
+  if (averageRiskScore >= 86 && behaviorSimilarityScore >= 80 && walletCount >= 5) return "reject"
+  if (averageRiskScore >= 61) return "manual_review"
+  if (walletCount >= 3 && sharedFundingSource !== null) return "manual_review"
   if (
     averageRiskScore < 31 &&
-    reasons.some(
-      (r) => r === "Shared funding source" || r.startsWith("Part of suspicious cluster")
-    )
+    reasons.some((r) => r === "Shared funding source" || r.startsWith("Part of suspicious cluster"))
   ) {
     return "manual_review"
   }
-  // All cluster cards are at minimum manual_review — never approve
   return "manual_review"
 }
 
@@ -328,6 +312,7 @@ export function analyzeWallets(
     const knownEntity = detectKnownEntity(wallet.walletAddress)
     const entityType: EntityType = knownEntity?.type ?? (wallet.isContract ? "contract" : "user")
     const entityRiskReason = knownEntity ? knownEntityRiskReason : null
+    const evidenceAvailable = hasEvidence(wallet, entityType)
     let score = 0
     const fundingGroupSize = wallet.fundingSource
       ? fundingGroups.get(wallet.fundingSource.toLowerCase())?.length ?? 0
@@ -337,29 +322,38 @@ export function analyzeWallets(
       ? drafts.find((cluster) => cluster.clusterLabel === clusterId)?.walletIndexes.length ?? 0
       : 0
 
-    if (wallet.walletAgeDays < 7) {
-      score += 25
-      reasons.push("Wallet is younger than 7 days")
-    } else if (wallet.walletAgeDays <= 30) {
-      score += 15
-      reasons.push("Wallet is between 7 and 30 days old")
-    } else if (wallet.walletAgeDays <= 90) {
-      score += 8
-      reasons.push("Wallet is younger than 90 days")
+    if (wallet.walletAgeDays !== null) {
+      if (wallet.walletAgeDays < 7) {
+        score += 25
+        reasons.push("Wallet is younger than 7 days")
+      } else if (wallet.walletAgeDays <= 30) {
+        score += 15
+        reasons.push("Wallet is between 7 and 30 days old")
+      } else if (wallet.walletAgeDays <= 90) {
+        score += 8
+        reasons.push("Wallet is younger than 90 days")
+      }
     }
 
-    if (wallet.txCount <= 2) {
-      score += 20
-      reasons.push("Low transaction count")
-    } else if (wallet.txCount <= 5) {
-      score += 12
-      reasons.push("Limited transaction history")
-    } else if (wallet.txCount <= 15) {
-      score += 5
-      reasons.push("Moderate transaction history")
+    if (wallet.txCount !== null) {
+      if (wallet.txCount <= 2) {
+        score += 20
+        reasons.push("Low transaction count")
+      } else if (wallet.txCount <= 5) {
+        score += 12
+        reasons.push("Limited transaction history")
+      } else if (wallet.txCount <= 15) {
+        score += 5
+        reasons.push("Moderate transaction history")
+      }
     }
 
-    if (wallet.campaignActionsCount >= 5 && wallet.txCount <= 10) {
+    if (
+      wallet.campaignActionsCount !== null &&
+      wallet.txCount !== null &&
+      wallet.campaignActionsCount >= 5 &&
+      wallet.txCount <= 10
+    ) {
       score += 15
       reasons.push("Campaign-only behavior pattern")
     }
@@ -376,24 +370,30 @@ export function analyzeWallets(
       reasons.push(`Part of suspicious cluster ${clusterId}`)
     }
 
-    if (wallet.contractsCount <= 1) {
-      score += 15
-      reasons.push("Low contract interaction diversity")
-    } else if (wallet.contractsCount <= 3) {
-      score += 8
-      reasons.push("Limited contract interaction diversity")
+    if (wallet.contractsCount !== null) {
+      if (wallet.contractsCount <= 1) {
+        score += 15
+        reasons.push("Low contract interaction diversity")
+      } else if (wallet.contractsCount <= 3) {
+        score += 8
+        reasons.push("Limited contract interaction diversity")
+      }
     }
 
-    if (wallet.totalVolume < 5 && wallet.campaignActionsCount > 3) {
+    if (
+      wallet.totalVolume !== null &&
+      wallet.campaignActionsCount !== null &&
+      wallet.totalVolume < 5 &&
+      wallet.campaignActionsCount > 3
+    ) {
       score += 10
       reasons.push("Low total volume despite campaign activity")
     }
 
-    // Additional signals only fire when on-chain enrichment actually ran, so
-    // CSV-only analyses keep their existing scoring behaviour unchanged.
     if (wallet.enrichmentStatus === "completed") {
       if (
         wallet.uniqueCounterparties !== null &&
+        wallet.txCount !== null &&
         wallet.uniqueCounterparties <= 2 &&
         wallet.txCount > 2
       ) {
@@ -403,6 +403,7 @@ export function analyzeWallets(
 
       if (
         wallet.lastActiveDaysAgo !== null &&
+        wallet.campaignActionsCount !== null &&
         wallet.lastActiveDaysAgo > 180 &&
         wallet.campaignActionsCount > 0
       ) {
@@ -411,6 +412,9 @@ export function analyzeWallets(
       }
 
       if (
+        wallet.walletAgeDays !== null &&
+        wallet.campaignActionsCount !== null &&
+        wallet.txCount !== null &&
         wallet.walletAgeDays < 7 &&
         wallet.campaignActionsCount > 0 &&
         wallet.txCount <= 5
@@ -425,6 +429,10 @@ export function analyzeWallets(
       reasons.unshift(knownEntityRiskReason)
     }
 
+    if (!evidenceAvailable && !knownEntity) {
+      reasons.push("Address-only input: on-chain enrichment or enriched CSV fields are required for evidence-based scoring")
+    }
+
     const riskScore = Math.min(100, score)
     const riskLevel = riskLevelFromScore(riskScore)
     const decision = statusFromSignals(
@@ -433,12 +441,11 @@ export function analyzeWallets(
       clusterId,
       clusterSize,
       fundingGroupSize,
-      entityType
+      entityType,
+      evidenceAvailable
     )
 
-    if (!reasons.length) {
-      reasons.push("No major risk signals detected")
-    }
+    if (!reasons.length) reasons.push("No major risk signals detected")
 
     return {
       walletAddress: wallet.walletAddress,
@@ -474,8 +481,7 @@ export function analyzeWallets(
   const clusters: ClusterResult[] = drafts.map((cluster) => {
     const clusterWallets = cluster.walletIndexes.map((index) => walletResults[index])
     const averageRiskScore =
-      clusterWallets.reduce((sum, wallet) => sum + wallet.riskScore, 0) /
-      clusterWallets.length
+      clusterWallets.reduce((sum, wallet) => sum + wallet.riskScore, 0) / clusterWallets.length
 
     return {
       clusterLabel: cluster.clusterLabel,
@@ -497,9 +503,7 @@ export function analyzeWallets(
 
   const totalWallets = walletResults.length
   const approvedCount = walletResults.filter((wallet) => wallet.status === "approved").length
-  const manualReviewCount = walletResults.filter(
-    (wallet) => wallet.status === "manual_review"
-  ).length
+  const manualReviewCount = walletResults.filter((wallet) => wallet.status === "manual_review").length
   const rejectedCount = walletResults.filter((wallet) => wallet.status === "rejected").length
   const averageRiskScore = totalWallets
     ? walletResults.reduce((sum, wallet) => sum + wallet.riskScore, 0) / totalWallets
