@@ -1,7 +1,7 @@
 import { requireAdminUser } from "@/lib/auth/admin"
-import { BugConsole } from "@/components/admin/bug-console"
+import { TaskConsole } from "@/components/admin/task-console"
 
 export default async function Page() {
   await requireAdminUser()
-  return <BugConsole />
+  return <TaskConsole />
 }
