@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { Activity, Bug, CreditCard, FileText, ShieldCheck, Wrench } from "lucide-react"
 
 import { getAdminMetrics, getRecentAnalyses } from "@/lib/admin/health"
 import { getAdminUser } from "@/lib/auth/admin"
@@ -18,9 +19,7 @@ function AccessDenied() {
     <Card className="glass-panel mx-auto max-w-2xl">
       <CardHeader>
         <CardTitle>Admin access required</CardTitle>
-        <CardDescription>
-          This page is only available for Tri-Proof admin emails. Log in with an admin account.
-        </CardDescription>
+        <CardDescription>This page is only available for Tri-Proof admin emails.</CardDescription>
       </CardHeader>
       <CardContent className="flex gap-3">
         <Link href="/login" className={buttonVariants()}>Login</Link>
@@ -36,22 +35,29 @@ export default async function Page() {
 
   const metrics = await getAdminMetrics()
   const analyses = await getRecentAnalyses()
+  const health = metrics.find((metric) => metric.label === "System Health")
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="dashboard-hero rounded-2xl p-6">
-        <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">
-          Admin Console
-        </Badge>
-        <h2 className="text-gradient text-3xl font-semibold">Tri-Proof operasyon merkezi</h2>
-        <p className="mt-2 max-w-2xl text-muted-foreground">
-          Admin: {admin.email}. Sistem sağlığı, analiz kuyruğu ve hata takibi buradan izlenir.
-        </p>
+      <div className="dashboard-hero relative overflow-hidden rounded-2xl p-6">
+        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Admin Command Center</Badge>
+            <h2 className="text-gradient text-3xl font-semibold">Tri-Proof operasyon merkezi</h2>
+            <p className="mt-2 max-w-2xl text-muted-foreground">
+              Admin: {admin.email}. Sistem sağlığı, analiz kuyruğu, ödeme akışı, blog ve issue takibi buradan yönetilir.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-primary/25 bg-primary/10 p-5 text-right">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Current status</p>
+            <p className={`mt-1 text-3xl font-semibold ${toneClass(health?.tone ?? "neutral")}`}>{String(health?.value ?? "Unknown")}</p>
+          </div>
+        </div>
       </div>
 
       <section className="grid gap-4 md:grid-cols-4">
         {metrics.map((metric) => (
-          <Card key={metric.label} className="glass-panel premium-card">
+          <Card key={metric.label} className="glass-panel premium-card hover-lift">
             <CardHeader className="pb-2">
               <CardDescription>{metric.label}</CardDescription>
               <CardTitle className={toneClass(metric.tone)}>{metric.value}</CardTitle>
@@ -60,20 +66,29 @@ export default async function Page() {
         ))}
       </section>
 
-      <section className="grid gap-4 md:grid-cols-4">
+      <section className="grid gap-4 lg:grid-cols-3">
         {[
-          ["Health", "/dashboard/admin/health"],
-          ["Bugs", "/dashboard/admin/bugs"],
-          ["Analyses", "/dashboard/admin/analyses"],
-          ["Blog", "/dashboard/admin/blog"],
-        ].map(([label, href]) => (
-          <Link key={label} href={href} className={`${buttonVariants({ variant: "outline" })} justify-center`}>
-            {label}
-          </Link>
+          [ShieldCheck, "System Health", "Database, API keys, treasury wallets and worker queue.", "/dashboard/admin/health"],
+          [Bug, "Issue Tracker", "Track bugs, broken flows, visual issues and Codex tasks.", "/dashboard/admin/bugs"],
+          [Activity, "Analysis Ops", "Review recent wallet analyses and failed jobs.", "/dashboard/admin/analyses"],
+          [CreditCard, "Payments", "USDC checkout configuration and manual payment notes.", "/dashboard/admin/payments"],
+          [FileText, "Blog Studio", "Create SEO-ready Web3 security articles with cover images.", "/dashboard/admin/blog"],
+          [Wrench, "Maintenance", "Run health checks and operational follow-up tasks.", "/dashboard/admin/health"],
+        ].map(([Icon, title, text, href]) => (
+          <Card key={title as string} className="glass-panel premium-card hover-lift">
+            <CardHeader>
+              <Icon className="text-primary" />
+              <CardTitle>{title as string}</CardTitle>
+              <CardDescription>{text as string}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href={href as string} className={buttonVariants({ variant: "outline" })}>Open</Link>
+            </CardContent>
+          </Card>
         ))}
       </section>
 
-      <Card className="glass-panel">
+      <Card className="glass-panel premium-card">
         <CardHeader>
           <CardTitle>Recent analyses</CardTitle>
           <CardDescription>Latest analysis jobs from production.</CardDescription>
