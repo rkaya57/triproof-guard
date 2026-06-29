@@ -1,6 +1,4 @@
-import Link from "next/link"
-
-import { buttonVariants } from "@/components/ui/button"
+import { CheckoutForm } from "@/components/checkout/checkout-form"
 import {
   Card,
   CardContent,
@@ -10,9 +8,9 @@ import {
 } from "@/components/ui/card"
 
 const plans = {
-  starter: { name: "Starter", amount: "99", wallets: "1,000" },
-  growth: { name: "Growth", amount: "249", wallets: "10,000" },
-  pro: { name: "Pro", amount: "499", wallets: "50,000" },
+  starter: { id: "starter", name: "Starter", amount: "99", wallets: "1,000" },
+  growth: { id: "growth", name: "Growth", amount: "249", wallets: "10,000" },
+  pro: { id: "pro", name: "Pro", amount: "499", wallets: "50,000" },
 }
 
 function planFromWallets(wallets: number) {
@@ -33,6 +31,19 @@ export default async function Page({
       ? params.plan
       : planFromWallets(Number.isFinite(requestedWallets) ? requestedWallets : 0)
   const plan = plans[selectedPlan as keyof typeof plans] ?? plans.starter
+
+  const networks = [
+    {
+      id: "base" as const,
+      label: "Base",
+      treasuryAddress: process.env.TRIPROOF_TREASURY_BASE_ADDRESS,
+    },
+    {
+      id: "polygon" as const,
+      label: "Polygon",
+      treasuryAddress: process.env.TRIPROOF_TREASURY_POLYGON_ADDRESS,
+    },
+  ]
 
   return (
     <main className="premium-page min-h-screen bg-background px-5 py-10 text-foreground sm:px-8">
@@ -55,18 +66,7 @@ export default async function Page({
                 <p className="mt-1 text-2xl font-semibold">{plan.wallets}</p>
               </div>
             </div>
-            <div className="rounded-lg border border-border bg-background/50 p-4 text-sm text-muted-foreground">
-              Payment address and automatic verification will be connected in the next step.
-              For now this page confirms that paid users should continue through checkout instead of creating a large free analysis.
-            </div>
-            <div className="flex gap-3">
-              <Link href="/pricing" className={buttonVariants({ variant: "outline" })}>
-                Back to Pricing
-              </Link>
-              <Link href="/dashboard/new-analysis" className={buttonVariants()}>
-                Back to Analysis
-              </Link>
-            </div>
+            <CheckoutForm plan={plan} networks={networks} />
           </CardContent>
         </Card>
       </div>
