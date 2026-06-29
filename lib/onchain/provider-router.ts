@@ -16,18 +16,10 @@ const REGISTRY: Record<string, OnChainProvider> = {
 }
 
 export type ProviderSelection = {
-  /** the chosen primary provider (real if any key is configured, else mock) */
   provider: OnChainProvider
-  /** whether we fell back to the mock provider because nothing was configured */
   usedMockFallback: boolean
 }
 
-/**
- * Select the on-chain provider for a chain following the configured priority
- * (default: alchemy -> etherscan -> blockscout -> mock). The first provider
- * that is both registered and configured for the chain wins. If none is
- * configured the mock provider is returned so the analysis never fails.
- */
 export function getOnChainProvider(chain: string): ProviderSelection {
   if (!isEnrichableChain(chain)) {
     return { provider: mockProvider, usedMockFallback: true }
@@ -35,7 +27,7 @@ export function getOnChainProvider(chain: string): ProviderSelection {
 
   const { providerPriority } = getOnChainConfig()
   for (const id of providerPriority) {
-    if (id === "mock") break // mock is the explicit fallback, handled below
+    if (id === "mock") continue
     const provider = REGISTRY[id]
     if (provider && provider.isConfigured(chain)) {
       return { provider, usedMockFallback: false }
