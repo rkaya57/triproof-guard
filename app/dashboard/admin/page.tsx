@@ -1,7 +1,7 @@
 import Link from "next/link"
 
 import { getAdminMetrics, getRecentAnalyses } from "@/lib/admin/health"
-import { requireAdminUser } from "@/lib/auth/admin"
+import { getAdminUser } from "@/lib/auth/admin"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,8 +13,27 @@ function toneClass(tone: string) {
   return "text-primary"
 }
 
+function AccessDenied() {
+  return (
+    <Card className="glass-panel mx-auto max-w-2xl">
+      <CardHeader>
+        <CardTitle>Admin access required</CardTitle>
+        <CardDescription>
+          This page is only available for Tri-Proof admin emails. Log in with an admin account.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex gap-3">
+        <Link href="/login" className={buttonVariants()}>Login</Link>
+        <Link href="/dashboard" className={buttonVariants({ variant: "outline" })}>Back to Dashboard</Link>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default async function Page() {
-  const admin = await requireAdminUser()
+  const admin = await getAdminUser()
+  if (!admin) return <AccessDenied />
+
   const metrics = await getAdminMetrics()
   const analyses = await getRecentAnalyses()
 
