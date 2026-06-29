@@ -77,13 +77,15 @@ export async function POST(request: Request) {
   const wantsEnrichment = mode === "onchain" || mode === "hybrid"
   const chainEnrichable = isEnrichableChain(parsedForm.data.chain)
 
-  // Enforce the on-chain wallet cap (free/demo vs authenticated).
-  if (wantsEnrichment && config.enabled && chainEnrichable) {
+  // Optional app-level wallet cap. Set ONCHAIN_MAX_WALLETS_PER_ANALYSIS=0
+  // or leave it unset to disable the hard cap. Provider rate limits and Vercel
+  // function duration still apply, so very large lists should move to a queue.
+  if (wantsEnrichment && config.enabled && chainEnrichable && config.maxWalletsPerAnalysis !== null) {
     const maxWallets = config.maxWalletsPerAnalysis
     if (parsedCsv.wallets.length > maxWallets) {
       return NextResponse.json(
         {
-          error: `On-chain enrichment is limited to ${maxWallets.toLocaleString()} wallets in this MVP. Please reduce the file size or use CSV Only mode.`,
+          error: `On-chain enrichment is limited to ${maxWallets.toLocaleString()} wallets. Please reduce the file size, raise ONCHAIN_MAX_WALLETS_PER_ANALYSIS, or use CSV Only mode.`,
         },
         { status: 400 }
       )
