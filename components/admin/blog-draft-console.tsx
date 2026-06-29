@@ -1,7 +1,7 @@
 "use client"
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react"
-import { Eye, ImagePlus, PencilLine, Trash2 } from "lucide-react"
+import { Edit3, Eye, ImagePlus, PencilLine, Trash2, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,12 +21,46 @@ type Draft = {
   content: string
   status: string
   createdAt: string
+  updatedAt?: string
 }
+
+type FormState = Omit<Draft, "id" | "createdAt" | "updatedAt">
 
 const key = "tri-proof-blog-drafts"
 
+const emptyForm: FormState = {
+  title: "",
+  slug: "",
+  excerpt: "",
+  category: "Airdrop Security",
+  tags: "",
+  coverImageUrl: "",
+  seoTitle: "",
+  seoDescription: "",
+  content: "",
+  status: "draft",
+}
+
 function slugify(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+}
+
+function normalizeDraft(value: Partial<Draft>, index: number): Draft {
+  return {
+    id: value.id ?? `POST-${index + 1}`,
+    title: value.title ?? "Untitled",
+    slug: value.slug ?? slugify(value.title ?? "untitled"),
+    excerpt: value.excerpt ?? "",
+    category: value.category ?? "Airdrop Security",
+    tags: value.tags ?? "",
+    coverImageUrl: value.coverImageUrl ?? "",
+    seoTitle: value.seoTitle ?? "",
+    seoDescription: value.seoDescription ?? "",
+    content: value.content ?? "",
+    status: value.status ?? "draft",
+    createdAt: value.createdAt ?? new Date().toISOString(),
+    updatedAt: value.updatedAt,
+  }
 }
 
 function readImage(file: File) {
@@ -39,14 +73,18 @@ function readImage(file: File) {
 
 export function BlogDraftConsole() {
   const [drafts, setDrafts] = useState<Draft[]>([])
-  const [previewImage, setPreviewImage] = useState("")
-  const [previewTitle, setPreviewTitle] = useState("Untitled Web3 security article")
-  const [previewExcerpt, setPreviewExcerpt] = useState("Write a short summary that makes teams want to read the article.")
-  const [previewCategory, setPreviewCategory] = useState("Airdrop Security")
+  const [form, setForm] = useState<FormState>(emptyForm)
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   useEffect(() => {
     const raw = localStorage.getItem(key)
-    if (raw) setDrafts(JSON.parse(raw) as Draft[])
+    if (!raw) return
+    try {
+      const parsed = JSON.parse(raw) as Partial<Draft>[]
+      setDrafts(parsed.map(normalizeDraft))
+    } catch {
+      setDrafts([])
+    }
   }, [])
 
   useEffect(() => {
@@ -58,39 +96,78 @@ export function BlogDraftConsole() {
     return { total: drafts.length, published, drafts: drafts.length - published }
   }, [drafts])
 
+  const previewTitle = form.title || "Untitled Web3 security article"
+  const previewExcerpt = form.excerpt || "Write a short summary that makes teams want to read the article."
+  const previewCategory = form.category || "Airdrop Security"
+  const previewImage = form.coverImageUrl
+
+  function setField<K extends keyof FormState>(field: K, value: FormState[K]) {
+    setForm((current) => ({ ...current, [field]: value }))
+  }
+
   async function onImageChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     if (!file) return
-    setPreviewImage(await readImage(file))
+    setField("coverImageUrl", await readImage(file))
   }
 
-  function add(event: FormEvent<HTMLFormElement>) {
+  function resetEditor() {
+    setEditingId(null)
+    setForm(emptyForm)
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const form = new FormData(event.currentTarget)
-    const title = String(form.get("title") ?? "").trim()
+    const title = form.title.trim()
     if (!title) return
-    const slug = String(form.get("slug") ?? "").trim() || slugify(title)
-    const draft: Draft = {
-      id: `POST-${Date.now()}`,
+
+    const now = new Date().toISOString()
+    const nextDraft: Draft = {
+      id: editingId ?? `POST-${Date.now()}`,
       title,
-      slug,
-      excerpt: String(form.get("excerpt") ?? "").trim(),
-      category: String(form.get("category") ?? "Airdrop Security").trim(),
-      tags: String(form.get("tags") ?? "").trim(),
-      coverImageUrl: previewImage || String(form.get("coverImageUrl") ?? "").trim(),
-      seoTitle: String(form.get("seoTitle") ?? "").trim(),
-      seoDescription: String(form.get("seoDescription") ?? "").trim(),
-      content: String(form.get("content") ?? "").trim(),
-      status: String(form.get("status") ?? "draft"),
-      createdAt: new Date().toISOString(),
+      slug: form.slug.trim() || slugify(title),
+      excerpt: form.excerpt.trim(),
+      category: form.category.trim() || "Airdrop Security",
+      tags: form.tags.trim(),
+      coverImageUrl: form.coverImageUrl.trim(),
+      seoTitle: form.seoTitle.trim(),
+      seoDescription: form.seoDescription.trim(),
+      content: form.content.trim(),
+      status: form.status,
+      createdAt: drafts.find((draft) => draft.id === editingId)?.createdAt ?? now,
+      updatedAt: editingId ? now : undefined,
     }
-    setDrafts((current) => [draft, ...current])
-    setPreviewImage("")
-    event.currentTarget.reset()
+
+    setDrafts((current) =>
+      editingId
+        ? current.map((draft) => (draft.id === editingId ? nextDraft : draft))
+        : [nextDraft, ...current]
+    )
+    resetEditor()
+  }
+
+  function edit(draft: Draft) {
+    setEditingId(draft.id)
+    setForm({
+      title: draft.title,
+      slug: draft.slug,
+      excerpt: draft.excerpt,
+      category: draft.category,
+      tags: draft.tags,
+      coverImageUrl: draft.coverImageUrl,
+      seoTitle: draft.seoTitle,
+      seoDescription: draft.seoDescription,
+      content: draft.content,
+      status: draft.status,
+    })
+    window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
   function remove(id: string) {
+    const approved = window.confirm("Bu blog taslağını silmek istiyor musun?")
+    if (!approved) return
     setDrafts((current) => current.filter((draft) => draft.id !== id))
+    if (editingId === id) resetEditor()
   }
 
   return (
@@ -101,7 +178,7 @@ export function BlogDraftConsole() {
             <span className="cyber-chip">Content Studio</span>
             <h2 className="text-gradient mt-4 text-3xl font-semibold">Blog Admin Studio</h2>
             <p className="mt-2 max-w-2xl text-muted-foreground">
-              Create SEO-ready Web3 security articles with cover images, categories, tags and live preview.
+              Create, edit and delete SEO-ready Web3 security articles with cover images, categories, tags and live preview.
             </p>
           </div>
           <div className="grid grid-cols-3 gap-3 text-center">
@@ -115,22 +192,26 @@ export function BlogDraftConsole() {
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <Card className="glass-panel premium-card">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><PencilLine className="text-primary" /> New article</CardTitle>
-            <CardDescription>Save a complete draft. Public publishing will be connected to database storage next.</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <PencilLine className="text-primary" /> {editingId ? "Edit article" : "New article"}
+            </CardTitle>
+            <CardDescription>
+              {editingId ? "Update the selected draft without creating a duplicate." : "Save a complete draft. Public publishing will be connected to database storage next."}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={add} className="grid gap-4">
+            <form onSubmit={submit} className="grid gap-4">
               <div className="grid gap-3 md:grid-cols-2">
-                <Input name="title" placeholder="Post title" onChange={(event) => setPreviewTitle(event.target.value || "Untitled Web3 security article")} />
-                <Input name="slug" placeholder="custom-slug optional" />
-                <Input name="category" placeholder="Category, e.g. Airdrop Security" onChange={(event) => setPreviewCategory(event.target.value || "Airdrop Security")} />
-                <Input name="tags" placeholder="Tags: Sybil, Airdrop, Wallet Risk" />
+                <Input value={form.title} placeholder="Post title" onChange={(event) => setField("title", event.target.value)} />
+                <Input value={form.slug} placeholder="custom-slug optional" onChange={(event) => setField("slug", event.target.value)} />
+                <Input value={form.category} placeholder="Category, e.g. Airdrop Security" onChange={(event) => setField("category", event.target.value)} />
+                <Input value={form.tags} placeholder="Tags: Sybil, Airdrop, Wallet Risk" onChange={(event) => setField("tags", event.target.value)} />
               </div>
 
-              <Textarea name="excerpt" placeholder="Short excerpt" rows={3} onChange={(event) => setPreviewExcerpt(event.target.value || "Write a short summary that makes teams want to read the article.")} />
+              <Textarea value={form.excerpt} placeholder="Short excerpt" rows={3} onChange={(event) => setField("excerpt", event.target.value)} />
 
               <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-                <Input name="coverImageUrl" placeholder="Cover image URL optional" onChange={(event) => setPreviewImage(event.target.value)} />
+                <Input value={form.coverImageUrl} placeholder="Cover image URL optional" onChange={(event) => setField("coverImageUrl", event.target.value)} />
                 <label className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border border-input bg-background px-4 text-sm hover:bg-primary/5">
                   <ImagePlus className="size-4 text-primary" /> Upload image
                   <input type="file" accept="image/*" className="sr-only" onChange={onImageChange} />
@@ -138,19 +219,22 @@ export function BlogDraftConsole() {
               </div>
 
               <div className="grid gap-3 md:grid-cols-2">
-                <Input name="seoTitle" placeholder="SEO title" />
-                <Input name="seoDescription" placeholder="SEO description" />
+                <Input value={form.seoTitle} placeholder="SEO title" onChange={(event) => setField("seoTitle", event.target.value)} />
+                <Input value={form.seoDescription} placeholder="SEO description" onChange={(event) => setField("seoDescription", event.target.value)} />
               </div>
 
-              <Textarea name="content" placeholder={"Article body / Markdown notes\n\n## Problem\nExplain the campaign risk..."} rows={10} />
+              <Textarea value={form.content} placeholder={"Article body / Markdown notes\n\n## Problem\nExplain the campaign risk..."} rows={10} onChange={(event) => setField("content", event.target.value)} />
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <select name="status" className="h-9 rounded-lg border border-input bg-background px-3 text-sm">
+                <select value={form.status} onChange={(event) => setField("status", event.target.value)} className="h-9 rounded-lg border border-input bg-background px-3 text-sm">
                   <option value="draft">Draft</option>
                   <option value="ready">Ready for review</option>
                   <option value="published">Published queue</option>
                 </select>
-                <Button type="submit">Save Article Draft</Button>
+                <div className="flex gap-2">
+                  {editingId && <Button type="button" variant="outline" onClick={resetEditor}><X data-icon="inline-start" />Cancel edit</Button>}
+                  <Button type="submit">{editingId ? "Update Article" : "Save Article Draft"}</Button>
+                </div>
               </div>
             </form>
           </CardContent>
@@ -179,20 +263,24 @@ export function BlogDraftConsole() {
       <Card className="glass-panel premium-card">
         <CardHeader>
           <CardTitle>Content queue</CardTitle>
-          <CardDescription>Drafts are saved in this browser for the MVP admin workflow.</CardDescription>
+          <CardDescription>Use Edit to revise old posts, or Delete to remove drafts from the queue.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {drafts.length === 0 && <p className="text-sm text-muted-foreground">No drafts yet.</p>}
           {drafts.map((draft) => (
-            <div key={draft.id} className="overflow-hidden rounded-xl border border-border bg-background/50">
+            <div key={draft.id} className={`overflow-hidden rounded-xl border bg-background/50 ${editingId === draft.id ? "border-primary" : "border-border"}`}>
               <div className="flex h-36 items-center justify-center bg-primary/10">
                 {draft.coverImageUrl ? <img src={draft.coverImageUrl} alt="Cover" className="h-full w-full object-cover" /> : <ImagePlus className="text-primary" />}
               </div>
               <div className="p-4">
-                <div className="mb-2 flex items-center justify-between gap-2"><span className="cyber-chip">{draft.category || "Blog"}</span><button onClick={() => remove(draft.id)} className="text-muted-foreground hover:text-red-300"><Trash2 className="size-4" /></button></div>
+                <div className="mb-2 flex items-center justify-between gap-2"><span className="cyber-chip">{draft.category || "Blog"}</span><span className="text-xs text-muted-foreground">{draft.status}</span></div>
                 <p className="font-medium">{draft.title}</p>
-                <p className="mt-1 text-xs text-muted-foreground">/{draft.slug} • {draft.status}</p>
+                <p className="mt-1 text-xs text-muted-foreground">/{draft.slug}</p>
                 {draft.excerpt && <p className="mt-3 line-clamp-3 text-sm text-muted-foreground">{draft.excerpt}</p>}
+                <div className="mt-4 flex gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => edit(draft)}><Edit3 data-icon="inline-start" />Edit</Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => remove(draft.id)}><Trash2 data-icon="inline-start" />Delete</Button>
+                </div>
               </div>
             </div>
           ))}
