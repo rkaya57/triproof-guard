@@ -9,6 +9,7 @@ import { analyzeWallets } from "@/lib/risk-engine"
 import { newAnalysisSchema } from "@/lib/validators/wallet"
 import { getOnChainConfig, isEnrichableChain } from "@/lib/onchain/enrichment-types"
 import { createAnalysisBatches } from "@/lib/analysis/batch-worker"
+import { getAccessPassForUser } from "@/lib/billing/access-pass"
 import type { AnalysisMode, EnrichmentMeta } from "@/types"
 import type { Prisma } from "@prisma/client"
 
@@ -89,8 +90,11 @@ export async function POST(request: Request) {
   try {
     const usedWallets = await getUsedWalletCount(user.id)
     const remainingWallets = Math.max(freeTrialWalletLimit - usedWallets, 0)
+    const accessPass = await getAccessPassForUser(user.id)
+    const paidAccessCoversUpload =
+      accessPass !== null && accessPass.walletCredits >= parsedCsv.wallets.length
 
-    if (parsedCsv.wallets.length > remainingWallets) {
+    if (parsedCsv.wallets.length > remainingWallets && !paidAccessCoversUpload) {
       return NextResponse.json(
         {
           code: "PAYMENT_REQUIRED",
