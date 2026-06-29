@@ -108,16 +108,28 @@ export async function createAnalysisBatches(analysisId: string, wallets: ParsedW
   return chunks.length
 }
 
-async function claimNextBatch() {
-  const rows = await db.$queryRaw<BatchRow[]>`
-    SELECT b.*
-    FROM "AnalysisBatch" b
-    JOIN "Analysis" a ON a."id" = b."analysisId"
-    WHERE b."status" = 'pending'
-      AND a."status" IN ('pending', 'processing', 'enriching')
-    ORDER BY b."createdAt" ASC, b."batchIndex" ASC
-    LIMIT 1
-  `
+async function claimNextBatch(analysisId?: string) {
+  const rows = analysisId
+    ? await db.$queryRaw<BatchRow[]>`
+        SELECT b.*
+        FROM "AnalysisBatch" b
+        JOIN "Analysis" a ON a."id" = b."analysisId"
+        WHERE b."status" = 'pending'
+          AND b."analysisId" = ${analysisId}
+          AND a."status" IN ('pending', 'processing', 'enriching')
+        ORDER BY b."batchIndex" ASC, b."createdAt" ASC
+        LIMIT 1
+      `
+    : await db.$queryRaw<BatchRow[]>`
+        SELECT b.*
+        FROM "AnalysisBatch" b
+        JOIN "Analysis" a ON a."id" = b."analysisId"
+        WHERE b."status" = 'pending'
+          AND a."status" IN ('pending', 'processing', 'enriching')
+        ORDER BY b."createdAt" ASC, b."batchIndex" ASC
+        LIMIT 1
+      `
+
   const batch = rows[0]
   if (!batch) return null
 
@@ -173,6 +185,9 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
 
   await db.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.analysis.update({ where: { id: analysisId }, data: { status: "analyzing" } })
+    await tx.walletAnalysis.deleteMany({ where: { analysisId } })
+    await tx.walletEnrichment.deleteMany({ where: { analysisId } })
+    await tx.cluster.deleteMany({ where: { analysisId } })
 
     await tx.walletAnalysis.createMany({
       data: result.wallets.map((wallet) => ({
@@ -274,10 +289,7 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
   return true
 }
 
-export async function processNextAnalysisBatch() {
-  const batch = await claimNextBatch()
-  if (!batch) return { processed: false, status: "idle", message: "No pending analysis batch." }
-
+async function processBatch(batch: BatchRow) {
   const analysis = await db.analysis.findUnique({ where: { id: batch.analysisId }, include: { project: true } })
   if (!analysis) return { processed: true, status: "failed", message: "Analysis not found." }
 
@@ -324,4 +336,19 @@ export async function processNextAnalysisBatch() {
     if (!retrying) await finalizeAnalysisIfReady(batch.analysisId)
     return { processed: true, status: retrying ? "retrying" : "failed", analysisId: batch.analysisId, batchId: batch.id, message }
   }
+}
+
+export async function processNextAnalysisBatch() {
+  const batch = await claimNextBatch()
+  if (!batch) return { processed: false, status: "idle", message: "No pending analysis batch." }
+  return processBatch(batch)
+}
+
+export async function processAnalysisBatchForAnalysis(analysisId: string) {
+  const batch = await claimNextBatch(analysisId)
+  if (!batch) {
+    const completed = await finalizeAnalysisIfReady(analysisId)
+    return { processed: false, status: completed ? "completed" : "idle", analysisId, message: completed ? "Analysis completed." : "No pending batch for this analysis." }
+  }
+  return processBatch(batch)
 }
