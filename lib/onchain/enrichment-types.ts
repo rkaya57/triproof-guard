@@ -152,32 +152,41 @@ function envNumber(name: string, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
+function envWalletCap(name: string, fallback: number | null) {
+  const raw = process.env[name]?.trim().toLowerCase()
+  if (!raw) return fallback
+  if (["0", "false", "none", "unlimited", "off"].includes(raw)) return null
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
 export type OnChainConfig = {
   enabled: boolean
   providerPriority: string[]
-  maxWalletsPerAnalysis: number
+  /** null means no hard app-level wallet cap; provider/Vercel limits still apply. */
+  maxWalletsPerAnalysis: number | null
   batchSize: number
   requestDelayMs: number
   cacheTtlHours: number
 }
 
 export function getOnChainConfig(): OnChainConfig {
-  const priority = (process.env.ONCHAIN_PROVIDER_PRIORITY ?? "alchemy,etherscan,blockscout,mock")
+  const priority = (process.env.ONCHAIN_PROVIDER_PRIORITY ?? "etherscan,alchemy,blockscout,mock")
     .split(",")
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean)
 
   return {
     enabled: (process.env.ONCHAIN_ENRICHMENT_ENABLED ?? "true") !== "false",
-    providerPriority: priority.length ? priority : ["alchemy", "etherscan", "blockscout", "mock"],
-    maxWalletsPerAnalysis: envNumber("ONCHAIN_MAX_WALLETS_PER_ANALYSIS", 1000),
+    providerPriority: priority.length ? priority : ["etherscan", "alchemy", "blockscout", "mock"],
+    maxWalletsPerAnalysis: envWalletCap("ONCHAIN_MAX_WALLETS_PER_ANALYSIS", null),
     batchSize: envNumber("ONCHAIN_BATCH_SIZE", 25),
     requestDelayMs: envNumber("ONCHAIN_REQUEST_DELAY_MS", 250),
     cacheTtlHours: envNumber("ONCHAIN_CACHE_TTL_HOURS", 24),
   }
 }
 
-/** Free/demo wallet cap for on-chain enrichment. */
+/** Free/demo wallet cap for UI messaging only; production cap is env-controlled. */
 export const DEMO_MAX_WALLETS = 100
 
 export function emptyEnrichedData(
