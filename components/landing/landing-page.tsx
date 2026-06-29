@@ -4,16 +4,23 @@ import {
   Activity,
   ArrowRight,
   CheckCircle2,
+  CircleDollarSign,
+  FileCheck2,
   FileDown,
-  Fingerprint,
   GitBranch,
+  Layers3,
+  LockKeyhole,
   Network,
+  Radar,
   ShieldAlert,
+  ShieldCheck,
+  Sparkles,
   Upload,
+  WalletCards,
 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -22,42 +29,79 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 
-const problems = [
-  "Bot/farm wallets drain reward pools",
-  "Projects reward fake users",
-  "Traditional checks are not enough",
+const navLinks = [
+  ["Workflow", "#workflow"],
+  ["Features", "#features"],
+  ["Pricing", "/pricing"],
+  ["Demo", "/dashboard/demo"],
 ]
 
-const steps = [
-  { icon: Upload, title: "Upload wallet CSV" },
-  { icon: Activity, title: "Run probabilistic risk analysis" },
-  { icon: Network, title: "Detect suspicious clusters" },
-  { icon: FileDown, title: "Export clean winners" },
+const heroStats = [
+  ["100", "free wallet trial"],
+  ["6", "EVM chains ready"],
+  ["USDC", "simple revenue model"],
+]
+
+const consoleStats = [
+  ["500", "Wallets", "Uploaded list"],
+  ["8", "Clusters", "Suspicious groups"],
+  ["42.8", "Avg risk", "Risk snapshot"],
+]
+
+const riskRows = [
+  ["0x71b...a91", "96", "Critical", "Reject"],
+  ["0x38f...42c", "82", "High", "Review"],
+  ["0x9dd...117", "54", "Medium", "Review"],
+  ["0x4aa...8e2", "27", "Low", "Approve"],
+]
+
+const painPoints = [
+  {
+    icon: ShieldAlert,
+    title: "Reward pools leak to Sybil farms",
+    text: "A long wallet list does not mean real community growth. Farmers can inflate campaigns before distribution.",
+  },
+  {
+    icon: Network,
+    title: "Clusters are hard to review manually",
+    text: "Shared funding sources, repeated behavior and low-activity wallets are difficult to detect in spreadsheets.",
+  },
+  {
+    icon: FileCheck2,
+    title: "Teams need defensible reward decisions",
+    text: "Projects need clean lists, manual review queues and clear explanations before they send rewards.",
+  },
+]
+
+const workflow = [
+  { icon: Upload, title: "Upload wallet CSV", text: "Import campaign participants from airdrops, quests, testnets or allowlists." },
+  { icon: Activity, title: "Score wallet risk", text: "Run CSV-only, on-chain or hybrid analysis depending on the data available." },
+  { icon: Radar, title: "Detect clusters", text: "Surface suspicious groups, shared funding patterns and similar behavior." },
+  { icon: FileDown, title: "Export decision lists", text: "Download approved, manual review and rejected wallet outputs for the team." },
 ]
 
 const features = [
-  "Wallet Risk Score",
-  "Funding Source Analysis",
-  "Wallet Clustering",
-  "Behavior Similarity",
-  "Manual Review List",
-  "Clean Reward List",
-  "Known Entity Review",
-  "Decision Explanations",
-  "PDF/CSV Reports",
+  "Wallet risk score",
+  "Funding source analysis",
+  "Suspicious cluster detection",
+  "Behavior similarity signals",
+  "Approved / review / rejected lists",
+  "CSV and PDF reporting",
+  "Known entity review",
+  "Batch queue for large lists",
+  "USDC checkout flow",
 ]
 
-const roadmap = [
-  ["Guard MVP", "Wallet CSV analysis, entity detection, cluster review, PDF/CSV reports"],
-  ["Guard Pro", "Saved analyst decisions, API access, repeat campaign monitoring"],
-  ["Tri-Proof Human", "Adaptive challenge layer and wallet-bound human signal"],
+const useCases = [
+  ["Airdrops", "Clean reward lists before token or USDC distribution."],
+  ["Testnets", "Filter farmers before points or whitelist allocation."],
+  ["Galxe / Zealy quests", "Review wallet lists before community reward campaigns."],
 ]
 
-const previewRows = [
-  ["0x0000...0001", "96", "Critical", "CL-001"],
-  ["0x0000...0032", "82", "High", "CL-001"],
-  ["0x0000...0144", "27", "Low", "-"],
-  ["0x0000...0220", "54", "Medium", "CL-008"],
+const plans = [
+  ["Free Trial", "100 wallets", "Try the core report before payment", "/dashboard/new-analysis"],
+  ["Starter", "99 USDC", "Up to 1,000 wallet credits", "/checkout?plan=starter"],
+  ["Growth", "249 USDC", "Up to 10,000 wallet credits", "/checkout?plan=growth"],
 ]
 
 export function LandingPage() {
@@ -66,16 +110,16 @@ export function LandingPage() {
       <section className="security-grid relative overflow-hidden border-b border-border">
         <div aria-hidden className="pointer-events-none absolute inset-0">
           <div
-            className="glow-orb left-[-6rem] top-[-4rem] size-80"
+            className="glow-orb left-[-7rem] top-[-5rem] size-96"
             style={{ background: "var(--guard-cyan)" }}
           />
           <div
-            className="glow-orb right-[-8rem] top-24 size-96"
-            style={{ background: "var(--guard-purple)", animationDelay: "3s" }}
+            className="glow-orb right-[-9rem] top-20 size-[28rem]"
+            style={{ background: "var(--guard-purple)", animationDelay: "2s" }}
           />
           <div
-            className="glow-orb bottom-[-8rem] left-1/3 size-80"
-            style={{ background: "var(--guard-cyan)", opacity: 0.35, animationDelay: "6s" }}
+            className="glow-orb bottom-[-10rem] left-1/3 size-96"
+            style={{ background: "var(--guard-cyan)", opacity: 0.32, animationDelay: "5s" }}
           />
         </div>
 
@@ -94,84 +138,88 @@ export function LandingPage() {
             <div className="flex flex-col">
               <span className="text-sm font-semibold">Tri-Proof Guard</span>
               <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-primary/80">
-                Sybil Guard
+                Wallet Risk Engine
               </span>
             </div>
           </Link>
           <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
-            <Link href="#features" className="transition-colors hover:text-primary">
-              Features
-            </Link>
-            <Link href="/pricing" className="transition-colors hover:text-primary">
-              Pricing
-            </Link>
-            <Link href="/dashboard/demo" className="transition-colors hover:text-primary">
-              Demo
-            </Link>
+            {navLinks.map(([label, href]) => (
+              <Link key={label} href={href} className="transition-colors hover:text-primary">
+                {label}
+              </Link>
+            ))}
           </nav>
-          <Link href="/login" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>
-            Login
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/login" className={`${buttonVariants({ variant: "outline" })} hover-lift hidden sm:inline-flex`}>
+              Login
+            </Link>
+            <Link href="/dashboard/new-analysis" className={`${buttonVariants()} glow-primary hover-lift`}>
+              Start Free
+            </Link>
+          </div>
         </header>
 
-        <div className="relative z-10 mx-auto grid max-w-7xl gap-10 px-5 pb-16 pt-10 sm:px-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:pb-24 lg:pt-20">
+        <div className="relative z-10 mx-auto grid max-w-7xl gap-10 px-5 pb-16 pt-10 sm:px-8 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:pb-24 lg:pt-20">
           <div className="reveal-up flex flex-col gap-8">
             <div className="flex flex-col gap-5">
-              <span className="cyber-chip w-fit">
-                Web3 Sybil Defense • Live MVP
-              </span>
-              <h1 className="text-gradient animate-gradient-text max-w-4xl text-4xl font-semibold leading-tight text-balance sm:text-6xl">
-                Protect your Web3 campaign from Sybil farms.
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="cyber-chip">Web3 Anti-Sybil MVP</span>
+                <Badge variant="secondary" className="border-primary/30 text-primary">
+                  100 wallets free
+                </Badge>
+              </div>
+              <h1 className="text-gradient animate-gradient-text max-w-4xl text-4xl font-semibold leading-tight text-balance sm:text-6xl lg:text-7xl">
+                Stop Sybil farms before reward distribution.
               </h1>
               <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-                Tri-Proof Guard analyzes wallet lists, detects suspicious clusters,
-                scores wallet risk and exports cleaner reward lists before airdrops,
-                testnets and whitelist campaigns.
+                Tri-Proof Guard helps Web3 teams analyze campaign wallet lists,
+                flag suspicious clusters and export cleaner reward decisions before
+                airdrops, testnets and community payouts.
               </p>
             </div>
+
             <div className="flex flex-col gap-3 sm:flex-row">
               <Link
                 href="/dashboard/new-analysis"
                 className={`${buttonVariants({ size: "lg" })} glow-primary hover-lift`}
               >
-                Start Analysis <ArrowRight data-icon="inline-end" />
+                Start 100-wallet trial <ArrowRight data-icon="inline-end" />
               </Link>
               <Link
-                href="/dashboard/demo"
+                href="/pricing"
                 className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}
               >
-                View Demo Report
+                View USDC plans
               </Link>
             </div>
-            <div className="flex flex-wrap gap-3 font-mono text-xs uppercase text-primary">
-              <span className="flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3 py-1">
-                <span className="pulse-dot" /> Upload wallets
-              </span>
-              <span className="rounded-full border border-primary/25 bg-primary/10 px-3 py-1">
-                Detect Sybil clusters
-              </span>
-              <span className="rounded-full border border-primary/25 bg-primary/10 px-3 py-1">
-                Export clean winners
-              </span>
+
+            <div className="grid max-w-2xl gap-3 sm:grid-cols-3">
+              {heroStats.map(([value, label], index) => (
+                <div
+                  key={label}
+                  className="rounded-xl border border-primary/20 bg-background/45 px-4 py-3 backdrop-blur reveal-up"
+                  style={{ animationDelay: `${index * 0.08}s` }}
+                >
+                  <p className="text-gradient text-2xl font-semibold">{value}</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div className="glass-panel premium-card animated-border data-scan relative min-h-[430px] overflow-hidden rounded-2xl p-5 reveal-up delay-200">
-            <div className="mb-5 flex items-center justify-between">
+          <div className="glass-panel premium-card animated-border data-scan relative min-h-[460px] overflow-hidden rounded-3xl p-5 reveal-up delay-200">
+            <div className="mb-5 flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-medium">Campaign Risk Console</p>
-                <p className="text-xs text-muted-foreground">Ethereum Airdrop Wallet Audit</p>
+                <p className="text-xs text-muted-foreground">Base Airdrop Wallet Audit</p>
               </div>
               <Badge variant="secondary" className="gap-2 border-primary/30 text-primary">
-                <span className="pulse-dot" /> Live preview
+                <span className="pulse-dot" /> Live workflow
               </Badge>
             </div>
+
             <div className="grid gap-3 sm:grid-cols-3">
-              {[
-                ["500", "Wallets", "Total uploaded"],
-                ["8", "Clusters", "Manual review"],
-                ["42.8", "Avg risk", "Campaign score"],
-              ].map(([value, label, detail], index) => (
+              {consoleStats.map(([value, label, detail], index) => (
                 <div
                   key={label}
                   className="premium-card hover-lift rounded-xl border border-border bg-background/60 p-4"
@@ -183,18 +231,19 @@ export function LandingPage() {
                 </div>
               ))}
             </div>
-            <div className="mt-5 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-[0.82fr_1.18fr]">
               <div className="rounded-xl border border-border bg-background/50 p-4">
                 <div className="mb-4 flex items-center justify-between text-sm">
                   <span>Risk distribution</span>
-                  <span className="text-muted-foreground">500 rows</span>
+                  <span className="text-muted-foreground">CSV + on-chain</span>
                 </div>
-                <div className="flex h-44 items-end gap-3">
+                <div className="flex h-48 items-end gap-3">
                   {[
-                    ["Low", "112px", "var(--guard-green)", "0s"],
-                    ["Medium", "74px", "var(--guard-yellow)", "0.3s"],
-                    ["High", "48px", "var(--guard-orange)", "0.6s"],
-                    ["Critical", "32px", "var(--guard-red)", "0.9s"],
+                    ["Low", "128px", "var(--guard-green)", "0s"],
+                    ["Medium", "88px", "var(--guard-yellow)", "0.3s"],
+                    ["High", "64px", "var(--guard-orange)", "0.6s"],
+                    ["Critical", "42px", "var(--guard-red)", "0.9s"],
                   ].map(([label, height, color, delay]) => (
                     <div key={label} className="flex flex-1 flex-col items-center gap-2">
                       <div
@@ -211,75 +260,76 @@ export function LandingPage() {
                   ))}
                 </div>
               </div>
+
               <div className="overflow-hidden rounded-xl border border-border bg-background/50">
-                {previewRows.map(([wallet, score, risk, cluster], index) => (
+                <div className="grid grid-cols-[1fr_72px_86px_80px] border-b border-border bg-primary/5 px-4 py-3 text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <span>Wallet</span>
+                  <span>Score</span>
+                  <span>Risk</span>
+                  <span>Action</span>
+                </div>
+                {riskRows.map(([wallet, score, risk, action], index) => (
                   <div
                     key={wallet}
-                    className="grid grid-cols-[1fr_72px_90px_70px] border-b border-border px-4 py-3 text-xs transition-colors last:border-b-0 hover:bg-primary/5"
+                    className="grid grid-cols-[1fr_72px_86px_80px] border-b border-border px-4 py-3 text-xs transition-colors last:border-b-0 hover:bg-primary/5"
                     style={{ animationDelay: `${index * 0.08}s` }}
                   >
                     <span className="font-mono text-muted-foreground">{wallet}</span>
                     <span>{score}</span>
                     <span>{risk}</span>
-                    <span className="text-primary">{cluster}</span>
+                    <span className="text-primary">{action}</span>
                   </div>
                 ))}
               </div>
             </div>
-          </div>
-        </div>
 
-        <div className="relative z-10 border-t border-border/70 bg-background/40 backdrop-blur">
-          <div className="mx-auto grid max-w-7xl grid-cols-2 gap-px overflow-hidden md:grid-cols-4">
-            {[
-              ["100K+", "Wallets queue-ready"],
-              ["6", "EVM chains supported"],
-              ["Batch", "Large CSV processing"],
-              ["No token", "USDC revenue model"],
-            ].map(([value, label]) => (
-              <div
-                key={label}
-                className="hover-lift flex flex-col items-center gap-1 px-5 py-8 text-center transition-colors hover:bg-primary/5"
-              >
-                <span className="text-gradient text-3xl font-semibold sm:text-4xl">
-                  {value}
-                </span>
-                <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                  {label}
-                </span>
-              </div>
-            ))}
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              {[
+                [LockKeyhole, "No token required"],
+                [CircleDollarSign, "USDC checkout"],
+                [Layers3, "Batch queue ready"],
+              ].map(([Icon, label]) => (
+                <div key={label as string} className="flex items-center gap-2 rounded-xl border border-border bg-background/45 px-3 py-2 text-xs text-muted-foreground">
+                  <Icon className="size-4 text-primary" />
+                  <span>{label as string}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
       <section className="mx-auto grid max-w-7xl gap-5 px-5 py-16 sm:px-8 lg:grid-cols-3">
-        {problems.map((problem, index) => (
-          <Card key={problem} className="glass-panel premium-card hover-lift reveal-up" style={{ animationDelay: `${index * 0.1}s` }}>
+        {painPoints.map((item, index) => (
+          <Card key={item.title} className="glass-panel premium-card hover-lift reveal-up" style={{ animationDelay: `${index * 0.1}s` }}>
             <CardHeader>
-              <ShieldAlert className="text-destructive" />
-              <CardTitle>{problem}</CardTitle>
+              <item.icon className="text-destructive" />
+              <CardTitle>{item.title}</CardTitle>
+              <CardDescription>{item.text}</CardDescription>
             </CardHeader>
           </Card>
         ))}
       </section>
 
-      <section className="border-y border-border bg-muted/30">
+      <section id="workflow" className="border-y border-border bg-muted/20">
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
-          <div className="mb-10 flex flex-col gap-3">
-            <h2 className="text-gradient text-3xl font-semibold">A clean workflow for reward decisions.</h2>
-            <p className="max-w-2xl text-muted-foreground">
-              The MVP focuses on wallet list analysis only: no biometrics, no token gate,
-              no Proof of Humanity implementation.
+          <div className="mb-10 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">
+                Operator workflow
+              </Badge>
+              <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">
+                From raw wallet CSV to cleaner reward list.
+              </h2>
+            </div>
+            <p className="max-w-xl text-muted-foreground">
+              The product is decision support, not identity certification. Your team keeps the final decision.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-4">
-            {steps.map((step, index) => (
-              <Card
-                key={step.title}
-                className="glass-panel premium-card hover-lift group relative overflow-hidden"
-              >
-                <span className="pointer-events-none absolute right-3 top-2 font-mono text-4xl font-bold text-primary/10 transition-colors group-hover:text-primary/20">
+            {workflow.map((step, index) => (
+              <Card key={step.title} className="glass-panel premium-card hover-lift group relative overflow-hidden">
+                <span className="pointer-events-none absolute right-3 top-2 font-mono text-5xl font-bold text-primary/10 transition-colors group-hover:text-primary/20">
                   {String(index + 1).padStart(2, "0")}
                 </span>
                 <CardHeader>
@@ -287,6 +337,7 @@ export function LandingPage() {
                     <step.icon />
                   </span>
                   <CardTitle className="text-base">{step.title}</CardTitle>
+                  <CardDescription>{step.text}</CardDescription>
                 </CardHeader>
               </Card>
             ))}
@@ -295,20 +346,22 @@ export function LandingPage() {
       </section>
 
       <section id="features" className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
-        <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr]">
+        <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
           <div>
-            <h2 className="text-gradient text-3xl font-semibold">Decision support, not identity claims.</h2>
-            <p className="mt-4 text-muted-foreground">
-              Tri-Proof Guard surfaces suspicious patterns and clean list suggestions so
-              project teams can make final reward decisions with better evidence.
+            <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">
+              Guard engine
+            </Badge>
+            <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">
+              Built for campaign teams, not generic analytics dashboards.
+            </h2>
+            <p className="mt-4 leading-7 text-muted-foreground">
+              Tri-Proof Guard focuses on one job: help Web3 projects review wallet lists before rewards go out.
+              It returns signals, clusters and suggested actions without making impossible “100% bot detection” claims.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             {features.map((feature) => (
-              <div
-                key={feature}
-                className="premium-card hover-lift flex items-center gap-3 rounded-lg border border-border bg-card/70 px-4 py-3 transition-colors hover:border-primary/45 hover:bg-primary/5"
-              >
+              <div key={feature} className="premium-card hover-lift flex items-center gap-3 rounded-lg border border-border bg-card/70 px-4 py-3 transition-colors hover:border-primary/45 hover:bg-primary/5">
                 <CheckCircle2 className="text-primary" />
                 <span className="text-sm">{feature}</span>
               </div>
@@ -317,22 +370,55 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 pb-16 sm:px-8">
+      <section className="border-y border-border bg-muted/20">
+        <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
+          <div className="mb-8 flex flex-col gap-3">
+            <Badge variant="secondary" className="w-fit gap-2 border-primary/30 text-primary">
+              <WalletCards className="size-3.5" />
+              Use cases
+            </Badge>
+            <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">
+              Useful anywhere wallets compete for rewards.
+            </h2>
+          </div>
+          <div className="grid gap-5 md:grid-cols-3">
+            {useCases.map(([title, text]) => (
+              <Card key={title} className="glass-panel premium-card hover-lift">
+                <CardHeader>
+                  <CardTitle>{title}</CardTitle>
+                  <CardDescription>{text}</CardDescription>
+                </CardHeader>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
+        <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">
+              Simple pricing
+            </Badge>
+            <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">
+              Start free. Upgrade with USDC when the list gets bigger.
+            </h2>
+          </div>
+          <Link href="/pricing" className={`${buttonVariants({ variant: "outline" })} hover-lift w-fit`}>
+            Full pricing <ArrowRight data-icon="inline-end" />
+          </Link>
+        </div>
         <div className="grid gap-5 md:grid-cols-3">
-          {[
-            ["Starter", "49-99 USDC", "Up to 5,000 wallets"],
-            ["Growth", "199-499 USDC", "Cluster analysis and PDF report"],
-            ["Pro", "1,000+ USDC", "100,000+ wallets and API beta"],
-          ].map(([name, price, detail]) => (
+          {plans.map(([name, price, detail, href]) => (
             <Card key={name} className="glass-panel premium-card hover-lift">
               <CardHeader>
                 <CardTitle>{name}</CardTitle>
                 <CardDescription>{detail}</CardDescription>
               </CardHeader>
-              <CardContent className="flex items-center justify-between">
+              <CardContent className="flex items-center justify-between gap-4">
                 <span className="text-gradient text-xl font-semibold">{price}</span>
-                <Link href="/pricing" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>
-                  View
+                <Link href={href} className={`${buttonVariants({ variant: name === "Free Trial" ? "default" : "outline" })} hover-lift`}>
+                  Open
                 </Link>
               </CardContent>
             </Card>
@@ -347,10 +433,16 @@ export function LandingPage() {
               <GitBranch className="size-3.5" />
               Roadmap
             </Badge>
-            <h2 className="text-gradient text-3xl font-semibold">Built in layers for campaign security teams.</h2>
+            <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">
+              Built in layers, without forcing a native token.
+            </h2>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
-            {roadmap.map(([phase, detail], index) => (
+            {[
+              ["Guard MVP", "CSV analysis, risk score, cluster review and PDF/CSV exports."],
+              ["Guard Pro", "Saved decisions, team review workflow, API access and repeat campaign monitoring."],
+              ["Tri-Proof Human", "Future adaptive challenge layer and wallet-bound human signal."],
+            ].map(([phase, detail], index) => (
               <div key={phase} className="glass-panel premium-card hover-lift rounded-lg p-5">
                 <span className="cyber-chip mb-3">Phase {index + 1}</span>
                 <p className="mt-1 font-semibold">{phase}</p>
@@ -364,37 +456,41 @@ export function LandingPage() {
       <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
         <div className="glass-panel scan-accent premium-card animated-border relative flex flex-col items-start justify-between gap-6 overflow-hidden rounded-2xl p-8 sm:p-10 md:flex-row md:items-center">
           <div className="relative z-10">
+            <div className="mb-3 flex items-center gap-2 text-primary">
+              <Sparkles className="size-5" />
+              <span className="font-mono text-xs uppercase tracking-[0.2em]">Live MVP</span>
+            </div>
             <h2 className="text-gradient text-2xl font-semibold sm:text-3xl">
-              Analyze your wallet list in minutes
+              Test the first 100 wallets free today.
             </h2>
             <p className="mt-2 max-w-xl text-muted-foreground">
-              Start with CSV upload, export approved wallets, and route edge cases to manual review.
+              Upload a CSV, review risk signals and see whether Tri-Proof Guard fits your Web3 campaign workflow.
             </p>
           </div>
-          <div className="relative z-10 flex gap-3">
-            <Link href="/register" className={`${buttonVariants()} glow-primary hover-lift`}>
-              Create Account
+          <div className="relative z-10 flex flex-col gap-3 sm:flex-row">
+            <Link href="/dashboard/new-analysis" className={`${buttonVariants()} glow-primary hover-lift`}>
+              Start free analysis
             </Link>
             <Link href="/dashboard/demo" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>
-              Demo Report
+              View demo report
             </Link>
           </div>
         </div>
       </section>
 
-      <section className="border-t border-border bg-muted/20">
+      <footer className="border-t border-border bg-muted/20">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-8 text-sm text-muted-foreground sm:px-8 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-2">
-            <Fingerprint />
-            <span>
-              Tri-Proof Human - adaptive human challenge and wallet-bound human signal. Coming after Guard MVP.
-            </span>
+            <ShieldCheck className="text-primary" />
+            <span>Tri-Proof Guard — Web3 wallet risk analysis for campaign teams.</span>
           </div>
-          <Button variant="ghost" disabled>
-            Coming later
-          </Button>
+          <div className="flex gap-4">
+            <Link href="/pricing" className="hover:text-primary">Pricing</Link>
+            <Link href="/dashboard/demo" className="hover:text-primary">Demo</Link>
+            <Link href="/login" className="hover:text-primary">Login</Link>
+          </div>
         </div>
-      </section>
+      </footer>
     </main>
   )
 }
