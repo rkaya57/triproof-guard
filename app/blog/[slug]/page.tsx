@@ -3,24 +3,37 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 
-import { getPostBySlug, getPublishedPosts } from "@/lib/blog/posts"
+import { getPostBySlugFromDb } from "@/lib/blog/db"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 
-export function generateStaticParams() {
-  return getPublishedPosts().map((post) => ({ slug: post.slug }))
+export const dynamic = "force-dynamic"
+
+function readingTime(content: string) {
+  const words = content.split(/\s+/).filter(Boolean).length
+  return `${Math.max(1, Math.ceil(words / 220))} min read`
+}
+
+function renderContent(content: string) {
+  return content
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean)
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const post = getPostBySlug(slug)
+  const post = await getPostBySlugFromDb(slug).catch(() => null)
   if (!post) return {}
-  return { title: `${post.title} | Tri-Proof Guard`, description: post.excerpt }
+  return {
+    title: post.seoTitle || `${post.title} | Tri-Proof Guard`,
+    description: post.seoDescription || post.excerpt || undefined,
+  }
 }
 
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const post = getPostBySlug(slug)
+  const post = await getPostBySlugFromDb(slug).catch(() => null)
   if (!post) notFound()
 
   return (
@@ -37,22 +50,33 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
         <Link href="/blog" className="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary">
           <ArrowLeft className="size-4" /> Back to blog
         </Link>
-        <div className="glass-panel rounded-3xl p-8 sm:p-10">
-          <div className="mb-5 flex flex-wrap gap-2">
-            <Badge variant="secondary" className="border-primary/30 text-primary">{post.category}</Badge>
-            <Badge variant="outline">{post.readTime}</Badge>
-          </div>
-          <h1 className="text-gradient max-w-4xl text-4xl font-semibold sm:text-6xl">{post.title}</h1>
-          <p className="mt-5 max-w-3xl text-lg text-muted-foreground">{post.excerpt}</p>
-          <div className="mt-8 flex flex-wrap gap-2">
-            {post.tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)}
+
+        <div className="glass-panel overflow-hidden rounded-3xl">
+          {post.coverImageUrl && (
+            <div className="h-72 border-b border-border bg-primary/10 sm:h-96">
+              <img src={post.coverImageUrl} alt={post.title} className="h-full w-full object-cover" />
+            </div>
+          )}
+          <div className="p-8 sm:p-10">
+            <div className="mb-5 flex flex-wrap gap-2">
+              <Badge variant="secondary" className="border-primary/30 text-primary">{post.category ?? "Web3 Security"}</Badge>
+              <Badge variant="outline">{readingTime(post.content)}</Badge>
+            </div>
+            <h1 className="text-gradient max-w-4xl text-4xl font-semibold sm:text-6xl">{post.title}</h1>
+            {post.excerpt && <p className="mt-5 max-w-3xl text-lg text-muted-foreground">{post.excerpt}</p>}
+            <div className="mt-8 flex flex-wrap gap-2">
+              {(post.tags ?? []).map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)}
+            </div>
           </div>
         </div>
 
-        <div className="prose prose-invert mt-10 max-w-none">
-          {post.content.map((paragraph) => (
-            <p key={paragraph} className="mb-5 text-lg leading-8 text-muted-foreground">{paragraph}</p>
-          ))}
+        <div className="mt-10 max-w-none">
+          {renderContent(post.content).map((block) => {
+            if (block.startsWith("### ")) return <h3 key={block} className="mb-4 mt-8 text-2xl font-semibold">{block.replace(/^### /, "")}</h3>
+            if (block.startsWith("## ")) return <h2 key={block} className="text-gradient mb-5 mt-10 text-3xl font-semibold">{block.replace(/^## /, "")}</h2>
+            if (block.startsWith("# ")) return null
+            return <p key={block} className="mb-5 text-lg leading-8 text-muted-foreground">{block}</p>
+          })}
         </div>
 
         <div className="mt-12 rounded-2xl border border-primary/25 bg-primary/5 p-6">
