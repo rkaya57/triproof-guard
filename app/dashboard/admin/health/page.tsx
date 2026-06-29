@@ -1,9 +1,26 @@
+import Link from "next/link"
+
 import { getAdminHealthChecks } from "@/lib/admin/health"
-import { requireAdminUser } from "@/lib/auth/admin"
+import { getAdminUser } from "@/lib/auth/admin"
+import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default async function Page() {
-  await requireAdminUser()
+  const admin = await getAdminUser()
+  if (!admin) {
+    return (
+      <Card className="glass-panel mx-auto max-w-2xl">
+        <CardHeader>
+          <CardTitle>Admin login required</CardTitle>
+          <CardDescription>Log in with a Tri-Proof admin email.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link href="/login" className={buttonVariants()}>Login</Link>
+        </CardContent>
+      </Card>
+    )
+  }
+
   const checks = await getAdminHealthChecks()
 
   return (
