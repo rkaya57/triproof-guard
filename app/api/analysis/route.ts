@@ -8,6 +8,7 @@ import { db } from "@/lib/db/prisma"
 import { analyzeWallets } from "@/lib/risk-engine"
 import { newAnalysisSchema } from "@/lib/validators/wallet"
 import { getOnChainConfig, isEnrichableChain } from "@/lib/onchain/enrichment-types"
+import { getOnChainProvider } from "@/lib/onchain/provider-router"
 import { createAnalysisBatches } from "@/lib/analysis/batch-worker"
 import { getAccessPassForUser } from "@/lib/billing/access-pass"
 import type { AnalysisMode, EnrichmentMeta } from "@/types"
@@ -58,7 +59,7 @@ export async function POST(request: Request) {
     campaignType: formData.get("campaignType"),
     chain: formData.get("chain"),
     notes: formData.get("notes") ?? "",
-    analysisMode: formData.get("analysisMode") ?? "csv_only",
+    analysisMode: formData.get("analysisMode") ?? "onchain",
     campaignContracts: formData.get("campaignContracts") ?? "",
   })
 
@@ -116,89 +117,54 @@ export async function POST(request: Request) {
 
   const mode = parsedForm.data.analysisMode as AnalysisMode
   const config = getOnChainConfig()
-  const warnings: string[] = []
-  const wantsEnrichment = mode === "onchain" || mode === "hybrid"
   const chainEnrichable = isEnrichableChain(parsedForm.data.chain)
+  const warnings: string[] = []
+
+  if (!config.enabled) {
+    return NextResponse.json(
+      { error: "Real on-chain analysis is disabled. Set ONCHAIN_ENRICHMENT_ENABLED=true in Vercel." },
+      { status: 400 }
+    )
+  }
+
+  if (!chainEnrichable) {
+    return NextResponse.json(
+      { error: `Real on-chain analysis is not available for ${parsedForm.data.chain}. Select Ethereum, Base, Arbitrum, Optimism, Polygon, or BNB Chain.` },
+      { status: 400 }
+    )
+  }
+
+  const selection = getOnChainProvider(parsedForm.data.chain)
+  if (selection.usedMockFallback || selection.provider.id === "mock") {
+    return NextResponse.json(
+      {
+        error:
+          `No real on-chain provider is configured for ${parsedForm.data.chain}. Add ETHERSCAN_API_KEY or ALCHEMY_API_KEY in Vercel before running analysis.`,
+      },
+      { status: 400 }
+    )
+  }
+
+  if (parsedCsv.mode === "basic") {
+    warnings.push(
+      "Address-only CSV detected. Real on-chain enrichment will be used; CSV-only/basic scoring is disabled."
+    )
+  }
+
   const projectName =
     parsedForm.data.projectName ||
     `${parsedForm.data.chain} ${parsedForm.data.campaignType} Wallet Audit`
   const notes = [
     parsedForm.data.notes || "",
-    parsedCsv.mode === "basic" ? "Basic CSV used, limited analysis mode" : "",
+    parsedCsv.mode === "basic"
+      ? "Address-only CSV detected. Real on-chain enrichment required; no synthetic CSV-only data will be generated."
+      : "Enriched CSV uploaded. Hybrid/On-chain mode will use real provider data where needed.",
   ]
     .filter(Boolean)
     .join("\n")
 
-  if (wantsEnrichment && config.enabled && chainEnrichable) {
-    try {
-      const created = await db.$transaction(async (tx: Prisma.TransactionClient) => {
-        const project = await tx.project.create({
-          data: {
-            userId: user.id,
-            name: projectName,
-            campaignType: parsedForm.data.campaignType,
-            chain: parsedForm.data.chain,
-            notes: notes || null,
-          },
-        })
-
-        return tx.analysis.create({
-          data: {
-            projectId: project.id,
-            status: "processing",
-            totalWallets: parsedCsv.wallets.length,
-            csvFileName: file.name,
-            analysisMode: mode,
-            enrichmentStatus: "pending",
-          },
-        })
-      })
-
-      const batchCount = await createAnalysisBatches(
-        created.id,
-        parsedCsv.wallets,
-        config.batchSize
-      )
-
-      return NextResponse.json({
-        analysisId: created.id,
-        status: "processing",
-        batchCount,
-        parseSummary: {
-          mode: parsedCsv.mode,
-          analysisMode: mode,
-          validWallets: parsedCsv.wallets.length,
-          issues: parsedCsv.issues,
-          duplicates: parsedCsv.duplicates,
-          warnings,
-          note: `On-chain analysis queued in ${batchCount.toLocaleString()} batches. Report will update when processing completes.`,
-        },
-      })
-    } catch (error) {
-      if (isDatabaseConnectionError(error)) {
-        return NextResponse.json(
-          { error: "Database is required for background on-chain processing." },
-          { status: 503 }
-        )
-      }
-      throw error
-    }
-  }
-
-  if (wantsEnrichment && !chainEnrichable) {
-    warnings.push(
-      `On-chain enrichment is not available for ${parsedForm.data.chain} yet. CSV Only analysis was used.`
-    )
-  } else if (wantsEnrichment && !config.enabled) {
-    warnings.push("On-chain enrichment is disabled. CSV Only analysis was used.")
-  }
-
-  const enrichmentMeta: EnrichmentMeta | null = null
-  const result = analyzeWallets(parsedCsv.wallets, enrichmentMeta)
-  let analysis: { id: string }
-
   try {
-    analysis = await db.$transaction(async (tx: Prisma.TransactionClient) => {
+    const created = await db.$transaction(async (tx: Prisma.TransactionClient) => {
       const project = await tx.project.create({
         data: {
           userId: user.id,
@@ -209,88 +175,61 @@ export async function POST(request: Request) {
         },
       })
 
-      const createdAnalysis = await tx.analysis.create({
+      return tx.analysis.create({
         data: {
           projectId: project.id,
-          status: "completed",
-          totalWallets: result.totalWallets,
-          approvedCount: result.approvedCount,
-          manualReviewCount: result.manualReviewCount,
-          rejectedCount: result.rejectedCount,
-          averageRiskScore: result.averageRiskScore,
-          suspiciousClustersCount: result.clusters.length,
+          status: "processing",
+          totalWallets: parsedCsv.wallets.length,
           csvFileName: file.name,
           analysisMode: mode,
-          completedAt: new Date(),
+          enrichmentStatus: "pending",
         },
       })
+    })
 
-      await tx.walletAnalysis.createMany({
-        data: result.wallets.map((wallet) => ({
-          analysisId: createdAnalysis.id,
-          walletAddress: wallet.walletAddress,
-          chain: wallet.chain,
-          entityLabel: wallet.entityLabel,
-          entityType: wallet.entityType,
-          entityRiskReason: wallet.entityRiskReason,
-          riskScore: wallet.riskScore,
-          riskLevel: wallet.riskLevel,
-          status: wallet.status,
-          recommendedAction: wallet.recommendedAction,
-          statusExplanation: wallet.statusExplanation,
-          fundingSource: wallet.fundingSource,
-          txCount: wallet.txCount,
-          walletAgeDays: wallet.walletAgeDays,
-          totalVolume: wallet.totalVolume,
-          contractsCount: wallet.contractsCount,
-          campaignActionsCount: wallet.campaignActionsCount,
-          clusterId: wallet.clusterId,
-          reasons: wallet.reasons,
-          firstSeen: toDate(wallet.firstSeen),
-          lastSeen: toDate(wallet.lastSeen),
-          nativeBalance: wallet.nativeBalance ?? null,
-          tokenCount: wallet.tokenCount ?? null,
-          uniqueCounterparties: wallet.uniqueCounterparties ?? null,
-          lastActiveDaysAgo: wallet.lastActiveDaysAgo ?? null,
-          isContract: wallet.isContract ?? null,
-          enrichmentProvider: wallet.enrichmentProvider ?? null,
-          enrichmentStatus: wallet.enrichmentStatus ?? null,
-        })),
-      })
+    const batchCount = await createAnalysisBatches(
+      created.id,
+      parsedCsv.wallets,
+      config.batchSize
+    )
 
-      if (result.clusters.length) {
-        await tx.cluster.createMany({
-          data: result.clusters.map((cluster) => ({
-            analysisId: createdAnalysis.id,
-            clusterLabel: cluster.clusterLabel,
-            walletCount: cluster.walletCount,
-            averageRiskScore: cluster.averageRiskScore,
-            sharedFundingSource: cluster.sharedFundingSource,
-            behaviorSimilarityScore: cluster.behaviorSimilarityScore,
-            suggestedAction: cluster.suggestedAction,
-            reasons: cluster.reasons,
-          })),
-        })
-      }
-
-      return createdAnalysis
+    return NextResponse.json({
+      analysisId: created.id,
+      status: "processing",
+      batchCount,
+      parseSummary: {
+        mode: parsedCsv.mode,
+        analysisMode: mode,
+        validWallets: parsedCsv.wallets.length,
+        issues: parsedCsv.issues,
+        duplicates: parsedCsv.duplicates,
+        warnings,
+        note: `Real on-chain analysis queued in ${batchCount.toLocaleString()} batches using ${selection.provider.id}. No CSV-only or mock wallet history will be used.`,
+      },
     })
   } catch (error) {
-    if (!isDatabaseConnectionError(error)) {
-      throw error
+    if (isDatabaseConnectionError(error)) {
+      return NextResponse.json(
+        { error: "Database is required for background on-chain processing." },
+        { status: 503 }
+      )
     }
-
-    analysis = await saveDevAnalysis({
-      userId: user.id,
-      projectName,
-      campaignType: parsedForm.data.campaignType,
-      chain: parsedForm.data.chain,
-      notes: notes || null,
-      csvFileName: file.name,
-      analysisMode: mode,
-      result,
-    })
+    throw error
   }
+
+  // Unreachable fallback kept only for TypeScript safety if future code paths change.
+  const enrichmentMeta: EnrichmentMeta | null = null
+  const result = analyzeWallets(parsedCsv.wallets, enrichmentMeta)
+  const analysis = await saveDevAnalysis({
+    userId: user.id,
+    projectName,
+    campaignType: parsedForm.data.campaignType,
+    chain: parsedForm.data.chain,
+    notes: notes || null,
+    csvFileName: file.name,
+    analysisMode: mode,
+    result,
+  })
 
   return NextResponse.json({
     analysisId: analysis.id,
@@ -302,10 +241,7 @@ export async function POST(request: Request) {
       issues: parsedCsv.issues,
       duplicates: parsedCsv.duplicates,
       warnings,
-      note:
-        parsedCsv.mode === "basic"
-          ? "Basic CSV used, limited analysis mode"
-          : "Enriched CSV used",
+      note: "Fallback analysis completed without synthetic wallet history.",
     },
   })
 }
