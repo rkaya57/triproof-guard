@@ -6,7 +6,7 @@ import {
   type WalletEnrichmentResult,
 } from "@/lib/onchain/enrichment-types"
 import { getCachedEnrichment, setCachedEnrichment } from "@/lib/onchain/cache"
-import { getOnChainProvider, mockProvider } from "@/lib/onchain/provider-router"
+import { getOnChainProvider } from "@/lib/onchain/provider-router"
 import { chunk, RateLimitError, sleep, withRetry } from "@/lib/onchain/rate-limit"
 
 export type EnrichWalletsInput = {
@@ -14,7 +14,6 @@ export type EnrichWalletsInput = {
   chain: string
   mode: AnalysisMode
   options?: EnrichWalletOptions
-  /** queue-ready progress hook: fires after each batch with processed count */
   onProgress?: (processed: number, total: number) => void
 }
 
@@ -23,18 +22,6 @@ export type EnrichWalletsOutput = {
   summary: EnrichmentSummary
 }
 
-/**
- * Orchestrates on-chain enrichment for a set of wallet addresses.
- *
- * - Processes wallets in batches with a delay between batches (rate-limit safe).
- * - Uses a short-lived cache to avoid repeat calls for the same wallet/chain.
- * - Retries transient failures with exponential backoff.
- * - Isolates per-wallet failures: a failed wallet falls back to mock data (or a
- *   `failed` status with empty data) WITHOUT failing the whole analysis.
- *
- * This runs synchronously inside the analysis request for the MVP, but the
- * batch + progress design maps cleanly onto a background queue later.
- */
 export async function enrichWallets(
   input: EnrichWalletsInput
 ): Promise<EnrichWalletsOutput> {
@@ -42,15 +29,17 @@ export async function enrichWallets(
   const config = getOnChainConfig()
   const { provider, usedMockFallback } = getOnChainProvider(chain)
 
+  if (usedMockFallback || provider.id === "mock") {
+    throw new Error(
+      `No real on-chain provider is configured for ${chain}. Add ETHERSCAN_API_KEY or ALCHEMY_API_KEY before running on-chain analysis.`
+    )
+  }
+
   const results = new Map<string, WalletEnrichmentResult>()
   const warnings = new Set<string>()
   let enrichedCount = 0
   let failedCount = 0
   let cacheHits = 0
-
-  if (usedMockFallback && provider.id === "mock") {
-    warnings.add("API key not configured. Mock enrichment data was used for this analysis.")
-  }
 
   const batches = chunk(addresses, config.batchSize)
   let processed = 0
@@ -60,9 +49,8 @@ export async function enrichWallets(
 
     await Promise.all(
       batch.map(async (address) => {
-        // 1. Cache hit?
         const cached = getCachedEnrichment(chain, address)
-        if (cached) {
+        if (cached && cached.provider !== "mock") {
           cacheHits += 1
           enrichedCount += 1
           results.set(address, {
@@ -75,7 +63,6 @@ export async function enrichWallets(
           return
         }
 
-        // 2. Try the selected provider with retry/backoff.
         try {
           const data = await withRetry(
             () => provider.enrichWallet(address, chain, options),
@@ -89,6 +76,11 @@ export async function enrichWallets(
               },
             }
           )
+
+          if (data.provider === "mock") {
+            throw new Error("Mock provider data is not allowed in production analysis.")
+          }
+
           setCachedEnrichment(data)
           enrichedCount += 1
           results.set(address, {
@@ -98,50 +90,34 @@ export async function enrichWallets(
             fromCache: false,
             errorMessage: null,
           })
-          return
-        } catch (primaryError) {
-          // 3. Per-wallet fallback to mock so one wallet can't sink the run.
-          warnings.add("Some wallets could not be enriched. Analysis continued with available data.")
-          try {
-            const data = await mockProvider.enrichWallet(address, chain, options)
-            setCachedEnrichment(data)
-            enrichedCount += 1
-            results.set(address, {
-              data,
-              status: "completed",
-              provider: "mock",
-              fromCache: false,
-              errorMessage:
-                primaryError instanceof Error ? primaryError.message : "Provider error",
-            })
-          } catch {
-            failedCount += 1
-            results.set(address, {
-              data: {
-                walletAddress: address,
-                chain,
-                provider: provider.id,
-                txCount: null,
-                walletAgeDays: null,
-                firstSeen: null,
-                lastSeen: null,
-                totalVolume: null,
-                nativeBalance: null,
-                tokenCount: null,
-                contractsCount: null,
-                campaignActionsCount: null,
-                uniqueCounterparties: null,
-                fundingSource: null,
-                isContract: null,
-                knownEntityLabel: null,
-                knownEntityType: null,
-              },
-              status: "failed",
+        } catch (error) {
+          failedCount += 1
+          warnings.add("Some wallets could not be enriched with real on-chain data. No mock data was used.")
+          results.set(address, {
+            data: {
+              walletAddress: address,
+              chain,
               provider: provider.id,
-              fromCache: false,
-              errorMessage: "On-chain enrichment failed for this wallet.",
-            })
-          }
+              txCount: null,
+              walletAgeDays: null,
+              firstSeen: null,
+              lastSeen: null,
+              totalVolume: null,
+              nativeBalance: null,
+              tokenCount: null,
+              contractsCount: null,
+              campaignActionsCount: null,
+              uniqueCounterparties: null,
+              fundingSource: null,
+              isContract: null,
+              knownEntityLabel: null,
+              knownEntityType: null,
+            },
+            status: "failed",
+            provider: provider.id,
+            fromCache: false,
+            errorMessage: error instanceof Error ? error.message : "On-chain enrichment failed.",
+          })
         }
       })
     )
@@ -149,7 +125,6 @@ export async function enrichWallets(
     processed += batch.length
     onProgress?.(processed, addresses.length)
 
-    // Delay between batches (not after the last one).
     if (batchIndex < batches.length - 1 && config.requestDelayMs > 0) {
       await sleep(config.requestDelayMs)
     }
@@ -163,7 +138,7 @@ export async function enrichWallets(
     skippedCount: 0,
     cacheHits,
     warnings: Array.from(warnings),
-    usedMockFallback,
+    usedMockFallback: false,
   }
 
   return { results, summary }
