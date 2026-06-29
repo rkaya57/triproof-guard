@@ -53,11 +53,17 @@ const roadmap = [
   ["Tri-Proof Human", "Adaptive challenge layer and wallet-bound human signal"],
 ]
 
+const previewRows = [
+  ["0x0000...0001", "96", "Critical", "CL-001"],
+  ["0x0000...0032", "82", "High", "CL-001"],
+  ["0x0000...0144", "27", "Low", "-"],
+  ["0x0000...0220", "54", "Medium", "CL-008"],
+]
+
 export function LandingPage() {
   return (
-    <main className="min-h-screen overflow-hidden bg-background text-foreground">
+    <main className="premium-page min-h-screen overflow-hidden bg-background text-foreground">
       <section className="security-grid relative overflow-hidden border-b border-border">
-        {/* ambient light sources */}
         <div aria-hidden className="pointer-events-none absolute inset-0">
           <div
             className="glow-orb left-[-6rem] top-[-4rem] size-80"
@@ -72,91 +78,113 @@ export function LandingPage() {
             style={{ background: "var(--guard-cyan)", opacity: 0.35, animationDelay: "6s" }}
           />
         </div>
+
         <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8">
-          <Link href="/" className="flex items-center gap-3">
-            <Image
-              src="/logo.svg"
-              alt="Tri-Proof Guard"
-              width={36}
-              height={36}
-              priority
-              className="rounded-lg"
-            />
-            <span className="text-sm font-semibold">Tri-Proof Guard</span>
+          <Link href="/" className="group flex items-center gap-3">
+            <span className="glow-primary flex size-11 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 transition-transform group-hover:scale-105">
+              <Image
+                src="/logo.svg"
+                alt="Tri-Proof Guard"
+                width={30}
+                height={30}
+                priority
+                className="rounded-lg"
+              />
+            </span>
+            <div className="flex flex-col">
+              <span className="text-sm font-semibold">Tri-Proof Guard</span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-primary/80">
+                Sybil Guard
+              </span>
+            </div>
           </Link>
           <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
-            <Link href="#features" className="hover:text-foreground">
+            <Link href="#features" className="transition-colors hover:text-primary">
               Features
             </Link>
-            <Link href="/pricing" className="hover:text-foreground">
+            <Link href="/pricing" className="transition-colors hover:text-primary">
               Pricing
             </Link>
-            <Link href="/dashboard/demo" className="hover:text-foreground">
+            <Link href="/dashboard/demo" className="transition-colors hover:text-primary">
               Demo
             </Link>
           </nav>
-          <Link href="/login" className={buttonVariants({ variant: "outline" })}>
+          <Link href="/login" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>
             Login
           </Link>
         </header>
 
         <div className="relative z-10 mx-auto grid max-w-7xl gap-10 px-5 pb-16 pt-10 sm:px-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:pb-24 lg:pt-20">
-          <div className="flex animate-in fade-in slide-in-from-bottom-4 flex-col gap-8 duration-700">
+          <div className="reveal-up flex flex-col gap-8">
             <div className="flex flex-col gap-5">
               <span className="cyber-chip w-fit">
-                Web3 Sybil Defense • Live
+                Web3 Sybil Defense • Live MVP
               </span>
               <h1 className="text-gradient animate-gradient-text max-w-4xl text-4xl font-semibold leading-tight text-balance sm:text-6xl">
                 Protect your Web3 campaign from Sybil farms.
               </h1>
               <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
                 Tri-Proof Guard analyzes wallet lists, detects suspicious clusters,
-                scores wallet risk and exports clean reward winners before airdrops,
+                scores wallet risk and exports cleaner reward lists before airdrops,
                 testnets and whitelist campaigns.
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Link
                 href="/dashboard/new-analysis"
-                className={`${buttonVariants({ size: "lg" })} glow-primary`}
+                className={`${buttonVariants({ size: "lg" })} glow-primary hover-lift`}
               >
                 Start Analysis <ArrowRight data-icon="inline-end" />
               </Link>
               <Link
                 href="/dashboard/demo"
-                className={buttonVariants({ variant: "outline", size: "lg" })}
+                className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}
               >
                 View Demo Report
               </Link>
             </div>
-            <p className="font-mono text-xs uppercase text-primary">
-              Upload wallets. Detect Sybil clusters. Export clean winners.
-            </p>
+            <div className="flex flex-wrap gap-3 font-mono text-xs uppercase text-primary">
+              <span className="flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3 py-1">
+                <span className="pulse-dot" /> Upload wallets
+              </span>
+              <span className="rounded-full border border-primary/25 bg-primary/10 px-3 py-1">
+                Detect Sybil clusters
+              </span>
+              <span className="rounded-full border border-primary/25 bg-primary/10 px-3 py-1">
+                Export clean winners
+              </span>
+            </div>
           </div>
 
-          <div className="glass-panel scan-accent relative min-h-[420px] animate-in fade-in zoom-in-95 overflow-hidden rounded-lg p-5 duration-700">
+          <div className="glass-panel premium-card animated-border data-scan relative min-h-[430px] overflow-hidden rounded-2xl p-5 reveal-up delay-200">
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">Campaign Risk Console</p>
                 <p className="text-xs text-muted-foreground">Ethereum Airdrop Wallet Audit</p>
               </div>
-              <Badge variant="secondary">Live preview</Badge>
+              <Badge variant="secondary" className="gap-2 border-primary/30 text-primary">
+                <span className="pulse-dot" /> Live preview
+              </Badge>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               {[
                 ["500", "Wallets", "Total uploaded"],
                 ["8", "Clusters", "Manual review"],
                 ["42.8", "Avg risk", "Campaign score"],
-              ].map(([value, label, detail]) => (
-                <div key={label} className="rounded-lg border border-border bg-background/60 p-4">
-                  <p className="text-2xl font-semibold">{value}</p>
+              ].map(([value, label, detail], index) => (
+                <div
+                  key={label}
+                  className="premium-card hover-lift rounded-xl border border-border bg-background/60 p-4"
+                  style={{ animationDelay: `${index * 0.08}s` }}
+                >
+                  <p className="text-gradient text-2xl font-semibold">{value}</p>
                   <p className="text-sm text-foreground">{label}</p>
                   <p className="text-xs text-muted-foreground">{detail}</p>
                 </div>
               ))}
             </div>
             <div className="mt-5 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
-              <div className="rounded-lg border border-border bg-background/50 p-4">
+              <div className="rounded-xl border border-border bg-background/50 p-4">
                 <div className="mb-4 flex items-center justify-between text-sm">
                   <span>Risk distribution</span>
                   <span className="text-muted-foreground">500 rows</span>
@@ -183,16 +211,12 @@ export function LandingPage() {
                   ))}
                 </div>
               </div>
-              <div className="rounded-lg border border-border bg-background/50">
-                {[
-                  ["0x0000...0001", "96", "Critical", "CL-001"],
-                  ["0x0000...0032", "82", "High", "CL-001"],
-                  ["0x0000...0144", "27", "Low", "-"],
-                  ["0x0000...0220", "54", "Medium", "CL-008"],
-                ].map(([wallet, score, risk, cluster]) => (
+              <div className="overflow-hidden rounded-xl border border-border bg-background/50">
+                {previewRows.map(([wallet, score, risk, cluster], index) => (
                   <div
                     key={wallet}
-                    className="grid grid-cols-[1fr_72px_90px_70px] border-b border-border px-4 py-3 text-xs last:border-b-0"
+                    className="grid grid-cols-[1fr_72px_90px_70px] border-b border-border px-4 py-3 text-xs transition-colors last:border-b-0 hover:bg-primary/5"
+                    style={{ animationDelay: `${index * 0.08}s` }}
                   >
                     <span className="font-mono text-muted-foreground">{wallet}</span>
                     <span>{score}</span>
@@ -205,18 +229,17 @@ export function LandingPage() {
           </div>
         </div>
 
-        {/* metrics strip */}
         <div className="relative z-10 border-t border-border/70 bg-background/40 backdrop-blur">
           <div className="mx-auto grid max-w-7xl grid-cols-2 gap-px overflow-hidden md:grid-cols-4">
             {[
-              ["100K+", "Wallets analyzable"],
+              ["100K+", "Wallets queue-ready"],
               ["6", "EVM chains supported"],
-              ["< 60s", "Average analysis time"],
-              ["3-layer", "Proof architecture"],
+              ["Batch", "Large CSV processing"],
+              ["No token", "USDC revenue model"],
             ].map(([value, label]) => (
               <div
                 key={label}
-                className="flex flex-col items-center gap-1 px-5 py-8 text-center transition-colors hover:bg-primary/5"
+                className="hover-lift flex flex-col items-center gap-1 px-5 py-8 text-center transition-colors hover:bg-primary/5"
               >
                 <span className="text-gradient text-3xl font-semibold sm:text-4xl">
                   {value}
@@ -231,8 +254,8 @@ export function LandingPage() {
       </section>
 
       <section className="mx-auto grid max-w-7xl gap-5 px-5 py-16 sm:px-8 lg:grid-cols-3">
-        {problems.map((problem) => (
-          <Card key={problem} className="glass-panel">
+        {problems.map((problem, index) => (
+          <Card key={problem} className="glass-panel premium-card hover-lift reveal-up" style={{ animationDelay: `${index * 0.1}s` }}>
             <CardHeader>
               <ShieldAlert className="text-destructive" />
               <CardTitle>{problem}</CardTitle>
@@ -254,13 +277,13 @@ export function LandingPage() {
             {steps.map((step, index) => (
               <Card
                 key={step.title}
-                className="glass-panel group relative overflow-hidden"
+                className="glass-panel premium-card hover-lift group relative overflow-hidden"
               >
                 <span className="pointer-events-none absolute right-3 top-2 font-mono text-4xl font-bold text-primary/10 transition-colors group-hover:text-primary/20">
                   {String(index + 1).padStart(2, "0")}
                 </span>
                 <CardHeader>
-                  <span className="glow-primary mb-2 flex size-11 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary">
+                  <span className="glow-primary mb-2 flex size-11 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary transition-transform group-hover:scale-110">
                     <step.icon />
                   </span>
                   <CardTitle className="text-base">{step.title}</CardTitle>
@@ -284,7 +307,7 @@ export function LandingPage() {
             {features.map((feature) => (
               <div
                 key={feature}
-                className="flex items-center gap-3 rounded-lg border border-border bg-card/70 px-4 py-3 transition-colors hover:border-primary/45 hover:bg-primary/5"
+                className="premium-card hover-lift flex items-center gap-3 rounded-lg border border-border bg-card/70 px-4 py-3 transition-colors hover:border-primary/45 hover:bg-primary/5"
               >
                 <CheckCircle2 className="text-primary" />
                 <span className="text-sm">{feature}</span>
@@ -301,14 +324,14 @@ export function LandingPage() {
             ["Growth", "199-499 USDC", "Cluster analysis and PDF report"],
             ["Pro", "1,000+ USDC", "100,000+ wallets and API beta"],
           ].map(([name, price, detail]) => (
-            <Card key={name} className="glass-panel">
+            <Card key={name} className="glass-panel premium-card hover-lift">
               <CardHeader>
                 <CardTitle>{name}</CardTitle>
                 <CardDescription>{detail}</CardDescription>
               </CardHeader>
               <CardContent className="flex items-center justify-between">
-                <span className="text-xl font-semibold">{price}</span>
-                <Link href="/pricing" className={buttonVariants({ variant: "outline" })}>
+                <span className="text-gradient text-xl font-semibold">{price}</span>
+                <Link href="/pricing" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>
                   View
                 </Link>
               </CardContent>
@@ -328,7 +351,7 @@ export function LandingPage() {
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             {roadmap.map(([phase, detail], index) => (
-              <div key={phase} className="glass-panel rounded-lg p-5">
+              <div key={phase} className="glass-panel premium-card hover-lift rounded-lg p-5">
                 <span className="cyber-chip mb-3">Phase {index + 1}</span>
                 <p className="mt-1 font-semibold">{phase}</p>
                 <p className="mt-3 text-sm leading-6 text-muted-foreground">{detail}</p>
@@ -339,7 +362,7 @@ export function LandingPage() {
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
-        <div className="glass-panel scan-accent relative flex flex-col items-start justify-between gap-6 overflow-hidden rounded-2xl p-8 sm:p-10 md:flex-row md:items-center">
+        <div className="glass-panel scan-accent premium-card animated-border relative flex flex-col items-start justify-between gap-6 overflow-hidden rounded-2xl p-8 sm:p-10 md:flex-row md:items-center">
           <div className="relative z-10">
             <h2 className="text-gradient text-2xl font-semibold sm:text-3xl">
               Analyze your wallet list in minutes
@@ -349,10 +372,10 @@ export function LandingPage() {
             </p>
           </div>
           <div className="relative z-10 flex gap-3">
-            <Link href="/register" className={`${buttonVariants()} glow-primary`}>
+            <Link href="/register" className={`${buttonVariants()} glow-primary hover-lift`}>
               Create Account
             </Link>
-            <Link href="/dashboard/demo" className={buttonVariants({ variant: "outline" })}>
+            <Link href="/dashboard/demo" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>
               Demo Report
             </Link>
           </div>
