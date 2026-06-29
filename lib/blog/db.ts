@@ -35,10 +35,7 @@ export type BlogPostInput = {
   authorEmail?: string
 }
 
-let ready = false
-
 export async function ensureBlogTable() {
-  if (ready) return
   await db.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "BlogPost" (
       "id" TEXT NOT NULL PRIMARY KEY,
@@ -60,7 +57,6 @@ export async function ensureBlogTable() {
   `)
   await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BlogPost_status_idx" ON "BlogPost"("status");`)
   await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BlogPost_slug_idx" ON "BlogPost"("slug");`)
-  ready = true
 }
 
 function normalizeStatus(status: string | undefined) {
@@ -69,7 +65,6 @@ function normalizeStatus(status: string | undefined) {
 }
 
 export async function listPublishedPosts() {
-  await ensureBlogTable()
   return db.$queryRaw<BlogPostRecord[]>`
     SELECT * FROM "BlogPost"
     WHERE "status" IN ('published', 'ready')
@@ -78,7 +73,6 @@ export async function listPublishedPosts() {
 }
 
 export async function listAdminPosts() {
-  await ensureBlogTable()
   return db.$queryRaw<BlogPostRecord[]>`
     SELECT * FROM "BlogPost"
     ORDER BY "updatedAt" DESC, "createdAt" DESC
@@ -86,7 +80,6 @@ export async function listAdminPosts() {
 }
 
 export async function getPostBySlugFromDb(slug: string) {
-  await ensureBlogTable()
   const rows = await db.$queryRaw<BlogPostRecord[]>`
     SELECT * FROM "BlogPost"
     WHERE "slug" = ${slug} AND "status" IN ('published', 'ready')
