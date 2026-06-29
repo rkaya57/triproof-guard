@@ -14,10 +14,34 @@ import type { Prisma } from "@prisma/client"
 
 export const runtime = "nodejs"
 
+const freeTrialWalletLimit = Number.parseInt(
+  process.env.FREE_TRIAL_WALLET_LIMIT ?? "100",
+  10
+)
+
 function toDate(value: string | null | undefined) {
   if (!value) return null
   const parsed = new Date(value)
   return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+async function getUsedWalletCount(userId: string) {
+  const result = await db.analysis.aggregate({
+    _sum: { totalWallets: true },
+    where: { project: { userId } },
+  })
+
+  return result._sum.totalWallets ?? 0
+}
+
+function checkoutUrl(walletCount: number, remainingWallets: number) {
+  const params = new URLSearchParams({
+    requiredWallets: String(walletCount),
+    remainingWallets: String(Math.max(remainingWallets, 0)),
+    reason: "free_trial_limit",
+  })
+
+  return `/checkout?${params.toString()}`
 }
 
 export async function POST(request: Request) {
@@ -60,6 +84,30 @@ export async function POST(request: Request) {
       },
       { status: 400 }
     )
+  }
+
+  try {
+    const usedWallets = await getUsedWalletCount(user.id)
+    const remainingWallets = Math.max(freeTrialWalletLimit - usedWallets, 0)
+
+    if (parsedCsv.wallets.length > remainingWallets) {
+      return NextResponse.json(
+        {
+          code: "PAYMENT_REQUIRED",
+          error: `Free trial includes ${freeTrialWalletLimit.toLocaleString()} wallets. This upload has ${parsedCsv.wallets.length.toLocaleString()} valid wallets, but you have ${remainingWallets.toLocaleString()} free wallets remaining. Please choose a paid USDC plan to continue.`,
+          freeTrialWalletLimit,
+          usedWallets,
+          remainingWallets,
+          requiredWallets: parsedCsv.wallets.length,
+          checkoutUrl: checkoutUrl(parsedCsv.wallets.length, remainingWallets),
+        },
+        { status: 402 }
+      )
+    }
+  } catch (error) {
+    if (!isDatabaseConnectionError(error)) {
+      throw error
+    }
   }
 
   const mode = parsedForm.data.analysisMode as AnalysisMode
