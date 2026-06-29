@@ -127,7 +127,7 @@ export function PricingPage() {
                 ))}
               </ul>
               <Link
-                href="/register"
+                href="/dashboard/new-analysis"
                 className={buttonVariants({ variant: plan.highlighted ? "default" : "outline" })}
               >
                 {plan.cta}
