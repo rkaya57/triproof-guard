@@ -46,6 +46,12 @@ type ClusterDraft = {
   reasons: string[]
 }
 
+const onChainCleanReason =
+  "On-chain evidence: no major risk signals detected from available provider data"
+
+const knownEntityRiskReason =
+  "On-chain entity evidence: known public exchange/service wallet detected. This address is not necessarily malicious, but it is not a typical individual reward campaign participant and should be manually reviewed."
+
 function hydrateWallet(wallet: ParsedWallet): EnrichedWallet {
   return {
     walletAddress: wallet.walletAddress,
@@ -163,7 +169,7 @@ function statusFromSignals(
       status: "manual_review",
       recommendedAction: "manual_review",
       statusExplanation:
-        `Wallet is part of suspicious cluster ${clusterId}. Cluster members are not automatically approved even when the numeric score is low.`,
+        `On-chain cluster evidence found: wallet is part of suspicious cluster ${clusterId}. Cluster members are not automatically approved even when the numeric score is low.`,
     }
   }
 
@@ -172,7 +178,7 @@ function statusFromSignals(
       status: "manual_review",
       recommendedAction: "manual_review",
       statusExplanation:
-        `Wallet shares funding source with ${fundingGroupSize} wallets. Shared funding groups of 5 or more require manual review.`,
+        `Funding cluster evidence found: wallet shares funding source with ${fundingGroupSize} wallets. Shared funding groups of 5 or more require manual review.`,
     }
   }
 
@@ -189,7 +195,7 @@ function statusFromSignals(
     status: "approved",
     recommendedAction: "approve",
     statusExplanation:
-      "Low risk score with no known entity, suspicious cluster, or shared funding source signal.",
+      "On-chain evidence did not show a known entity, suspicious cluster, or shared funding-source signal for this wallet.",
   }
 }
 
@@ -238,8 +244,8 @@ function createClusters(wallets: EnrichedWallet[]) {
         sharedFundingSource: fundingSource,
         behaviorSimilarityScore: Math.min(98, 58 + indexes.length * 3),
         reasons: [
-          "Shared funding source",
-          "Multiple wallets funded from the same origin",
+          "Shared funding source evidence",
+          "Funding cluster evidence: multiple wallets were funded from the same on-chain origin",
         ],
       })
     })
@@ -267,10 +273,10 @@ function createClusters(wallets: EnrichedWallet[]) {
         sharedFundingSource: null,
         behaviorSimilarityScore: Math.min(94, 52 + indexes.length * 4),
         reasons: [
-          "Similar wallet age",
-          "Similar transaction count",
-          "Similar campaign activity",
-          "Same chain behavior pattern",
+          "Behavior cluster evidence: similar wallet age",
+          "Behavior cluster evidence: similar transaction count",
+          "Behavior cluster evidence: similar campaign activity",
+          "Behavior cluster evidence: same chain behavior pattern",
         ],
       })
     })
@@ -290,15 +296,12 @@ function suggestedActionFromCluster(
   if (walletCount >= 3 && sharedFundingSource !== null) return "manual_review"
   if (
     averageRiskScore < 31 &&
-    reasons.some((r) => r === "Shared funding source" || r.startsWith("Part of suspicious cluster"))
+    reasons.some((r) => r.startsWith("Shared funding source") || r.startsWith("Part of suspicious cluster"))
   ) {
     return "manual_review"
   }
   return "manual_review"
 }
-
-const knownEntityRiskReason =
-  "Known public exchange/service wallet detected. This address is not necessarily malicious, but it is not a typical individual reward campaign participant and should be manually reviewed."
 
 export function analyzeWallets(
   wallets: ParsedWallet[],
@@ -322,29 +325,33 @@ export function analyzeWallets(
       ? drafts.find((cluster) => cluster.clusterLabel === clusterId)?.walletIndexes.length ?? 0
       : 0
 
+    if (wallet.enrichmentStatus === "completed" && wallet.enrichmentProvider) {
+      reasons.push(`On-chain verified via ${wallet.enrichmentProvider}`)
+    }
+
     if (wallet.walletAgeDays !== null) {
       if (wallet.walletAgeDays < 7) {
         score += 25
-        reasons.push("Wallet is younger than 7 days")
+        reasons.push("On-chain evidence: wallet is younger than 7 days")
       } else if (wallet.walletAgeDays <= 30) {
         score += 15
-        reasons.push("Wallet is between 7 and 30 days old")
+        reasons.push("On-chain evidence: wallet is between 7 and 30 days old")
       } else if (wallet.walletAgeDays <= 90) {
         score += 8
-        reasons.push("Wallet is younger than 90 days")
+        reasons.push("On-chain evidence: wallet is younger than 90 days")
       }
     }
 
     if (wallet.txCount !== null) {
       if (wallet.txCount <= 2) {
         score += 20
-        reasons.push("Low transaction count")
+        reasons.push("On-chain evidence: low transaction count")
       } else if (wallet.txCount <= 5) {
         score += 12
-        reasons.push("Limited transaction history")
+        reasons.push("On-chain evidence: limited transaction history")
       } else if (wallet.txCount <= 15) {
         score += 5
-        reasons.push("Moderate transaction history")
+        reasons.push("On-chain evidence: moderate transaction history")
       }
     }
 
@@ -355,28 +362,28 @@ export function analyzeWallets(
       wallet.txCount <= 10
     ) {
       score += 15
-      reasons.push("Campaign-only behavior pattern")
+      reasons.push("Campaign evidence: campaign-only behavior pattern")
     }
 
     const fundingRisk = clusterRisk(fundingGroupSize)
     if (fundingRisk > 0) {
       score += fundingRisk
-      reasons.push(`Shared funding source with ${fundingGroupSize} wallets`)
+      reasons.push(`Shared funding source evidence: funding cluster with ${fundingGroupSize} wallets`)
     }
 
     const clusterScore = clusterRisk(clusterSize)
     if (clusterScore > 0 && clusterId) {
       score += clusterScore
-      reasons.push(`Part of suspicious cluster ${clusterId}`)
+      reasons.push(`Cluster evidence: part of suspicious cluster ${clusterId}`)
     }
 
     if (wallet.contractsCount !== null) {
       if (wallet.contractsCount <= 1) {
         score += 15
-        reasons.push("Low contract interaction diversity")
+        reasons.push("On-chain evidence: low contract interaction diversity")
       } else if (wallet.contractsCount <= 3) {
         score += 8
-        reasons.push("Limited contract interaction diversity")
+        reasons.push("On-chain evidence: limited contract interaction diversity")
       }
     }
 
@@ -387,7 +394,7 @@ export function analyzeWallets(
       wallet.campaignActionsCount > 3
     ) {
       score += 10
-      reasons.push("Low total volume despite campaign activity")
+      reasons.push("On-chain evidence: low total volume despite campaign activity")
     }
 
     if (wallet.enrichmentStatus === "completed") {
@@ -398,7 +405,7 @@ export function analyzeWallets(
         wallet.txCount > 2
       ) {
         score += 8
-        reasons.push("Very few unique counterparties")
+        reasons.push("On-chain evidence: very few unique counterparties")
       }
 
       if (
@@ -408,7 +415,7 @@ export function analyzeWallets(
         wallet.campaignActionsCount > 0
       ) {
         score += 10
-        reasons.push("Dormant wallet reactivated for campaign activity")
+        reasons.push("On-chain evidence: dormant wallet reactivated for campaign activity")
       }
 
       if (
@@ -420,7 +427,7 @@ export function analyzeWallets(
         wallet.txCount <= 5
       ) {
         score += 5
-        reasons.push("Brand-new wallet active only during campaign")
+        reasons.push("On-chain evidence: brand-new wallet active only during campaign")
       }
     }
 
@@ -430,7 +437,7 @@ export function analyzeWallets(
     }
 
     if (!evidenceAvailable && !knownEntity) {
-      reasons.push("Address-only input: on-chain enrichment or enriched CSV fields are required for evidence-based scoring")
+      reasons.push("On-chain evidence unavailable: enrichment or enriched CSV fields are required for evidence-based scoring")
     }
 
     const riskScore = Math.min(100, score)
@@ -445,7 +452,9 @@ export function analyzeWallets(
       evidenceAvailable
     )
 
-    if (!reasons.length) reasons.push("No major risk signals detected")
+    if (!reasons.length || (reasons.length === 1 && reasons[0].startsWith("On-chain verified"))) {
+      reasons.push(onChainCleanReason)
+    }
 
     return {
       walletAddress: wallet.walletAddress,
