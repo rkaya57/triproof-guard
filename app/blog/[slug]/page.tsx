@@ -1,9 +1,10 @@
 import Image from "next/image"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Home } from "lucide-react"
 
 import { getPostBySlugFromDb } from "@/lib/blog/db"
+import { BlogEngagement } from "@/components/blog/blog-engagement"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 
@@ -43,13 +44,24 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
           <Image src="/logo.svg" alt="Tri-Proof Guard" width={36} height={36} className="rounded-lg" />
           <span className="text-sm font-semibold">Tri-Proof Guard</span>
         </Link>
-        <Link href="/blog" className={buttonVariants({ variant: "outline" })}>Blog</Link>
+        <div className="flex items-center gap-3">
+          <Link href="/" className={buttonVariants({ variant: "outline" })}>
+            <Home data-icon="inline-start" /> Home
+          </Link>
+          <Link href="/blog" className={buttonVariants({ variant: "outline" })}>Blog</Link>
+        </div>
       </header>
 
       <article className="mx-auto max-w-5xl px-5 py-10 sm:px-8">
-        <Link href="/blog" className="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary">
-          <ArrowLeft className="size-4" /> Back to blog
-        </Link>
+        <div className="mb-8 flex flex-wrap items-center gap-3">
+          <Link href="/blog" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary">
+            <ArrowLeft className="size-4" /> Back to blog
+          </Link>
+          <span className="text-muted-foreground">/</span>
+          <Link href="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary">
+            Home page
+          </Link>
+        </div>
 
         <div className="glass-panel overflow-hidden rounded-3xl">
           {post.coverImageUrl && (
@@ -78,6 +90,8 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
             return <p key={block} className="mb-5 text-lg leading-8 text-muted-foreground">{block}</p>
           })}
         </div>
+
+        <BlogEngagement slug={post.slug} title={post.title} />
 
         <div className="mt-12 rounded-2xl border border-primary/25 bg-primary/5 p-6">
           <h2 className="text-2xl font-semibold">Need to review a wallet list?</h2>
