@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { ToastProvider } from "@/components/ui/toast"
 import "./globals.css"
+import "./premium-ui.css"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
