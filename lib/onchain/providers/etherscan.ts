@@ -9,9 +9,12 @@ import { RateLimitError } from "@/lib/onchain/rate-limit"
 import type { OnChainProvider } from "@/lib/onchain/providers/provider"
 
 /**
- * Etherscan-compatible provider (Etherscan, Basescan, Arbiscan, Optimism
- * Etherscan, Polygonscan, BscScan). All of these expose the same REST shape, so
- * a single adapter covers every supported EVM chain.
+ * Etherscan V2 provider.
+ *
+ * Etherscan V2 unifies 60+ EVM chains under one account/API key. We therefore
+ * prefer a single ETHERSCAN_API_KEY and route multichain requests with the
+ * `chainid` parameter. For backward compatibility, per-chain explorer keys
+ * such as BASESCAN_API_KEY or POLYGONSCAN_API_KEY are still accepted.
  *
  * All calls are server-side only. API keys are read from environment variables
  * and never leave the server. Raw responses are stored under `rawData` but are
@@ -42,9 +45,17 @@ type TokenTx = {
   contractAddress: string
 }
 
+const ETHERSCAN_V2_BASE_URL = "https://api.etherscan.io/v2/api"
+
 function apiKeyForChain(chain: string) {
   const config = getEvmChainConfig(chain)
   if (!config) return ""
+
+  // Etherscan V2: one key works across supported EVM chains.
+  const globalKey = process.env.ETHERSCAN_API_KEY?.trim()
+  if (globalKey) return globalKey
+
+  // Backward compatibility with the older per-explorer configuration.
   return process.env[config.etherscanKeyEnv]?.trim() ?? ""
 }
 
@@ -58,10 +69,11 @@ async function call<T>(
   }
 
   const search = new URLSearchParams({
+    chainid: String(config.chainId),
     ...params,
     apikey: apiKeyForChain(chain),
   })
-  const url = `${config.etherscanBaseUrl}?${search.toString()}`
+  const url = `${ETHERSCAN_V2_BASE_URL}?${search.toString()}`
 
   const response = await fetch(url, { headers: { accept: "application/json" } })
   if (!response.ok) {
