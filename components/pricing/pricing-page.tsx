@@ -140,3 +140,4 @@ export function PricingPage() {
     </main>
   )
 }
+
