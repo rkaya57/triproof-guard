@@ -1,12 +1,14 @@
 import Link from "next/link"
 
 import { getRecentAnalyses } from "@/lib/admin/health"
-import { requireAdminUser } from "@/lib/auth/admin"
+import { getAdminUser } from "@/lib/auth/admin"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { buttonVariants } from "@/components/ui/button"
 
 export default async function Page() {
-  await requireAdminUser()
+  const admin = await getAdminUser()
+  if (!admin) return <Card className="glass-panel"><CardHeader><CardTitle>Admin login required</CardTitle></CardHeader><CardContent><Link href="/login" className={buttonVariants()}>Login</Link></CardContent></Card>
+
   const analyses = await getRecentAnalyses()
 
   return (
