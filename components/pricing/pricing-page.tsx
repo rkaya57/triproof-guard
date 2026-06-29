@@ -18,6 +18,7 @@ const plans = [
     price: "49-99 USDC",
     detail: "Small campaigns validating reward lists before launch.",
     cta: "Request Access",
+    href: "/checkout?plan=starter",
     features: [
       "Up to 5,000 wallets",
       "Wallet risk score",
@@ -30,6 +31,7 @@ const plans = [
     price: "199-499 USDC",
     detail: "The recommended lane for campaign teams using cluster review.",
     cta: "Start Pilot",
+    href: "/checkout?plan=growth",
     highlighted: true,
     features: [
       "Up to 25,000 wallets",
@@ -44,6 +46,7 @@ const plans = [
     price: "1,000+ USDC",
     detail: "High-volume audits, repeat operations, and partner support.",
     cta: "Talk to Sales",
+    href: "/checkout?plan=pro",
     features: [
       "100,000+ wallets",
       "Priority analysis",
@@ -127,7 +130,7 @@ export function PricingPage() {
                 ))}
               </ul>
               <Link
-                href="/dashboard/new-analysis"
+                href={plan.href}
                 className={buttonVariants({ variant: plan.highlighted ? "default" : "outline" })}
               >
                 {plan.cta}
@@ -140,4 +143,3 @@ export function PricingPage() {
     </main>
   )
 }
-
