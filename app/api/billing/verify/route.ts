@@ -5,6 +5,8 @@ import { attachAccessPassCookie } from "@/lib/billing/access-pass"
 
 export const runtime = "nodejs"
 
+const zeroBigInt = BigInt(0)
+const usdcDecimals = BigInt(1_000_000)
 const transferTopic =
   "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 
@@ -58,11 +60,11 @@ function topicAddress(topic: string | undefined) {
 }
 
 function parseHexBigInt(value: string | undefined) {
-  if (!value || !value.startsWith("0x")) return 0n
+  if (!value || !value.startsWith("0x")) return zeroBigInt
   try {
     return BigInt(value)
   } catch {
-    return 0n
+    return zeroBigInt
   }
 }
 
@@ -119,7 +121,7 @@ async function verifyTransfer({
 
   const treasury = normalizeAddress(network.treasury)
   const usdcContract = normalizeAddress(network.usdcContract)
-  const expectedUnits = BigInt(expectedAmountUsdc) * 1_000_000n
+  const expectedUnits = BigInt(expectedAmountUsdc) * usdcDecimals
 
   const matchingLog = (receipt.logs ?? []).find((log) => {
     const topics = log.topics ?? []
