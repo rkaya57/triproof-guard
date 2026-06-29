@@ -13,49 +13,6 @@ export type BlogCommentRecord = {
   createdAt: Date
 }
 
-let ready = false
-
-export async function ensureEngagementTables() {
-  if (ready) return
-
-  await db.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "BlogComment" (
-      "id" TEXT NOT NULL PRIMARY KEY,
-      "postId" TEXT NOT NULL,
-      "authorName" TEXT NOT NULL,
-      "authorEmail" TEXT,
-      "content" TEXT NOT NULL,
-      "status" TEXT NOT NULL DEFAULT 'visible',
-      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-  `)
-  await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BlogComment_postId_idx" ON "BlogComment"("postId");`)
-
-  await db.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "BlogReaction" (
-      "id" TEXT NOT NULL PRIMARY KEY,
-      "postId" TEXT NOT NULL,
-      "visitorId" TEXT NOT NULL,
-      "type" TEXT NOT NULL DEFAULT 'like',
-      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT "BlogReaction_post_visitor_type_unique" UNIQUE ("postId", "visitorId", "type")
-    );
-  `)
-  await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BlogReaction_postId_idx" ON "BlogReaction"("postId");`)
-
-  await db.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "BlogShare" (
-      "id" TEXT NOT NULL PRIMARY KEY,
-      "postId" TEXT NOT NULL,
-      "platform" TEXT NOT NULL DEFAULT 'copy',
-      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-  `)
-  await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BlogShare_postId_idx" ON "BlogShare"("postId");`)
-
-  ready = true
-}
-
 function countValue(row: unknown, key = "count") {
   const value = (row as Record<string, unknown> | undefined)?.[key]
   if (typeof value === "number") return value
@@ -65,7 +22,6 @@ function countValue(row: unknown, key = "count") {
 }
 
 export async function getBlogEngagement(slug: string, visitorId?: string) {
-  await ensureEngagementTables()
   const post = await getPostBySlugFromDb(slug)
   if (!post) return null
 
@@ -95,7 +51,6 @@ export async function getBlogEngagement(slug: string, visitorId?: string) {
 }
 
 export async function likeBlogPost(slug: string, visitorId: string) {
-  await ensureEngagementTables()
   const post = await getPostBySlugFromDb(slug)
   if (!post) return null
 
@@ -108,7 +63,6 @@ export async function likeBlogPost(slug: string, visitorId: string) {
 }
 
 export async function unlikeBlogPost(slug: string, visitorId: string) {
-  await ensureEngagementTables()
   const post = await getPostBySlugFromDb(slug)
   if (!post) return null
 
@@ -130,7 +84,6 @@ export async function addBlogComment({
   authorEmail?: string
   content: string
 }) {
-  await ensureEngagementTables()
   const post = await getPostBySlugFromDb(slug)
   if (!post) return null
 
@@ -142,7 +95,6 @@ export async function addBlogComment({
 }
 
 export async function recordBlogShare(slug: string, platform: string) {
-  await ensureEngagementTables()
   const post = await getPostBySlugFromDb(slug)
   if (!post) return null
 
