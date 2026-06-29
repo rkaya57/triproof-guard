@@ -15,12 +15,12 @@ import {
 const plans = [
   {
     name: "Starter",
-    price: "49-99 USDC",
-    detail: "Small campaigns validating reward lists before launch.",
-    cta: "Request Access",
+    price: "99 USDC",
+    detail: "Small campaign audits and first paid customer reports.",
+    cta: "Pay with USDC",
     href: "/checkout?plan=starter",
     features: [
-      "Up to 5,000 wallets",
+      "Up to 1,000 wallet credits",
       "Wallet risk score",
       "CSV export",
       "Clean reward list",
@@ -28,13 +28,13 @@ const plans = [
   },
   {
     name: "Growth",
-    price: "199-499 USDC",
-    detail: "The recommended lane for campaign teams using cluster review.",
-    cta: "Start Pilot",
+    price: "249 USDC",
+    detail: "Recommended for airdrops, testnets and active reward campaigns.",
+    cta: "Pay with USDC",
     href: "/checkout?plan=growth",
     highlighted: true,
     features: [
-      "Up to 25,000 wallets",
+      "Up to 10,000 wallet credits",
       "Cluster analysis",
       "Funding source analysis",
       "PDF report",
@@ -43,12 +43,12 @@ const plans = [
   },
   {
     name: "Pro",
-    price: "1,000+ USDC",
-    detail: "High-volume audits, repeat operations, and partner support.",
-    cta: "Talk to Sales",
+    price: "499 USDC",
+    detail: "High-volume audits, repeat operations and partner support.",
+    cta: "Pay with USDC",
     href: "/checkout?plan=pro",
     features: [
-      "100,000+ wallets",
+      "Up to 50,000 wallet credits",
       "Priority analysis",
       "Advanced report",
       "API beta access",
@@ -59,7 +59,7 @@ const plans = [
 
 export function PricingPage() {
   return (
-    <main className="min-h-screen bg-background">
+    <main className="premium-page min-h-screen bg-background">
       <header className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8">
         <Link href="/" className="flex items-center gap-3">
           <Image
@@ -73,40 +73,37 @@ export function PricingPage() {
           <span className="text-sm font-semibold">Tri-Proof Guard</span>
         </Link>
         <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard/demo"
-            className={buttonVariants({ variant: "outline" })}
-          >
+          <Link href="/dashboard/demo" className={buttonVariants({ variant: "outline" })}>
             View Demo
           </Link>
-          <Link
-            href="/dashboard/new-analysis"
-            className={`${buttonVariants()} glow-primary`}
-          >
-            Start Analysis
+          <Link href="/dashboard/new-analysis" className={`${buttonVariants()} glow-primary`}>
+            Free 100-wallet Trial
           </Link>
         </div>
       </header>
+
       <section className="security-grid border-y border-border">
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
           <Badge variant="secondary" className="mb-5 w-fit border-primary/30 text-primary">
-            Guard MVP pricing
+            Live USDC checkout
           </Badge>
-          <h1 className="max-w-3xl text-4xl font-semibold sm:text-6xl">Pricing built for Web3 campaign scale.</h1>
+          <h1 className="max-w-3xl text-4xl font-semibold sm:text-6xl">
+            Pricing built for Web3 campaign scale.
+          </h1>
           <p className="mt-5 max-w-2xl text-muted-foreground">
-            Payment integration is prepared as a future USDC module. The current MVP
-            ships request-access pricing UI and a clean separation for billing.
+            Every account can test up to 100 wallets for free. Larger analyses continue through Base or Polygon USDC payment verification.
           </p>
         </div>
       </section>
+
       <section className="mx-auto grid max-w-7xl gap-5 px-5 py-16 sm:px-8 lg:grid-cols-3">
         {plans.map((plan) => (
           <Card
             key={plan.name}
             className={
               plan.highlighted
-                ? "glass-panel relative border-primary/50 bg-primary/10 shadow-[0_0_40px_rgba(56,189,248,0.14)]"
-                : "glass-panel"
+                ? "glass-panel premium-card relative border-primary/50 bg-primary/10 shadow-[0_0_40px_rgba(56,189,248,0.14)]"
+                : "glass-panel premium-card"
             }
           >
             {plan.highlighted && (
