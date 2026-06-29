@@ -61,6 +61,8 @@ type CsvPreview = {
   invalidCount: number
 }
 
+type AnalysisMode = "onchain" | "hybrid"
+
 const enrichedColumns = new Set([
   "funding_source",
   "tx_count",
@@ -69,6 +71,22 @@ const enrichedColumns = new Set([
   "campaign_actions",
   "risk_flags",
 ])
+
+const enrichableChains = new Set([
+  "Ethereum",
+  "Base",
+  "Arbitrum",
+  "Optimism",
+  "Polygon",
+  "BNB Chain",
+])
+
+const enrichmentSteps = [
+  "Parsing CSV",
+  "Fetching real on-chain data",
+  "Running risk engine",
+  "Generating report",
+]
 
 function splitCsvRow(row: string) {
   return row
@@ -131,14 +149,6 @@ function downloadSampleCsv() {
   URL.revokeObjectURL(url)
 }
 
-const baseSteps = ["Parsing CSV", "Running risk engine", "Generating report"]
-const enrichmentSteps = [
-  "Parsing CSV",
-  "Enriching wallets",
-  "Running risk engine",
-  "Generating report",
-]
-
 export function NewAnalysisForm() {
   const router = useRouter()
   const { toast } = useToast()
@@ -153,26 +163,15 @@ export function NewAnalysisForm() {
   const [isDragging, setIsDragging] = useState(false)
   const [campaignType, setCampaignType] = useState("Airdrop")
   const [chain, setChain] = useState("Ethereum")
-  const [analysisMode, setAnalysisMode] = useState<"csv_only" | "onchain" | "hybrid">(
-    "csv_only"
-  )
+  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>("onchain")
 
-  const enrichableChains = new Set([
-    "Ethereum",
-    "Base",
-    "Arbitrum",
-    "Optimism",
-    "Polygon",
-    "BNB Chain",
-  ])
-  const wantsEnrichment = analysisMode === "onchain" || analysisMode === "hybrid"
   const chainSupportsEnrichment = enrichableChains.has(chain)
 
-  const modeDescriptions: Record<typeof analysisMode, string> = {
-    csv_only: "Use only the fields provided in the uploaded CSV.",
+  const modeDescriptions: Record<AnalysisMode, string> = {
     onchain:
-      "Fetch wallet activity, age, funding source and interaction data from blockchain APIs.",
-    hybrid: "Use uploaded CSV fields first and enrich missing data from blockchain APIs.",
+      "Fetch real wallet activity, age, funding source and interaction data from blockchain APIs. No synthetic CSV-only scoring is used.",
+    hybrid:
+      "Use uploaded CSV fields first and enrich missing data from blockchain APIs. No mock wallet history is generated.",
   }
 
   async function acceptFile(file: File | null) {
@@ -235,10 +234,15 @@ export function NewAnalysisForm() {
     const campaignTypeValue = String(formData.get("campaignType") ?? "Airdrop")
     const chainValue = String(formData.get("chain") ?? "Ethereum")
     const projectName = String(formData.get("projectName") ?? "").trim()
-    const modeValue = String(formData.get("analysisMode") ?? "csv_only")
+    const modeValue = String(formData.get("analysisMode") ?? "onchain") as AnalysisMode
 
     if (!selectedFile) {
       setError("CSV file is required.")
+      return
+    }
+
+    if (!enrichableChains.has(chainValue)) {
+      setError(`${chainValue} on-chain analysis is not available yet. Select an EVM chain.`)
       return
     }
 
@@ -246,9 +250,9 @@ export function NewAnalysisForm() {
       formData.set("projectName", `${chainValue} ${campaignTypeValue} Wallet Audit`)
     }
     formData.set("csvFile", selectedFile)
+    formData.set("analysisMode", modeValue)
 
-    const steps =
-      modeValue === "onchain" || modeValue === "hybrid" ? enrichmentSteps : baseSteps
+    const steps = enrichmentSteps
     setProgressSteps(steps)
     setProgressIndex(0)
     setPending(true)
@@ -285,7 +289,7 @@ export function NewAnalysisForm() {
       stopProgress()
       setProgressIndex(steps.length)
       ;(body.parseSummary?.warnings ?? []).forEach((warning) => toast(warning, "info"))
-      toast("Analysis complete", "success")
+      toast("Analysis queued", "success")
       setNote(body.parseSummary?.note ?? "")
       router.push(`/dashboard/analysis/${body.analysisId}`)
       router.refresh()
@@ -297,6 +301,9 @@ export function NewAnalysisForm() {
   }
 
   const defaultProjectName = `${chain} ${campaignType} Wallet Audit`
+  const supportedEvmChains = supportedChains.filter((supportedChain) =>
+    enrichableChains.has(supportedChain)
+  )
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -304,7 +311,7 @@ export function NewAnalysisForm() {
         <CardHeader>
           <CardTitle>New Analysis</CardTitle>
           <CardDescription>
-            Upload a basic or enriched wallet CSV. Basic CSVs run in limited analysis mode with deterministic heuristics.
+            Upload a wallet CSV and run real on-chain enrichment. CSV-only/basic mode has been removed to avoid synthetic or misleading results.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -349,13 +356,15 @@ export function NewAnalysisForm() {
                     value={chain}
                     onChange={(event) => setChain(event.target.value)}
                   >
-                    {supportedChains.map((supportedChain) => (
+                    {supportedEvmChains.map((supportedChain) => (
                       <option key={supportedChain} value={supportedChain}>
                         {supportedChain}
-                        {supportedChain === "Solana" ? " (on-chain coming soon)" : ""}
                       </option>
                     ))}
                   </select>
+                  <FieldDescription>
+                    Only EVM chains with real on-chain provider support are shown.
+                  </FieldDescription>
                 </Field>
               </div>
 
@@ -367,50 +376,37 @@ export function NewAnalysisForm() {
                   className={selectClass}
                   value={analysisMode}
                   onChange={(event) =>
-                    setAnalysisMode(event.target.value as typeof analysisMode)
+                    setAnalysisMode(event.target.value as AnalysisMode)
                   }
                 >
-                  <option value="csv_only">CSV Only</option>
                   <option value="onchain">On-Chain Enrichment</option>
                   <option value="hybrid">Hybrid</option>
                 </select>
                 <FieldDescription>{modeDescriptions[analysisMode]}</FieldDescription>
               </Field>
 
-              {wantsEnrichment && (
-                <Alert>
-                  <FileUp />
-                  <AlertDescription>
-                    On-chain enrichment may take longer depending on wallet count,
-                    selected chain and API rate limits.
-                    {!chainSupportsEnrichment && (
-                      <>
-                        {" "}
-                        On-chain enrichment is not available for {chain} yet — the
-                        analysis will run in CSV Only mode.
-                      </>
-                    )}
-                  </AlertDescription>
-                </Alert>
-              )}
+              <Alert>
+                <FileUp />
+                <AlertDescription>
+                  Every new analysis now uses real on-chain data. If Etherscan or Alchemy cannot return data, the report will show missing/failed enrichment instead of fabricated wallet history.
+                  {!chainSupportsEnrichment && ` ${chain} is not supported yet.`}
+                </AlertDescription>
+              </Alert>
 
-              {wantsEnrichment && (
-                <Field>
-                  <FieldLabel htmlFor="campaignContracts">
-                    Campaign contract addresses (optional)
-                  </FieldLabel>
-                  <Textarea
-                    id="campaignContracts"
-                    name="campaignContracts"
-                    placeholder={"0xabc...\n0xdef...\n0xghi..."}
-                    rows={4}
-                  />
-                  <FieldDescription>
-                    One address per line. Used to count campaign interactions per
-                    wallet. Leave empty to skip campaign-action detection.
-                  </FieldDescription>
-                </Field>
-              )}
+              <Field>
+                <FieldLabel htmlFor="campaignContracts">
+                  Campaign contract addresses (optional)
+                </FieldLabel>
+                <Textarea
+                  id="campaignContracts"
+                  name="campaignContracts"
+                  placeholder={"0xabc...\n0xdef...\n0xghi..."}
+                  rows={4}
+                />
+                <FieldDescription>
+                  One address per line. Used to count campaign interactions per wallet. Leave empty to skip campaign-action detection.
+                </FieldDescription>
+              </Field>
 
               <Field>
                 <FieldLabel htmlFor="csvFile">Upload CSV</FieldLabel>
@@ -430,7 +426,7 @@ export function NewAnalysisForm() {
                   <UploadCloud className="mb-3 size-9 text-primary" />
                   <span className="font-medium">Drop CSV here or browse files</span>
                   <span className="mt-1 text-sm text-muted-foreground">
-                    Basic CSVs are supported; enriched columns improve cluster and funding analysis.
+                    Required column: wallet_address. Address-only CSVs are enriched with real on-chain data.
                   </span>
                   <Input
                     id="csvFile"
@@ -442,7 +438,7 @@ export function NewAnalysisForm() {
                   />
                 </label>
                 <FieldDescription className="flex flex-wrap items-center gap-2">
-                  Required column: wallet_address. Enriched columns improve risk analysis.
+                  Required column: wallet_address. Optional enriched columns can be used in Hybrid mode.
                   <button
                     type="button"
                     onClick={downloadSampleCsv}
@@ -464,7 +460,7 @@ export function NewAnalysisForm() {
                       <div>
                         <p className="font-medium">{preview.name}</p>
                         <p className="text-sm text-muted-foreground">
-                          {preview.size} • {preview.rowCount} rows • {preview.mode} mode
+                          {preview.size} • {preview.rowCount} rows • {preview.mode === "basic" ? "address-only CSV" : "enriched CSV"}
                         </p>
                       </div>
                     </div>
@@ -589,7 +585,7 @@ export function NewAnalysisForm() {
                 ) : (
                   <FileUp data-icon="inline-start" />
                 )}
-                Run Analysis
+                Run Real On-Chain Analysis
               </Button>
             </div>
           </form>
