@@ -36,6 +36,9 @@ export type EnrichedWalletData = {
   ownerProgram?: string | null
   behaviorFingerprint?: string[] | null
   campaignQualityScore?: number | null
+  campaignOnlyRatio?: number | null
+  behaviorDiversityScore?: number | null
+  botScriptScore?: number | null
   rawData?: unknown
 }
 
@@ -232,5 +235,8 @@ export function emptyEnrichedData(
     ownerProgram: null,
     behaviorFingerprint: null,
     campaignQualityScore: null,
+    campaignOnlyRatio: null,
+    behaviorDiversityScore: null,
+    botScriptScore: null,
   }
 }
