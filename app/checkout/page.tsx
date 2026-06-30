@@ -38,16 +38,6 @@ export default async function Page({
       label: "Solana Pay",
       treasuryAddress: process.env.TRIPROOF_TREASURY_SOLANA_ADDRESS,
     },
-    {
-      id: "base" as const,
-      label: "Base",
-      treasuryAddress: process.env.TRIPROOF_TREASURY_BASE_ADDRESS,
-    },
-    {
-      id: "polygon" as const,
-      label: "Polygon",
-      treasuryAddress: process.env.TRIPROOF_TREASURY_POLYGON_ADDRESS,
-    },
   ]
 
   return (
@@ -57,7 +47,7 @@ export default async function Page({
           <CardHeader>
             <CardTitle>Checkout: {plan.name}</CardTitle>
             <CardDescription>
-              Free trial is limited to 100 wallets. Continue with this plan to unlock larger analyses.
+              Free trial is limited to 100 wallets. Continue with Solana USDC to unlock larger analyses.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
