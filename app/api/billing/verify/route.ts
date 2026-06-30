@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import { getCurrentUser } from "@/lib/auth/session"
 import { attachAccessPassCookie } from "@/lib/billing/access-pass"
+import { verifySolanaUsdcTransfer } from "@/lib/billing/solana-pay"
 
 export const runtime = "nodejs"
 
@@ -33,10 +34,18 @@ const networks = {
       "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359",
     treasury: process.env.TRIPROOF_TREASURY_POLYGON_ADDRESS,
   },
+  solana: {
+    label: "Solana",
+    treasury: process.env.TRIPROOF_TREASURY_SOLANA_ADDRESS,
+    usdcMint:
+      process.env.SOLANA_USDC_MINT ??
+      "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  },
 } as const
 
 type PlanId = keyof typeof plans
 type NetworkId = keyof typeof networks
+type EvmNetworkId = Exclude<NetworkId, "solana">
 
 type ReceiptLog = {
   address?: string
@@ -98,15 +107,19 @@ async function etherscanProxy(chainId: number, action: string, params: Record<st
   return data.result
 }
 
-async function verifyTransfer({
+async function verifyEvmTransfer({
   txHash,
   network,
   expectedAmountUsdc,
 }: {
   txHash: string
-  network: (typeof networks)[NetworkId]
+  network: (typeof networks)[EvmNetworkId]
   expectedAmountUsdc: number
 }) {
+  if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
+    return { ok: false as const, error: "Invalid transaction hash." }
+  }
+
   const receipt = (await etherscanProxy(network.chainId, "eth_getTransactionReceipt", {
     txhash: txHash,
   })) as Receipt | null
@@ -194,16 +207,19 @@ export async function POST(request: Request) {
     )
   }
 
-  if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
-    return NextResponse.json({ error: "Invalid transaction hash." }, { status: 400 })
-  }
-
   try {
-    const verification = await verifyTransfer({
-      txHash,
-      network,
-      expectedAmountUsdc: plan.amountUsdc,
-    })
+    const verification =
+      networkId === "solana"
+        ? await verifySolanaUsdcTransfer({
+            txHash,
+            network,
+            expectedAmountUsdc: plan.amountUsdc,
+          })
+        : await verifyEvmTransfer({
+            txHash,
+            network: network as (typeof networks)[EvmNetworkId],
+            expectedAmountUsdc: plan.amountUsdc,
+          })
 
     if (!verification.ok) {
       return NextResponse.json({ error: verification.error }, { status: 400 })
