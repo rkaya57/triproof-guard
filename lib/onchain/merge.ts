@@ -92,6 +92,9 @@ export function mergeEnrichment(
       ownerProgram: pickString(wallet.ownerProgram, data.ownerProgram, apiWins),
       behaviorFingerprint: pickArray(wallet.behaviorFingerprint, data.behaviorFingerprint, apiWins),
       campaignQualityScore: pickNumber(wallet.campaignQualityScore, data.campaignQualityScore, apiWins),
+      campaignOnlyRatio: pickNumber(wallet.campaignOnlyRatio, data.campaignOnlyRatio, apiWins),
+      behaviorDiversityScore: pickNumber(wallet.behaviorDiversityScore, data.behaviorDiversityScore, apiWins),
+      botScriptScore: pickNumber(wallet.botScriptScore, data.botScriptScore, apiWins),
       enrichmentProvider: provider,
       enrichmentStatus: status,
     }
