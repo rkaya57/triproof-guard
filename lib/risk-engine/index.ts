@@ -34,6 +34,12 @@ type EnrichedWallet = {
   uniqueCounterparties: number | null
   lastActiveDaysAgo: number | null
   isContract: boolean | null
+  knownEntityLabel: string | null
+  knownEntityType: EntityType | null
+  accountType: string | null
+  ownerProgram: string | null
+  behaviorFingerprint: string[] | null
+  campaignQualityScore: number | null
   enrichmentProvider: string | null
   enrichmentStatus: EnrichmentStatus | null
 }
@@ -50,7 +56,7 @@ const onChainCleanReason =
   "On-chain evidence: no major risk signals detected from available provider data"
 
 const knownEntityRiskReason =
-  "On-chain entity evidence: known public exchange/service wallet detected. This address is not necessarily malicious, but it is not a typical individual reward campaign participant and should be manually reviewed."
+  "On-chain entity evidence: known public exchange/service/protocol wallet detected. This address is not necessarily malicious, but it is not a typical individual reward campaign participant and should be manually reviewed."
 
 function hydrateWallet(wallet: ParsedWallet): EnrichedWallet {
   return {
@@ -69,12 +75,23 @@ function hydrateWallet(wallet: ParsedWallet): EnrichedWallet {
     uniqueCounterparties: wallet.uniqueCounterparties ?? null,
     lastActiveDaysAgo: wallet.lastActiveDaysAgo ?? null,
     isContract: wallet.isContract ?? null,
+    knownEntityLabel: wallet.knownEntityLabel ?? null,
+    knownEntityType: wallet.knownEntityType ?? null,
+    accountType: wallet.accountType ?? null,
+    ownerProgram: wallet.ownerProgram ?? null,
+    behaviorFingerprint: wallet.behaviorFingerprint ?? null,
+    campaignQualityScore: wallet.campaignQualityScore ?? null,
     enrichmentProvider: wallet.enrichmentProvider ?? null,
     enrichmentStatus: wallet.enrichmentStatus ?? null,
   }
 }
 
+function isUserLikeAccount(wallet: EnrichedWallet) {
+  return !wallet.accountType || wallet.accountType === "system_user_wallet"
+}
+
 function hasEvidence(wallet: EnrichedWallet, entityType: EntityType) {
+  if (wallet.accountType === "missing_or_closed_account") return false
   return (
     entityType !== "user" ||
     wallet.txCount !== null ||
@@ -86,6 +103,7 @@ function hasEvidence(wallet: EnrichedWallet, entityType: EntityType) {
     wallet.uniqueCounterparties !== null ||
     wallet.lastActiveDaysAgo !== null ||
     wallet.isContract !== null ||
+    wallet.accountType !== null ||
     wallet.enrichmentStatus === "completed"
   )
 }
@@ -111,7 +129,8 @@ function statusFromSignals(
   clusterSize: number,
   fundingGroupSize: number,
   entityType: EntityType,
-  evidenceAvailable: boolean
+  evidenceAvailable: boolean,
+  accountType: string | null
 ): StatusDecision {
   const contextualSignals = explainContextualSignals(clusterId, fundingGroupSize)
   const hasClusterSignal = Boolean(clusterId)
@@ -123,7 +142,16 @@ function statusFromSignals(
       status: "manual_review",
       recommendedAction: "manual_review",
       statusExplanation:
-        "Only a wallet address was available. No on-chain or enriched CSV signals were evaluated, so this wallet requires manual review instead of automatic approval.",
+        "Unverified wallet: no reliable on-chain evidence was available. This is not a low-risk approval; it requires manual review or a rerun with a stronger provider response.",
+    }
+  }
+
+  if (accountType && accountType !== "system_user_wallet") {
+    return {
+      status: "manual_review",
+      recommendedAction: "manual_review",
+      statusExplanation:
+        `Non-user Solana account detected (${accountType}). Program, token, sysvar, or protocol accounts should not be included in normal user reward lists without manual review.`,
     }
   }
 
@@ -214,11 +242,25 @@ function nextClusterLabel(index: number) {
   return `CL-${String(index + 1).padStart(3, "0")}`
 }
 
+function timeBucket(iso: string | null, hours: number) {
+  if (!iso) return null
+  const parsed = Date.parse(iso)
+  if (!Number.isFinite(parsed)) return null
+  const bucketMs = hours * 60 * 60 * 1000
+  return Math.floor(parsed / bucketMs)
+}
+
+function fingerprintKey(wallet: EnrichedWallet) {
+  const fp = wallet.behaviorFingerprint ?? []
+  return fp.slice(0, 6).join("|")
+}
+
 function hasBehaviorClusterInputs(wallet: EnrichedWallet) {
   return (
+    isUserLikeAccount(wallet) &&
     wallet.walletAgeDays !== null &&
     wallet.txCount !== null &&
-    wallet.campaignActionsCount !== null
+    (wallet.contractsCount !== null || wallet.uniqueCounterparties !== null || Boolean(wallet.behaviorFingerprint?.length))
   )
 }
 
@@ -228,7 +270,7 @@ function createClusters(wallets: EnrichedWallet[]) {
   const fundingGroups = new Map<string, number[]>()
 
   wallets.forEach((wallet, index) => {
-    if (!wallet.fundingSource) return
+    if (!isUserLikeAccount(wallet) || !wallet.fundingSource) return
     const key = wallet.fundingSource.toLowerCase()
     fundingGroups.set(key, [...(fundingGroups.get(key) ?? []), index])
   })
@@ -245,7 +287,33 @@ function createClusters(wallets: EnrichedWallet[]) {
         behaviorSimilarityScore: Math.min(98, 58 + indexes.length * 3),
         reasons: [
           "Shared funding source evidence",
-          "Funding cluster evidence: multiple wallets were funded from the same on-chain origin",
+          "Funding cluster evidence: multiple user-like wallets were funded from the same on-chain origin",
+        ],
+      })
+    })
+
+  const temporalGroups = new Map<string, number[]>()
+  wallets.forEach((wallet, index) => {
+    if (assigned.has(index) || !isUserLikeAccount(wallet)) return
+    const bucketId = timeBucket(wallet.firstSeen, 24)
+    if (bucketId === null) return
+    const key = [wallet.chain, bucketId, bucket(wallet.txCount ?? 0, 5)].join(":")
+    temporalGroups.set(key, [...(temporalGroups.get(key) ?? []), index])
+  })
+
+  Array.from(temporalGroups.values())
+    .filter((indexes) => indexes.length >= 4)
+    .forEach((indexes) => {
+      const label = nextClusterLabel(drafts.length)
+      indexes.forEach((walletIndex) => assigned.set(walletIndex, label))
+      drafts.push({
+        clusterLabel: label,
+        walletIndexes: indexes,
+        sharedFundingSource: null,
+        behaviorSimilarityScore: Math.min(92, 50 + indexes.length * 4),
+        reasons: [
+          "Temporal cohort evidence: wallets first appeared in the same time window",
+          "Behavior cluster evidence: similar transaction count inside the cohort",
         ],
       })
     })
@@ -257,7 +325,9 @@ function createClusters(wallets: EnrichedWallet[]) {
       wallet.chain,
       bucket(wallet.walletAgeDays as number, 14),
       bucket(wallet.txCount as number, 5),
-      bucket(wallet.campaignActionsCount as number, 3),
+      bucket(wallet.contractsCount ?? 0, 3),
+      bucket(wallet.tokenCount ?? 0, 2),
+      fingerprintKey(wallet),
     ].join(":")
     secondaryGroups.set(key, [...(secondaryGroups.get(key) ?? []), index])
   })
@@ -275,8 +345,8 @@ function createClusters(wallets: EnrichedWallet[]) {
         reasons: [
           "Behavior cluster evidence: similar wallet age",
           "Behavior cluster evidence: similar transaction count",
-          "Behavior cluster evidence: similar campaign activity",
-          "Behavior cluster evidence: same chain behavior pattern",
+          "Behavior cluster evidence: similar protocol interaction diversity",
+          "Behavior fingerprint evidence: similar sampled program/instruction pattern",
         ],
       })
     })
@@ -313,8 +383,9 @@ export function analyzeWallets(
   const walletResults: WalletRiskResult[] = enrichedWallets.map((wallet, index) => {
     const reasons: string[] = []
     const knownEntity = detectKnownEntity(wallet.walletAddress)
-    const entityType: EntityType = knownEntity?.type ?? (wallet.isContract ? "contract" : "user")
-    const entityRiskReason = knownEntity ? knownEntityRiskReason : null
+    const entityLabel = knownEntity?.label ?? wallet.knownEntityLabel ?? null
+    const entityType: EntityType = knownEntity?.type ?? wallet.knownEntityType ?? (wallet.isContract ? "contract" : "user")
+    const entityRiskReason = knownEntity?.reason ?? (entityLabel ? knownEntityRiskReason : null)
     const evidenceAvailable = hasEvidence(wallet, entityType)
     let score = 0
     const fundingGroupSize = wallet.fundingSource
@@ -327,6 +398,20 @@ export function analyzeWallets(
 
     if (wallet.enrichmentStatus === "completed" && wallet.enrichmentProvider) {
       reasons.push(`On-chain verified via ${wallet.enrichmentProvider}`)
+    }
+
+    if (wallet.accountType) {
+      reasons.push(`Solana account intelligence: ${wallet.accountType}`)
+      if (wallet.ownerProgram) reasons.push(`Solana owner program: ${wallet.ownerProgram}`)
+      if (wallet.accountType !== "system_user_wallet") {
+        score = Math.max(score, 65)
+        reasons.push("Account type evidence: not a normal end-user wallet")
+      }
+    }
+
+    if (!evidenceAvailable && !entityLabel) {
+      score = Math.max(score, 50)
+      reasons.push("Unverified evidence: no reliable on-chain data was available; do not treat as low risk")
     }
 
     if (wallet.walletAgeDays !== null) {
@@ -365,6 +450,21 @@ export function analyzeWallets(
       reasons.push("Campaign evidence: campaign-only behavior pattern")
     }
 
+    if (wallet.campaignQualityScore !== null) {
+      if (wallet.campaignQualityScore < 30) {
+        score += 25
+        reasons.push("Campaign quality evidence: very weak organic wallet history")
+      } else if (wallet.campaignQualityScore < 50) {
+        score += 15
+        reasons.push("Campaign quality evidence: weak organic wallet history")
+      } else if (wallet.campaignQualityScore < 70) {
+        score += 7
+        reasons.push("Campaign quality evidence: limited organic wallet history")
+      } else if (wallet.campaignQualityScore >= 85) {
+        reasons.push("Campaign quality evidence: strong organic wallet profile")
+      }
+    }
+
     const fundingRisk = clusterRisk(fundingGroupSize)
     if (fundingRisk > 0) {
       score += fundingRisk
@@ -380,10 +480,10 @@ export function analyzeWallets(
     if (wallet.contractsCount !== null) {
       if (wallet.contractsCount <= 1) {
         score += 15
-        reasons.push("On-chain evidence: low contract interaction diversity")
+        reasons.push("On-chain evidence: low protocol/program interaction diversity")
       } else if (wallet.contractsCount <= 3) {
         score += 8
-        reasons.push("On-chain evidence: limited contract interaction diversity")
+        reasons.push("On-chain evidence: limited protocol/program interaction diversity")
       }
     }
 
@@ -431,13 +531,9 @@ export function analyzeWallets(
       }
     }
 
-    if (knownEntity) {
+    if (entityLabel) {
       score = Math.max(score, 65)
-      reasons.unshift(knownEntityRiskReason)
-    }
-
-    if (!evidenceAvailable && !knownEntity) {
-      reasons.push("On-chain evidence unavailable: enrichment or enriched CSV fields are required for evidence-based scoring")
+      reasons.unshift(entityRiskReason ?? knownEntityRiskReason)
     }
 
     const riskScore = Math.min(100, score)
@@ -449,7 +545,8 @@ export function analyzeWallets(
       clusterSize,
       fundingGroupSize,
       entityType,
-      evidenceAvailable
+      evidenceAvailable,
+      wallet.accountType
     )
 
     if (!reasons.length || (reasons.length === 1 && reasons[0].startsWith("On-chain verified"))) {
@@ -459,7 +556,7 @@ export function analyzeWallets(
     return {
       walletAddress: wallet.walletAddress,
       chain: wallet.chain,
-      entityLabel: knownEntity?.label ?? null,
+      entityLabel,
       entityType,
       entityRiskReason,
       riskScore,
@@ -482,6 +579,10 @@ export function analyzeWallets(
       uniqueCounterparties: wallet.uniqueCounterparties,
       lastActiveDaysAgo: wallet.lastActiveDaysAgo,
       isContract: wallet.isContract,
+      accountType: wallet.accountType,
+      ownerProgram: wallet.ownerProgram,
+      behaviorFingerprint: wallet.behaviorFingerprint,
+      campaignQualityScore: wallet.campaignQualityScore,
       enrichmentProvider: wallet.enrichmentProvider,
       enrichmentStatus: wallet.enrichmentStatus,
     }
