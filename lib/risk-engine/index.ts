@@ -7,6 +7,7 @@ import type {
   ParsedWallet,
   PolicyAction,
   RiskLevel,
+  RiskPolicy,
   SuggestedAction,
   WalletRiskResult,
   WalletStatus,
@@ -60,11 +61,72 @@ type ClusterDraft = {
   reasons: string[]
 }
 
-const onChainCleanReason =
-  "On-chain evidence: no major risk signals detected from available provider data"
+type PolicyConfig = {
+  approveMax: number
+  manualMax: number
+  rejectMin: number
+  hardRejectMin: number
+  noDataAction: SuggestedAction
+  fundingRejectSize: number
+  clusterRejectSize: number
+  clusterReviewSize: number
+  scoreMultiplier: number
+  label: string
+}
 
 const knownEntityRiskReason =
   "On-chain entity evidence: known public exchange/service/protocol wallet detected. This address is not a typical individual reward campaign participant."
+const onChainCleanReason =
+  "On-chain evidence: no major risk signals detected from available provider data."
+
+const POLICY_CONFIG: Record<RiskPolicy, PolicyConfig> = {
+  conservative: {
+    approveMax: 35,
+    manualMax: 74,
+    rejectMin: 90,
+    hardRejectMin: 85,
+    noDataAction: "manual_review",
+    fundingRejectSize: 14,
+    clusterRejectSize: 14,
+    clusterReviewSize: 5,
+    scoreMultiplier: 0.9,
+    label: "Conservative",
+  },
+  balanced: {
+    approveMax: 35,
+    manualMax: 59,
+    rejectMin: 80,
+    hardRejectMin: 70,
+    noDataAction: "reject",
+    fundingRejectSize: 10,
+    clusterRejectSize: 10,
+    clusterReviewSize: 4,
+    scoreMultiplier: 1,
+    label: "Balanced",
+  },
+  strict: {
+    approveMax: 25,
+    manualMax: 49,
+    rejectMin: 70,
+    hardRejectMin: 55,
+    noDataAction: "reject",
+    fundingRejectSize: 6,
+    clusterRejectSize: 6,
+    clusterReviewSize: 3,
+    scoreMultiplier: 1.15,
+    label: "Strict",
+  },
+}
+
+export function normalizeRiskPolicy(value: string | null | undefined): RiskPolicy {
+  if (value === "conservative" || value === "strict") return value
+  return "balanced"
+}
+
+export function riskPolicyFromNotes(notes: string | null | undefined): RiskPolicy {
+  const match = notes?.match(/^TRIPROOF_RISK_POLICY=(conservative|balanced|strict)$/m)
+  return normalizeRiskPolicy(match?.[1])
+}
 
 function hydrateWallet(wallet: ParsedWallet): EnrichedWallet {
   return {
@@ -147,6 +209,7 @@ function statusFromSignals({
   evidenceAvailable,
   accountType,
   hardSybilSignal,
+  riskPolicy,
 }: {
   score: number
   riskLevel: RiskLevel
@@ -157,20 +220,28 @@ function statusFromSignals({
   evidenceAvailable: boolean
   accountType: string | null
   hardSybilSignal: boolean
+  riskPolicy: RiskPolicy
 }): StatusDecision {
+  const config = POLICY_CONFIG[riskPolicy]
   const contextualSignals = explainContextualSignals(clusterId, fundingGroupSize)
   const hasClusterSignal = Boolean(clusterId)
   const hasSharedFundingSignal = fundingGroupSize >= 5
-  const largeSharedFundingGroup = fundingGroupSize >= 10
-  const largeCluster = clusterSize >= 10
-  const severeCluster = hasClusterSignal && (clusterSize >= 6 || largeSharedFundingGroup)
 
   if (!evidenceAvailable) {
+    if (config.noDataAction === "manual_review") {
+      return {
+        status: "manual_review",
+        recommendedAction: "manual_review",
+        statusExplanation:
+          `Gray zone under ${config.label} policy: no reliable on-chain history was available. This is not approved automatically; the project team can decide whether inactive/unfunded wallets are eligible.`,
+      }
+    }
+
     return {
       status: "rejected",
       recommendedAction: "reject",
       statusExplanation:
-        "Rejected as unverified/not eligible: no reliable on-chain evidence was available. Tri-Proof does not approve wallets without enough evidence for reward inclusion.",
+        `Rejected / Not Eligible under ${config.label} policy: no reliable on-chain history or provider-readable account data was available. Tri-Proof does not treat inactive, unfunded, closed, or unreadable wallets as clean reward candidates.`,
     }
   }
 
@@ -179,7 +250,7 @@ function statusFromSignals({
       status: "rejected",
       recommendedAction: "reject",
       statusExplanation:
-        `Rejected as not eligible: non-user Solana account detected (${accountType}). Program, token, sysvar, protocol, closed, or program-owned accounts are excluded from normal user reward lists.`,
+        `Rejected / Not Eligible: non-user Solana account detected (${accountType}). Program, token, sysvar, protocol, closed, or program-owned accounts are excluded from normal user reward lists.`,
     }
   }
 
@@ -188,81 +259,63 @@ function statusFromSignals({
       status: "rejected",
       recommendedAction: "reject",
       statusExplanation:
-        `Rejected as not eligible: known ${entityType} address. It may not be malicious, but it is not a typical individual campaign participant.`,
+        `Rejected / Not Eligible: known ${entityType} address. It may not be malicious, but it is not a typical individual campaign participant.`,
     }
   }
 
-  if (score >= 80) {
+  if (score >= config.rejectMin) {
     return {
       status: "rejected",
       recommendedAction: "reject",
       statusExplanation: contextualSignals
-        ? `Rejected: very high risk score with contextual evidence; wallet is ${contextualSignals}.`
-        : "Rejected: very high wallet risk score.",
+        ? `Rejected under ${config.label} policy: very high risk score with contextual evidence; wallet is ${contextualSignals}.`
+        : `Rejected under ${config.label} policy: very high wallet risk score.`,
     }
   }
 
-  if (hardSybilSignal) {
+  if (hardSybilSignal && score >= config.hardRejectMin) {
     return {
       status: "rejected",
       recommendedAction: "reject",
       statusExplanation: contextualSignals
-        ? `Rejected: high-confidence Sybil/farming signal detected; wallet is ${contextualSignals}.`
-        : "Rejected: high-confidence Sybil/farming signal detected.",
+        ? `Rejected under ${config.label} policy: high-confidence Sybil/farming signal detected; wallet is ${contextualSignals}.`
+        : `Rejected under ${config.label} policy: high-confidence Sybil/farming signal detected.`,
     }
   }
 
-  if (severeCluster || largeCluster || largeSharedFundingGroup) {
+  if (fundingGroupSize >= config.fundingRejectSize || clusterSize >= config.clusterRejectSize) {
     return {
       status: "rejected",
       recommendedAction: "reject",
       statusExplanation:
-        `Rejected: severe cluster evidence detected. Wallet is ${contextualSignals || "part of a large suspicious wallet group"}.`,
+        `Rejected under ${config.label} policy: severe cluster/funding evidence detected. Wallet is ${contextualSignals || "part of a large suspicious wallet group"}.`,
     }
   }
 
-  if (score <= 35 && !hasClusterSignal && !hasSharedFundingSignal) {
+  if (score <= config.approveMax && !hasClusterSignal && !hasSharedFundingSignal) {
     return {
       status: "approved",
       recommendedAction: "approve",
       statusExplanation:
-        "Approved: wallet has enough on-chain evidence and no known entity, shared funding-source, or suspicious cluster signal.",
+        `Approved under ${config.label} policy: enough on-chain evidence and no known entity, shared funding-source, severe cluster, or hard Sybil signal.`,
     }
   }
 
-  if (score >= 60 && (hasClusterSignal || hasSharedFundingSignal || riskLevel === "high")) {
+  if (score > config.manualMax || riskLevel === "high" || clusterSize >= config.clusterReviewSize) {
     return {
       status: "rejected",
       recommendedAction: "reject",
       statusExplanation: contextualSignals
-        ? `Rejected: high risk score with cluster/funding evidence; wallet is ${contextualSignals}.`
-        : "Rejected: high risk score with strong contextual evidence.",
-    }
-  }
-
-  if (score >= 60) {
-    return {
-      status: "manual_review",
-      recommendedAction: "manual_review",
-      statusExplanation:
-        "Manual review: high score, but no hard Sybil or severe cluster signal was strong enough for automatic rejection.",
-    }
-  }
-
-  if (score >= 36) {
-    return {
-      status: "manual_review",
-      recommendedAction: "manual_review",
-      statusExplanation:
-        "Manual review: medium-risk gray-zone wallet. It has some weak risk signals but not enough evidence for automatic rejection.",
+        ? `Rejected under ${config.label} policy: risk score and contextual evidence crossed the automatic exclusion threshold; wallet is ${contextualSignals}.`
+        : `Rejected under ${config.label} policy: risk score crossed the automatic exclusion threshold.`,
     }
   }
 
   return {
-    status: "approved",
-    recommendedAction: "approve",
+    status: "manual_review",
+    recommendedAction: "manual_review",
     statusExplanation:
-      "Approved: low risk score and no hard Sybil, cluster, known-entity, or no-data signal detected.",
+      `Gray zone under ${config.label} policy: this wallet has some weak risk signals, but not enough evidence for automatic rejection.`,
   }
 }
 
@@ -337,13 +390,11 @@ function timeBucket(iso: string | null, hours: number) {
   if (!iso) return null
   const parsed = Date.parse(iso)
   if (!Number.isFinite(parsed)) return null
-  const bucketMs = hours * 60 * 60 * 1000
-  return Math.floor(parsed / bucketMs)
+  return Math.floor(parsed / (hours * 60 * 60 * 1000))
 }
 
 function fingerprintKey(wallet: EnrichedWallet) {
-  const fp = wallet.behaviorFingerprint ?? []
-  return fp.slice(0, 8).join("|")
+  return (wallet.behaviorFingerprint ?? []).slice(0, 8).join("|")
 }
 
 function hasBehaviorClusterInputs(wallet: EnrichedWallet) {
@@ -415,7 +466,7 @@ function createClusters(wallets: EnrichedWallet[]) {
       })
     })
 
-  const secondaryGroups = new Map<string, number[]>()
+  const behaviorGroups = new Map<string, number[]>()
   wallets.forEach((wallet, index) => {
     if (assigned.has(index) || !hasBehaviorClusterInputs(wallet)) return
     const key = [
@@ -426,10 +477,10 @@ function createClusters(wallets: EnrichedWallet[]) {
       bucket(wallet.tokenCount ?? 0, 2),
       fingerprintKey(wallet),
     ].join(":")
-    secondaryGroups.set(key, [...(secondaryGroups.get(key) ?? []), index])
+    behaviorGroups.set(key, [...(behaviorGroups.get(key) ?? []), index])
   })
 
-  Array.from(secondaryGroups.values())
+  Array.from(behaviorGroups.values())
     .filter((indexes) => indexes.length >= 4)
     .forEach((indexes) => {
       const label = nextClusterLabel(drafts.length)
@@ -461,27 +512,29 @@ function suggestedActionFromCluster(
   sharedFundingSource: string | null,
   reasons: string[]
 ): SuggestedAction {
-  const largeCluster = walletCount >= 10
-  const highSimilarity = behaviorSimilarityScore >= 80
-  const sharedFunding = sharedFundingSource !== null
   const autoRejectReason = reasons.some((reason) => reason.startsWith("Auto-reject threshold"))
-
-  if (autoRejectReason || largeCluster || (sharedFunding && walletCount >= 6) || (highSimilarity && averageRiskScore >= 60)) {
+  if (
+    autoRejectReason ||
+    walletCount >= 10 ||
+    (sharedFundingSource !== null && walletCount >= 6) ||
+    (behaviorSimilarityScore >= 80 && averageRiskScore >= 60)
+  ) {
     return "reject"
   }
-
   return "manual_review"
 }
 
 export function analyzeWallets(
   wallets: ParsedWallet[],
-  enrichment: EnrichmentMeta | null = null
+  enrichment: EnrichmentMeta | null = null,
+  riskPolicy: RiskPolicy = "balanced"
 ): AnalysisResult {
+  const config = POLICY_CONFIG[riskPolicy]
   const enrichedWallets = wallets.map(hydrateWallet)
   const { drafts, assigned, fundingGroups } = createClusters(enrichedWallets)
 
   const walletResults: WalletRiskResult[] = enrichedWallets.map((wallet, index) => {
-    const reasons: string[] = []
+    const reasons: string[] = [`V1.6 risk policy: ${config.label}`]
     const knownEntity = detectKnownEntity(wallet.walletAddress)
     const entityLabel = knownEntity?.label ?? wallet.knownEntityLabel ?? null
     const entityType: EntityType = knownEntity?.type ?? wallet.knownEntityType ?? (wallet.isContract ? "contract" : "user")
@@ -512,13 +565,13 @@ export function analyzeWallets(
       if (wallet.ownerProgram) reasons.push(`Solana owner program: ${wallet.ownerProgram}`)
       if (wallet.accountType !== "system_user_wallet") {
         score = Math.max(score, wallet.accountType === "missing_or_closed_account" ? 45 : 75)
-        reasons.push("Account type evidence: not a normal end-user wallet")
+        reasons.push("V1.5 eligibility: not a normal end-user wallet")
       }
     }
 
     if (!evidenceAvailable && !entityLabel) {
       score = Math.max(score, 45)
-      reasons.push("Unverified evidence: no reliable on-chain data was available; excluded from automatic approval")
+      reasons.push("V1.5 No On-chain Data: no reliable provider-readable wallet history was available")
     }
 
     if (wallet.walletAgeDays !== null) {
@@ -680,12 +733,8 @@ export function analyzeWallets(
       }
     }
 
-    if (wallet.policyAction === "reject") {
-      score = Math.max(score, 95)
-    } else if (wallet.policyAction === "manual_review") {
-      score = Math.max(score, 55)
-    }
-
+    if (wallet.policyAction === "reject") score = Math.max(score, 95)
+    if (wallet.policyAction === "manual_review") score = Math.max(score, 55)
     if (entityLabel) {
       score = Math.max(score, 75)
       reasons.unshift(entityRiskReason ?? knownEntityRiskReason)
@@ -694,15 +743,15 @@ export function analyzeWallets(
     const hardSybilSignal =
       wallet.policyAction === "reject" ||
       campaignOnlyPattern ||
-      fundingGroupSize >= 10 ||
-      clusterSize >= 10 ||
+      fundingGroupSize >= config.fundingRejectSize ||
+      clusterSize >= config.clusterRejectSize ||
       (clusterSize >= 6 && clusterSimilarity >= 75) ||
       (wallet.botScriptScore !== null && wallet.botScriptScore >= 80) ||
       (wallet.campaignOnlyRatio !== null && wallet.campaignOnlyRatio >= 0.8 && (wallet.txCount ?? 0) <= 15) ||
       (wallet.behaviorDiversityScore !== null && wallet.behaviorDiversityScore < 20 && (wallet.txCount ?? 0) <= 5) ||
       (wallet.walletAgeDays !== null && wallet.walletAgeDays < 7 && wallet.txCount !== null && wallet.txCount <= 2)
 
-    const riskScore = Math.min(100, score)
+    const riskScore = Math.min(100, Math.round(score * config.scoreMultiplier))
     const riskLevel = riskLevelFromScore(riskScore)
     const baseDecision = statusFromSignals({
       score: riskScore,
@@ -714,12 +763,11 @@ export function analyzeWallets(
       evidenceAvailable,
       accountType: wallet.accountType,
       hardSybilSignal,
+      riskPolicy,
     })
     const decision = policyDecision(wallet, baseDecision, evidenceAvailable, entityType)
 
-    if (!reasons.length || (reasons.length === 1 && reasons[0].startsWith("On-chain verified"))) {
-      reasons.push(onChainCleanReason)
-    }
+    if (reasons.length === 1) reasons.push(onChainCleanReason)
 
     return {
       walletAddress: wallet.walletAddress,
