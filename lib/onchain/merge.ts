@@ -1,4 +1,4 @@
-import type { AnalysisMode, ParsedWallet } from "@/types"
+import type { AnalysisMode, EntityType, ParsedWallet } from "@/types"
 import type { WalletEnrichmentResult } from "@/lib/onchain/enrichment-types"
 
 function pickNumber(
@@ -23,6 +23,23 @@ function pickString(
   return csvValue ?? apiValue ?? null
 }
 
+function pickArray(
+  csvValue: string[] | null | undefined,
+  apiValue: string[] | null | undefined,
+  apiWins: boolean
+): string[] | null {
+  if (apiWins) return apiValue ?? csvValue ?? null
+  return csvValue ?? apiValue ?? null
+}
+
+function pickEntityType(value: string | null | undefined): EntityType | null {
+  if (!value) return null
+  if (["exchange", "service", "bridge", "contract", "protocol", "unknown", "user"].includes(value)) {
+    return value as EntityType
+  }
+  return null
+}
+
 function daysSince(iso: string | null): number | null {
   if (!iso) return null
   const parsed = Date.parse(iso)
@@ -30,18 +47,6 @@ function daysSince(iso: string | null): number | null {
   return Math.max(0, Math.floor((Date.now() - parsed) / (24 * 60 * 60 * 1000)))
 }
 
-/**
- * Merge enrichment results into parsed CSV wallets according to the analysis
- * mode:
- *
- * - `onchain`: API data is authoritative; CSV values only fill gaps the API
- *   could not resolve.
- * - `hybrid`: CSV values win when present; the API fills only what's missing.
- * - `csv_only`: this function is not used (no enrichment runs).
- *
- * The returned wallets remain plain {@link ParsedWallet}s (plus the optional
- * enrichment fields) so the existing risk engine consumes them unchanged.
- */
 export function mergeEnrichment(
   wallets: ParsedWallet[],
   results: Map<string, WalletEnrichmentResult>,
@@ -81,6 +86,12 @@ export function mergeEnrichment(
       ),
       lastActiveDaysAgo: daysSince(lastSeen),
       isContract: data.isContract ?? wallet.isContract ?? null,
+      knownEntityLabel: pickString(wallet.knownEntityLabel, data.knownEntityLabel, apiWins),
+      knownEntityType: pickEntityType(data.knownEntityType) ?? wallet.knownEntityType ?? null,
+      accountType: pickString(wallet.accountType, data.accountType, apiWins),
+      ownerProgram: pickString(wallet.ownerProgram, data.ownerProgram, apiWins),
+      behaviorFingerprint: pickArray(wallet.behaviorFingerprint, data.behaviorFingerprint, apiWins),
+      campaignQualityScore: pickNumber(wallet.campaignQualityScore, data.campaignQualityScore, apiWins),
       enrichmentProvider: provider,
       enrichmentStatus: status,
     }
