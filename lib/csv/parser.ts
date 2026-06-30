@@ -1,6 +1,6 @@
 import Papa from "papaparse"
 
-import type { CsvIssue, CsvParseResult, ParsedWallet } from "@/types"
+import type { CsvIssue, CsvParseResult, EntityType, ParsedWallet, PolicyAction } from "@/types"
 import {
   isValidWalletAddress,
   normalizeHeader,
@@ -22,6 +22,14 @@ function getWalletAddress(row: RawCsvRow) {
   return ""
 }
 
+function firstText(row: RawCsvRow, keys: string[]) {
+  for (const key of keys) {
+    const value = textOrNull(row[key])
+    if (value) return value
+  }
+  return null
+}
+
 function toNumber(value: string | undefined) {
   if (value == null || value.trim() === "") {
     return null
@@ -34,6 +42,80 @@ function toNumber(value: string | undefined) {
 function textOrNull(value: string | undefined) {
   const trimmed = value?.trim()
   return trimmed ? trimmed : null
+}
+
+function normalizePolicyAction(value: string | null): PolicyAction {
+  if (!value) return null
+  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, "_")
+
+  if (
+    [
+      "approve",
+      "approved",
+      "allow",
+      "allowlist",
+      "whitelist",
+      "trusted",
+      "trusted_user",
+      "verified",
+      "verified_user",
+      "confirmed_human",
+      "false_positive",
+      "safe",
+    ].includes(normalized)
+  ) {
+    return "approve"
+  }
+
+  if (
+    [
+      "reject",
+      "rejected",
+      "deny",
+      "denylist",
+      "block",
+      "blocked",
+      "blocklist",
+      "blacklist",
+      "known_sybil",
+      "confirmed_sybil",
+      "bot",
+      "farmer",
+      "farm",
+      "not_eligible",
+      "exclude",
+      "excluded",
+    ].includes(normalized)
+  ) {
+    return "reject"
+  }
+
+  if (
+    [
+      "manual",
+      "manual_review",
+      "review",
+      "needs_review",
+      "suspicious",
+      "watchlist",
+      "gray",
+      "grey",
+      "uncertain",
+    ].includes(normalized)
+  ) {
+    return "manual_review"
+  }
+
+  return null
+}
+
+function normalizeEntityType(value: string | null): EntityType | null {
+  if (!value) return null
+  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, "_")
+  if (["exchange", "service", "bridge", "contract", "protocol", "unknown", "user"].includes(normalized)) {
+    return normalized as EntityType
+  }
+  return null
 }
 
 export function parseWalletCsv(csvText: string, selectedChain: string): CsvParseResult {
@@ -92,6 +174,19 @@ export function parseWalletCsv(csvText: string, selectedChain: string): CsvParse
 
     seen.add(duplicateKey)
 
+    const reputationLabel = firstText(row, [
+      "reputation_label",
+      "reputation",
+      "review_label",
+      "customer_label",
+      "label",
+    ])
+    const explicitPolicy = firstText(row, ["policy_action", "policy", "decision", "action", "status_override"])
+    const policyAction = normalizePolicyAction(explicitPolicy ?? reputationLabel)
+    const entityLabel = firstText(row, ["entity_label", "known_entity", "entity", "wallet_label"])
+    const entityType = normalizeEntityType(firstText(row, ["entity_type", "known_entity_type"]))
+    const policyReason = firstText(row, ["policy_reason", "reason", "note", "notes", "review_note"])
+
     wallets.push({
       walletAddress: normalizedAddress,
       chain: rowChain,
@@ -103,6 +198,12 @@ export function parseWalletCsv(csvText: string, selectedChain: string): CsvParse
       totalVolume: toNumber(row.total_volume),
       contractsCount: toNumber(row.contracts_count),
       campaignActionsCount: toNumber(row.campaign_actions_count),
+      knownEntityLabel: entityLabel,
+      knownEntityType: entityType,
+      policyAction,
+      reputationLabel,
+      policyReason,
+      customerLabel: firstText(row, ["customer_label", "review_label", "label"]),
       sourceRow: rowNumber,
     })
   })
@@ -117,6 +218,15 @@ export function parseWalletCsv(csvText: string, selectedChain: string): CsvParse
     "total_volume",
     "contracts_count",
     "campaign_actions_count",
+    "policy_action",
+    "policy",
+    "decision",
+    "reputation_label",
+    "reputation",
+    "review_label",
+    "customer_label",
+    "entity_label",
+    "entity_type",
   ]
 
   return {
