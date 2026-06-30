@@ -8,6 +8,10 @@ type TokenAccount = {
   pubkey?: string
 }
 
+type SignatureInfo = {
+  signature: string
+}
+
 type ParsedInstruction = {
   program?: string
   parsed?: {
@@ -183,7 +187,49 @@ export async function verifySolanaUsdcTransfer({
 
   return {
     ok: true as const,
+    txHash,
     receivedAmountUsdc: Number(instructionAmountUnits(matchingTransfer)) / Number(usdcDecimals),
     confirmations,
+  }
+}
+
+export async function verifySolanaUsdcTransferByReference({
+  reference,
+  network,
+  expectedAmountUsdc,
+}: {
+  reference: string
+  network: SolanaPaymentNetwork
+  expectedAmountUsdc: number
+}) {
+  if (!validateSolanaAddress(reference)) {
+    return { ok: false as const, error: "Invalid Solana payment reference." }
+  }
+
+  const signatures = await solanaRpc<SignatureInfo[]>("getSignaturesForAddress", [
+    reference,
+    { limit: 10, commitment: "confirmed" },
+  ])
+
+  if (!signatures.length) {
+    return { ok: false as const, pending: true, error: "Payment not found yet." }
+  }
+
+  for (const item of signatures) {
+    const verification = await verifySolanaUsdcTransfer({
+      txHash: item.signature,
+      network,
+      expectedAmountUsdc,
+    })
+
+    if (verification.ok) {
+      return verification
+    }
+  }
+
+  return {
+    ok: false as const,
+    pending: true,
+    error: "Payment was not found yet for this Solana Pay reference.",
   }
 }
