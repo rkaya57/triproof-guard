@@ -55,6 +55,11 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
     return `solana:${selectedNetwork.treasuryAddress}?${params.toString()}`
   }, [isSolana, plan.amount, plan.name, plan.wallets, selectedNetwork?.treasuryAddress])
 
+  function openSolanaWallet() {
+    if (!solanaPayUrl) return
+    window.location.href = solanaPayUrl
+  }
+
   async function copyAddress() {
     if (!selectedNetwork?.treasuryAddress) return
     await navigator.clipboard.writeText(selectedNetwork.treasuryAddress)
@@ -137,7 +142,7 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
       <div className="rounded-lg border border-primary/25 bg-primary/5 p-4">
         <div className="mb-2 flex items-center justify-between gap-3">
           <p className="font-medium">
-            {isSolana ? "Pay with Solana Pay USDC" : "Send USDC to this treasury address"}
+            {isSolana ? "One-click Solana Pay checkout" : "Send USDC to this treasury address"}
           </p>
           <Button type="button" variant="outline" size="sm" onClick={copyAddress}>
             <Copy data-icon="inline-start" /> Copy
@@ -147,14 +152,15 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
           {selectedNetwork?.treasuryAddress}
         </code>
         <p className="mt-3 text-sm text-muted-foreground">
-          Send exactly {plan.amount} USDC or more on {selectedNetwork?.label}. Then paste the
-          {isSolana ? " Solana transaction signature" : " transaction hash"} below. The system will verify the USDC transfer on-chain.
+          {isSolana
+            ? `Click the payment button, approve ${plan.amount} USDC in your Solana wallet, then paste the transaction signature below so Tri-Proof can verify it on-chain.`
+            : `Send exactly ${plan.amount} USDC or more on ${selectedNetwork?.label}. Then paste the transaction hash below. The system will verify the USDC transfer on-chain.`}
         </p>
         {isSolana && solanaPayUrl && (
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-            <a href={solanaPayUrl} className={buttonVariants({ variant: "secondary" })}>
-              <ExternalLink data-icon="inline-start" /> Open Solana Pay
-            </a>
+            <Button type="button" variant="secondary" onClick={openSolanaWallet}>
+              <ExternalLink data-icon="inline-start" /> Open Wallet & Pay
+            </Button>
             <Button type="button" variant="outline" onClick={copySolanaPayLink}>
               <Copy data-icon="inline-start" /> Copy Solana Pay Link
             </Button>
@@ -164,13 +170,13 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
 
       <div>
         <label htmlFor="txHash" className="text-sm font-medium">
-          {isSolana ? "Transaction signature" : "Transaction hash"}
+          {isSolana ? "Transaction signature after approval" : "Transaction hash"}
         </label>
         <Input
           id="txHash"
           value={txHash}
           onChange={(event) => setTxHash(event.target.value)}
-          placeholder={isSolana ? "Solana transaction signature" : "0x..."}
+          placeholder={isSolana ? "Paste the Solana transaction signature" : "0x..."}
           className="mt-2"
         />
       </div>
@@ -190,7 +196,7 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
       <div className="flex flex-col gap-3 sm:flex-row">
         <Button type="submit" disabled={pending || !txHash.trim()}>
           {pending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <ShieldCheck data-icon="inline-start" />}
-          Verify USDC Payment
+          Verify Payment & Activate Credits
         </Button>
         <Link href="/pricing" className={buttonVariants({ variant: "outline" })}>
           Back to Pricing
