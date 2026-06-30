@@ -56,7 +56,7 @@ const onChainCleanReason =
   "On-chain evidence: no major risk signals detected from available provider data"
 
 const knownEntityRiskReason =
-  "On-chain entity evidence: known public exchange/service/protocol wallet detected. This address is not necessarily malicious, but it is not a typical individual reward campaign participant and should be manually reviewed."
+  "On-chain entity evidence: known public exchange/service/protocol wallet detected. This address is not a typical individual reward campaign participant."
 
 function hydrateWallet(wallet: ParsedWallet): EnrichedWallet {
   return {
@@ -122,100 +122,124 @@ function explainContextualSignals(clusterId: string | null, fundingGroupSize: nu
   return signals.join(" and ")
 }
 
-function statusFromSignals(
-  score: number,
-  riskLevel: RiskLevel,
-  clusterId: string | null,
-  clusterSize: number,
-  fundingGroupSize: number,
-  entityType: EntityType,
-  evidenceAvailable: boolean,
+function statusFromSignals({
+  score,
+  riskLevel,
+  clusterId,
+  clusterSize,
+  fundingGroupSize,
+  entityType,
+  evidenceAvailable,
+  accountType,
+  hardSybilSignal,
+}: {
+  score: number
+  riskLevel: RiskLevel
+  clusterId: string | null
+  clusterSize: number
+  fundingGroupSize: number
+  entityType: EntityType
+  evidenceAvailable: boolean
   accountType: string | null
-): StatusDecision {
+  hardSybilSignal: boolean
+}): StatusDecision {
   const contextualSignals = explainContextualSignals(clusterId, fundingGroupSize)
   const hasClusterSignal = Boolean(clusterId)
   const hasSharedFundingSignal = fundingGroupSize >= 5
-  const isSevereCluster = hasClusterSignal && clusterSize >= 6
+  const largeSharedFundingGroup = fundingGroupSize >= 10
+  const largeCluster = clusterSize >= 10
+  const severeCluster = hasClusterSignal && (clusterSize >= 6 || largeSharedFundingGroup)
 
   if (!evidenceAvailable) {
     return {
-      status: "manual_review",
-      recommendedAction: "manual_review",
+      status: "rejected",
+      recommendedAction: "reject",
       statusExplanation:
-        "Unverified wallet: no reliable on-chain evidence was available. This is not a low-risk approval; it requires manual review or a rerun with a stronger provider response.",
+        "Rejected as unverified/not eligible: no reliable on-chain evidence was available. Tri-Proof does not approve wallets without enough evidence for reward inclusion.",
     }
   }
 
   if (accountType && accountType !== "system_user_wallet") {
     return {
-      status: "manual_review",
-      recommendedAction: "manual_review",
+      status: "rejected",
+      recommendedAction: "reject",
       statusExplanation:
-        `Non-user Solana account detected (${accountType}). Program, token, sysvar, or protocol accounts should not be included in normal user reward lists without manual review.`,
+        `Rejected as not eligible: non-user Solana account detected (${accountType}). Program, token, sysvar, protocol, closed, or program-owned accounts are excluded from normal user reward lists.`,
     }
   }
 
   if (isReviewOnlyEntityType(entityType)) {
     return {
-      status: "manual_review",
-      recommendedAction: "manual_review",
+      status: "rejected",
+      recommendedAction: "reject",
       statusExplanation:
-        `Known ${entityType} wallet should be reviewed before reward inclusion. It is not necessarily malicious, but it is not a typical individual participant.`,
+        `Rejected as not eligible: known ${entityType} address. It may not be malicious, but it is not a typical individual campaign participant.`,
     }
   }
 
-  if (score >= 86 && isSevereCluster) {
+  if (score >= 80) {
+    return {
+      status: "rejected",
+      recommendedAction: "reject",
+      statusExplanation: contextualSignals
+        ? `Rejected: very high risk score with contextual evidence; wallet is ${contextualSignals}.`
+        : "Rejected: very high wallet risk score.",
+    }
+  }
+
+  if (hardSybilSignal) {
+    return {
+      status: "rejected",
+      recommendedAction: "reject",
+      statusExplanation: contextualSignals
+        ? `Rejected: high-confidence Sybil/farming signal detected; wallet is ${contextualSignals}.`
+        : "Rejected: high-confidence Sybil/farming signal detected.",
+    }
+  }
+
+  if (severeCluster || largeCluster || largeSharedFundingGroup) {
     return {
       status: "rejected",
       recommendedAction: "reject",
       statusExplanation:
-        `Critical risk score and severe cluster membership detected. Wallet is ${contextualSignals}.`,
+        `Rejected: severe cluster evidence detected. Wallet is ${contextualSignals || "part of a large suspicious wallet group"}.`,
     }
   }
 
-  if (score >= 86) {
+  if (score <= 35 && !hasClusterSignal && !hasSharedFundingSignal) {
     return {
-      status: "manual_review",
-      recommendedAction: "manual_review",
+      status: "approved",
+      recommendedAction: "approve",
       statusExplanation:
-        "Critical risk score detected, but contextual cluster evidence is not severe enough for automatic rejection.",
+        "Approved: wallet has enough on-chain evidence and no known entity, shared funding-source, or suspicious cluster signal.",
     }
   }
 
-  if (riskLevel === "high") {
+  if (score >= 60 && (hasClusterSignal || hasSharedFundingSignal || riskLevel === "high")) {
     return {
-      status: "manual_review",
-      recommendedAction: "manual_review",
+      status: "rejected",
+      recommendedAction: "reject",
       statusExplanation: contextualSignals
-        ? `High risk score with contextual signal: wallet is ${contextualSignals}.`
-        : "High risk score requires project team review before reward inclusion.",
+        ? `Rejected: high risk score with cluster/funding evidence; wallet is ${contextualSignals}.`
+        : "Rejected: high risk score with strong contextual evidence.",
     }
   }
 
-  if (hasClusterSignal) {
+  if (score >= 60) {
     return {
       status: "manual_review",
       recommendedAction: "manual_review",
       statusExplanation:
-        `On-chain cluster evidence found: wallet is part of suspicious cluster ${clusterId}. Cluster members are not automatically approved even when the numeric score is low.`,
+        "Manual review: high score, but no hard Sybil or severe cluster signal was strong enough for automatic rejection.",
     }
   }
 
-  if (hasSharedFundingSignal) {
+  if (score >= 36) {
     return {
       status: "manual_review",
       recommendedAction: "manual_review",
       statusExplanation:
-        `Funding cluster evidence found: wallet shares funding source with ${fundingGroupSize} wallets. Shared funding groups of 5 or more require manual review.`,
-    }
-  }
-
-  if (riskLevel === "medium") {
-    return {
-      status: "manual_review",
-      recommendedAction: "manual_review",
-      statusExplanation:
-        "Medium risk score requires project team review before reward inclusion.",
+        "Manual review: medium-risk gray-zone wallet. It has some weak risk signals but not enough evidence for automatic rejection.",
     }
   }
 
@@ -223,12 +247,13 @@ function statusFromSignals(
     status: "approved",
     recommendedAction: "approve",
     statusExplanation:
-      "On-chain evidence did not show a known entity, suspicious cluster, or shared funding-source signal for this wallet.",
+      "Approved: low risk score and no hard Sybil, cluster, known-entity, or no-data signal detected.",
   }
 }
 
 function clusterRisk(size: number) {
-  if (size >= 21) return 35
+  if (size >= 21) return 40
+  if (size >= 10) return 30
   if (size >= 6) return 20
   if (size >= 3) return 10
   return 0
@@ -252,7 +277,7 @@ function timeBucket(iso: string | null, hours: number) {
 
 function fingerprintKey(wallet: EnrichedWallet) {
   const fp = wallet.behaviorFingerprint ?? []
-  return fp.slice(0, 6).join("|")
+  return fp.slice(0, 8).join("|")
 }
 
 function hasBehaviorClusterInputs(wallet: EnrichedWallet) {
@@ -284,10 +309,13 @@ function createClusters(wallets: EnrichedWallet[]) {
         clusterLabel: label,
         walletIndexes: indexes,
         sharedFundingSource: fundingSource,
-        behaviorSimilarityScore: Math.min(98, 58 + indexes.length * 3),
+        behaviorSimilarityScore: Math.min(99, 62 + indexes.length * 3),
         reasons: [
-          "Shared funding source evidence",
+          "V1.2 funding cluster: shared funding source",
           "Funding cluster evidence: multiple user-like wallets were funded from the same on-chain origin",
+          indexes.length >= 10
+            ? "Auto-reject threshold: large shared funding group"
+            : "Manual/reject threshold: shared funding group requires cluster-aware decisioning",
         ],
       })
     })
@@ -302,7 +330,7 @@ function createClusters(wallets: EnrichedWallet[]) {
   })
 
   Array.from(temporalGroups.values())
-    .filter((indexes) => indexes.length >= 4)
+    .filter((indexes) => indexes.length >= 5)
     .forEach((indexes) => {
       const label = nextClusterLabel(drafts.length)
       indexes.forEach((walletIndex) => assigned.set(walletIndex, label))
@@ -310,10 +338,13 @@ function createClusters(wallets: EnrichedWallet[]) {
         clusterLabel: label,
         walletIndexes: indexes,
         sharedFundingSource: null,
-        behaviorSimilarityScore: Math.min(92, 50 + indexes.length * 4),
+        behaviorSimilarityScore: Math.min(94, 54 + indexes.length * 4),
         reasons: [
-          "Temporal cohort evidence: wallets first appeared in the same time window",
+          "V1.2 temporal cohort: wallets first appeared in the same time window",
           "Behavior cluster evidence: similar transaction count inside the cohort",
+          indexes.length >= 10
+            ? "Auto-reject threshold: large same-time cohort"
+            : "Manual/reject threshold: same-time cohort requires cluster-aware decisioning",
         ],
       })
     })
@@ -333,7 +364,7 @@ function createClusters(wallets: EnrichedWallet[]) {
   })
 
   Array.from(secondaryGroups.values())
-    .filter((indexes) => indexes.length >= 3)
+    .filter((indexes) => indexes.length >= 4)
     .forEach((indexes) => {
       const label = nextClusterLabel(drafts.length)
       indexes.forEach((walletIndex) => assigned.set(walletIndex, label))
@@ -341,12 +372,15 @@ function createClusters(wallets: EnrichedWallet[]) {
         clusterLabel: label,
         walletIndexes: indexes,
         sharedFundingSource: null,
-        behaviorSimilarityScore: Math.min(94, 52 + indexes.length * 4),
+        behaviorSimilarityScore: Math.min(96, 56 + indexes.length * 4),
         reasons: [
-          "Behavior cluster evidence: similar wallet age",
+          "V1.2 behavior cluster: similar wallet age",
           "Behavior cluster evidence: similar transaction count",
-          "Behavior cluster evidence: similar protocol interaction diversity",
+          "Behavior cluster evidence: similar protocol/program interaction diversity",
           "Behavior fingerprint evidence: similar sampled program/instruction pattern",
+          indexes.length >= 10
+            ? "Auto-reject threshold: large behavior-similar wallet group"
+            : "Manual/reject threshold: behavior-similar group requires cluster-aware decisioning",
         ],
       })
     })
@@ -361,15 +395,15 @@ function suggestedActionFromCluster(
   sharedFundingSource: string | null,
   reasons: string[]
 ): SuggestedAction {
-  if (averageRiskScore >= 86 && behaviorSimilarityScore >= 80 && walletCount >= 5) return "reject"
-  if (averageRiskScore >= 61) return "manual_review"
-  if (walletCount >= 3 && sharedFundingSource !== null) return "manual_review"
-  if (
-    averageRiskScore < 31 &&
-    reasons.some((r) => r.startsWith("Shared funding source") || r.startsWith("Part of suspicious cluster"))
-  ) {
-    return "manual_review"
+  const largeCluster = walletCount >= 10
+  const highSimilarity = behaviorSimilarityScore >= 80
+  const sharedFunding = sharedFundingSource !== null
+  const autoRejectReason = reasons.some((reason) => reason.startsWith("Auto-reject threshold"))
+
+  if (autoRejectReason || largeCluster || (sharedFunding && walletCount >= 6) || (highSimilarity && averageRiskScore >= 60)) {
+    return "reject"
   }
+
   return "manual_review"
 }
 
@@ -392,9 +426,9 @@ export function analyzeWallets(
       ? fundingGroups.get(wallet.fundingSource.toLowerCase())?.length ?? 0
       : 0
     const clusterId = assigned.get(index) ?? null
-    const clusterSize = clusterId
-      ? drafts.find((cluster) => cluster.clusterLabel === clusterId)?.walletIndexes.length ?? 0
-      : 0
+    const cluster = clusterId ? drafts.find((item) => item.clusterLabel === clusterId) ?? null : null
+    const clusterSize = cluster?.walletIndexes.length ?? 0
+    const clusterSimilarity = cluster?.behaviorSimilarityScore ?? 0
 
     if (wallet.enrichmentStatus === "completed" && wallet.enrichmentProvider) {
       reasons.push(`On-chain verified via ${wallet.enrichmentProvider}`)
@@ -404,14 +438,14 @@ export function analyzeWallets(
       reasons.push(`Solana account intelligence: ${wallet.accountType}`)
       if (wallet.ownerProgram) reasons.push(`Solana owner program: ${wallet.ownerProgram}`)
       if (wallet.accountType !== "system_user_wallet") {
-        score = Math.max(score, 65)
+        score = Math.max(score, wallet.accountType === "missing_or_closed_account" ? 45 : 75)
         reasons.push("Account type evidence: not a normal end-user wallet")
       }
     }
 
     if (!evidenceAvailable && !entityLabel) {
-      score = Math.max(score, 50)
-      reasons.push("Unverified evidence: no reliable on-chain data was available; do not treat as low risk")
+      score = Math.max(score, 45)
+      reasons.push("Unverified evidence: no reliable on-chain data was available; excluded from automatic approval")
     }
 
     if (wallet.walletAgeDays !== null) {
@@ -440,13 +474,14 @@ export function analyzeWallets(
       }
     }
 
-    if (
+    const campaignOnlyPattern =
       wallet.campaignActionsCount !== null &&
       wallet.txCount !== null &&
       wallet.campaignActionsCount >= 5 &&
       wallet.txCount <= 10
-    ) {
-      score += 15
+
+    if (campaignOnlyPattern) {
+      score += 20
       reasons.push("Campaign evidence: campaign-only behavior pattern")
     }
 
@@ -526,28 +561,36 @@ export function analyzeWallets(
         wallet.campaignActionsCount > 0 &&
         wallet.txCount <= 5
       ) {
-        score += 5
+        score += 10
         reasons.push("On-chain evidence: brand-new wallet active only during campaign")
       }
     }
 
     if (entityLabel) {
-      score = Math.max(score, 65)
+      score = Math.max(score, 75)
       reasons.unshift(entityRiskReason ?? knownEntityRiskReason)
     }
 
+    const hardSybilSignal =
+      campaignOnlyPattern ||
+      fundingGroupSize >= 10 ||
+      clusterSize >= 10 ||
+      (clusterSize >= 6 && clusterSimilarity >= 75) ||
+      (wallet.walletAgeDays !== null && wallet.walletAgeDays < 7 && wallet.txCount !== null && wallet.txCount <= 2)
+
     const riskScore = Math.min(100, score)
     const riskLevel = riskLevelFromScore(riskScore)
-    const decision = statusFromSignals(
-      riskScore,
+    const decision = statusFromSignals({
+      score: riskScore,
       riskLevel,
       clusterId,
       clusterSize,
       fundingGroupSize,
       entityType,
       evidenceAvailable,
-      wallet.accountType
-    )
+      accountType: wallet.accountType,
+      hardSybilSignal,
+    })
 
     if (!reasons.length || (reasons.length === 1 && reasons[0].startsWith("On-chain verified"))) {
       reasons.push(onChainCleanReason)
