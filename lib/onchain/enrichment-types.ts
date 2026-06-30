@@ -14,10 +14,6 @@ export type EnrichmentStatus =
   | "failed"
   | "skipped"
 
-/**
- * The canonical enriched-wallet shape every provider must return.
- * Any field a provider cannot resolve is left `null` (never throws).
- */
 export type EnrichedWalletData = {
   walletAddress: string
   chain: string
@@ -36,6 +32,10 @@ export type EnrichedWalletData = {
   isContract: boolean | null
   knownEntityLabel: string | null
   knownEntityType: string | null
+  accountType?: string | null
+  ownerProgram?: string | null
+  behaviorFingerprint?: string[] | null
+  campaignQualityScore?: number | null
   rawData?: unknown
 }
 
@@ -161,10 +161,6 @@ export function getSolanaChainConfig(chain: string): SolanaChainConfig | null {
   return chain === SOLANA_CHAIN_CONFIG.chain ? SOLANA_CHAIN_CONFIG : null
 }
 
-// ---------------------------------------------------------------------------
-// Runtime configuration sourced from environment variables
-// ---------------------------------------------------------------------------
-
 function envNumber(name: string, fallback: number) {
   const raw = process.env[name]
   if (!raw) return fallback
@@ -232,5 +228,9 @@ export function emptyEnrichedData(
     isContract: null,
     knownEntityLabel: null,
     knownEntityType: null,
+    accountType: null,
+    ownerProgram: null,
+    behaviorFingerprint: null,
+    campaignQualityScore: null,
   }
 }
