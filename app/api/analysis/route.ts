@@ -52,6 +52,7 @@ export async function POST(request: Request) {
     chain: formData.get("chain"),
     notes: formData.get("notes") ?? "",
     analysisMode: formData.get("analysisMode") ?? "onchain",
+    riskPolicy: formData.get("riskPolicy") ?? "balanced",
     campaignContracts: formData.get("campaignContracts") ?? "",
   })
 
@@ -150,11 +151,14 @@ export async function POST(request: Request) {
     warnings.push(`${campaignContracts.length.toLocaleString()} campaign address/program IDs will be used for campaign-action scoring.`)
   }
 
+  warnings.push(`Risk policy preset: ${parsedForm.data.riskPolicy}.`)
+
   const projectName =
     parsedForm.data.projectName ||
     `${parsedForm.data.chain} ${parsedForm.data.campaignType} Wallet Audit`
   const notes = [
     parsedForm.data.notes || "",
+    `TRIPROOF_RISK_POLICY=${parsedForm.data.riskPolicy}`,
     campaignContracts.length ? `TRIPROOF_CAMPAIGN_CONTRACTS=${campaignContracts.join(",")}` : "",
     parsedCsv.mode === "basic"
       ? "Address-only CSV detected. Real on-chain enrichment required; no synthetic CSV-only data will be generated."
@@ -200,11 +204,12 @@ export async function POST(request: Request) {
       parseSummary: {
         mode: parsedCsv.mode,
         analysisMode: mode,
+        riskPolicy: parsedForm.data.riskPolicy,
         validWallets: parsedCsv.wallets.length,
         issues: parsedCsv.issues,
         duplicates: parsedCsv.duplicates,
         warnings,
-        note: `Real on-chain analysis queued in ${batchCount.toLocaleString()} batches using ${selection.provider.id}. No CSV-only or mock wallet history will be used.`,
+        note: `Real on-chain analysis queued in ${batchCount.toLocaleString()} batches using ${selection.provider.id}. Risk policy: ${parsedForm.data.riskPolicy}. No CSV-only or mock wallet history will be used.`,
       },
     })
   } catch (error) {
