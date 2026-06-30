@@ -42,7 +42,6 @@ export const KNOWN_ENTITIES: Record<string, KnownEntity> = {
     reason: knownEntityReason,
   },
 
-  // Solana core programs, sysvars, token mints and major public protocol IDs.
   "11111111111111111111111111111111": {
     label: "Solana System Program",
     type: "protocol",
@@ -73,7 +72,7 @@ export const KNOWN_ENTITIES: Record<string, KnownEntity> = {
     action: "manual_review",
     reason: solanaProgramReason,
   },
-  "atoken-gpvbdgvxr1b2hvzbsiqw5xwh25eftnslja8knl".replace("-", ""): {
+  "atokengpvbdgvxr1b2hvzbsiqw5xwh25eftnslja8knl": {
     label: "Associated Token Account Program",
     type: "protocol",
     action: "manual_review",
