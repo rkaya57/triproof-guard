@@ -121,7 +121,7 @@ export async function POST(request: Request) {
 
   if (!chainEnrichable) {
     return NextResponse.json(
-      { error: `Real on-chain analysis is not available for ${parsedForm.data.chain}. Select Ethereum, Base, Arbitrum, Optimism, Polygon, or BNB Chain.` },
+      { error: `Real on-chain analysis is not available for ${parsedForm.data.chain}. Select Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain, or Solana.` },
       { status: 400 }
     )
   }
@@ -131,7 +131,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          `No real on-chain provider is configured for ${parsedForm.data.chain}. Add ETHERSCAN_API_KEY or ALCHEMY_API_KEY in Vercel before running analysis.`,
+          `No real on-chain provider is configured for ${parsedForm.data.chain}. Add HELIUS_API_KEY/SOLANA_RPC_URL for Solana or ETHERSCAN_API_KEY/ALCHEMY_API_KEY for EVM chains in Vercel before running analysis.`,
       },
       { status: 400 }
     )
