@@ -7,12 +7,10 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 
-const TEST_PAYMENT_USDC = "1"
-
 const plans = {
-  starter: { id: "starter", name: "Starter", amount: TEST_PAYMENT_USDC, wallets: "1,000" },
-  growth: { id: "growth", name: "Growth", amount: TEST_PAYMENT_USDC, wallets: "10,000" },
-  pro: { id: "pro", name: "Pro", amount: TEST_PAYMENT_USDC, wallets: "50,000" },
+  starter: { id: "starter", name: "Starter", amount: "29", wallets: "1,000" },
+  growth: { id: "growth", name: "Growth", amount: "99", wallets: "10,000" },
+  pro: { id: "pro", name: "Pro", amount: "249", wallets: "50,000" },
 }
 
 function planFromWallets(wallets: number) {
