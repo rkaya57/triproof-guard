@@ -52,12 +52,17 @@ export type ParsedWallet = {
   totalVolume: number | null
   contractsCount: number | null
   campaignActionsCount: number | null
-  // On-chain enrichment fields (optional; filled by the enrichment engine).
   nativeBalance?: number | null
   tokenCount?: number | null
   uniqueCounterparties?: number | null
   lastActiveDaysAgo?: number | null
   isContract?: boolean | null
+  knownEntityLabel?: string | null
+  knownEntityType?: EntityType | null
+  accountType?: string | null
+  ownerProgram?: string | null
+  behaviorFingerprint?: string[] | null
+  campaignQualityScore?: number | null
   enrichmentProvider?: string | null
   enrichmentStatus?: EnrichmentStatus | null
   sourceRow?: number
@@ -96,7 +101,6 @@ export type WalletRiskResult = {
   campaignActionsCount: number | null
   clusterId: string | null
   reasons: string[]
-  // On-chain enrichment fields (optional; present when enrichment ran).
   firstSeen?: string | null
   lastSeen?: string | null
   nativeBalance?: number | null
@@ -104,6 +108,10 @@ export type WalletRiskResult = {
   uniqueCounterparties?: number | null
   lastActiveDaysAgo?: number | null
   isContract?: boolean | null
+  accountType?: string | null
+  ownerProgram?: string | null
+  behaviorFingerprint?: string[] | null
+  campaignQualityScore?: number | null
   enrichmentProvider?: string | null
   enrichmentStatus?: EnrichmentStatus | null
 }
