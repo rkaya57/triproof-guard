@@ -92,7 +92,9 @@ export async function enrichWallets(
           })
         } catch (error) {
           failedCount += 1
-          warnings.add("Some wallets could not be enriched with real on-chain data. No mock data was used.")
+          warnings.add(
+            "Some wallets have no reliable on-chain history or provider-readable account data. They were marked as No On-chain Data; no mock data was used."
+          )
           results.set(address, {
             data: {
               walletAddress: address,
@@ -112,11 +114,18 @@ export async function enrichWallets(
               isContract: null,
               knownEntityLabel: null,
               knownEntityType: null,
+              accountType: "missing_or_closed_account",
+              ownerProgram: null,
+              behaviorFingerprint: null,
+              campaignQualityScore: null,
+              campaignOnlyRatio: null,
+              behaviorDiversityScore: null,
+              botScriptScore: null,
             },
             status: "failed",
             provider: provider.id,
             fromCache: false,
-            errorMessage: error instanceof Error ? error.message : "On-chain enrichment failed.",
+            errorMessage: error instanceof Error ? error.message : "No reliable on-chain data available.",
           })
         }
       })
