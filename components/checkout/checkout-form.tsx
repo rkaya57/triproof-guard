@@ -1,17 +1,21 @@
 "use client"
 
-import { FormEvent, useState } from "react"
+import { FormEvent, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { CheckCircle2, Copy, Loader2, ShieldCheck } from "lucide-react"
+import { CheckCircle2, Copy, ExternalLink, Loader2, ShieldCheck } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toast"
 
+const solanaUsdcMint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+
+type NetworkId = "base" | "polygon" | "solana"
+
 type Network = {
-  id: "base" | "polygon"
+  id: NetworkId
   label: string
   treasuryAddress?: string
 }
@@ -27,8 +31,8 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
   const router = useRouter()
   const { toast } = useToast()
   const availableNetworks = networks.filter((network) => network.treasuryAddress)
-  const [network, setNetwork] = useState<"base" | "polygon">(
-    availableNetworks[0]?.id ?? "base"
+  const [network, setNetwork] = useState<NetworkId>(
+    availableNetworks[0]?.id ?? "solana"
   )
   const [txHash, setTxHash] = useState("")
   const [pending, setPending] = useState(false)
@@ -36,11 +40,31 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
   const [success, setSuccess] = useState("")
 
   const selectedNetwork = networks.find((item) => item.id === network)
+  const isSolana = network === "solana"
+
+  const solanaPayUrl = useMemo(() => {
+    if (!isSolana || !selectedNetwork?.treasuryAddress) return ""
+
+    const params = new URLSearchParams({
+      amount: plan.amount,
+      "spl-token": solanaUsdcMint,
+      label: "Tri-Proof Protocol",
+      message: `${plan.name} plan - ${plan.wallets} wallet credits`,
+    })
+
+    return `solana:${selectedNetwork.treasuryAddress}?${params.toString()}`
+  }, [isSolana, plan.amount, plan.name, plan.wallets, selectedNetwork?.treasuryAddress])
 
   async function copyAddress() {
     if (!selectedNetwork?.treasuryAddress) return
     await navigator.clipboard.writeText(selectedNetwork.treasuryAddress)
     toast("Treasury address copied", "success")
+  }
+
+  async function copySolanaPayLink() {
+    if (!solanaPayUrl) return
+    await navigator.clipboard.writeText(solanaPayUrl)
+    toast("Solana Pay link copied", "success")
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -80,8 +104,8 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
     return (
       <Alert variant="destructive">
         <AlertDescription>
-          Treasury wallet addresses are not configured yet. Add TRIPROOF_TREASURY_BASE_ADDRESS
-          or TRIPROOF_TREASURY_POLYGON_ADDRESS in Vercel Environment Variables.
+          Treasury wallet addresses are not configured yet. Add TRIPROOF_TREASURY_SOLANA_ADDRESS,
+          TRIPROOF_TREASURY_BASE_ADDRESS, or TRIPROOF_TREASURY_POLYGON_ADDRESS in Vercel Environment Variables.
         </AlertDescription>
       </Alert>
     )
@@ -94,7 +118,7 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
           <p className="text-xs text-muted-foreground">Network</p>
           <select
             value={network}
-            onChange={(event) => setNetwork(event.target.value as "base" | "polygon")}
+            onChange={(event) => setNetwork(event.target.value as NetworkId)}
             className="mt-2 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             {availableNetworks.map((item) => (
@@ -112,7 +136,9 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
 
       <div className="rounded-lg border border-primary/25 bg-primary/5 p-4">
         <div className="mb-2 flex items-center justify-between gap-3">
-          <p className="font-medium">Send USDC to this treasury address</p>
+          <p className="font-medium">
+            {isSolana ? "Pay with Solana Pay USDC" : "Send USDC to this treasury address"}
+          </p>
           <Button type="button" variant="outline" size="sm" onClick={copyAddress}>
             <Copy data-icon="inline-start" /> Copy
           </Button>
@@ -122,19 +148,29 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
         </code>
         <p className="mt-3 text-sm text-muted-foreground">
           Send exactly {plan.amount} USDC or more on {selectedNetwork?.label}. Then paste the
-          transaction hash below. The system will verify the USDC transfer on-chain.
+          {isSolana ? " Solana transaction signature" : " transaction hash"} below. The system will verify the USDC transfer on-chain.
         </p>
+        {isSolana && solanaPayUrl && (
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <a href={solanaPayUrl} className={buttonVariants({ variant: "secondary" })}>
+              <ExternalLink data-icon="inline-start" /> Open Solana Pay
+            </a>
+            <Button type="button" variant="outline" onClick={copySolanaPayLink}>
+              <Copy data-icon="inline-start" /> Copy Solana Pay Link
+            </Button>
+          </div>
+        )}
       </div>
 
       <div>
         <label htmlFor="txHash" className="text-sm font-medium">
-          Transaction hash
+          {isSolana ? "Transaction signature" : "Transaction hash"}
         </label>
         <Input
           id="txHash"
           value={txHash}
           onChange={(event) => setTxHash(event.target.value)}
-          placeholder="0x..."
+          placeholder={isSolana ? "Solana transaction signature" : "0x..."}
           className="mt-2"
         />
       </div>
