@@ -6,6 +6,7 @@ import {
 } from "@/lib/onchain/enrichment-types"
 import { detectKnownEntity } from "@/lib/risk-engine/known-entities"
 import { RateLimitError } from "@/lib/onchain/rate-limit"
+import { heliusProvider } from "@/lib/onchain/providers/helius"
 import type { OnChainProvider } from "@/lib/onchain/providers/provider"
 
 /**
@@ -166,6 +167,10 @@ async function enrichWallet(
   chain: string,
   options?: EnrichWalletOptions
 ): Promise<EnrichedWalletData> {
+  if (chain === "Solana") {
+    return heliusProvider.enrichWallet(address, chain, options)
+  }
+
   const config = getEvmChainConfig(chain)
   const data = emptyEnrichedData(address, chain, "etherscan")
   const lowerAddress = address.toLowerCase()
@@ -255,6 +260,7 @@ async function enrichWallet(
 
 export const etherscanProvider: OnChainProvider = {
   id: "etherscan",
-  isConfigured: (chain: string) => apiKeyForChain(chain).length > 0,
+  isConfigured: (chain: string) =>
+    chain === "Solana" ? heliusProvider.isConfigured(chain) : apiKeyForChain(chain).length > 0,
   enrichWallet,
 }
