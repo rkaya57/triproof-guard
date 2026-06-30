@@ -47,15 +47,18 @@ export const newAnalysisSchema = z.object({
   campaignContracts: z.string().trim().max(5000).optional().or(z.literal("")),
 })
 
-/** Parse a free-text list of campaign contract addresses (one per line/comma). */
+const evmWalletRegex = /^0x[a-fA-F0-9]{40}$/
+const solanaWalletRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
+
+/** Parse campaign addresses/program IDs supplied by the user. */
 export function parseCampaignContracts(input: string | null | undefined): string[] {
   if (!input) return []
   return Array.from(
     new Set(
       input
         .split(/[\n,;\s]+/)
-        .map((value) => value.trim().toLowerCase())
-        .filter((value) => evmWalletRegex.test(value))
+        .map((value) => value.trim())
+        .filter((value) => evmWalletRegex.test(value) || solanaWalletRegex.test(value))
     )
   )
 }
@@ -68,9 +71,6 @@ export const authSchema = z.object({
 export const registerSchema = authSchema.extend({
   name: z.string().trim().min(2).max(80),
 })
-
-const evmWalletRegex = /^0x[a-fA-F0-9]{40}$/
-const solanaWalletRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
 
 export function isValidWalletAddress(address: string, chain: string) {
   const value = address.trim()
