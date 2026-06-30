@@ -41,7 +41,6 @@ export const KNOWN_ENTITIES: Record<string, KnownEntity> = {
     action: "manual_review",
     reason: knownEntityReason,
   },
-
   "11111111111111111111111111111111": {
     label: "Solana System Program",
     type: "protocol",
@@ -114,7 +113,7 @@ export const KNOWN_ENTITIES: Record<string, KnownEntity> = {
     action: "manual_review",
     reason: solanaProgramReason,
   },
-  "jupyiwryjfskupiha7hker8vutaefosybkedznssdvcN".toLowerCase(): {
+  "jupyiwryjfskupiha7hker8vutaefosybkedznssdvcn": {
     label: "Jupiter Token Mint",
     type: "protocol",
     action: "manual_review",
