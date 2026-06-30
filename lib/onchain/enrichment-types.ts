@@ -130,15 +130,35 @@ export const EVM_CHAIN_CONFIG: Record<string, EvmChainConfig> = {
   },
 }
 
-/** Chains we can actually enrich on-chain in this MVP (EVM only). */
-export const ENRICHABLE_CHAINS = Object.keys(EVM_CHAIN_CONFIG)
+export type SolanaChainConfig = {
+  chain: "Solana"
+  nativeSymbol: "SOL"
+  nativeDecimals: 9
+  rpcUrlEnv: "SOLANA_RPC_URL"
+  apiKeyEnv: "HELIUS_API_KEY"
+}
+
+export const SOLANA_CHAIN_CONFIG: SolanaChainConfig = {
+  chain: "Solana",
+  nativeSymbol: "SOL",
+  nativeDecimals: 9,
+  rpcUrlEnv: "SOLANA_RPC_URL",
+  apiKeyEnv: "HELIUS_API_KEY",
+}
+
+/** Chains we can actually enrich on-chain in this MVP. */
+export const ENRICHABLE_CHAINS = [...Object.keys(EVM_CHAIN_CONFIG), SOLANA_CHAIN_CONFIG.chain]
 
 export function isEnrichableChain(chain: string) {
-  return chain in EVM_CHAIN_CONFIG
+  return chain in EVM_CHAIN_CONFIG || chain === SOLANA_CHAIN_CONFIG.chain
 }
 
 export function getEvmChainConfig(chain: string): EvmChainConfig | null {
   return EVM_CHAIN_CONFIG[chain] ?? null
+}
+
+export function getSolanaChainConfig(chain: string): SolanaChainConfig | null {
+  return chain === SOLANA_CHAIN_CONFIG.chain ? SOLANA_CHAIN_CONFIG : null
 }
 
 // ---------------------------------------------------------------------------
@@ -171,14 +191,14 @@ export type OnChainConfig = {
 }
 
 export function getOnChainConfig(): OnChainConfig {
-  const priority = (process.env.ONCHAIN_PROVIDER_PRIORITY ?? "etherscan,alchemy,blockscout,mock")
+  const priority = (process.env.ONCHAIN_PROVIDER_PRIORITY ?? "helius,etherscan,alchemy,blockscout,mock")
     .split(",")
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean)
 
   return {
     enabled: (process.env.ONCHAIN_ENRICHMENT_ENABLED ?? "true") !== "false",
-    providerPriority: priority.length ? priority : ["etherscan", "alchemy", "blockscout", "mock"],
+    providerPriority: priority.length ? priority : ["helius", "etherscan", "alchemy", "blockscout", "mock"],
     maxWalletsPerAnalysis: envWalletCap("ONCHAIN_MAX_WALLETS_PER_ANALYSIS", null),
     batchSize: envNumber("ONCHAIN_BATCH_SIZE", 25),
     requestDelayMs: envNumber("ONCHAIN_REQUEST_DELAY_MS", 250),
