@@ -161,9 +161,11 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
 
     setPaymentReference(reference)
     setPaymentUrl(url)
-    setError("")
+    setError(
+      "Chrome could not open the wallet automatically if no Solana protocol handler is registered. Click Copy Pay Link and open it inside Phantom/Solflare, or use a mobile Solana wallet."
+    )
     setSuccess("")
-    window.location.href = url
+    window.open(url, "_blank", "noopener,noreferrer")
     void autoVerify(reference)
   }
 
