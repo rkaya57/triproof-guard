@@ -9,9 +9,24 @@ function escapeCsv(value: unknown) {
   return normalized
 }
 
+function decisionLabel(status: WalletStatus) {
+  if (status === "approved") return "Approved"
+  if (status === "manual_review") return "Gray Zone / Manual Review"
+  return "Rejected / Not Eligible"
+}
+
+function hasNoOnChainData(wallet: WalletRiskResult) {
+  return (
+    wallet.enrichmentStatus === "failed" ||
+    wallet.accountType === "missing_or_closed_account" ||
+    wallet.reasons.some((reason) => reason.includes("No On-chain Data"))
+  )
+}
+
 export function walletsToCsv(wallets: WalletRiskResult[], full = false) {
   const baseHeaders = [
     "wallet_address",
+    "decision_label",
     "entity_label",
     "entity_type",
     "risk_score",
@@ -19,6 +34,7 @@ export function walletsToCsv(wallets: WalletRiskResult[], full = false) {
     "status",
     "recommended_action",
     "cluster_id",
+    "no_onchain_data",
     "risk_reasons",
     "status_explanation",
   ]
@@ -40,12 +56,20 @@ export function walletsToCsv(wallets: WalletRiskResult[], full = false) {
     "is_contract",
     "enrichment_provider",
     "enrichment_status",
+    "campaign_quality_score",
+    "campaign_only_ratio",
+    "behavior_diversity_score",
+    "bot_script_score",
+    "policy_action",
+    "reputation_label",
+    "policy_reason",
     "entity_risk_reason",
   ]
   const headers = full ? fullHeaders : baseHeaders
   const rows = wallets.map((wallet) => {
     const baseValues = [
       wallet.walletAddress,
+      decisionLabel(wallet.status),
       wallet.entityLabel ?? "",
       wallet.entityType,
       wallet.riskScore,
@@ -53,6 +77,7 @@ export function walletsToCsv(wallets: WalletRiskResult[], full = false) {
       wallet.status,
       wallet.recommendedAction,
       wallet.clusterId ?? "",
+      hasNoOnChainData(wallet) ? "true" : "false",
       wallet.reasons,
       wallet.statusExplanation,
     ]
@@ -74,6 +99,13 @@ export function walletsToCsv(wallets: WalletRiskResult[], full = false) {
       wallet.isContract == null ? "" : wallet.isContract ? "true" : "false",
       wallet.enrichmentProvider ?? "",
       wallet.enrichmentStatus ?? "",
+      wallet.campaignQualityScore ?? "",
+      wallet.campaignOnlyRatio ?? "",
+      wallet.behaviorDiversityScore ?? "",
+      wallet.botScriptScore ?? "",
+      wallet.policyAction ?? "",
+      wallet.reputationLabel ?? "",
+      wallet.policyReason ?? "",
       wallet.entityRiskReason ?? "",
     ]
 
