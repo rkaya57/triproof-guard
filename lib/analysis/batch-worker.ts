@@ -262,6 +262,10 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
             campaignOnlyRatio: wallet.campaignOnlyRatio ?? null,
             behaviorDiversityScore: wallet.behaviorDiversityScore ?? null,
             botScriptScore: wallet.botScriptScore ?? null,
+            policyAction: wallet.policyAction ?? null,
+            reputationLabel: wallet.reputationLabel ?? null,
+            policyReason: wallet.policyReason ?? null,
+            customerLabel: wallet.customerLabel ?? null,
           },
         })),
       })
