@@ -332,6 +332,89 @@ function campaignActionCount(transactions: ParsedTransaction[], campaignContract
   return count
 }
 
+function activeDayCount(signatures: SignatureInfo[]) {
+  const days = new Set<string>()
+  signatures.forEach((item) => {
+    if (!item.blockTime) return
+    days.add(new Date(item.blockTime * 1000).toISOString().slice(0, 10))
+  })
+  return days.size
+}
+
+function behaviorDiversityScore({
+  programCount,
+  activeDays,
+  counterparties,
+  tokenCount,
+}: {
+  programCount: number
+  activeDays: number
+  counterparties: number
+  tokenCount: number
+}) {
+  return Math.max(
+    0,
+    Math.min(100, programCount * 12 + activeDays * 8 + counterparties * 6 + tokenCount * 5)
+  )
+}
+
+function campaignOnlyRatio(actionCount: number | null, sampledTransactions: number) {
+  if (actionCount === null || sampledTransactions <= 0) return null
+  return Number(Math.min(1, actionCount / sampledTransactions).toFixed(3))
+}
+
+function botScriptScore({
+  walletAgeDays,
+  txCount,
+  activeDays,
+  programCount,
+  counterparties,
+  campaignRatio,
+  accountType,
+  diversityScore,
+}: {
+  walletAgeDays: number | null
+  txCount: number | null
+  activeDays: number
+  programCount: number
+  counterparties: number
+  campaignRatio: number | null
+  accountType: string
+  diversityScore: number
+}) {
+  if (accountType !== "system_user_wallet") return 100
+
+  let score = 0
+  if (walletAgeDays === null) score += 20
+  else if (walletAgeDays < 7) score += 25
+  else if (walletAgeDays < 30) score += 12
+
+  if (txCount === null) score += 20
+  else if (txCount <= 2) score += 25
+  else if (txCount <= 5) score += 15
+  else if (txCount <= 15) score += 6
+
+  if (activeDays <= 1 && (txCount ?? 0) > 0) score += 15
+  else if (activeDays <= 2 && (txCount ?? 0) > 3) score += 8
+
+  if (programCount <= 1) score += 18
+  else if (programCount <= 3) score += 8
+
+  if (counterparties <= 1 && (txCount ?? 0) > 1) score += 12
+  else if (counterparties <= 2 && (txCount ?? 0) > 3) score += 6
+
+  if (campaignRatio !== null) {
+    if (campaignRatio >= 0.8) score += 30
+    else if (campaignRatio >= 0.5) score += 18
+    else if (campaignRatio >= 0.25) score += 8
+  }
+
+  if (diversityScore < 25) score += 15
+  else if (diversityScore < 45) score += 8
+
+  return Math.max(0, Math.min(100, score))
+}
+
 function campaignQualityScore({
   walletAgeDays,
   txCount,
@@ -445,6 +528,24 @@ export const heliusProvider: OnChainProvider = {
     const fundingSource = extractFundingSource(oldestTransaction, address)
     const programCount = behavior.programs.length
     const actionCount = campaignActionCount(parsedTransactions, options?.campaignContracts)
+    const activeDays = activeDayCount(signatures)
+    const diversityScore = behaviorDiversityScore({
+      programCount,
+      activeDays,
+      counterparties: counterparties.size,
+      tokenCount: activeTokenAccounts,
+    })
+    const campaignRatio = campaignOnlyRatio(actionCount, parsedTransactions.length)
+    const scriptScore = botScriptScore({
+      walletAgeDays,
+      txCount: signatures.length,
+      activeDays,
+      programCount,
+      counterparties: counterparties.size,
+      campaignRatio,
+      accountType: classification.accountType,
+      diversityScore,
+    })
     const qualityScore = campaignQualityScore({
       walletAgeDays,
       txCount: signatures.length,
@@ -476,6 +577,9 @@ export const heliusProvider: OnChainProvider = {
       ownerProgram: classification.ownerProgram,
       behaviorFingerprint: [...behavior.programs, ...behavior.instructionTypes].slice(0, 50),
       campaignQualityScore: qualityScore,
+      campaignOnlyRatio: campaignRatio,
+      behaviorDiversityScore: diversityScore,
+      botScriptScore: scriptScore,
       rawData: {
         sampledSignatures: signatures.length,
         sampledTransactions: parsedTransactions.length,
@@ -485,6 +589,10 @@ export const heliusProvider: OnChainProvider = {
         ownerProgram: classification.ownerProgram,
         behaviorProgramCount: behavior.programs.length,
         behaviorInstructionTypeCount: behavior.instructionTypes.length,
+        activeDays,
+        campaignOnlyRatio: campaignRatio,
+        behaviorDiversityScore: diversityScore,
+        botScriptScore: scriptScore,
       },
     }
   },
