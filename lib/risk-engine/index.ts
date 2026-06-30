@@ -5,6 +5,7 @@ import type {
   EnrichmentStatus,
   EntityType,
   ParsedWallet,
+  PolicyAction,
   RiskLevel,
   SuggestedAction,
   WalletRiskResult,
@@ -43,6 +44,10 @@ type EnrichedWallet = {
   campaignOnlyRatio: number | null
   behaviorDiversityScore: number | null
   botScriptScore: number | null
+  policyAction: PolicyAction
+  reputationLabel: string | null
+  policyReason: string | null
+  customerLabel: string | null
   enrichmentProvider: string | null
   enrichmentStatus: EnrichmentStatus | null
 }
@@ -87,6 +92,10 @@ function hydrateWallet(wallet: ParsedWallet): EnrichedWallet {
     campaignOnlyRatio: wallet.campaignOnlyRatio ?? null,
     behaviorDiversityScore: wallet.behaviorDiversityScore ?? null,
     botScriptScore: wallet.botScriptScore ?? null,
+    policyAction: wallet.policyAction ?? null,
+    reputationLabel: wallet.reputationLabel ?? null,
+    policyReason: wallet.policyReason ?? null,
+    customerLabel: wallet.customerLabel ?? null,
     enrichmentProvider: wallet.enrichmentProvider ?? null,
     enrichmentStatus: wallet.enrichmentStatus ?? null,
   }
@@ -255,6 +264,57 @@ function statusFromSignals({
     statusExplanation:
       "Approved: low risk score and no hard Sybil, cluster, known-entity, or no-data signal detected.",
   }
+}
+
+function policyDecision(
+  wallet: EnrichedWallet,
+  baseDecision: StatusDecision,
+  evidenceAvailable: boolean,
+  entityType: EntityType
+): StatusDecision {
+  if (!wallet.policyAction) return baseDecision
+  const label = wallet.reputationLabel ?? wallet.customerLabel ?? wallet.policyAction
+  const reason = wallet.policyReason ? ` Reason: ${wallet.policyReason}` : ""
+
+  if (wallet.policyAction === "reject") {
+    return {
+      status: "rejected",
+      recommendedAction: "reject",
+      statusExplanation: `Rejected by V1.4 reputation/policy override (${label}).${reason}`,
+    }
+  }
+
+  if (wallet.policyAction === "manual_review") {
+    return {
+      status: "manual_review",
+      recommendedAction: "manual_review",
+      statusExplanation: `Manual review required by V1.4 reputation/policy override (${label}).${reason}`,
+    }
+  }
+
+  if (
+    wallet.policyAction === "approve" &&
+    evidenceAvailable &&
+    isUserLikeAccount(wallet) &&
+    entityType === "user"
+  ) {
+    return {
+      status: "approved",
+      recommendedAction: "approve",
+      statusExplanation: `Approved by V1.4 allowlist/trusted-user policy (${label}) after basic eligibility checks.${reason}`,
+    }
+  }
+
+  if (wallet.policyAction === "approve") {
+    return {
+      status: "manual_review",
+      recommendedAction: "manual_review",
+      statusExplanation:
+        `Allowlist/trusted-user policy (${label}) was present, but the wallet failed basic eligibility or on-chain evidence checks. Manual review required.${reason}`,
+    }
+  }
+
+  return baseDecision
 }
 
 function clusterRisk(size: number) {
@@ -436,6 +496,13 @@ export function analyzeWallets(
     const clusterSize = cluster?.walletIndexes.length ?? 0
     const clusterSimilarity = cluster?.behaviorSimilarityScore ?? 0
 
+    if (wallet.policyAction) {
+      reasons.push(
+        `V1.4 reputation/policy signal: ${wallet.policyAction}${wallet.reputationLabel ? ` (${wallet.reputationLabel})` : ""}`
+      )
+      if (wallet.policyReason) reasons.push(`V1.4 policy reason: ${wallet.policyReason}`)
+    }
+
     if (wallet.enrichmentStatus === "completed" && wallet.enrichmentProvider) {
       reasons.push(`On-chain verified via ${wallet.enrichmentProvider}`)
     }
@@ -613,12 +680,19 @@ export function analyzeWallets(
       }
     }
 
+    if (wallet.policyAction === "reject") {
+      score = Math.max(score, 95)
+    } else if (wallet.policyAction === "manual_review") {
+      score = Math.max(score, 55)
+    }
+
     if (entityLabel) {
       score = Math.max(score, 75)
       reasons.unshift(entityRiskReason ?? knownEntityRiskReason)
     }
 
     const hardSybilSignal =
+      wallet.policyAction === "reject" ||
       campaignOnlyPattern ||
       fundingGroupSize >= 10 ||
       clusterSize >= 10 ||
@@ -630,7 +704,7 @@ export function analyzeWallets(
 
     const riskScore = Math.min(100, score)
     const riskLevel = riskLevelFromScore(riskScore)
-    const decision = statusFromSignals({
+    const baseDecision = statusFromSignals({
       score: riskScore,
       riskLevel,
       clusterId,
@@ -641,6 +715,7 @@ export function analyzeWallets(
       accountType: wallet.accountType,
       hardSybilSignal,
     })
+    const decision = policyDecision(wallet, baseDecision, evidenceAvailable, entityType)
 
     if (!reasons.length || (reasons.length === 1 && reasons[0].startsWith("On-chain verified"))) {
       reasons.push(onChainCleanReason)
@@ -679,6 +754,10 @@ export function analyzeWallets(
       campaignOnlyRatio: wallet.campaignOnlyRatio,
       behaviorDiversityScore: wallet.behaviorDiversityScore,
       botScriptScore: wallet.botScriptScore,
+      policyAction: wallet.policyAction,
+      reputationLabel: wallet.reputationLabel,
+      policyReason: wallet.policyReason,
+      customerLabel: wallet.customerLabel,
       enrichmentProvider: wallet.enrichmentProvider,
       enrichmentStatus: wallet.enrichmentStatus,
     }
