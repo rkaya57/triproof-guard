@@ -63,6 +63,9 @@ export type ParsedWallet = {
   ownerProgram?: string | null
   behaviorFingerprint?: string[] | null
   campaignQualityScore?: number | null
+  campaignOnlyRatio?: number | null
+  behaviorDiversityScore?: number | null
+  botScriptScore?: number | null
   enrichmentProvider?: string | null
   enrichmentStatus?: EnrichmentStatus | null
   sourceRow?: number
@@ -112,6 +115,9 @@ export type WalletRiskResult = {
   ownerProgram?: string | null
   behaviorFingerprint?: string[] | null
   campaignQualityScore?: number | null
+  campaignOnlyRatio?: number | null
+  behaviorDiversityScore?: number | null
+  botScriptScore?: number | null
   enrichmentProvider?: string | null
   enrichmentStatus?: EnrichmentStatus | null
 }
