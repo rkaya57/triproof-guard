@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client"
 
 import { db } from "@/lib/db/prisma"
-import { analyzeWallets } from "@/lib/risk-engine"
+import { analyzeWallets, riskPolicyFromNotes } from "@/lib/risk-engine"
 import { enrichWallets } from "@/lib/onchain/enrich-wallet"
 import { mergeEnrichment } from "@/lib/onchain/merge"
 import { parseCampaignContracts } from "@/lib/validators/wallet"
@@ -187,11 +187,12 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
   })
 
   const mode = (analysis.analysisMode ?? "onchain") as AnalysisMode
+  const riskPolicy = riskPolicyFromNotes(analysis.project.notes)
   const enrichmentMeta = mergeSummary(mode, summaries)
   const walletsForAnalysis = enrichmentResults.size
     ? mergeEnrichment(originalWallets, enrichmentResults, mode)
     : originalWallets
-  const result = analyzeWallets(walletsForAnalysis, enrichmentMeta)
+  const result = analyzeWallets(walletsForAnalysis, enrichmentMeta, riskPolicy)
 
   await db.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.analysis.update({ where: { id: analysisId }, data: { status: "analyzing" } })
@@ -266,6 +267,7 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
             reputationLabel: wallet.reputationLabel ?? null,
             policyReason: wallet.policyReason ?? null,
             customerLabel: wallet.customerLabel ?? null,
+            riskPolicy,
           },
         })),
       })
