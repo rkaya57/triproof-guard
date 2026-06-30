@@ -11,6 +11,10 @@ type RpcResponse<T> = {
   error?: { message?: string }
 }
 
+type BalanceResult = {
+  value?: number
+}
+
 type SignatureInfo = {
   signature: string
   blockTime?: number | null
@@ -55,7 +59,7 @@ type ParsedTransaction = {
   }
 }
 
-function getRpcUrl() {
+export function getSolanaRpcUrl() {
   const explicit = process.env.SOLANA_RPC_URL?.trim()
   if (explicit) return explicit
 
@@ -65,8 +69,8 @@ function getRpcUrl() {
   return null
 }
 
-async function heliusRpc<T>(method: string, params: unknown[] = []): Promise<T> {
-  const rpcUrl = getRpcUrl()
+export async function solanaRpc<T>(method: string, params: unknown[] = []): Promise<T> {
+  const rpcUrl = getSolanaRpcUrl()
   if (!rpcUrl) {
     throw new Error("HELIUS_API_KEY or SOLANA_RPC_URL is not configured")
   }
@@ -86,7 +90,7 @@ async function heliusRpc<T>(method: string, params: unknown[] = []): Promise<T> 
   const payload = (await response.json()) as RpcResponse<T>
 
   if (!response.ok || payload.error) {
-    throw new Error(payload.error?.message ?? `Helius RPC ${method} failed`)
+    throw new Error(payload.error?.message ?? `Solana RPC ${method} failed`)
   }
 
   return payload.result as T
@@ -149,10 +153,11 @@ async function getSolanaTransactions(signatures: SignatureInfo[]) {
   const transactions = await Promise.all(
     selected.map(async (item) => {
       try {
-        return await heliusRpc<ParsedTransaction | null>("getTransaction", [
+        return await solanaRpc<ParsedTransaction | null>("getTransaction", [
           item.signature,
           {
             encoding: "jsonParsed",
+            commitment: "confirmed",
             maxSupportedTransactionVersion: 0,
           },
         ])
@@ -173,7 +178,7 @@ export const heliusProvider: OnChainProvider = {
   id: "helius",
 
   isConfigured(chain: string) {
-    return chain === "Solana" && Boolean(getRpcUrl())
+    return chain === "Solana" && Boolean(getSolanaRpcUrl())
   },
 
   async enrichWallet(
@@ -189,16 +194,20 @@ export const heliusProvider: OnChainProvider = {
       throw new Error("Invalid Solana wallet address")
     }
 
-    const [balanceLamports, signatures, tokenAccounts] = await Promise.all([
-      heliusRpc<number>("getBalance", [address]).then((value) => Number(value ?? 0)),
-      heliusRpc<SignatureInfo[]>("getSignaturesForAddress", [address, { limit: 100 }]),
-      heliusRpc<{ value?: ParsedTokenAccount[] }>("getTokenAccountsByOwner", [
+    const [balanceResult, signatures, tokenAccounts] = await Promise.all([
+      solanaRpc<BalanceResult>("getBalance", [address, { commitment: "confirmed" }]),
+      solanaRpc<SignatureInfo[]>("getSignaturesForAddress", [
+        address,
+        { limit: 100, commitment: "confirmed" },
+      ]),
+      solanaRpc<{ value?: ParsedTokenAccount[] }>("getTokenAccountsByOwner", [
         address,
         { programId: tokenProgramId },
-        { encoding: "jsonParsed" },
+        { encoding: "jsonParsed", commitment: "confirmed" },
       ]),
     ])
 
+    const balanceLamports = Number(balanceResult.value ?? 0)
     const orderedByTime = [...signatures]
       .filter((item) => item.blockTime)
       .sort((a, b) => Number(a.blockTime) - Number(b.blockTime))
