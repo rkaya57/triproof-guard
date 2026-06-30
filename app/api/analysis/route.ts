@@ -62,7 +62,9 @@ export async function POST(request: Request) {
     )
   }
 
-  const campaignContracts = parseCampaignContracts(parsedForm.data.campaignContracts)
+  const campaignContracts = parseCampaignContracts(
+    [parsedForm.data.campaignContracts, parsedForm.data.notes].filter(Boolean).join("\n")
+  )
   const file = formData.get("csvFile")
   if (!(file instanceof File) || file.size === 0) {
     return NextResponse.json({ error: "CSV file is required" }, { status: 400 })
