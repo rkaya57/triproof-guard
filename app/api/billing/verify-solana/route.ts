@@ -9,12 +9,10 @@ import {
 
 export const runtime = "nodejs"
 
-const TEST_PAYMENT_USDC = 1
-
 const plans = {
-  starter: { amountUsdc: TEST_PAYMENT_USDC, walletCredits: 1000 },
-  growth: { amountUsdc: TEST_PAYMENT_USDC, walletCredits: 10000 },
-  pro: { amountUsdc: TEST_PAYMENT_USDC, walletCredits: 50000 },
+  starter: { amountUsdc: 29, walletCredits: 1000 },
+  growth: { amountUsdc: 99, walletCredits: 10000 },
+  pro: { amountUsdc: 249, walletCredits: 50000 },
 } as const
 
 const solanaNetwork = {
