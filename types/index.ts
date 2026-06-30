@@ -41,6 +41,8 @@ export type EnrichmentStatus =
   | "failed"
   | "skipped"
 
+export type PolicyAction = "approve" | "manual_review" | "reject" | null
+
 export type ParsedWallet = {
   walletAddress: string
   chain: string
@@ -66,6 +68,10 @@ export type ParsedWallet = {
   campaignOnlyRatio?: number | null
   behaviorDiversityScore?: number | null
   botScriptScore?: number | null
+  policyAction?: PolicyAction
+  reputationLabel?: string | null
+  policyReason?: string | null
+  customerLabel?: string | null
   enrichmentProvider?: string | null
   enrichmentStatus?: EnrichmentStatus | null
   sourceRow?: number
@@ -118,6 +124,10 @@ export type WalletRiskResult = {
   campaignOnlyRatio?: number | null
   behaviorDiversityScore?: number | null
   botScriptScore?: number | null
+  policyAction?: PolicyAction
+  reputationLabel?: string | null
+  policyReason?: string | null
+  customerLabel?: string | null
   enrichmentProvider?: string | null
   enrichmentStatus?: EnrichmentStatus | null
 }
