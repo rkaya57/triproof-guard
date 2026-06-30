@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth/session"
 import { parseWalletCsv } from "@/lib/csv/parser"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
-import { newAnalysisSchema } from "@/lib/validators/wallet"
+import { newAnalysisSchema, parseCampaignContracts } from "@/lib/validators/wallet"
 import { getOnChainConfig, isEnrichableChain } from "@/lib/onchain/enrichment-types"
 import { getOnChainProvider } from "@/lib/onchain/provider-router"
 import { createAnalysisBatches } from "@/lib/analysis/batch-worker"
@@ -62,6 +62,7 @@ export async function POST(request: Request) {
     )
   }
 
+  const campaignContracts = parseCampaignContracts(parsedForm.data.campaignContracts)
   const file = formData.get("csvFile")
   if (!(file instanceof File) || file.size === 0) {
     return NextResponse.json({ error: "CSV file is required" }, { status: 400 })
@@ -143,11 +144,16 @@ export async function POST(request: Request) {
     )
   }
 
+  if (campaignContracts.length) {
+    warnings.push(`${campaignContracts.length.toLocaleString()} campaign address/program IDs will be used for campaign-action scoring.`)
+  }
+
   const projectName =
     parsedForm.data.projectName ||
     `${parsedForm.data.chain} ${parsedForm.data.campaignType} Wallet Audit`
   const notes = [
     parsedForm.data.notes || "",
+    campaignContracts.length ? `TRIPROOF_CAMPAIGN_CONTRACTS=${campaignContracts.join(",")}` : "",
     parsedCsv.mode === "basic"
       ? "Address-only CSV detected. Real on-chain enrichment required; no synthetic CSV-only data will be generated."
       : "Enriched CSV uploaded. Hybrid/On-chain mode will use real provider data where needed.",
