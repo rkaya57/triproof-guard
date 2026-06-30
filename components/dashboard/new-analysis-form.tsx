@@ -79,6 +79,7 @@ const enrichableChains = new Set([
   "Optimism",
   "Polygon",
   "BNB Chain",
+  "Solana",
 ])
 
 const enrichmentSteps = [
@@ -113,10 +114,7 @@ async function buildCsvPreview(file: File): Promise<CsvPreview> {
   const invalidCount =
     walletColumnIndex < 0
       ? dataRows.length
-      : dataRows.filter((row) => {
-          const value = splitCsvRow(row)[walletColumnIndex] ?? ""
-          return !/^0x[a-fA-F0-9]{40}$/.test(value)
-        }).length
+      : 0
   const mode = normalizedColumns.some((column) => enrichedColumns.has(column)) ? "enriched" : "basic"
 
   return {
@@ -130,11 +128,9 @@ async function buildCsvPreview(file: File): Promise<CsvPreview> {
 }
 
 const sampleCsv = `wallet_address
-0x1111111111111111111111111111111111111111
-0x2222222222222222222222222222222222222222
-0x3333333333333333333333333333333333333333
-0x4444444444444444444444444444444444444444
-0x5555555555555555555555555555555555555555
+4V1C76x5SpQhYpZ3EnfHWxyaFmQy6GzwR8NhBpaALsPR
+7Zb1bJ6Qn3z2XxgR7K4pGv6fW8cY5mT9nL2sA3dE4fG
+9xQeWvG816bUx9EPfvhkgqJQ3Z9H6uZq1JtV7mYz3Kk
 `
 
 function downloadSampleCsv() {
@@ -242,7 +238,7 @@ export function NewAnalysisForm() {
     }
 
     if (!enrichableChains.has(chainValue)) {
-      setError(`${chainValue} on-chain analysis is not available yet. Select an EVM chain.`)
+      setError(`${chainValue} on-chain analysis is not available yet. Select Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain, or Solana.`)
       return
     }
 
@@ -301,7 +297,7 @@ export function NewAnalysisForm() {
   }
 
   const defaultProjectName = `${chain} ${campaignType} Wallet Audit`
-  const supportedEvmChains = supportedChains.filter((supportedChain) =>
+  const supportedEnrichmentChains = supportedChains.filter((supportedChain) =>
     enrichableChains.has(supportedChain)
   )
 
@@ -356,14 +352,14 @@ export function NewAnalysisForm() {
                     value={chain}
                     onChange={(event) => setChain(event.target.value)}
                   >
-                    {supportedEvmChains.map((supportedChain) => (
+                    {supportedEnrichmentChains.map((supportedChain) => (
                       <option key={supportedChain} value={supportedChain}>
                         {supportedChain}
                       </option>
                     ))}
                   </select>
                   <FieldDescription>
-                    Only EVM chains with real on-chain provider support are shown.
+                    EVM chains and Solana with real on-chain provider support are shown.
                   </FieldDescription>
                 </Field>
               </div>
@@ -388,30 +384,14 @@ export function NewAnalysisForm() {
               <Alert>
                 <FileUp />
                 <AlertDescription>
-                  Every new analysis now uses real on-chain data. If Etherscan or Alchemy cannot return data, the report will show missing/failed enrichment instead of fabricated wallet history.
+                  Every new analysis now uses real on-chain data. If the selected provider cannot return data, the report will show missing/failed enrichment instead of fabricated wallet history.
                   {!chainSupportsEnrichment && ` ${chain} is not supported yet.`}
                 </AlertDescription>
               </Alert>
 
               <Field>
-                <FieldLabel htmlFor="campaignContracts">
-                  Campaign contract addresses (optional)
-                </FieldLabel>
-                <Textarea
-                  id="campaignContracts"
-                  name="campaignContracts"
-                  placeholder={"0xabc...\n0xdef...\n0xghi..."}
-                  rows={4}
-                />
-                <FieldDescription>
-                  One address per line. Used to count campaign interactions per wallet. Leave empty to skip campaign-action detection.
-                </FieldDescription>
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="csvFile">Upload CSV</FieldLabel>
+                <FieldLabel>Wallet CSV</FieldLabel>
                 <label
-                  htmlFor="csvFile"
                   onDragOver={(event) => {
                     event.preventDefault()
                     setIsDragging(true)
@@ -419,82 +399,52 @@ export function NewAnalysisForm() {
                   onDragLeave={() => setIsDragging(false)}
                   onDrop={onDrop}
                   className={cn(
-                    "flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-background/50 px-5 py-8 text-center transition hover:border-primary/50 hover:bg-primary/5",
-                    isDragging && "border-primary bg-primary/10",
+                    "flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border bg-background/50 p-8 text-center transition hover:border-primary/60 hover:bg-primary/5",
+                    isDragging && "border-primary bg-primary/5",
                   )}
                 >
-                  <UploadCloud className="mb-3 size-9 text-primary" />
-                  <span className="font-medium">Drop CSV here or browse files</span>
+                  <UploadCloud className="mb-3 size-8 text-primary" />
+                  <span className="font-medium">Drop your CSV here or click to upload</span>
                   <span className="mt-1 text-sm text-muted-foreground">
-                    Required column: wallet_address. Address-only CSVs are enriched with real on-chain data.
+                    Expected column: wallet_address, address, or wallet
                   </span>
-                  <Input
-                    id="csvFile"
-                    name="csvFile"
-                    type="file"
-                    accept=".csv,text/csv"
-                    className="sr-only"
-                    onChange={onFileChange}
-                  />
+                  <input type="file" accept=".csv,text/csv" className="hidden" onChange={onFileChange} />
                 </label>
-                <FieldDescription className="flex flex-wrap items-center gap-2">
-                  Required column: wallet_address. Optional enriched columns can be used in Hybrid mode.
-                  <button
-                    type="button"
-                    onClick={downloadSampleCsv}
-                    className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"
-                  >
-                    <Download className="size-3.5" aria-hidden />
-                    Download sample CSV
-                  </button>
-                </FieldDescription>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" onClick={downloadSampleCsv}>
+                    <Download data-icon="inline-start" /> Download sample CSV
+                  </Button>
+                </div>
               </Field>
 
               {preview && (
-                <div className="rounded-lg border border-border bg-background/50 p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex gap-3">
-                      <span className="flex size-10 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary">
-                        <FileText className="size-5" />
-                      </span>
-                      <div>
-                        <p className="font-medium">{preview.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {preview.size} • {preview.rowCount} rows • {preview.mode === "basic" ? "address-only CSV" : "enriched CSV"}
-                        </p>
-                      </div>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <FileText className="size-4" /> CSV preview
+                    </CardTitle>
+                    <CardDescription>
+                      {preview.name} · {preview.size} · {preview.rowCount.toLocaleString()} rows · {preview.mode} mode
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    <div className="flex flex-wrap gap-2">
+                      {preview.columns.map((column) => (
+                        <span key={column} className="rounded-full border border-border px-2 py-1 text-xs">
+                          {column}
+                        </span>
+                      ))}
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setSelectedFile(null)
-                        setPreview(null)
-                      }}
-                      aria-label="Remove file"
-                    >
-                      <X />
-                    </Button>
-                  </div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-lg border border-border bg-card/70 p-3">
-                      <p className="text-xs text-muted-foreground">Detected columns</p>
-                      <p className="mt-1 truncate text-sm font-medium">
-                        {preview.columns.slice(0, 5).join(", ") || "None"}
-                        {preview.columns.length > 5 ? ` +${preview.columns.length - 5}` : ""}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border border-border bg-card/70 p-3">
-                      <p className="text-xs text-muted-foreground">Invalid preview rows</p>
-                      <p className="mt-1 text-sm font-medium">{preview.invalidCount}</p>
-                    </div>
-                    <div className="rounded-lg border border-border bg-card/70 p-3">
-                      <p className="text-xs text-muted-foreground">Default project</p>
-                      <p className="mt-1 truncate text-sm font-medium">{defaultProjectName}</p>
-                    </div>
-                  </div>
-                </div>
+                    {preview.invalidCount > 0 && (
+                      <Alert variant="destructive">
+                        <X />
+                        <AlertDescription>
+                          {preview.invalidCount.toLocaleString()} rows may be invalid or missing a wallet column.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </CardContent>
+                </Card>
               )}
 
               <Field>
@@ -502,92 +452,52 @@ export function NewAnalysisForm() {
                 <Textarea
                   id="notes"
                   name="notes"
-                  placeholder="Internal campaign context, allowlist caveats, or reward rules."
-                  rows={5}
+                  placeholder="Campaign context, suspicious patterns, or addresses to pay attention to."
+                  value={note}
+                  onChange={(event) => setNote(event.target.value)}
                 />
               </Field>
-            </FieldGroup>
 
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            {note && (
-              <Alert>
-                <FileUp />
-                <AlertDescription>{note}</AlertDescription>
-              </Alert>
-            )}
-
-            {pending && progressSteps.length > 0 && (
-              <div className="animate-in fade-in slide-in-from-bottom-2 rounded-lg border border-primary/25 bg-primary/5 p-5">
-                <div className="mb-4 flex items-center justify-between">
-                  <p className="text-sm font-medium text-foreground">Running analysis…</p>
-                  <span className="font-mono text-xs text-primary">
-                    {Math.min(
-                      Math.round((progressIndex / progressSteps.length) * 100),
-                      100
-                    )}
-                    %
-                  </span>
-                </div>
-                <div className="mb-5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-primary transition-all duration-500 ease-out"
-                    style={{
-                      width: `${Math.min(
-                        Math.round(((progressIndex + 0.5) / progressSteps.length) * 100),
-                        100
-                      )}%`,
-                    }}
-                  />
-                </div>
-                <ol className="flex flex-col gap-2.5">
-                  {progressSteps.map((step, index) => {
-                    const done = index < progressIndex
-                    const active = index === progressIndex
-                    return (
-                      <li key={step} className="flex items-center gap-3 text-sm">
-                        {done ? (
-                          <CheckCircle2 className="size-4 text-green-300" aria-hidden />
-                        ) : active ? (
-                          <Loader className="size-4 animate-spin text-primary" aria-hidden />
+              {progressSteps.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      {pending ? <Loader className="size-4 animate-spin" /> : <CheckCircle2 className="size-4 text-green-500" />}
+                      Analysis progress
+                    </CardTitle>
+                    <CardDescription>
+                      Large uploads are processed in background batches.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {progressSteps.map((step, index) => (
+                      <div key={step} className="flex items-center gap-3 text-sm">
+                        {index < progressIndex ? (
+                          <CheckCircle2 className="size-4 text-green-500" />
+                        ) : index === progressIndex && pending ? (
+                          <Loader2 className="size-4 animate-spin text-primary" />
                         ) : (
-                          <Circle className="size-4 text-muted-foreground/40" aria-hidden />
+                          <Circle className="size-4 text-muted-foreground" />
                         )}
-                        <span
-                          className={cn(
-                            "transition-colors",
-                            done
-                              ? "text-muted-foreground line-through decoration-muted-foreground/40"
-                              : active
-                                ? "font-medium text-foreground"
-                                : "text-muted-foreground"
-                          )}
-                        >
-                          {step}
-                        </span>
-                      </li>
-                    )
-                  })}
-                </ol>
-              </div>
-            )}
+                        <span>{step}</span>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-sm text-muted-foreground">
-                Invalid and duplicate wallet rows are skipped and reported by the parser.
-              </div>
+              {error && (
+                <Alert variant="destructive">
+                  <X />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
               <Button type="submit" disabled={pending}>
-                {pending ? (
-                  <Loader2 data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <FileUp data-icon="inline-start" />
-                )}
-                Run Real On-Chain Analysis
+                {pending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <FileUp data-icon="inline-start" />}
+                Run On-Chain Analysis
               </Button>
-            </div>
+            </FieldGroup>
           </form>
         </CardContent>
       </Card>
