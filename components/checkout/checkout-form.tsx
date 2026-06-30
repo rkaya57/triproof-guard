@@ -1,21 +1,19 @@
 "use client"
 
-import { FormEvent, useMemo, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { CheckCircle2, Copy, ExternalLink, Loader2, ShieldCheck } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button, buttonVariants } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toast"
 
 const solanaUsdcMint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-
-type NetworkId = "base" | "polygon" | "solana"
+const base58Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 
 type Network = {
-  id: NetworkId
+  id: "solana"
   label: string
   treasuryAddress?: string
 }
@@ -27,111 +25,176 @@ type Plan = {
   wallets: string
 }
 
-export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network[] }) {
-  const router = useRouter()
-  const { toast } = useToast()
-  const availableNetworks = networks.filter((network) => network.treasuryAddress)
-  const [network, setNetwork] = useState<NetworkId>(
-    availableNetworks[0]?.id ?? "solana"
-  )
-  const [txHash, setTxHash] = useState("")
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState("")
-  const [success, setSuccess] = useState("")
+type VerifyResponse = {
+  ok?: boolean
+  pending?: boolean
+  error?: string
+  message?: string
+}
 
-  const selectedNetwork = networks.find((item) => item.id === network)
-  const isSolana = network === "solana"
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
 
-  const solanaPayUrl = useMemo(() => {
-    if (!isSolana || !selectedNetwork?.treasuryAddress) return ""
+function encodeBase58(bytes: Uint8Array) {
+  const digits = [0]
 
-    const params = new URLSearchParams({
-      amount: plan.amount,
-      "spl-token": solanaUsdcMint,
-      label: "Tri-Proof Protocol",
-      message: `${plan.name} plan - ${plan.wallets} wallet credits`,
-    })
+  for (const byte of bytes) {
+    let carry = byte
+    for (let index = 0; index < digits.length; index += 1) {
+      const value = digits[index] * 256 + carry
+      digits[index] = value % 58
+      carry = Math.floor(value / 58)
+    }
 
-    return `solana:${selectedNetwork.treasuryAddress}?${params.toString()}`
-  }, [isSolana, plan.amount, plan.name, plan.wallets, selectedNetwork?.treasuryAddress])
-
-  function openSolanaWallet() {
-    if (!solanaPayUrl) return
-    window.location.href = solanaPayUrl
-  }
-
-  async function copyAddress() {
-    if (!selectedNetwork?.treasuryAddress) return
-    await navigator.clipboard.writeText(selectedNetwork.treasuryAddress)
-    toast("Treasury address copied", "success")
-  }
-
-  async function copySolanaPayLink() {
-    if (!solanaPayUrl) return
-    await navigator.clipboard.writeText(solanaPayUrl)
-    toast("Solana Pay link copied", "success")
-  }
-
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setError("")
-    setSuccess("")
-    setPending(true)
-
-    try {
-      const response = await fetch("/api/billing/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: plan.id, network, txHash }),
-      })
-      const body = (await response.json().catch(() => ({}))) as {
-        ok?: boolean
-        error?: string
-        message?: string
-      }
-
-      if (!response.ok || !body.ok) {
-        setError(body.error ?? "Verification failed.")
-        return
-      }
-
-      setSuccess(body.message ?? "USDC payment verified. Analysis credits are active.")
-      toast("USDC payment verified", "success")
-      setTimeout(() => router.push("/dashboard/new-analysis"), 900)
-    } catch {
-      setError("Verification failed. Please try again.")
-    } finally {
-      setPending(false)
+    while (carry > 0) {
+      digits.push(carry % 58)
+      carry = Math.floor(carry / 58)
     }
   }
 
-  if (!availableNetworks.length) {
+  let output = ""
+  for (const byte of bytes) {
+    if (byte === 0) output += base58Alphabet[0]
+    else break
+  }
+
+  for (let index = digits.length - 1; index >= 0; index -= 1) {
+    output += base58Alphabet[digits[index]]
+  }
+
+  return output
+}
+
+function generateSolanaReference() {
+  const bytes = new Uint8Array(32)
+  window.crypto.getRandomValues(bytes)
+  return encodeBase58(bytes)
+}
+
+function buildSolanaPayUrl({
+  treasuryAddress,
+  amount,
+  planName,
+  wallets,
+  reference,
+}: {
+  treasuryAddress: string
+  amount: string
+  planName: string
+  wallets: string
+  reference: string
+}) {
+  const params = new URLSearchParams({
+    amount,
+    "spl-token": solanaUsdcMint,
+    label: "Tri-Proof Protocol",
+    message: `${planName} plan - ${wallets} wallet credits`,
+    reference,
+  })
+
+  return `solana:${treasuryAddress}?${params.toString()}`
+}
+
+export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network[] }) {
+  const router = useRouter()
+  const { toast } = useToast()
+  const solanaNetwork = networks.find((network) => network.id === "solana" && network.treasuryAddress)
+  const [paymentReference, setPaymentReference] = useState("")
+  const [paymentUrl, setPaymentUrl] = useState("")
+  const [checking, setChecking] = useState(false)
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
+
+  async function verifyPayment(reference: string, showPendingError = false) {
+    const response = await fetch("/api/billing/verify-solana", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan: plan.id, reference }),
+    })
+    const body = (await response.json().catch(() => ({}))) as VerifyResponse
+
+    if (response.ok && body.ok) {
+      setSuccess(body.message ?? "Solana USDC payment verified. Analysis credits are active.")
+      setError("")
+      toast("Solana USDC payment verified", "success")
+      setTimeout(() => router.push("/dashboard/new-analysis"), 900)
+      return true
+    }
+
+    if (response.status === 202 || body.pending) {
+      if (showPendingError) setError("Payment is not visible on-chain yet. Approve it in your wallet, then try again.")
+      return false
+    }
+
+    setError(body.error ?? "Payment verification failed.")
+    return false
+  }
+
+  async function autoVerify(reference: string) {
+    setChecking(true)
+
+    for (let attempt = 0; attempt < 36; attempt += 1) {
+      const verified = await verifyPayment(reference)
+      if (verified) {
+        setChecking(false)
+        return
+      }
+      await sleep(5000)
+    }
+
+    setChecking(false)
+    setError("Payment was not detected automatically yet. You can click Check Payment after wallet approval.")
+  }
+
+  function openSolanaWallet() {
+    if (!solanaNetwork?.treasuryAddress) return
+
+    const reference = generateSolanaReference()
+    const url = buildSolanaPayUrl({
+      treasuryAddress: solanaNetwork.treasuryAddress,
+      amount: plan.amount,
+      planName: plan.name,
+      wallets: plan.wallets,
+      reference,
+    })
+
+    setPaymentReference(reference)
+    setPaymentUrl(url)
+    setError("")
+    setSuccess("")
+    window.location.href = url
+    void autoVerify(reference)
+  }
+
+  async function copyAddress() {
+    if (!solanaNetwork?.treasuryAddress) return
+    await navigator.clipboard.writeText(solanaNetwork.treasuryAddress)
+    toast("Solana treasury address copied", "success")
+  }
+
+  async function copySolanaPayLink() {
+    if (!paymentUrl) return
+    await navigator.clipboard.writeText(paymentUrl)
+    toast("Solana Pay link copied", "success")
+  }
+
+  if (!solanaNetwork?.treasuryAddress) {
     return (
       <Alert variant="destructive">
         <AlertDescription>
-          Treasury wallet addresses are not configured yet. Add TRIPROOF_TREASURY_SOLANA_ADDRESS,
-          TRIPROOF_TREASURY_BASE_ADDRESS, or TRIPROOF_TREASURY_POLYGON_ADDRESS in Vercel Environment Variables.
+          Solana treasury wallet is not configured yet. Add TRIPROOF_TREASURY_SOLANA_ADDRESS in Vercel Environment Variables.
         </AlertDescription>
       </Alert>
     )
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-5">
+    <div className="flex flex-col gap-5">
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-lg border border-border bg-background/50 p-4">
-          <p className="text-xs text-muted-foreground">Network</p>
-          <select
-            value={network}
-            onChange={(event) => setNetwork(event.target.value as NetworkId)}
-            className="mt-2 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            {availableNetworks.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
+          <p className="text-xs text-muted-foreground">Payment network</p>
+          <p className="mt-2 text-lg font-semibold">Solana Pay</p>
         </div>
         <div className="rounded-lg border border-border bg-background/50 p-4">
           <p className="text-xs text-muted-foreground">Required amount</p>
@@ -141,45 +204,48 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
 
       <div className="rounded-lg border border-primary/25 bg-primary/5 p-4">
         <div className="mb-2 flex items-center justify-between gap-3">
-          <p className="font-medium">
-            {isSolana ? "One-click Solana Pay checkout" : "Send USDC to this treasury address"}
-          </p>
+          <p className="font-medium">One-click Solana Pay checkout</p>
           <Button type="button" variant="outline" size="sm" onClick={copyAddress}>
-            <Copy data-icon="inline-start" /> Copy
+            <Copy data-icon="inline-start" /> Copy Address
           </Button>
         </div>
         <code className="block overflow-x-auto rounded-md border border-border bg-background p-3 text-xs">
-          {selectedNetwork?.treasuryAddress}
+          {solanaNetwork.treasuryAddress}
         </code>
         <p className="mt-3 text-sm text-muted-foreground">
-          {isSolana
-            ? `Click the payment button, approve ${plan.amount} USDC in your Solana wallet, then paste the transaction signature below so Tri-Proof can verify it on-chain.`
-            : `Send exactly ${plan.amount} USDC or more on ${selectedNetwork?.label}. Then paste the transaction hash below. The system will verify the USDC transfer on-chain.`}
+          Click Open Wallet & Pay, approve {plan.amount} USDC in your Solana wallet, and Tri-Proof will check the payment automatically using a unique on-chain reference.
         </p>
-        {isSolana && solanaPayUrl && (
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-            <Button type="button" variant="secondary" onClick={openSolanaWallet}>
-              <ExternalLink data-icon="inline-start" /> Open Wallet & Pay
-            </Button>
-            <Button type="button" variant="outline" onClick={copySolanaPayLink}>
-              <Copy data-icon="inline-start" /> Copy Solana Pay Link
-            </Button>
-          </div>
+        {paymentReference && (
+          <p className="mt-2 break-all text-xs text-muted-foreground">
+            Payment reference: {paymentReference}
+          </p>
         )}
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <Button type="button" variant="secondary" onClick={openSolanaWallet} disabled={checking}>
+            {checking ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <ExternalLink data-icon="inline-start" />}
+            Open Wallet & Pay
+          </Button>
+          {paymentReference && (
+            <Button type="button" variant="outline" onClick={() => void verifyPayment(paymentReference, true)} disabled={checking}>
+              <ShieldCheck data-icon="inline-start" /> Check Payment
+            </Button>
+          )}
+          {paymentUrl && (
+            <Button type="button" variant="outline" onClick={copySolanaPayLink}>
+              <Copy data-icon="inline-start" /> Copy Pay Link
+            </Button>
+          )}
+        </div>
       </div>
 
-      <div>
-        <label htmlFor="txHash" className="text-sm font-medium">
-          {isSolana ? "Transaction signature after approval" : "Transaction hash"}
-        </label>
-        <Input
-          id="txHash"
-          value={txHash}
-          onChange={(event) => setTxHash(event.target.value)}
-          placeholder={isSolana ? "Paste the Solana transaction signature" : "0x..."}
-          className="mt-2"
-        />
-      </div>
+      {checking && (
+        <Alert>
+          <Loader2 className="animate-spin" />
+          <AlertDescription>
+            Waiting for wallet approval and on-chain confirmation...
+          </AlertDescription>
+        </Alert>
+      )}
 
       {error && (
         <Alert variant="destructive">
@@ -194,14 +260,10 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
       )}
 
       <div className="flex flex-col gap-3 sm:flex-row">
-        <Button type="submit" disabled={pending || !txHash.trim()}>
-          {pending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <ShieldCheck data-icon="inline-start" />}
-          Verify Payment & Activate Credits
-        </Button>
         <Link href="/pricing" className={buttonVariants({ variant: "outline" })}>
           Back to Pricing
         </Link>
       </div>
-    </form>
+    </div>
   )
 }
