@@ -5,6 +5,7 @@ const lamportsPerSol = 1_000_000_000
 const tokenProgramId = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 const systemProgramId = "11111111111111111111111111111111"
 const solanaWalletRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
+const solanaSignatureSampleLimit = 1000
 
 type RpcResponse<T> = {
   result?: T
@@ -198,7 +199,7 @@ export const heliusProvider: OnChainProvider = {
       solanaRpc<BalanceResult>("getBalance", [address, { commitment: "confirmed" }]),
       solanaRpc<SignatureInfo[]>("getSignaturesForAddress", [
         address,
-        { limit: 100, commitment: "confirmed" },
+        { limit: solanaSignatureSampleLimit, commitment: "confirmed" },
       ]),
       solanaRpc<{ value?: ParsedTokenAccount[] }>("getTokenAccountsByOwner", [
         address,
@@ -259,6 +260,7 @@ export const heliusProvider: OnChainProvider = {
       rawData: {
         sampledSignatures: signatures.length,
         sampledTransactions: parsedTransactions.length,
+        signatureSampleLimit: solanaSignatureSampleLimit,
         oldestSignature,
       },
     }
