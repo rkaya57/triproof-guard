@@ -32,10 +32,6 @@ type VerifyResponse = {
   message?: string
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms))
-}
-
 function encodeBase58(bytes: Uint8Array) {
   const digits = [0]
 
@@ -107,44 +103,36 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
   const [success, setSuccess] = useState("")
 
   async function verifyPayment(reference: string, showPendingError = false) {
-    const response = await fetch("/api/billing/verify-solana", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan: plan.id, reference }),
-    })
-    const body = (await response.json().catch(() => ({}))) as VerifyResponse
-
-    if (response.ok && body.ok) {
-      setSuccess(body.message ?? "Solana USDC payment verified. Analysis credits are active.")
-      setError("")
-      toast("Solana USDC payment verified", "success")
-      setTimeout(() => router.push("/dashboard/new-analysis"), 900)
-      return true
-    }
-
-    if (response.status === 202 || body.pending) {
-      if (showPendingError) setError("Payment is not visible on-chain yet. Approve it in your wallet, then try again.")
-      return false
-    }
-
-    setError(body.error ?? "Payment verification failed.")
-    return false
-  }
-
-  async function autoVerify(reference: string) {
     setChecking(true)
 
-    for (let attempt = 0; attempt < 36; attempt += 1) {
-      const verified = await verifyPayment(reference)
-      if (verified) {
-        setChecking(false)
-        return
-      }
-      await sleep(5000)
-    }
+    try {
+      const response = await fetch("/api/billing/verify-solana", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: plan.id, reference }),
+      })
+      const body = (await response.json().catch(() => ({}))) as VerifyResponse
 
-    setChecking(false)
-    setError("Payment was not detected automatically yet. You can click Check Payment after wallet approval.")
+      if (response.ok && body.ok) {
+        setSuccess(body.message ?? "Solana USDC payment verified. Analysis credits are active.")
+        setError("")
+        toast("Solana USDC payment verified", "success")
+        setTimeout(() => router.push("/dashboard/new-analysis"), 900)
+        return true
+      }
+
+      if (response.status === 202 || body.pending) {
+        if (showPendingError) {
+          setError("Payment is not visible on-chain yet. Approve it in your wallet, then click Check Payment again.")
+        }
+        return false
+      }
+
+      setError(body.error ?? "Payment verification failed.")
+      return false
+    } finally {
+      setChecking(false)
+    }
   }
 
   function openSolanaWallet() {
@@ -162,11 +150,10 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
     setPaymentReference(reference)
     setPaymentUrl(url)
     setError(
-      "Chrome could not open the wallet automatically if no Solana protocol handler is registered. Click Copy Pay Link and open it inside Phantom/Solflare, or use a mobile Solana wallet."
+      "If Chrome does not open your wallet, copy the Pay Link and open it inside Phantom/Solflare. After approving the payment, click Check Payment."
     )
     setSuccess("")
     window.open(url, "_blank", "noopener,noreferrer")
-    void autoVerify(reference)
   }
 
   async function copyAddress() {
@@ -215,7 +202,7 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
           {solanaNetwork.treasuryAddress}
         </code>
         <p className="mt-3 text-sm text-muted-foreground">
-          Click Open Wallet & Pay, approve {plan.amount} USDC in your Solana wallet, and Tri-Proof will check the payment automatically using a unique on-chain reference.
+          Click Open Wallet & Pay, approve {plan.amount} USDC in your Solana wallet, then click Check Payment. Tri-Proof verifies it on-chain with a unique reference.
         </p>
         {paymentReference && (
           <p className="mt-2 break-all text-xs text-muted-foreground">
@@ -223,13 +210,13 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
           </p>
         )}
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-          <Button type="button" variant="secondary" onClick={openSolanaWallet} disabled={checking}>
-            {checking ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <ExternalLink data-icon="inline-start" />}
-            Open Wallet & Pay
+          <Button type="button" variant="secondary" onClick={openSolanaWallet}>
+            <ExternalLink data-icon="inline-start" /> Open Wallet & Pay
           </Button>
           {paymentReference && (
             <Button type="button" variant="outline" onClick={() => void verifyPayment(paymentReference, true)} disabled={checking}>
-              <ShieldCheck data-icon="inline-start" /> Check Payment
+              {checking ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <ShieldCheck data-icon="inline-start" />}
+              Check Payment
             </Button>
           )}
           {paymentUrl && (
@@ -239,15 +226,6 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
           )}
         </div>
       </div>
-
-      {checking && (
-        <Alert>
-          <Loader2 className="animate-spin" />
-          <AlertDescription>
-            Waiting for wallet approval and on-chain confirmation...
-          </AlertDescription>
-        </Alert>
-      )}
 
       {error && (
         <Alert variant="destructive">
