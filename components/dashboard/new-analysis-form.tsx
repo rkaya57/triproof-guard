@@ -70,6 +70,15 @@ const enrichedColumns = new Set([
   "contract_interactions",
   "campaign_actions",
   "risk_flags",
+  "policy_action",
+  "policy",
+  "decision",
+  "reputation_label",
+  "reputation",
+  "review_label",
+  "customer_label",
+  "entity_label",
+  "entity_type",
 ])
 
 const enrichableChains = new Set([
@@ -127,10 +136,10 @@ async function buildCsvPreview(file: File): Promise<CsvPreview> {
   }
 }
 
-const sampleCsv = `wallet_address
-4V1C76x5SpQhYpZ3EnfHWxyaFmQy6GzwR8NhBpaALsPR
-7Zb1bJ6Qn3z2XxgR7K4pGv6fW8cY5mT9nL2sA3dE4fG
-9xQeWvG816bUx9EPfvhkgqJQ3Z9H6uZq1JtV7mYz3Kk
+const sampleCsv = `wallet_address,policy_action,reputation_label,policy_reason
+4V1C76x5SpQhYpZ3EnfHWxyaFmQy6GzwR8NhBpaALsPR,,,
+7Zb1bJ6Qn3z2XxgR7K4pGv6fW8cY5mT9nL2sA3dE4fG,manual_review,needs_review,Project team wants a human check
+9xQeWvG816bUx9EPfvhkgqJQ3Z9H6uZq1JtV7mYz3Kk,reject,known_sybil,Imported from customer blocklist
 `
 
 function downloadSampleCsv() {
@@ -406,7 +415,10 @@ export function NewAnalysisForm() {
                   <UploadCloud className="mb-3 size-8 text-primary" />
                   <span className="font-medium">Drop your CSV here or click to upload</span>
                   <span className="mt-1 text-sm text-muted-foreground">
-                    Expected column: wallet_address, address, or wallet
+                    Required column: wallet_address, address, or wallet
+                  </span>
+                  <span className="mt-1 max-w-xl text-xs text-muted-foreground">
+                    Optional V1.4 columns: policy_action, reputation_label, policy_reason, entity_label, entity_type. Use allowlist/trusted_user, blocklist/known_sybil, or needs_review to import project-side reputation decisions.
                   </span>
                   <input type="file" accept=".csv,text/csv" className="hidden" onChange={onFileChange} />
                 </label>
