@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import type { CampaignType, Chain } from "@/types"
+import type { CampaignType, Chain, RiskPolicy } from "@/types"
 
 export const campaignTypes: CampaignType[] = [
   "Airdrop",
@@ -24,6 +24,7 @@ export const supportedChains: Chain[] = [
 ]
 
 export const analysisModes = ["onchain", "hybrid"] as const
+export const riskPolicies: RiskPolicy[] = ["conservative", "balanced", "strict"]
 
 export const newAnalysisSchema = z.object({
   projectName: z.preprocess(
@@ -43,6 +44,10 @@ export const newAnalysisSchema = z.object({
   analysisMode: z.preprocess(
     (value) => (value == null || value === "" || value === "csv_only" ? "onchain" : value),
     z.enum(analysisModes)
+  ),
+  riskPolicy: z.preprocess(
+    (value) => (value == null || value === "" ? "balanced" : value),
+    z.enum(riskPolicies as [RiskPolicy, ...RiskPolicy[]])
   ),
   campaignContracts: z.string().trim().max(5000).optional().or(z.literal("")),
 })
