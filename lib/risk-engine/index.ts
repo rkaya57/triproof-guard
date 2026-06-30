@@ -40,6 +40,9 @@ type EnrichedWallet = {
   ownerProgram: string | null
   behaviorFingerprint: string[] | null
   campaignQualityScore: number | null
+  campaignOnlyRatio: number | null
+  behaviorDiversityScore: number | null
+  botScriptScore: number | null
   enrichmentProvider: string | null
   enrichmentStatus: EnrichmentStatus | null
 }
@@ -81,6 +84,9 @@ function hydrateWallet(wallet: ParsedWallet): EnrichedWallet {
     ownerProgram: wallet.ownerProgram ?? null,
     behaviorFingerprint: wallet.behaviorFingerprint ?? null,
     campaignQualityScore: wallet.campaignQualityScore ?? null,
+    campaignOnlyRatio: wallet.campaignOnlyRatio ?? null,
+    behaviorDiversityScore: wallet.behaviorDiversityScore ?? null,
+    botScriptScore: wallet.botScriptScore ?? null,
     enrichmentProvider: wallet.enrichmentProvider ?? null,
     enrichmentStatus: wallet.enrichmentStatus ?? null,
   }
@@ -485,6 +491,47 @@ export function analyzeWallets(
       reasons.push("Campaign evidence: campaign-only behavior pattern")
     }
 
+    if (wallet.campaignOnlyRatio !== null) {
+      const percent = Math.round(wallet.campaignOnlyRatio * 100)
+      if (wallet.campaignOnlyRatio >= 0.8) {
+        score += 30
+        reasons.push(`V1.3 behavior intelligence: ${percent}% of sampled activity is campaign-only`)
+      } else if (wallet.campaignOnlyRatio >= 0.5) {
+        score += 18
+        reasons.push(`V1.3 behavior intelligence: ${percent}% campaign-only activity concentration`)
+      } else if (wallet.campaignOnlyRatio >= 0.25) {
+        score += 8
+        reasons.push(`V1.3 behavior intelligence: ${percent}% campaign-action concentration`)
+      }
+    }
+
+    if (wallet.behaviorDiversityScore !== null) {
+      if (wallet.behaviorDiversityScore < 25) {
+        score += 18
+        reasons.push("V1.3 behavior intelligence: very low behavior diversity")
+      } else if (wallet.behaviorDiversityScore < 45) {
+        score += 8
+        reasons.push("V1.3 behavior intelligence: limited behavior diversity")
+      } else if (wallet.behaviorDiversityScore >= 75) {
+        reasons.push("V1.3 behavior intelligence: healthy behavior diversity")
+      }
+    }
+
+    if (wallet.botScriptScore !== null) {
+      if (wallet.botScriptScore >= 80) {
+        score += 35
+        reasons.push(`V1.3 bot-script probability: very high (${wallet.botScriptScore}/100)`)
+      } else if (wallet.botScriptScore >= 60) {
+        score += 22
+        reasons.push(`V1.3 bot-script probability: high (${wallet.botScriptScore}/100)`)
+      } else if (wallet.botScriptScore >= 40) {
+        score += 10
+        reasons.push(`V1.3 bot-script probability: moderate (${wallet.botScriptScore}/100)`)
+      } else if (wallet.botScriptScore <= 20) {
+        reasons.push(`V1.3 bot-script probability: low (${wallet.botScriptScore}/100)`)
+      }
+    }
+
     if (wallet.campaignQualityScore !== null) {
       if (wallet.campaignQualityScore < 30) {
         score += 25
@@ -576,6 +623,9 @@ export function analyzeWallets(
       fundingGroupSize >= 10 ||
       clusterSize >= 10 ||
       (clusterSize >= 6 && clusterSimilarity >= 75) ||
+      (wallet.botScriptScore !== null && wallet.botScriptScore >= 80) ||
+      (wallet.campaignOnlyRatio !== null && wallet.campaignOnlyRatio >= 0.8 && (wallet.txCount ?? 0) <= 15) ||
+      (wallet.behaviorDiversityScore !== null && wallet.behaviorDiversityScore < 20 && (wallet.txCount ?? 0) <= 5) ||
       (wallet.walletAgeDays !== null && wallet.walletAgeDays < 7 && wallet.txCount !== null && wallet.txCount <= 2)
 
     const riskScore = Math.min(100, score)
@@ -626,6 +676,9 @@ export function analyzeWallets(
       ownerProgram: wallet.ownerProgram,
       behaviorFingerprint: wallet.behaviorFingerprint,
       campaignQualityScore: wallet.campaignQualityScore,
+      campaignOnlyRatio: wallet.campaignOnlyRatio,
+      behaviorDiversityScore: wallet.behaviorDiversityScore,
+      botScriptScore: wallet.botScriptScore,
       enrichmentProvider: wallet.enrichmentProvider,
       enrichmentStatus: wallet.enrichmentStatus,
     }
