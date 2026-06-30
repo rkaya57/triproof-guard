@@ -34,6 +34,11 @@ export default async function Page({
 
   const networks = [
     {
+      id: "solana" as const,
+      label: "Solana Pay",
+      treasuryAddress: process.env.TRIPROOF_TREASURY_SOLANA_ADDRESS,
+    },
+    {
       id: "base" as const,
       label: "Base",
       treasuryAddress: process.env.TRIPROOF_TREASURY_BASE_ADDRESS,
