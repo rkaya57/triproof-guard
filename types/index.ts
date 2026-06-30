@@ -34,6 +34,8 @@ export type EntityType =
 
 export type AnalysisMode = "csv_only" | "onchain" | "hybrid"
 
+export type RiskPolicy = "conservative" | "balanced" | "strict"
+
 export type EnrichmentStatus =
   | "pending"
   | "processing"
@@ -179,6 +181,7 @@ export type AnalysisDetail = {
   createdAt: string
   completedAt: string | null
   analysisMode?: AnalysisMode | null
+  riskPolicy?: RiskPolicy | null
   enrichment?: EnrichmentMeta | null
   project: {
     id: string
