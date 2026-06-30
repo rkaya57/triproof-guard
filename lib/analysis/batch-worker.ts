@@ -259,6 +259,9 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
             ownerProgram: wallet.ownerProgram ?? null,
             behaviorFingerprint: wallet.behaviorFingerprint ?? [],
             campaignQualityScore: wallet.campaignQualityScore ?? null,
+            campaignOnlyRatio: wallet.campaignOnlyRatio ?? null,
+            behaviorDiversityScore: wallet.behaviorDiversityScore ?? null,
+            botScriptScore: wallet.botScriptScore ?? null,
           },
         })),
       })
