@@ -4,6 +4,7 @@ import { db } from "@/lib/db/prisma"
 import { analyzeWallets } from "@/lib/risk-engine"
 import { enrichWallets } from "@/lib/onchain/enrich-wallet"
 import { mergeEnrichment } from "@/lib/onchain/merge"
+import { parseCampaignContracts } from "@/lib/validators/wallet"
 import type { AnalysisMode, EnrichmentMeta, ParsedWallet } from "@/types"
 import type { EnrichmentSummary, WalletEnrichmentResult } from "@/lib/onchain/enrichment-types"
 
@@ -24,6 +25,15 @@ function toDate(value: string | null | undefined) {
   if (!value) return null
   const parsed = new Date(value)
   return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function extractCampaignContracts(notes: string | null | undefined) {
+  if (!notes) return []
+  const line = notes
+    .split(/\r?\n/)
+    .find((value) => value.startsWith("TRIPROOF_CAMPAIGN_CONTRACTS="))
+  if (!line) return []
+  return parseCampaignContracts(line.replace("TRIPROOF_CAMPAIGN_CONTRACTS=", ""))
 }
 
 function chunkArray<T>(items: T[], size: number) {
@@ -244,6 +254,12 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
           knownEntityLabel: wallet.entityLabel,
           knownEntityType: wallet.entityType,
           enrichmentStatus: wallet.enrichmentStatus ?? "completed",
+          rawData: {
+            accountType: wallet.accountType ?? null,
+            ownerProgram: wallet.ownerProgram ?? null,
+            behaviorFingerprint: wallet.behaviorFingerprint ?? [],
+            campaignQualityScore: wallet.campaignQualityScore ?? null,
+          },
         })),
       })
     }
@@ -295,6 +311,7 @@ async function processBatch(batch: BatchRow) {
 
   const wallets = parseJson<ParsedWallet[]>(batch.walletData, [])
   const mode = (analysis.analysisMode ?? "onchain") as AnalysisMode
+  const campaignContracts = extractCampaignContracts(analysis.project.notes)
 
   try {
     await db.analysis.update({ where: { id: analysis.id }, data: { status: "enriching", enrichmentStatus: "processing" } })
@@ -302,6 +319,7 @@ async function processBatch(batch: BatchRow) {
       addresses: wallets.map((wallet) => wallet.walletAddress),
       chain: analysis.project.chain,
       mode,
+      options: { campaignContracts },
     })
 
     await db.$executeRaw`
