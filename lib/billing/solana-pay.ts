@@ -89,12 +89,11 @@ export function buildSolanaPayUrl({
   label?: string
   message?: string
 }) {
-  const params = new URLSearchParams({
-    amount: String(amountUsdc),
-    spl-token: process.env.SOLANA_USDC_MINT ?? defaultSolanaUsdcMint,
-    label,
-    message,
-  })
+  const params = new URLSearchParams()
+  params.set("amount", String(amountUsdc))
+  params.set("spl-token", process.env.SOLANA_USDC_MINT ?? defaultSolanaUsdcMint)
+  params.set("label", label)
+  params.set("message", message)
 
   if (reference) params.set("reference", reference)
 
