@@ -1,12 +1,22 @@
 import { NextResponse } from "next/server"
 
+function configuredWorkerSecrets() {
+  return [process.env.WORKER_SECRET, process.env.ANALYSIS_WORKER_SECRET]
+    .map((secret) => secret?.trim())
+    .filter((secret): secret is string => Boolean(secret))
+}
+
 export function isWorkerAuthorized(request: Request) {
-  const secret = process.env.WORKER_SECRET?.trim()
-  if (!secret) return true
+  const secrets = configuredWorkerSecrets()
+  if (!secrets.length) return true
 
   const authorization = request.headers.get("authorization") ?? ""
+  const bearer = authorization.startsWith("Bearer ")
+    ? authorization.slice(7).trim()
+    : ""
   const workerHeader = request.headers.get("x-worker-secret") ?? ""
-  return authorization === `Bearer ${secret}` || workerHeader === secret
+
+  return secrets.some((secret) => bearer === secret || workerHeader === secret)
 }
 
 export function workerUnauthorized() {
