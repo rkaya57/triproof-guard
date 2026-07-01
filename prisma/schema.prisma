@@ -67,16 +67,23 @@ enum FeedbackLabel {
   needs_more_data
 }
 
+enum WebhookDeliveryStatus {
+  pending
+  delivered
+  failed
+}
+
 model User {
-  id           String          @id @default(cuid())
-  name         String
-  email        String          @unique
-  passwordHash String
-  projects     Project[]
-  teamReviews  TeamReview[]
-  feedbacks    FeedbackEvent[]
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  id               String            @id @default(cuid())
+  name             String
+  email            String            @unique
+  passwordHash     String
+  projects         Project[]
+  teamReviews      TeamReview[]
+  feedbacks        FeedbackEvent[]
+  webhookEndpoints WebhookEndpoint[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 }
 
 model Project {
@@ -120,6 +127,7 @@ model Analysis {
   enrichments             WalletEnrichment[]
   teamReviews             TeamReview[]
   feedbackEvents          FeedbackEvent[]
+  webhookDeliveries       WebhookDelivery[]
   createdAt               DateTime           @default(now())
   completedAt             DateTime?
 
@@ -214,6 +222,45 @@ model FeedbackEvent {
   @@index([walletAddress])
   @@index([userId])
   @@index([label])
+}
+
+model WebhookEndpoint {
+  id          String             @id @default(cuid())
+  userId      String
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url         String
+  secret      String
+  eventTypes  Json
+  isActive    Boolean            @default(true)
+  description String?
+  deliveries  WebhookDelivery[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([userId])
+  @@index([isActive])
+}
+
+model WebhookDelivery {
+  id                 String                @id @default(cuid())
+  endpointId         String
+  endpoint           WebhookEndpoint       @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  analysisId         String?
+  analysis           Analysis?             @relation(fields: [analysisId], references: [id], onDelete: SetNull)
+  eventType          String
+  status             WebhookDeliveryStatus @default(pending)
+  statusCode         Int?
+  errorMessage       String?
+  requestPayload     Json
+  responseBody       String?
+  attemptCount       Int                   @default(0)
+  deliveredAt        DateTime?
+  createdAt          DateTime              @default(now())
+
+  @@index([endpointId])
+  @@index([analysisId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model WalletEnrichment {
