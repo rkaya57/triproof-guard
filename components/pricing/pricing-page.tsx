@@ -15,7 +15,7 @@ import {
 const plans = [
   {
     name: "Starter",
-    price: "99 USDC",
+    price: "29 USDC",
     detail: "Small campaign audits and first paid customer reports.",
     cta: "Pay with USDC",
     href: "/checkout?plan=starter",
@@ -28,7 +28,7 @@ const plans = [
   },
   {
     name: "Growth",
-    price: "249 USDC",
+    price: "99 USDC",
     detail: "Recommended for airdrops, testnets and active reward campaigns.",
     cta: "Pay with USDC",
     href: "/checkout?plan=growth",
@@ -38,12 +38,12 @@ const plans = [
       "Cluster analysis",
       "Funding source analysis",
       "PDF report",
-      "Manual review list",
+      "Gray-zone review list",
     ],
   },
   {
     name: "Pro",
-    price: "499 USDC",
+    price: "249 USDC",
     detail: "High-volume audits, repeat operations and partner support.",
     cta: "Pay with USDC",
     href: "/checkout?plan=pro",
@@ -85,13 +85,13 @@ export function PricingPage() {
       <section className="security-grid border-y border-border">
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
           <Badge variant="secondary" className="mb-5 w-fit border-primary/30 text-primary">
-            Live USDC checkout
+            Live Solana USDC checkout
           </Badge>
           <h1 className="max-w-3xl text-4xl font-semibold sm:text-6xl">
             Pricing built for Web3 campaign scale.
           </h1>
           <p className="mt-5 max-w-2xl text-muted-foreground">
-            Every account can test up to 100 wallets for free. Larger analyses continue through Base or Polygon USDC payment verification.
+            Every account can test up to 100 wallets for free. Larger analyses continue through Solana USDC payment verification.
           </p>
         </div>
       </section>
