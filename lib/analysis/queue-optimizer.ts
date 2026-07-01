@@ -60,28 +60,6 @@ export async function getAnalysisQueueStatus({
 } = {}) {
   const minutes = safeStaleMinutes(staleMinutes)
 
-  const selectSql = `
-    COUNT(*)::int AS total,
-    COUNT(*) FILTER (WHERE b."status" = 'pending')::int AS pending,
-    COUNT(*) FILTER (WHERE b."status" = 'processing')::int AS processing,
-    COUNT(*) FILTER (WHERE b."status" = 'completed')::int AS completed,
-    COUNT(*) FILTER (WHERE b."status" = 'failed')::int AS failed,
-    COUNT(*) FILTER (
-      WHERE b."status" = 'processing'
-        AND b."startedAt" IS NOT NULL
-        AND b."startedAt" < NOW() - (${minutes} * INTERVAL '1 minute')
-    )::int AS "staleProcessing",
-    MIN(b."createdAt") FILTER (WHERE b."status" = 'pending') AS "oldestPendingAt",
-    MIN(b."startedAt") FILTER (WHERE b."status" = 'processing') AS "oldestProcessingAt"
-  `
-
-  if (analysisId && userId) {
-    const rows = await db.$queryRaw<QueueStatusRow[]>`
-      SELECT ${db.$queryRawUnsafe ? undefined : undefined}
-    `
-    void rows
-  }
-
   if (analysisId && userId) {
     const rows = await db.$queryRaw<QueueStatusRow[]>`
       SELECT
