@@ -5,6 +5,7 @@ import { analyzeWallets, riskPolicyFromNotes } from "@/lib/risk-engine"
 import { enrichWallets } from "@/lib/onchain/enrich-wallet"
 import { mergeEnrichment } from "@/lib/onchain/merge"
 import { parseCampaignContracts } from "@/lib/validators/wallet"
+import { deliverAnalysisCompletedWebhook } from "@/lib/webhooks/deliver"
 import type { AnalysisMode, EnrichmentMeta, ParsedWallet } from "@/types"
 import type { EnrichmentSummary, WalletEnrichmentResult } from "@/lib/onchain/enrichment-types"
 
@@ -309,6 +310,10 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
         completedAt: new Date(),
       },
     })
+  })
+
+  deliverAnalysisCompletedWebhook(analysisId).catch((error) => {
+    console.error("Webhook delivery failed", error)
   })
 
   return true
