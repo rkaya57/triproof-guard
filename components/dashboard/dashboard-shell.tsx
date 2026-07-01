@@ -10,6 +10,7 @@ import {
   Home,
   LogOut,
   Settings,
+  ShieldCheck,
   Sparkles,
   Tags,
 } from "lucide-react"
@@ -26,9 +27,20 @@ const navItems = [
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ]
 
-export function DashboardShell({ children }: { children: React.ReactNode }) {
+const adminNavItems = [
+  { href: "/dashboard/admin/diagnostics", label: "Admin Diagnostics", icon: ShieldCheck },
+]
+
+export function DashboardShell({
+  children,
+  isAdmin = false,
+}: {
+  children: React.ReactNode
+  isAdmin?: boolean
+}) {
   const pathname = usePathname()
   const router = useRouter()
+  const items = isAdmin ? [...navItems, ...adminNavItems] : navItems
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" })
@@ -59,7 +71,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </div>
           </Link>
           <nav className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
-            {navItems.map((item) => {
+            {items.map((item) => {
               const active =
                 pathname === item.href ||
                 (item.href !== "/dashboard" && pathname.startsWith(item.href))
@@ -70,7 +82,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                   className={cn(
                     buttonVariants({ variant: active ? "secondary" : "ghost" }),
                     "hover-lift justify-start transition-all",
-                    active && "nav-glow-active border-primary/30 bg-primary/10 text-primary"
+                    active && "nav-glow-active border-primary/30 bg-primary/10 text-primary",
+                    item.href.startsWith("/dashboard/admin") &&
+                      "border-yellow-400/20 text-yellow-100 hover:bg-yellow-400/10 hover:text-yellow-100"
                   )}
                 >
                   <item.icon data-icon="inline-start" />
