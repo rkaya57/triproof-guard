@@ -8,6 +8,30 @@ import { db } from "@/lib/db/prisma"
 
 export const runtime = "nodejs"
 
+async function getAnalysisWithReviewData(id: string, userId: string) {
+  return db.analysis.findFirst({
+    where: { id, project: { userId } },
+    include: {
+      project: true,
+      wallets: { orderBy: [{ riskScore: "desc" }, { walletAddress: "asc" }] },
+      clusters: { orderBy: [{ averageRiskScore: "desc" }, { clusterLabel: "asc" }] },
+      teamReviews: { include: { reviewer: { select: { name: true } } } },
+      feedbackEvents: true,
+    },
+  })
+}
+
+async function getAnalysisWithoutReviewData(id: string, userId: string) {
+  return db.analysis.findFirst({
+    where: { id, project: { userId } },
+    include: {
+      project: true,
+      wallets: { orderBy: [{ riskScore: "desc" }, { walletAddress: "asc" }] },
+      clusters: { orderBy: [{ averageRiskScore: "desc" }, { clusterLabel: "asc" }] },
+    },
+  })
+}
+
 export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> }
@@ -21,16 +45,11 @@ export async function GET(
   const { id } = await context.params
   let analysis
   try {
-    analysis = await db.analysis.findFirst({
-      where: { id, project: { userId: user.id } },
-      include: {
-        project: true,
-        wallets: { orderBy: [{ riskScore: "desc" }, { walletAddress: "asc" }] },
-        clusters: { orderBy: [{ averageRiskScore: "desc" }, { clusterLabel: "asc" }] },
-        teamReviews: { include: { reviewer: { select: { name: true } } } },
-        feedbackEvents: true,
-      },
-    })
+    try {
+      analysis = await getAnalysisWithReviewData(id, user.id)
+    } catch {
+      analysis = await getAnalysisWithoutReviewData(id, user.id)
+    }
   } catch (error) {
     if (isDatabaseConnectionError(error)) {
       const devAnalysis = await getDevAnalysisForUser(user.id, id)
@@ -41,7 +60,8 @@ export async function GET(
       return NextResponse.json({ analysis: devAnalysis })
     }
 
-    throw error
+    console.error("Analysis API load failed", error)
+    return NextResponse.json({ error: "Analysis could not be loaded" }, { status: 500 })
   }
 
   if (!analysis) {
