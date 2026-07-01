@@ -7,6 +7,12 @@ function toNumber(value: unknown) {
   return 0
 }
 
+function toDateString(value: unknown) {
+  if (!value) return null
+  const date = value instanceof Date ? value : new Date(String(value))
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
 function countFrom(rows: unknown[]) {
   return toNumber((rows[0] as Record<string, unknown> | undefined)?.count)
 }
@@ -29,32 +35,173 @@ export type AdminMetric = {
   label: string
   value: string | number
   tone: "good" | "warn" | "bad" | "neutral"
+  detail?: string
+}
+
+export type AdminWarning = {
+  title: string
+  severity: "warning" | "critical" | "info"
+  count?: number
+  detail: string
+  action: string
+  href: string
+}
+
+export type AdminQueueBreakdown = {
+  pending: number
+  processing: number
+  completed: number
+  failed: number
+  staleProcessing: number
+  oldestPendingAt: string | null
+  oldestProcessingAt: string | null
+}
+
+export async function getAdminQueueBreakdown(): Promise<AdminQueueBreakdown> {
+  try {
+    const rows = await db.$queryRawUnsafe<Array<Record<string, unknown>>>(`
+      SELECT
+        COUNT(*) FILTER (WHERE "status" = 'pending')::int AS pending,
+        COUNT(*) FILTER (WHERE "status" = 'processing')::int AS processing,
+        COUNT(*) FILTER (WHERE "status" = 'completed')::int AS completed,
+        COUNT(*) FILTER (WHERE "status" = 'failed')::int AS failed,
+        COUNT(*) FILTER (
+          WHERE "status" = 'processing'
+            AND "startedAt" IS NOT NULL
+            AND "startedAt" < NOW() - INTERVAL '15 minutes'
+        )::int AS "staleProcessing",
+        MIN("createdAt") FILTER (WHERE "status" = 'pending') AS "oldestPendingAt",
+        MIN("startedAt") FILTER (WHERE "status" = 'processing') AS "oldestProcessingAt"
+      FROM "AnalysisBatch"
+    `)
+    const row = rows[0] ?? {}
+    return {
+      pending: toNumber(row.pending),
+      processing: toNumber(row.processing),
+      completed: toNumber(row.completed),
+      failed: toNumber(row.failed),
+      staleProcessing: toNumber(row.staleProcessing),
+      oldestPendingAt: toDateString(row.oldestPendingAt),
+      oldestProcessingAt: toDateString(row.oldestProcessingAt),
+    }
+  } catch {
+    return {
+      pending: 0,
+      processing: 0,
+      completed: 0,
+      failed: 0,
+      staleProcessing: 0,
+      oldestPendingAt: null,
+      oldestProcessingAt: null,
+    }
+  }
 }
 
 export async function getAdminMetrics() {
-  const [users, analyses, completed, failed, pendingBatches, failedBatches, totalWallets] =
+  const [users, analyses, completed, failed, queue, totalWallets] =
     await Promise.all([
       safeCount(`SELECT COUNT(*)::int AS count FROM "User"`),
       safeCount(`SELECT COUNT(*)::int AS count FROM "Analysis"`),
       safeCount(`SELECT COUNT(*)::int AS count FROM "Analysis" WHERE "status" = 'completed'`),
       safeCount(`SELECT COUNT(*)::int AS count FROM "Analysis" WHERE "status" = 'failed'`),
-      safeCount(`SELECT COUNT(*)::int AS count FROM "AnalysisBatch" WHERE "status" IN ('pending', 'processing')`),
-      safeCount(`SELECT COUNT(*)::int AS count FROM "AnalysisBatch" WHERE "status" = 'failed'`),
+      getAdminQueueBreakdown(),
       safeCount(`SELECT COALESCE(SUM("totalWallets"), 0)::int AS count FROM "Analysis"`),
     ])
 
-  const healthTone = failed || failedBatches ? "bad" : pendingBatches ? "warn" : "good"
+  const activeQueue = queue.pending + queue.processing
+  const healthTone = failed || queue.failed || queue.staleProcessing ? "bad" : activeQueue ? "warn" : "good"
 
   return [
-    { label: "System Health", value: healthTone === "bad" ? "Critical" : healthTone === "warn" ? "Warning" : "Healthy", tone: healthTone },
-    { label: "Users", value: users, tone: "neutral" },
-    { label: "Total Analyses", value: analyses, tone: "neutral" },
-    { label: "Completed", value: completed, tone: "good" },
-    { label: "Failed", value: failed, tone: failed ? "bad" : "good" },
-    { label: "Pending Batches", value: pendingBatches, tone: pendingBatches ? "warn" : "good" },
-    { label: "Failed Batches", value: failedBatches, tone: failedBatches ? "bad" : "good" },
-    { label: "Wallets Processed", value: totalWallets, tone: "neutral" },
+    {
+      label: "System Health",
+      value: healthTone === "bad" ? "Critical" : healthTone === "warn" ? "Warning" : "Healthy",
+      tone: healthTone,
+      detail: healthTone === "warn" ? `${activeQueue} active queue batches` : healthTone === "bad" ? "Failed or stale jobs detected" : "All core checks look clean",
+    },
+    { label: "Users", value: users, tone: "neutral", detail: "Registered accounts" },
+    { label: "Total Analyses", value: analyses, tone: "neutral", detail: "All created analysis jobs" },
+    { label: "Completed", value: completed, tone: "good", detail: "Finished reports" },
+    { label: "Failed Analyses", value: failed, tone: failed ? "bad" : "good", detail: "Analysis jobs with failed status" },
+    { label: "Active Queue", value: activeQueue, tone: activeQueue ? "warn" : "good", detail: `${queue.pending} pending / ${queue.processing} processing` },
+    { label: "Failed Batches", value: queue.failed, tone: queue.failed ? "bad" : "good", detail: "Background queue failures" },
+    { label: "Wallets Processed", value: totalWallets, tone: "neutral", detail: "Total submitted wallets" },
   ] satisfies AdminMetric[]
+}
+
+export async function getAdminWarnings(): Promise<AdminWarning[]> {
+  const [failedAnalyses, queue] = await Promise.all([
+    safeCount(`SELECT COUNT(*)::int AS count FROM "Analysis" WHERE "status" = 'failed'`),
+    getAdminQueueBreakdown(),
+  ])
+
+  const warnings: AdminWarning[] = []
+  const activeQueue = queue.pending + queue.processing
+
+  if (activeQueue > 0) {
+    warnings.push({
+      title: "Active analysis queue",
+      severity: queue.staleProcessing > 0 ? "critical" : "warning",
+      count: activeQueue,
+      detail: `${queue.pending} pending and ${queue.processing} processing batch jobs are waiting for the worker. This is normal while large analyses are running, but it should decrease after the worker cron runs.`,
+      action: "Open queue docs",
+      href: "/docs/queue",
+    })
+  }
+
+  if (queue.staleProcessing > 0) {
+    warnings.push({
+      title: "Stale processing batches",
+      severity: "critical",
+      count: queue.staleProcessing,
+      detail: "Some batches have been processing for more than 15 minutes. They may be stuck and should be recovered by the queue worker.",
+      action: "Open queue docs",
+      href: "/docs/queue",
+    })
+  }
+
+  if (queue.failed > 0) {
+    warnings.push({
+      title: "Failed queue batches",
+      severity: "critical",
+      count: queue.failed,
+      detail: "One or more background batches failed. Check worker logs and inspect the affected analysis.",
+      action: "Review analysis ops",
+      href: "/dashboard/admin/analyses",
+    })
+  }
+
+  if (failedAnalyses > 0) {
+    warnings.push({
+      title: "Failed analyses",
+      severity: "critical",
+      count: failedAnalyses,
+      detail: "Some analysis records are marked failed. Review logs, provider status and CSV inputs.",
+      action: "Review analyses",
+      href: "/dashboard/admin/analyses",
+    })
+  }
+
+  if (!process.env.WORKER_SECRET) {
+    warnings.push({
+      title: "Worker secret not configured",
+      severity: "warning",
+      detail: "WORKER_SECRET is missing. Add it in Vercel environment variables before using scheduled workers.",
+      action: "Open production docs",
+      href: "/docs/production",
+    })
+  }
+
+  if (!warnings.length) {
+    warnings.push({
+      title: "No active warnings",
+      severity: "info",
+      detail: "Queue, failed jobs and critical admin checks look clean right now.",
+      action: "Open diagnostics",
+      href: "/dashboard/admin/diagnostics",
+    })
+  }
+
+  return warnings
 }
 
 export async function getRecentAnalyses() {
@@ -82,15 +229,14 @@ export async function getAdminHealthChecks() {
   }
 
   checks.push({ name: "Admin emails", ok: Boolean(process.env.ADMIN_EMAILS), detail: process.env.ADMIN_EMAILS ? "Configured" : "Missing ADMIN_EMAILS" })
-  checks.push({ name: "Etherscan", ok: Boolean(process.env.ETHERSCAN_API_KEY), detail: process.env.ETHERSCAN_API_KEY ? "Configured" : "Missing ETHERSCAN_API_KEY" })
-  checks.push({ name: "Alchemy", ok: Boolean(process.env.ALCHEMY_API_KEY), detail: process.env.ALCHEMY_API_KEY ? "Configured" : "Missing ALCHEMY_API_KEY" })
-  checks.push({ name: "Base treasury", ok: Boolean(process.env.TRIPROOF_TREASURY_BASE_ADDRESS), detail: process.env.TRIPROOF_TREASURY_BASE_ADDRESS ? "Configured" : "Missing Base treasury" })
-  checks.push({ name: "Polygon treasury", ok: Boolean(process.env.TRIPROOF_TREASURY_POLYGON_ADDRESS), detail: process.env.TRIPROOF_TREASURY_POLYGON_ADDRESS ? "Configured" : "Missing Polygon treasury" })
+  checks.push({ name: "Helius", ok: Boolean(process.env.HELIUS_API_KEY || process.env.SOLANA_RPC_URL), detail: process.env.HELIUS_API_KEY || process.env.SOLANA_RPC_URL ? "Configured" : "Missing Solana provider" })
+  checks.push({ name: "Treasury Solana", ok: Boolean(process.env.TRIPROOF_TREASURY_SOLANA_ADDRESS), detail: process.env.TRIPROOF_TREASURY_SOLANA_ADDRESS ? "Configured" : "Missing Solana treasury" })
   checks.push({ name: "Session secret", ok: Boolean(process.env.NEXTAUTH_SECRET), detail: process.env.NEXTAUTH_SECRET ? "Configured" : "Missing NEXTAUTH_SECRET" })
-  checks.push({ name: "Worker secret", ok: Boolean(process.env.CRON_SECRET || process.env.ANALYSIS_WORKER_SECRET), detail: process.env.CRON_SECRET || process.env.ANALYSIS_WORKER_SECRET ? "Configured" : "Missing worker secret" })
+  checks.push({ name: "Worker secret", ok: Boolean(process.env.WORKER_SECRET), detail: process.env.WORKER_SECRET ? "Configured" : "Missing WORKER_SECRET" })
 
-  const failedBatches = await safeCount(`SELECT COUNT(*)::int AS count FROM "AnalysisBatch" WHERE "status" = 'failed'`)
-  checks.push({ name: "Failed batches", ok: failedBatches === 0, detail: `${failedBatches} failed batch jobs` })
+  const queue = await getAdminQueueBreakdown()
+  checks.push({ name: "Active queue", ok: queue.pending + queue.processing === 0, detail: `${queue.pending + queue.processing} active batch jobs` })
+  checks.push({ name: "Failed batches", ok: queue.failed === 0, detail: `${queue.failed} failed batch jobs` })
 
   return checks
 }
