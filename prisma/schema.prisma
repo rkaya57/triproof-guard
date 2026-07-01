@@ -73,6 +73,25 @@ enum WebhookDeliveryStatus {
   failed
 }
 
+enum HumanityChallengeLevel {
+  BASIC
+  STANDARD
+  STRICT
+}
+
+enum HumanitySessionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
+enum HumanityDecision {
+  APPROVED
+  MANUAL_REVIEW
+  REJECTED
+}
+
 model User {
   id               String            @id @default(cuid())
   name             String
@@ -311,4 +330,71 @@ model Cluster {
 
   @@index([analysisId])
   @@unique([analysisId, clusterLabel])
+}
+
+model HumanityCampaign {
+  id                   String                 @id @default(cuid())
+  projectId            String?
+  name                 String
+  slug                 String                 @unique
+  description          String?
+  humanityGateEnabled  Boolean                @default(true)
+  challengeLevel       HumanityChallengeLevel @default(STANDARD)
+  proofExpiresInDays   Int                    @default(30)
+  maxAttemptsPerWallet Int                    @default(3)
+  sessions             HumanityChallengeSession[]
+  verifications        HumanityVerification[]
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  @@index([projectId])
+}
+
+model HumanityChallengeSession {
+  id                String                @id @default(cuid())
+  campaignId        String
+  campaign          HumanityCampaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  walletAddress     String
+  walletChain       String?
+  nonce             String                @unique
+  challengeSequence Json
+  status            HumanitySessionStatus @default(PENDING)
+  expiresAt         DateTime
+  verification      HumanityVerification?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@index([campaignId, walletAddress])
+  @@index([status])
+}
+
+model HumanityVerification {
+  id                    String                    @id @default(cuid())
+  campaignId            String
+  campaign              HumanityCampaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  sessionId             String                    @unique
+  session               HumanityChallengeSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  walletAddress         String
+  walletChain           String?
+  nullifierHash         String                    @unique
+  humanSessionScore     Float
+  facePresenceScore     Float?
+  headPoseScore         Float?
+  eyeBlinkScore         Float?
+  handGestureScore      Float?
+  motionTimingScore     Float?
+  frameConsistencyScore Float?
+  replayRiskScore       Float?
+  injectionRiskScore    Float?
+  decision              HumanityDecision
+  reasonCodes           Json
+  signedMessage         String?
+  signature             String?
+  signatureVerified     Boolean                   @default(false)
+  proofExpiresAt        DateTime
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+
+  @@index([campaignId, walletAddress])
+  @@index([decision])
 }
