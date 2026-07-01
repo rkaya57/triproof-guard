@@ -60,7 +60,7 @@
   --secondary: #111827;
   --secondary-foreground: #f8fafc;
   --muted: #111827;
-  --muted-foreground: #94a3b8;
+  --muted-foreground: #cbd5e1;
   --accent: #1e293b;
   --accent-foreground: #f8fafc;
   --destructive: #ef4444;
@@ -101,7 +101,7 @@
   --secondary: #111827;
   --secondary-foreground: #f8fafc;
   --muted: #111827;
-  --muted-foreground: #94a3b8;
+  --muted-foreground: #cbd5e1;
   --accent: #1e293b;
   --accent-foreground: #f8fafc;
   --destructive: #ef4444;
@@ -209,11 +209,9 @@
 .security-grid {
   position: relative;
   background-image:
-    linear-gradient(color-mix(in oklab, var(--guard-cyan), transparent 90%) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in oklab, var(--guard-cyan), transparent 90%) 1px, transparent 1px);
+    linear-gradient(color-mix(in oklab, var(--guard-cyan), transparent 88%) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--guard-cyan), transparent 88%) 1px, transparent 1px);
   background-size: 44px 44px;
-  -webkit-mask-image: radial-gradient(120% 90% at 50% 0%, #000 35%, transparent 92%);
-  mask-image: radial-gradient(120% 90% at 50% 0%, #000 35%, transparent 92%);
   animation: grid-drift 14s linear infinite;
 }
 
@@ -221,25 +219,31 @@
   content: "";
   position: absolute;
   inset: 0;
+  z-index: 0;
   pointer-events: none;
   background: radial-gradient(
     70% 60% at 50% -10%,
-    color-mix(in oklab, var(--guard-cyan), transparent 84%),
+    color-mix(in oklab, var(--guard-cyan), transparent 88%),
     transparent 60%
   );
+}
+
+.security-grid > :not([aria-hidden]) {
+  position: relative;
+  z-index: 1;
 }
 
 .glass-panel {
   position: relative;
   background:
-    linear-gradient(135deg, color-mix(in oklab, var(--card), var(--guard-cyan) 7%), var(--card)),
+    linear-gradient(135deg, color-mix(in oklab, var(--card), var(--guard-cyan) 10%), color-mix(in oklab, var(--card), #000 10%)),
     var(--card);
-  border: 1px solid color-mix(in oklab, var(--border), var(--guard-cyan) 20%);
+  border: 1px solid color-mix(in oklab, var(--border), var(--guard-cyan) 32%);
   border-radius: var(--radius-lg);
   box-shadow:
-    0 18px 64px color-mix(in oklab, #000, transparent 42%),
-    inset 0 1px 0 color-mix(in oklab, #fff, transparent 92%),
-    inset 0 0 0 1px color-mix(in oklab, var(--guard-cyan), transparent 94%);
+    0 18px 64px color-mix(in oklab, #000, transparent 38%),
+    inset 0 1px 0 color-mix(in oklab, #fff, transparent 88%),
+    inset 0 0 0 1px color-mix(in oklab, var(--guard-cyan), transparent 90%);
   backdrop-filter: blur(10px) saturate(135%);
   transition:
     transform 0.25s ease,
@@ -248,37 +252,39 @@
 }
 
 .glass-panel:hover {
-  border-color: color-mix(in oklab, var(--guard-cyan), transparent 55%);
+  border-color: color-mix(in oklab, var(--guard-cyan), transparent 45%);
   box-shadow:
-    0 24px 80px color-mix(in oklab, #000, transparent 35%),
-    0 0 0 1px color-mix(in oklab, var(--guard-cyan), transparent 70%),
-    0 0 36px color-mix(in oklab, var(--guard-cyan), transparent 80%);
+    0 24px 80px color-mix(in oklab, #000, transparent 32%),
+    0 0 0 1px color-mix(in oklab, var(--guard-cyan), transparent 62%),
+    0 0 36px color-mix(in oklab, var(--guard-cyan), transparent 76%);
 }
 
 /* Gradient cyber heading text */
 .text-gradient {
   background: linear-gradient(
     100deg,
-    var(--foreground) 0%,
-    color-mix(in oklab, var(--guard-cyan), #fff 10%) 45%,
-    var(--guard-purple) 100%
+    #ffffff 0%,
+    #e0f7ff 28%,
+    #8ee7ff 55%,
+    #c4b5fd 100%
   );
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  filter: drop-shadow(0 0 12px color-mix(in oklab, var(--guard-cyan), transparent 84%));
 }
 
 /* Neon glow for primary CTAs / accents */
 .glow-primary {
   box-shadow:
-    0 0 0 1px color-mix(in oklab, var(--guard-cyan), transparent 60%),
-    0 8px 30px color-mix(in oklab, var(--guard-cyan), transparent 68%);
+    0 0 0 1px color-mix(in oklab, var(--guard-cyan), transparent 55%),
+    0 8px 30px color-mix(in oklab, var(--guard-cyan), transparent 62%);
 }
 
 .glow-primary:hover {
   box-shadow:
-    0 0 0 1px color-mix(in oklab, var(--guard-cyan), transparent 35%),
-    0 10px 40px color-mix(in oklab, var(--guard-cyan), transparent 52%);
+    0 0 0 1px color-mix(in oklab, var(--guard-cyan), transparent 30%),
+    0 10px 40px color-mix(in oklab, var(--guard-cyan), transparent 48%);
 }
 
 /* HUD-style status pill */
@@ -287,13 +293,14 @@
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  border: 1px solid color-mix(in oklab, var(--guard-cyan), transparent 60%);
-  background: color-mix(in oklab, var(--guard-cyan), transparent 90%);
-  color: color-mix(in oklab, var(--guard-cyan), #fff 22%);
+  border: 1px solid color-mix(in oklab, var(--guard-cyan), transparent 50%);
+  background: color-mix(in oklab, var(--guard-cyan), transparent 86%);
+  color: #bae6fd;
   border-radius: 999px;
   padding: 0.3rem 0.75rem;
   font-family: var(--font-mono);
   font-size: 0.72rem;
+  font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -378,7 +385,7 @@
   position: absolute;
   border-radius: 9999px;
   filter: blur(100px);
-  opacity: 0.22;
+  opacity: 0.18;
   pointer-events: none;
   animation: orb-drift 16s ease-in-out infinite;
 }
