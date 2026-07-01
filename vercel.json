@@ -1,13 +1,8 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "path": "/api/worker/analysis-queue",
-      "schedule": "0,5,10,15,20,25,30,35,40,45,50,55 * * * *"
-    },
-    {
-      "path": "/api/worker/webhook-retry",
-      "schedule": "0,15,30,45 * * * *"
+      "path": "/api/analysis/process-next-batch",
+      "schedule": "0 3 * * *"
     }
   ]
 }
