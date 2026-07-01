@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 
-import { processNextAnalysisBatch } from "@/lib/analysis/batch-worker"
+import { processAnalysisQueue } from "@/lib/analysis/queue-optimizer"
 
 export const runtime = "nodejs"
 
@@ -8,6 +8,7 @@ function isAuthorized(request: Request) {
   const configuredSecret =
     process.env.ANALYSIS_WORKER_SECRET?.trim() ||
     process.env["CRON" + "_SECRET"]?.trim() ||
+    process.env.WORKER_SECRET?.trim() ||
     ""
 
   if (!configuredSecret) {
@@ -22,20 +23,24 @@ function isAuthorized(request: Request) {
   return bearer === configuredSecret || querySecret === configuredSecret
 }
 
-export async function POST(request: Request) {
+async function runQueue(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const result = await processNextAnalysisBatch()
-  return NextResponse.json(result)
+  const result = await processAnalysisQueue({
+    maxBatches: 8,
+    timeBudgetMs: 45000,
+    recoverStale: true,
+  })
+
+  return NextResponse.json({ ok: true, source: "legacy-cron", ...result })
+}
+
+export async function POST(request: Request) {
+  return runQueue(request)
 }
 
 export async function GET(request: Request) {
-  if (!isAuthorized(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const result = await processNextAnalysisBatch()
-  return NextResponse.json(result)
+  return runQueue(request)
 }
