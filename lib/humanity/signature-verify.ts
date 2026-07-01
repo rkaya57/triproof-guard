@@ -1,5 +1,5 @@
 import bs58 from "bs58"
-import { verify as naclVerify } from "tweetnacl"
+import nacl from "tweetnacl"
 import { verifyMessage } from "ethers"
 
 function hexToBytes(value: string) {
@@ -63,7 +63,7 @@ export async function verifyWalletSignature({
       const publicKey = bs58.decode(walletAddress)
       const sig = decodeSolanaSignature(cleanSignature)
       const encodedMessage = new TextEncoder().encode(message)
-      const ok = naclVerify.detached(encodedMessage, sig, publicKey)
+      const ok = nacl.sign.detached.verify(encodedMessage, sig, publicKey)
       return {
         signatureVerified: ok,
         signatureCaptured: true,
