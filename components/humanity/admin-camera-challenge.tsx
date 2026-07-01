@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react"
 import { Camera, CheckCircle2, Loader2, RefreshCw, Signature, Video, XCircle } from "lucide-react"
 
-import { buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { buttonVariants } from "@/components/ui/button"
+import { createMediaPipeFaceSampler, type MediaPipeFaceSampler } from "@/lib/humanity/browser-mediapipe"
 import { requestBrowserWalletSignature } from "@/lib/humanity/browser-wallet-signature"
 
 type Session = {
@@ -28,6 +29,9 @@ type FrameSample = {
   brightness: number
   sharpness: number
   motion: number
+  facePresent?: boolean
+  faceConfidence?: number
+  landmarkCount?: number
 }
 
 type Phase = "idle" | "starting" | "camera" | "running" | "submitting" | "result" | "signing" | "joined" | "error"
@@ -48,8 +52,9 @@ function decisionClass(decision?: string) {
 }
 
 function average(values: number[], fallback = 0) {
-  if (!values.length) return fallback
-  return values.reduce((sum, value) => sum + value, 0) / values.length
+  const clean = values.filter((value) => Number.isFinite(value))
+  if (!clean.length) return fallback
+  return clean.reduce((sum, value) => sum + value, 0) / clean.length
 }
 
 export function AdminCameraChallenge({
@@ -64,6 +69,7 @@ export function AdminCameraChallenge({
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const mediaPipeRef = useRef<MediaPipeFaceSampler | null>(null)
   const previousPixelsRef = useRef<Uint8ClampedArray | null>(null)
   const samplesRef = useRef<FrameSample[]>([])
   const timingsRef = useRef<number[]>([])
@@ -74,9 +80,12 @@ export function AdminCameraChallenge({
   const [error, setError] = useState<string | null>(null)
   const [stepIndex, setStepIndex] = useState(0)
   const [progress, setProgress] = useState(0)
+  const [detectorLabel, setDetectorLabel] = useState("Canvas fallback")
   const [signatureStatus, setSignatureStatus] = useState<string | null>(null)
 
   function stopCamera() {
+    mediaPipeRef.current?.dispose()
+    mediaPipeRef.current = null
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
   }
@@ -90,6 +99,7 @@ export function AdminCameraChallenge({
     const canvas = canvasRef.current
     if (!video || !canvas || video.videoWidth === 0 || video.videoHeight === 0) return null
 
+    const mediaPipeSample = mediaPipeRef.current?.sample()
     const width = 96
     const height = 72
     canvas.width = width
@@ -117,10 +127,14 @@ export function AdminCameraChallenge({
 
     previousPixelsRef.current = new Uint8ClampedArray(data)
     const pixelCount = data.length / 4
+    const canvasMotion = previous ? motionSum / pixelCount : 0
     return {
       brightness: brightnessSum / pixelCount,
       sharpness: edgeSum / pixelCount,
-      motion: previous ? motionSum / pixelCount : 0,
+      motion: Math.max(canvasMotion, mediaPipeSample?.centerMotion ?? 0),
+      facePresent: mediaPipeSample?.facePresent,
+      faceConfidence: mediaPipeSample?.confidence,
+      landmarkCount: mediaPipeSample?.landmarkCount,
     }
   }
 
@@ -131,6 +145,7 @@ export function AdminCameraChallenge({
     setSignatureStatus(null)
     setStepIndex(0)
     setProgress(0)
+    setDetectorLabel("Canvas fallback")
     samplesRef.current = []
     timingsRef.current = []
     previousPixelsRef.current = null
@@ -159,6 +174,13 @@ export function AdminCameraChallenge({
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         await videoRef.current.play().catch(() => undefined)
+        try {
+          mediaPipeRef.current = await createMediaPipeFaceSampler(videoRef.current)
+          setDetectorLabel("MediaPipe Face Mesh")
+        } catch (mpError) {
+          console.warn("[HumanityGate] MediaPipe unavailable, using canvas fallback", mpError)
+          setDetectorLabel("Canvas fallback")
+        }
       }
       void runChallenge()
     } catch (err) {
@@ -195,16 +217,19 @@ export function AdminCameraChallenge({
     const brightnessAvg = average(samples.map((sample) => sample.brightness), 80)
     const sharpnessAvg = average(samples.map((sample) => sample.sharpness), 6)
     const motionAvg = average(samples.map((sample) => sample.motion), 8)
+    const faceConfidenceAvg = average(samples.map((sample) => sample.faceConfidence ?? Number.NaN), Number.NaN)
+    const faceSeenCount = samples.filter((sample) => sample.facePresent).length
     const brightnessOk = brightnessAvg > 35 && brightnessAvg < 235
+    const mediaPipeActive = Number.isFinite(faceConfidenceAvg) && faceSeenCount > 3
 
     const scores = {
-      facePresenceScore: clamp(brightnessOk ? 78 + sharpnessAvg * 3 : 42),
-      headPoseScore: clamp(62 + motionAvg * 5),
-      eyeBlinkScore: clamp(68 + motionAvg * 2),
+      facePresenceScore: clamp(mediaPipeActive ? faceConfidenceAvg : brightnessOk ? 78 + sharpnessAvg * 3 : 42),
+      headPoseScore: clamp(mediaPipeActive ? 70 + Math.min(24, motionAvg * 2.4) : 62 + motionAvg * 5),
+      eyeBlinkScore: clamp(mediaPipeActive ? 70 + Math.min(20, motionAvg * 1.8) : 68 + motionAvg * 2),
       handGestureScore: clamp(session.challengeSequence.includes("RAISE_HAND") ? 64 + motionAvg * 4 : 78),
       motionTimingScore: clamp(72 + Math.min(18, motionAvg * 2)),
       frameConsistencyScore: clamp(86 - Math.abs(110 - brightnessAvg) * 0.18),
-      replayRiskScore: clamp(sharpnessAvg < 2 ? 72 : 22 - motionAvg),
+      replayRiskScore: clamp(mediaPipeActive ? Math.max(8, 34 - motionAvg) : sharpnessAvg < 2 ? 72 : 22 - motionAvg),
       injectionRiskScore: clamp(samples.length < 20 ? 68 : 12),
     }
 
@@ -218,11 +243,13 @@ export function AdminCameraChallenge({
           walletChain,
           scores,
           clientMetadata: {
-            detector: "admin_camera_canvas",
+            detector: mediaPipeActive ? "mediapipe_face_mesh" : "admin_camera_canvas",
             stepTimingsMs: timingsRef.current,
             sampleCount: samples.length,
+            faceSeenCount,
             avgBrightness: Math.round(brightnessAvg),
             avgMotion: Math.round(motionAvg),
+            avgFaceConfidence: mediaPipeActive ? Math.round(faceConfidenceAvg) : null,
             rawVideoUploaded: false,
           },
         }),
@@ -243,12 +270,7 @@ export function AdminCameraChallenge({
     setSignatureStatus(null)
     setError(null)
     try {
-      const walletSignature = await requestBrowserWalletSignature({
-        walletChain,
-        walletAddress,
-        message: result.signMessage,
-      })
-
+      const walletSignature = await requestBrowserWalletSignature({ walletChain, walletAddress, message: result.signMessage })
       const res = await fetch("/api/humanity/challenge/sign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -282,6 +304,7 @@ export function AdminCameraChallenge({
     setError(null)
     setStepIndex(0)
     setProgress(0)
+    setDetectorLabel("Canvas fallback")
     setSignatureStatus(null)
     samplesRef.current = []
     timingsRef.current = []
@@ -294,9 +317,12 @@ export function AdminCameraChallenge({
     <div className="glass-panel premium-card animated-border rounded-3xl p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <Badge variant="secondary" className="border-primary/30 bg-primary/10 text-cyan-100">Live camera mode</Badge>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="secondary" className="border-primary/30 bg-primary/10 text-cyan-100">Live camera mode</Badge>
+            <Badge variant="outline" className="border-purple-400/30 bg-purple-400/10 text-purple-100">{detectorLabel}</Badge>
+          </div>
           <h2 className="mt-3 text-2xl font-semibold text-white">Admin Camera Challenge</h2>
-          <p className="mt-1 text-sm text-slate-300">Camera stays local. Only derived numeric signals are submitted.</p>
+          <p className="mt-1 text-sm text-slate-300">Camera stays local. MediaPipe/canvas derived numeric signals are submitted.</p>
         </div>
         <Video className="text-primary" />
       </div>
@@ -312,9 +338,7 @@ export function AdminCameraChallenge({
               <span className="text-slate-300">{phase === "running" ? `Perform: ${shortLabel(currentStep ?? "step")}` : phase === "submitting" ? "Submitting derived scores" : "Camera ready"}</span>
               <span className="font-mono text-cyan-200">{session ? `${stepIndex + 1}/${session.challengeSequence.length}` : "0/0"}</span>
             </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800">
-              <div className="h-full bg-primary transition-all" style={{ width: `${Math.round(progress * 100)}%` }} />
-            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800"><div className="h-full bg-primary transition-all" style={{ width: `${Math.round(progress * 100)}%` }} /></div>
           </div>
         </div>
       )}
