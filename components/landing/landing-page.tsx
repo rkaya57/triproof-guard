@@ -43,7 +43,7 @@ const navLinks = [
 
 const heroStats = [
   ["100", "free wallet trial"],
-  ["6", "EVM chains ready"],
+  ["Solana", "analysis + checkout"],
   ["USDC", "simple revenue model"],
 ]
 
@@ -54,17 +54,17 @@ const consoleStats = [
 ]
 
 const riskRows = [
-  ["0x71b...a91", "96", "Critical", "Reject"],
-  ["0x38f...42c", "82", "High", "Review"],
-  ["0x9dd...117", "54", "Medium", "Review"],
-  ["0x4aa...8e2", "27", "Low", "Approve"],
+  ["7xC...fxG", "96", "Critical", "Reject"],
+  ["DNf...jwM", "72", "High", "Reject"],
+  ["GxD...XSq", "44", "Medium", "Review"],
+  ["8pY...F4w", "18", "Low", "Approve"],
 ]
 
 const painPoints = [
   {
     icon: ShieldAlert,
     title: "Reward pools leak to Sybil farms",
-    text: "A long wallet list does not mean real community growth. Farmers can inflate campaigns before distribution.",
+    text: "A long wallet list does not mean real community growth. Coordinated wallets can inflate campaigns before distribution.",
   },
   {
     icon: Network,
@@ -74,40 +74,41 @@ const painPoints = [
   {
     icon: FileCheck2,
     title: "Teams need defensible reward decisions",
-    text: "Projects need clean lists, manual review queues and clear explanations before they send rewards.",
+    text: "Projects need clean lists, gray-zone queues and clear explanations before they send rewards.",
   },
 ]
 
 const workflow = [
   { icon: Upload, title: "Upload wallet CSV", text: "Import campaign participants from airdrops, quests, testnets or allowlists." },
-  { icon: Activity, title: "Enrich on-chain data", text: "Run real on-chain or hybrid analysis with provider evidence from supported EVM chains." },
+  { icon: Activity, title: "Enrich on-chain data", text: "Run real on-chain or hybrid analysis with provider evidence from supported chains." },
   { icon: Radar, title: "Detect clusters", text: "Surface suspicious groups, shared funding patterns and similar behavior." },
-  { icon: FileDown, title: "Export decision lists", text: "Download approved, manual review and rejected wallet outputs for the team." },
+  { icon: FileDown, title: "Export decision lists", text: "Download approved, gray-zone and rejected/not-eligible wallet outputs." },
 ]
 
 const features = [
   "Real on-chain enrichment",
+  "Solana wallet analysis",
   "Wallet risk score",
   "Funding source analysis",
   "Suspicious cluster detection",
-  "Behavior similarity signals",
-  "Approved / review / rejected lists",
+  "Behavior intelligence signals",
+  "Approved / gray-zone / rejected lists",
   "CSV and PDF reporting",
-  "Known entity review",
-  "Batch queue for large lists",
-  "USDC checkout flow",
+  "Policy presets",
+  "Solana USDC checkout",
 ]
 
 const useCases = [
   ["Airdrops", "Clean reward lists before token or USDC distribution."],
-  ["Testnets", "Filter farmers before points or whitelist allocation."],
+  ["Testnets", "Filter low-quality participants before points or whitelist allocation."],
   ["Galxe / Zealy quests", "Review wallet lists before community reward campaigns."],
 ]
 
 const plans = [
   ["Free Trial", "100 wallets", "Try the core report before payment", "/dashboard/new-analysis"],
-  ["Starter", "99 USDC", "Up to 1,000 wallet credits", "/checkout?plan=starter"],
-  ["Growth", "249 USDC", "Up to 10,000 wallet credits", "/checkout?plan=growth"],
+  ["Starter", "29 USDC", "Up to 1,000 wallet credits", "/checkout?plan=starter"],
+  ["Growth", "99 USDC", "Up to 10,000 wallet credits", "/checkout?plan=growth"],
+  ["Pro", "249 USDC", "Up to 50,000 wallet credits", "/checkout?plan=pro"],
 ]
 
 export function LandingPage() {
@@ -157,12 +158,10 @@ export function LandingPage() {
                 Tri-Proof Guard helps Web3 teams analyze campaign wallet lists, enrich addresses with real on-chain evidence, flag suspicious clusters and export cleaner reward decisions before airdrops, testnets and community payouts.
               </p>
             </div>
-
             <div className="flex flex-col gap-3 sm:flex-row">
               <Link href="/dashboard/new-analysis" className={`${buttonVariants({ size: "lg" })} glow-primary hover-lift`}>Start 100-wallet trial <ArrowRight data-icon="inline-end" /></Link>
               <Link href="/docs" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>Read docs <BookOpen data-icon="inline-end" /></Link>
             </div>
-
             <div className="grid max-w-2xl gap-3 sm:grid-cols-3">
               {heroStats.map(([value, label], index) => (
                 <div key={label} className="rounded-xl border border-primary/20 bg-background/45 px-4 py-3 backdrop-blur reveal-up" style={{ animationDelay: `${index * 0.08}s` }}>
@@ -175,58 +174,28 @@ export function LandingPage() {
 
           <div className="glass-panel premium-card animated-border data-scan relative min-h-[460px] overflow-hidden rounded-3xl p-5 reveal-up delay-200">
             <div className="mb-5 flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium">Campaign Risk Console</p>
-                <p className="text-xs text-muted-foreground">Base Airdrop Wallet Audit</p>
-              </div>
+              <div><p className="text-sm font-medium">Campaign Risk Console</p><p className="text-xs text-muted-foreground">Solana Airdrop Wallet Audit</p></div>
               <Badge variant="secondary" className="gap-2 border-primary/30 text-primary"><span className="pulse-dot" /> Live workflow</Badge>
             </div>
-
             <div className="grid gap-3 sm:grid-cols-3">
               {consoleStats.map(([value, label, detail], index) => (
                 <div key={label} className="premium-card hover-lift rounded-xl border border-border bg-background/60 p-4" style={{ animationDelay: `${index * 0.08}s` }}>
-                  <p className="text-gradient text-2xl font-semibold">{value}</p>
-                  <p className="text-sm text-foreground">{label}</p>
-                  <p className="text-xs text-muted-foreground">{detail}</p>
+                  <p className="text-gradient text-2xl font-semibold">{value}</p><p className="text-sm text-foreground">{label}</p><p className="text-xs text-muted-foreground">{detail}</p>
                 </div>
               ))}
             </div>
-
-            <div className="mt-5 grid gap-4 lg:grid-cols-[0.82fr_1.18fr]">
-              <div className="rounded-xl border border-border bg-background/50 p-4">
-                <div className="mb-4 flex items-center justify-between text-sm">
-                  <span>Risk distribution</span>
-                  <span className="text-muted-foreground">On-chain evidence</span>
-                </div>
-                <div className="flex h-48 items-end gap-3">
-                  {[
-                    ["Low", "128px", "var(--guard-green)", "0s"],
-                    ["Medium", "88px", "var(--guard-yellow)", "0.3s"],
-                    ["High", "64px", "var(--guard-orange)", "0.6s"],
-                    ["Critical", "42px", "var(--guard-red)", "0.9s"],
-                  ].map(([label, height, color, delay]) => (
-                    <div key={label} className="flex flex-1 flex-col items-center gap-2">
-                      <div className="bar-pulse w-full rounded-t-md" style={{ height, backgroundColor: color, boxShadow: `0 0 18px ${color}`, animationDelay: delay }} />
-                      <span className="text-[11px] text-muted-foreground">{label}</span>
-                    </div>
-                  ))}
-                </div>
+            <div className="mt-5 overflow-hidden rounded-xl border border-border bg-background/50">
+              <div className="grid grid-cols-[1fr_72px_86px_120px] border-b border-border bg-primary/5 px-4 py-3 text-[11px] uppercase tracking-wide text-muted-foreground">
+                <span>Wallet</span><span>Score</span><span>Risk</span><span>Decision</span>
               </div>
-
-              <div className="overflow-hidden rounded-xl border border-border bg-background/50">
-                <div className="grid grid-cols-[1fr_72px_86px_80px] border-b border-border bg-primary/5 px-4 py-3 text-[11px] uppercase tracking-wide text-muted-foreground">
-                  <span>Wallet</span><span>Score</span><span>Risk</span><span>Action</span>
+              {riskRows.map(([wallet, score, risk, action], index) => (
+                <div key={wallet} className="grid grid-cols-[1fr_72px_86px_120px] border-b border-border px-4 py-3 text-xs transition-colors last:border-b-0 hover:bg-primary/5" style={{ animationDelay: `${index * 0.08}s` }}>
+                  <span className="font-mono text-muted-foreground">{wallet}</span><span>{score}</span><span>{risk}</span><span className="text-primary">{action}</span>
                 </div>
-                {riskRows.map(([wallet, score, risk, action], index) => (
-                  <div key={wallet} className="grid grid-cols-[1fr_72px_86px_80px] border-b border-border px-4 py-3 text-xs transition-colors last:border-b-0 hover:bg-primary/5" style={{ animationDelay: `${index * 0.08}s` }}>
-                    <span className="font-mono text-muted-foreground">{wallet}</span><span>{score}</span><span>{risk}</span><span className="text-primary">{action}</span>
-                  </div>
-                ))}
-              </div>
+              ))}
             </div>
-
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              {[[LockKeyhole, "No token required"], [CircleDollarSign, "USDC checkout"], [Layers3, "Batch queue ready"]].map(([Icon, label]) => (
+              {[[LockKeyhole, "No token required"], [CircleDollarSign, "Solana USDC"], [Layers3, "Batch queue ready"]].map(([Icon, label]) => (
                 <div key={label as string} className="flex items-center gap-2 rounded-xl border border-border bg-background/45 px-3 py-2 text-xs text-muted-foreground">
                   <Icon className="size-4 text-primary" /><span>{label as string}</span>
                 </div>
@@ -247,10 +216,7 @@ export function LandingPage() {
       <section id="workflow" className="border-y border-border bg-muted/20">
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
           <div className="mb-10 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
-              <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Operator workflow</Badge>
-              <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">From raw wallet CSV to cleaner reward list.</h2>
-            </div>
+            <div><Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Operator workflow</Badge><h2 className="text-gradient text-3xl font-semibold sm:text-4xl">From raw wallet CSV to cleaner reward list.</h2></div>
             <p className="max-w-xl text-muted-foreground">The product is decision support, not identity certification. Your team keeps the final decision.</p>
           </div>
           <div className="grid gap-4 md:grid-cols-4">
@@ -269,7 +235,7 @@ export function LandingPage() {
           <div>
             <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Guard engine</Badge>
             <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Built for campaign teams, not generic analytics dashboards.</h2>
-            <p className="mt-4 leading-7 text-muted-foreground">Tri-Proof Guard focuses on one job: help Web3 projects review wallet lists before rewards go out. It returns signals, clusters and suggested actions without making impossible “100% bot detection” claims.</p>
+            <p className="mt-4 leading-7 text-muted-foreground">Tri-Proof Guard focuses on one job: help Web3 projects review wallet lists before rewards go out. It returns signals, clusters and suggested actions without making impossible “100% detection” claims.</p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link href="/docs" className={`${buttonVariants({ variant: "outline" })} hover-lift`}><BookOpen data-icon="inline-start" /> How it works</Link>
               <Link href="/contact" className={`${buttonVariants({ variant: "outline" })} hover-lift`}><Mail data-icon="inline-start" /> Contact us</Link>
@@ -297,7 +263,7 @@ export function LandingPage() {
           <div><Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Simple pricing</Badge><h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Start free. Upgrade with USDC when the list gets bigger.</h2></div>
           <Link href="/pricing" className={`${buttonVariants({ variant: "outline" })} hover-lift w-fit`}>Full pricing <ArrowRight data-icon="inline-end" /></Link>
         </div>
-        <div className="grid gap-5 md:grid-cols-3">
+        <div className="grid gap-5 md:grid-cols-4">
           {plans.map(([name, price, detail, href]) => (<Card key={name} className="glass-panel premium-card hover-lift"><CardHeader><CardTitle>{name}</CardTitle><CardDescription>{detail}</CardDescription></CardHeader><CardContent className="flex items-center justify-between gap-4"><span className="text-gradient text-xl font-semibold">{price}</span><Link href={href} className={`${buttonVariants({ variant: name === "Free Trial" ? "default" : "outline" })} hover-lift`}>Open</Link></CardContent></Card>))}
         </div>
       </section>
