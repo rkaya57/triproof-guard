@@ -36,6 +36,14 @@ export type AnalysisMode = "csv_only" | "onchain" | "hybrid"
 
 export type RiskPolicy = "conservative" | "balanced" | "strict"
 
+export type FeedbackLabel =
+  | "correct_decision"
+  | "false_positive"
+  | "false_negative"
+  | "confirmed_risk"
+  | "trusted_user"
+  | "needs_more_data"
+
 export type EnrichmentStatus =
   | "pending"
   | "processing"
@@ -44,6 +52,14 @@ export type EnrichmentStatus =
   | "skipped"
 
 export type PolicyAction = "approve" | "manual_review" | "reject" | null
+
+export type TeamReviewState = {
+  finalStatus: WalletStatus
+  feedbackLabel: FeedbackLabel | null
+  notes: string | null
+  reviewerName: string | null
+  updatedAt: string
+}
 
 export type ParsedWallet = {
   walletAddress: string
@@ -132,6 +148,7 @@ export type WalletRiskResult = {
   customerLabel?: string | null
   enrichmentProvider?: string | null
   enrichmentStatus?: EnrichmentStatus | null
+  teamReview?: TeamReviewState | null
 }
 
 export type EnrichmentMeta = {
@@ -154,6 +171,24 @@ export type ClusterResult = {
   suggestedAction: SuggestedAction
   reasons: string[]
   walletAddresses: string[]
+}
+
+export type FeedbackSummary = {
+  totalFeedback: number
+  correctDecision: number
+  falsePositive: number
+  falseNegative: number
+  confirmedRisk: number
+  trustedUser: number
+  needsMoreData: number
+}
+
+export type TeamReviewSummary = {
+  reviewedWallets: number
+  pendingReview: number
+  approvedByTeam: number
+  grayZoneByTeam: number
+  rejectedByTeam: number
 }
 
 export type AnalysisResult = {
@@ -183,6 +218,8 @@ export type AnalysisDetail = {
   analysisMode?: AnalysisMode | null
   riskPolicy?: RiskPolicy | null
   enrichment?: EnrichmentMeta | null
+  feedbackSummary?: FeedbackSummary | null
+  teamReviewSummary?: TeamReviewSummary | null
   project: {
     id: string
     name: string
