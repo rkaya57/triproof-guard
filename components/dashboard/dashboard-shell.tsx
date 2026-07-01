@@ -7,6 +7,7 @@ import {
   BarChart3,
   FileText,
   FilePlus2,
+  HeartPulse,
   Home,
   LogOut,
   Settings,
@@ -28,7 +29,8 @@ const navItems = [
 ]
 
 const adminNavItems = [
-  { href: "/dashboard/admin/diagnostics", label: "Admin Diagnostics", icon: ShieldCheck },
+  { href: "/dashboard/admin", label: "Admin Center", icon: ShieldCheck },
+  { href: "/dashboard/admin/diagnostics", label: "Diagnostics", icon: HeartPulse },
 ]
 
 export function DashboardShell({
