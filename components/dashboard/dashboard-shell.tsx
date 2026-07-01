@@ -10,6 +10,7 @@ import {
   HeartPulse,
   Home,
   LogOut,
+  ScanFace,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -30,6 +31,7 @@ const navItems = [
 
 const adminNavItems = [
   { href: "/dashboard/admin", label: "Admin Center", icon: ShieldCheck },
+  { href: "/dashboard/admin/humanity", label: "Humanity Gate", icon: ScanFace },
   { href: "/dashboard/admin/diagnostics", label: "Diagnostics", icon: HeartPulse },
 ]
 
