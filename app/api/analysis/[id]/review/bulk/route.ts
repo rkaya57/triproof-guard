@@ -32,6 +32,10 @@ function normalizeFeedback(value: unknown): FeedbackLabel | null {
   return feedbackLabels.includes(value as FeedbackLabel) ? (value as FeedbackLabel) : null
 }
 
+function reasonsSnapshot(value: unknown) {
+  return Array.isArray(value) ? value.map((reason) => String(reason)) : []
+}
+
 async function updateAnalysisCounts(tx: Prisma.TransactionClient, analysisId: string) {
   const [approvedCount, manualReviewCount, rejectedCount] = await Promise.all([
     tx.walletAnalysis.count({ where: { analysisId, status: "approved" } }),
@@ -149,7 +153,7 @@ export async function POST(
               finalStatus,
               riskScore: wallet.riskScore,
               riskLevel: wallet.riskLevel,
-              reasonsSnapshot: wallet.reasons,
+              reasonsSnapshot: reasonsSnapshot(wallet.reasons),
               notes,
               source,
             },
