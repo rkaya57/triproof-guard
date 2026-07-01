@@ -4,7 +4,11 @@ import type {
   ClusterResult,
   EnrichmentMeta,
   EnrichmentStatus,
+  FeedbackLabel,
+  RiskPolicy,
+  TeamReviewState,
   WalletRiskResult,
+  WalletStatus,
 } from "@/types"
 
 type DbWallet = {
@@ -35,6 +39,19 @@ type DbWallet = {
   isContract?: boolean | null
   enrichmentProvider?: string | null
   enrichmentStatus?: string | null
+}
+
+type DbTeamReview = {
+  walletAddress: string
+  finalStatus: string
+  feedbackLabel: string | null
+  notes: string | null
+  updatedAt: Date
+  reviewer?: { name?: string | null } | null
+}
+
+type DbFeedbackEvent = {
+  label: string
 }
 
 type DbCluster = {
@@ -76,13 +93,36 @@ type DbAnalysis = {
   }
   wallets: DbWallet[]
   clusters: DbCluster[]
+  teamReviews?: DbTeamReview[]
+  feedbackEvents?: DbFeedbackEvent[]
 }
 
 function reasonsToStrings(reasons: unknown) {
   return Array.isArray(reasons) ? reasons.map((reason) => String(reason)) : []
 }
 
+function riskPolicyFromNotes(notes: string | null | undefined): RiskPolicy {
+  const match = notes?.match(/^TRIPROOF_RISK_POLICY=(conservative|balanced|strict)$/m)
+  if (match?.[1] === "conservative" || match?.[1] === "strict") return match[1]
+  return "balanced"
+}
+
+function feedbackCount(events: DbFeedbackEvent[] | undefined, label: FeedbackLabel) {
+  return (events ?? []).filter((event) => event.label === label).length
+}
+
 export function serializeAnalysis(analysis: DbAnalysis): AnalysisDetail {
+  const reviewMap = new Map<string, TeamReviewState>()
+  ;(analysis.teamReviews ?? []).forEach((review) => {
+    reviewMap.set(review.walletAddress, {
+      finalStatus: review.finalStatus as WalletStatus,
+      feedbackLabel: review.feedbackLabel as FeedbackLabel | null,
+      notes: review.notes,
+      reviewerName: review.reviewer?.name ?? null,
+      updatedAt: review.updatedAt.toISOString(),
+    })
+  })
+
   const wallets: WalletRiskResult[] = analysis.wallets.map((wallet) => ({
     walletAddress: wallet.walletAddress,
     chain: wallet.chain,
@@ -114,6 +154,7 @@ export function serializeAnalysis(analysis: DbAnalysis): AnalysisDetail {
     isContract: wallet.isContract ?? null,
     enrichmentProvider: wallet.enrichmentProvider ?? null,
     enrichmentStatus: (wallet.enrichmentStatus ?? null) as EnrichmentStatus | null,
+    teamReview: reviewMap.get(wallet.walletAddress) ?? null,
   }))
 
   const clusters: ClusterResult[] = analysis.clusters.map((cluster) => ({
@@ -142,6 +183,9 @@ export function serializeAnalysis(analysis: DbAnalysis): AnalysisDetail {
       }
     : null
 
+  const reviewedWallets = analysis.teamReviews?.length ?? 0
+  const feedbackEvents = analysis.feedbackEvents ?? []
+
   return {
     id: analysis.id,
     status: analysis.status,
@@ -155,7 +199,24 @@ export function serializeAnalysis(analysis: DbAnalysis): AnalysisDetail {
     createdAt: analysis.createdAt.toISOString(),
     completedAt: analysis.completedAt?.toISOString() ?? null,
     analysisMode: (analysis.analysisMode ?? "csv_only") as AnalysisMode,
+    riskPolicy: riskPolicyFromNotes(analysis.project.notes),
     enrichment,
+    feedbackSummary: {
+      totalFeedback: feedbackEvents.length,
+      correctDecision: feedbackCount(feedbackEvents, "correct_decision"),
+      falsePositive: feedbackCount(feedbackEvents, "false_positive"),
+      falseNegative: feedbackCount(feedbackEvents, "false_negative"),
+      confirmedRisk: feedbackCount(feedbackEvents, "confirmed_risk"),
+      trustedUser: feedbackCount(feedbackEvents, "trusted_user"),
+      needsMoreData: feedbackCount(feedbackEvents, "needs_more_data"),
+    },
+    teamReviewSummary: {
+      reviewedWallets,
+      pendingReview: Math.max(analysis.totalWallets - reviewedWallets, 0),
+      approvedByTeam: (analysis.teamReviews ?? []).filter((review) => review.finalStatus === "approved").length,
+      grayZoneByTeam: (analysis.teamReviews ?? []).filter((review) => review.finalStatus === "manual_review").length,
+      rejectedByTeam: (analysis.teamReviews ?? []).filter((review) => review.finalStatus === "rejected").length,
+    },
     project: analysis.project,
     wallets,
     clusters,
