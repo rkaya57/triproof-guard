@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import {
   createMediaPipeFaceSampler,
+  type FaceConnectionSets,
+  type LandmarkConnection,
   type MediaPipeFaceSample,
   type MediaPipeFaceSampler,
   type NormalizedLandmark,
@@ -54,35 +56,66 @@ type LiveSignal = {
   smileScore: number
   confidence: number
   motion: number
+  landmarkCount: number
+  handLandmarkCount: number
   faceLandmarks: NormalizedLandmark[]
   handLandmarks: NormalizedLandmark[]
+}
+
+type CanvasPoint = { x: number; y: number }
+
+type StrokeStyle = {
+  strokeStyle: string
+  shadowColor?: string
+  shadowBlur?: number
+  lineDash?: number[]
 }
 
 const STEP_HOLD_MS = 1200
 const STEP_TIMEOUT_MS = 15000
 const SAMPLE_MS = 90
 
-const FACE_CONNECTIONS: Array<[number, number]> = [
-  [10, 338], [338, 297], [297, 332], [332, 284], [284, 251], [251, 389], [389, 356], [356, 454],
-  [454, 323], [323, 361], [361, 288], [288, 397], [397, 365], [365, 379], [379, 378], [378, 400],
-  [400, 377], [377, 152], [152, 148], [148, 176], [176, 149], [149, 150], [150, 136], [136, 172],
-  [172, 58], [58, 132], [132, 93], [93, 234], [234, 127], [127, 162], [162, 21], [21, 54],
-  [54, 103], [103, 67], [67, 109], [109, 10],
-  [33, 7], [7, 163], [163, 144], [144, 145], [145, 153], [153, 154], [154, 155], [155, 133],
-  [362, 382], [382, 381], [381, 380], [380, 374], [374, 373], [373, 390], [390, 249], [249, 263],
-  [168, 6], [6, 197], [197, 195], [195, 5], [5, 4], [4, 1], [1, 19], [19, 94], [94, 2],
-  [61, 146], [146, 91], [91, 181], [181, 84], [84, 17], [17, 314], [314, 405], [405, 321], [321, 375], [375, 291],
-  [70, 63], [63, 105], [105, 66], [66, 107], [107, 336], [336, 296], [296, 334], [334, 293], [293, 300],
-  [234, 93], [93, 132], [132, 58], [58, 172], [172, 136], [136, 150], [150, 149],
-  [454, 323], [323, 361], [361, 288], [288, 397], [397, 365], [365, 379], [379, 378],
-  [127, 234], [356, 454], [152, 200], [200, 199], [199, 175], [175, 152],
+const EMPTY_FACE_CONNECTIONS: FaceConnectionSets = {
+  tessellation: [],
+  contours: [],
+  lips: [],
+  leftEye: [],
+  rightEye: [],
+  leftEyebrow: [],
+  rightEyebrow: [],
+  leftIris: [],
+  rightIris: [],
+}
+
+const FEATURE_POINT_INDICES = [
+  1, 4, 5, 6, 8, 9, 10, 13, 14, 17, 33, 46, 52, 55, 61, 63, 70, 78, 82, 87, 93, 105, 107, 133, 145, 152, 159, 168,
+  172, 197, 234, 263, 276, 282, 285, 291, 293, 300, 308, 312, 317, 323, 334, 336, 362, 374, 386, 454, 468, 469, 470,
+  471, 472, 473, 474, 475, 476, 477,
 ]
 
-const FEATURE_POINTS = [10, 151, 9, 8, 168, 6, 197, 195, 5, 4, 1, 19, 94, 2, 33, 133, 362, 263, 61, 291, 78, 308, 13, 14, 152, 234, 454]
-const HAND_CHAINS = [[0, 1, 2, 3, 4], [0, 5, 6, 7, 8], [0, 9, 10, 11, 12], [0, 13, 14, 15, 16], [0, 17, 18, 19, 20]]
+const HAND_CONNECTIONS: LandmarkConnection[] = [
+  { start: 0, end: 1 }, { start: 1, end: 2 }, { start: 2, end: 3 }, { start: 3, end: 4 },
+  { start: 0, end: 5 }, { start: 5, end: 6 }, { start: 6, end: 7 }, { start: 7, end: 8 },
+  { start: 5, end: 9 }, { start: 9, end: 10 }, { start: 10, end: 11 }, { start: 11, end: 12 },
+  { start: 9, end: 13 }, { start: 13, end: 14 }, { start: 14, end: 15 }, { start: 15, end: 16 },
+  { start: 13, end: 17 }, { start: 17, end: 18 }, { start: 18, end: 19 }, { start: 19, end: 20 },
+  { start: 0, end: 17 },
+]
 
 function emptySignal(): LiveSignal {
-  return { facePresent: false, handPresent: false, yaw: 0, blinkScore: 0, smileScore: 0, confidence: 0, motion: 0, faceLandmarks: [], handLandmarks: [] }
+  return {
+    facePresent: false,
+    handPresent: false,
+    yaw: 0,
+    blinkScore: 0,
+    smileScore: 0,
+    confidence: 0,
+    motion: 0,
+    landmarkCount: 0,
+    handLandmarkCount: 0,
+    faceLandmarks: [],
+    handLandmarks: [],
+  }
 }
 
 function clamp(value: number) {
@@ -120,31 +153,32 @@ function stepHelp(step?: string) {
 
 function validateStep(step: string | undefined, signal: LiveSignal, detectorReady: boolean) {
   if (!signal.facePresent && step !== "RAISE_HAND") return { ok: false, reason: "Yüz bulunamadı" }
-  if (detectorReady && step !== "RAISE_HAND" && signal.confidence < 35) return { ok: false, reason: "Yüz mesh güveni düşük" }
+  if (detectorReady && step !== "RAISE_HAND" && signal.landmarkCount < 468) return { ok: false, reason: "Tam yüz mesh bekleniyor" }
+  if (detectorReady && step !== "RAISE_HAND" && signal.confidence < 55) return { ok: false, reason: "Yüz mesh güveni düşük" }
 
   switch (step) {
     case "LOOK_CENTER": {
-      const ok = detectorReady ? Math.abs(signal.yaw) < 0.24 : signal.facePresent && signal.motion < 22
+      const ok = detectorReady ? Math.abs(signal.yaw) < 0.2 && signal.confidence >= 70 : signal.facePresent && signal.motion < 22
       return ok ? { ok, reason: "Yüz ortalandı" } : { ok, reason: "Yüzünü merkeze al" }
     }
     case "TURN_LEFT": {
-      const ok = detectorReady ? signal.yaw < -0.14 || signal.motion > 12 : signal.facePresent && signal.motion > 9
+      const ok = detectorReady ? signal.yaw < -0.16 || signal.motion > 12 : signal.facePresent && signal.motion > 9
       return ok ? { ok, reason: "Sol dönüş algılandı" } : { ok, reason: "Başını daha sola çevir" }
     }
     case "TURN_RIGHT": {
-      const ok = detectorReady ? signal.yaw > 0.14 || signal.motion > 12 : signal.facePresent && signal.motion > 9
+      const ok = detectorReady ? signal.yaw > 0.16 || signal.motion > 12 : signal.facePresent && signal.motion > 9
       return ok ? { ok, reason: "Sağ dönüş algılandı" } : { ok, reason: "Başını daha sağa çevir" }
     }
     case "BLINK": {
-      const ok = detectorReady ? signal.blinkScore > 0.32 || signal.motion > 10 : signal.facePresent && signal.motion > 11
+      const ok = detectorReady ? signal.blinkScore > 0.3 || signal.motion > 16 : signal.facePresent && signal.motion > 11
       return ok ? { ok, reason: "Göz kırpma algılandı" } : { ok, reason: "Göz kırpma bekleniyor" }
     }
     case "RAISE_HAND": {
-      const ok = detectorReady ? signal.handPresent : signal.motion > 13
+      const ok = detectorReady ? signal.handPresent && signal.handLandmarkCount >= 18 : signal.motion > 13
       return ok ? { ok, reason: "El algılandı" } : { ok, reason: "Elini kameraya göster" }
     }
     case "SMILE": {
-      const ok = detectorReady ? signal.smileScore > 0.22 || signal.facePresent : signal.facePresent && signal.motion < 20
+      const ok = detectorReady ? signal.smileScore > 0.24 : signal.facePresent && signal.motion < 20
       return ok ? { ok, reason: "Gülümseme sinyali algılandı" } : { ok, reason: "Gülümseme bekleniyor" }
     }
     default:
@@ -159,8 +193,8 @@ function decisionClass(decision?: string) {
   return "border-primary/30 bg-primary/10 text-cyan-100"
 }
 
-function mirrorX(point: NormalizedLandmark, width: number) {
-  return (1 - point.x) * width
+function toCanvasPoint(point: NormalizedLandmark, width: number, height: number): CanvasPoint {
+  return { x: (1 - point.x) * width, y: point.y * height }
 }
 
 function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
@@ -173,14 +207,264 @@ function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, wi
   ctx.closePath()
 }
 
-function drawProfessionalHud(ctx: CanvasRenderingContext2D, width: number, height: number, signal: LiveSignal, progress: number, currentStep?: string) {
-  const active = progress > 0.8
+function drawConnections(
+  ctx: CanvasRenderingContext2D,
+  landmarks: NormalizedLandmark[],
+  connections: LandmarkConnection[],
+  width: number,
+  height: number,
+  style: StrokeStyle,
+  lineWidth: number
+) {
+  if (!connections.length) return
   ctx.save()
-  ctx.strokeStyle = active ? "rgba(34,197,94,0.95)" : "rgba(56,189,248,0.95)"
-  ctx.lineWidth = 2
-  ctx.shadowColor = active ? "rgba(34,197,94,0.45)" : "rgba(56,189,248,0.6)"
-  ctx.shadowBlur = 12
+  ctx.strokeStyle = style.strokeStyle
+  ctx.lineWidth = lineWidth
+  ctx.lineCap = "round"
+  ctx.lineJoin = "round"
+  ctx.shadowColor = style.shadowColor ?? "transparent"
+  ctx.shadowBlur = style.shadowBlur ?? 0
+  if (style.lineDash) ctx.setLineDash(style.lineDash)
+  ctx.beginPath()
+  for (const connection of connections) {
+    const start = landmarks[connection.start]
+    const end = landmarks[connection.end]
+    if (!start || !end) continue
+    const a = toCanvasPoint(start, width, height)
+    const b = toCanvasPoint(end, width, height)
+    ctx.moveTo(a.x, a.y)
+    ctx.lineTo(b.x, b.y)
+  }
+  ctx.stroke()
+  ctx.restore()
+}
 
+function getFaceBounds(landmarks: NormalizedLandmark[], width: number, height: number) {
+  if (!landmarks.length) return null
+  let minX = width
+  let minY = height
+  let maxX = 0
+  let maxY = 0
+  for (const point of landmarks) {
+    if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) continue
+    const canvasPoint = toCanvasPoint(point, width, height)
+    minX = Math.min(minX, canvasPoint.x)
+    minY = Math.min(minY, canvasPoint.y)
+    maxX = Math.max(maxX, canvasPoint.x)
+    maxY = Math.max(maxY, canvasPoint.y)
+  }
+  if (minX >= maxX || minY >= maxY) return null
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+}
+
+function drawHudCorners(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, color = "rgba(125,211,252,0.95)") {
+  const corner = Math.max(18, Math.min(width, height) * 0.16)
+  ctx.save()
+  ctx.strokeStyle = color
+  ctx.lineWidth = 2
+  ctx.shadowColor = "rgba(56,189,248,0.8)"
+  ctx.shadowBlur = 10
+  ctx.beginPath()
+  ctx.moveTo(x, y + corner)
+  ctx.lineTo(x, y)
+  ctx.lineTo(x + corner, y)
+  ctx.moveTo(x + width - corner, y)
+  ctx.lineTo(x + width, y)
+  ctx.lineTo(x + width, y + corner)
+  ctx.moveTo(x + width, y + height - corner)
+  ctx.lineTo(x + width, y + height)
+  ctx.lineTo(x + width - corner, y + height)
+  ctx.moveTo(x + corner, y + height)
+  ctx.lineTo(x, y + height)
+  ctx.lineTo(x, y + height - corner)
+  ctx.stroke()
+  ctx.restore()
+}
+
+function drawHudPanel(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, title: string, rows: string[]) {
+  const height = 34 + rows.length * 20
+  ctx.save()
+  ctx.fillStyle = "rgba(2, 6, 23, 0.72)"
+  drawRoundedRect(ctx, x, y, width, height, 8)
+  ctx.fill()
+  ctx.strokeStyle = "rgba(56,189,248,0.32)"
+  ctx.lineWidth = 1
+  ctx.stroke()
+  ctx.fillStyle = "#67e8f9"
+  ctx.font = "700 12px ui-monospace, SFMono-Regular, Menlo, monospace"
+  ctx.fillText(title, x + 12, y + 20)
+  ctx.strokeStyle = "rgba(125,211,252,0.38)"
+  ctx.beginPath()
+  ctx.moveTo(x + 12, y + 27)
+  ctx.lineTo(x + width - 12, y + 27)
+  ctx.stroke()
+  ctx.fillStyle = "rgba(186,230,253,0.92)"
+  ctx.font = "500 11px ui-monospace, SFMono-Regular, Menlo, monospace"
+  rows.forEach((row, index) => ctx.fillText(row, x + 12, y + 47 + index * 20))
+  ctx.restore()
+}
+
+function drawMiniBars(ctx: CanvasRenderingContext2D, x: number, y: number, values: number[]) {
+  ctx.save()
+  values.forEach((value, index) => {
+    const barWidth = 78
+    const barY = y + index * 14
+    ctx.fillStyle = "rgba(15,23,42,0.82)"
+    ctx.fillRect(x, barY, barWidth, 7)
+    ctx.fillStyle = index % 2 === 0 ? "rgba(34,211,238,0.78)" : "rgba(168,85,247,0.72)"
+    ctx.fillRect(x, barY, Math.max(4, barWidth * Math.max(0, Math.min(1, value))), 7)
+  })
+  ctx.restore()
+}
+
+function drawFallbackStatus(ctx: CanvasRenderingContext2D, width: number, height: number, detectorLabel: string) {
+  if (detectorLabel !== "Canvas fallback") return
+  ctx.save()
+  ctx.fillStyle = "rgba(2,6,23,0.7)"
+  drawRoundedRect(ctx, width / 2 - 96, height * 0.18, 192, 38, 8)
+  ctx.fill()
+  ctx.strokeStyle = "rgba(56,189,248,0.35)"
+  ctx.stroke()
+  ctx.fillStyle = "#7dd3fc"
+  ctx.font = "700 12px ui-monospace, SFMono-Regular, Menlo, monospace"
+  ctx.fillText("CANVAS FALLBACK", width / 2 - 63, height * 0.18 + 24)
+  ctx.restore()
+}
+
+function drawProfessionalFaceMesh(
+  ctx: CanvasRenderingContext2D,
+  landmarks: NormalizedLandmark[],
+  width: number,
+  height: number,
+  connections: FaceConnectionSets
+) {
+  if (landmarks.length < 468) return
+  const featureConnections = [
+    ...connections.lips,
+    ...connections.leftEye,
+    ...connections.rightEye,
+    ...connections.leftEyebrow,
+    ...connections.rightEyebrow,
+  ]
+
+  ctx.save()
+  ctx.globalCompositeOperation = "lighter"
+  drawConnections(
+    ctx,
+    landmarks,
+    connections.tessellation,
+    width,
+    height,
+    { strokeStyle: "rgba(34,211,238,0.3)", shadowColor: "rgba(34,211,238,0.25)", shadowBlur: 2 },
+    0.9
+  )
+  drawConnections(
+    ctx,
+    landmarks,
+    connections.contours,
+    width,
+    height,
+    { strokeStyle: "rgba(125,211,252,0.92)", shadowColor: "rgba(56,189,248,0.62)", shadowBlur: 5 },
+    1.65
+  )
+  drawConnections(
+    ctx,
+    landmarks,
+    featureConnections,
+    width,
+    height,
+    { strokeStyle: "rgba(224,242,254,0.95)", shadowColor: "rgba(56,189,248,0.88)", shadowBlur: 8 },
+    1.75
+  )
+  drawConnections(
+    ctx,
+    landmarks,
+    [...connections.leftIris, ...connections.rightIris],
+    width,
+    height,
+    { strokeStyle: "rgba(255,255,255,0.96)", shadowColor: "rgba(125,211,252,0.95)", shadowBlur: 10 },
+    1.55
+  )
+
+  ctx.fillStyle = "rgba(103,232,249,0.7)"
+  ctx.shadowColor = "rgba(34,211,238,0.46)"
+  ctx.shadowBlur = 4
+  for (const point of landmarks) {
+    const p = toCanvasPoint(point, width, height)
+    ctx.beginPath()
+    ctx.arc(p.x, p.y, 0.95, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  ctx.fillStyle = "rgba(255,255,255,0.96)"
+  ctx.shadowColor = "rgba(56,189,248,0.95)"
+  ctx.shadowBlur = 12
+  for (const index of FEATURE_POINT_INDICES) {
+    const point = landmarks[index]
+    if (!point) continue
+    const p = toCanvasPoint(point, width, height)
+    ctx.beginPath()
+    ctx.arc(p.x, p.y, index >= 468 ? 2.4 : 2.25, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.restore()
+
+  const bounds = getFaceBounds(landmarks, width, height)
+  if (!bounds) return
+  const padX = bounds.width * 0.08
+  const padY = bounds.height * 0.06
+  drawHudCorners(
+    ctx,
+    Math.max(18, bounds.x - padX),
+    Math.max(18, bounds.y - padY),
+    Math.min(width - 36, bounds.width + padX * 2),
+    Math.min(height - 36, bounds.height + padY * 2)
+  )
+}
+
+function drawProfessionalHandMesh(ctx: CanvasRenderingContext2D, landmarks: NormalizedLandmark[], width: number, height: number) {
+  if (!landmarks.length) return
+  ctx.save()
+  ctx.globalCompositeOperation = "lighter"
+  drawConnections(
+    ctx,
+    landmarks,
+    HAND_CONNECTIONS,
+    width,
+    height,
+    { strokeStyle: "rgba(196,181,253,0.94)", shadowColor: "rgba(168,85,247,0.75)", shadowBlur: 10 },
+    2.4
+  )
+  ctx.fillStyle = "rgba(233,213,255,0.95)"
+  ctx.shadowColor = "rgba(168,85,247,0.95)"
+  ctx.shadowBlur = 11
+  for (const point of landmarks) {
+    const p = toCanvasPoint(point, width, height)
+    ctx.beginPath()
+    ctx.arc(p.x, p.y, 3.2, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  const bounds = getFaceBounds(landmarks, width, height)
+  if (bounds) drawHudCorners(ctx, bounds.x - 12, bounds.y - 12, bounds.width + 24, bounds.height + 24, "rgba(216,180,254,0.88)")
+  ctx.restore()
+}
+
+function drawScanHud(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  signal: LiveSignal,
+  progress: number,
+  currentStep: string | undefined,
+  detectorLabel: string
+) {
+  const active = progress > 0.8
+  const now = Date.now()
+  ctx.save()
+  ctx.strokeStyle = active ? "rgba(34,197,94,0.95)" : "rgba(56,189,248,0.9)"
+  ctx.lineWidth = 2
+  ctx.shadowColor = active ? "rgba(34,197,94,0.42)" : "rgba(56,189,248,0.58)"
+  ctx.shadowBlur = 12
   const inset = 18
   const cut = 26
   ctx.beginPath()
@@ -196,117 +480,90 @@ function drawProfessionalHud(ctx: CanvasRenderingContext2D, width: number, heigh
   ctx.stroke()
   ctx.shadowBlur = 0
 
-  ctx.setLineDash([10, 8])
-  ctx.strokeStyle = "rgba(56,189,248,0.38)"
-  ctx.strokeRect(width * 0.24, height * 0.08, width * 0.52, height * 0.78)
+  ctx.setLineDash([12, 18])
+  ctx.strokeStyle = "rgba(125,211,252,0.5)"
+  ctx.beginPath()
+  ctx.moveTo(width * 0.14, 32)
+  ctx.lineTo(width * 0.86, 32)
+  ctx.moveTo(width * 0.14, height - 32)
+  ctx.lineTo(width * 0.86, height - 32)
+  ctx.stroke()
   ctx.setLineDash([])
 
-  const scanY = height * 0.08 + ((Date.now() / 8) % (height * 0.78))
-  const gradient = ctx.createLinearGradient(0, scanY - 22, 0, scanY + 22)
-  gradient.addColorStop(0, "rgba(56,189,248,0)")
-  gradient.addColorStop(0.5, "rgba(56,189,248,0.6)")
-  gradient.addColorStop(1, "rgba(56,189,248,0)")
+  ctx.strokeStyle = "rgba(125,211,252,0.45)"
+  ctx.lineWidth = 1
+  for (let y = height * 0.26; y < height * 0.74; y += 22) {
+    ctx.beginPath()
+    ctx.moveTo(36, y)
+    ctx.lineTo(52, y)
+    ctx.moveTo(width - 52, y)
+    ctx.lineTo(width - 36, y)
+    ctx.stroke()
+  }
+
+  const scanY = height * 0.1 + ((now / 10) % (height * 0.78))
+  const gradient = ctx.createLinearGradient(0, scanY - 14, 0, scanY + 14)
+  gradient.addColorStop(0, "rgba(34,211,238,0)")
+  gradient.addColorStop(0.5, "rgba(34,211,238,0.38)")
+  gradient.addColorStop(1, "rgba(34,211,238,0)")
   ctx.fillStyle = gradient
-  ctx.fillRect(width * 0.21, scanY - 22, width * 0.58, 44)
-
-  ctx.fillStyle = "rgba(2,6,23,0.72)"
-  drawRoundedRect(ctx, 28, 28, Math.min(410, width - 56), 102, 14)
-  ctx.fill()
-  ctx.strokeStyle = "rgba(56,189,248,0.25)"
+  ctx.fillRect(0, scanY - 14, width, 28)
+  ctx.strokeStyle = "rgba(125,211,252,0.72)"
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(0, scanY)
+  ctx.lineTo(width, scanY)
   ctx.stroke()
-
-  ctx.fillStyle = "#7dd3fc"
-  ctx.font = "700 13px ui-monospace, SFMono-Regular, Menlo, monospace"
-  ctx.fillText("FACE SCAN", 46, 56)
-  ctx.font = "500 12px ui-monospace, SFMono-Regular, Menlo, monospace"
-  ctx.fillText(`STATUS: ${signal.facePresent ? "LOCKED" : "SEARCHING"}`, 46, 80)
-  ctx.fillText(`STEP: ${stepTitle(currentStep).toUpperCase()}`, 46, 102)
-  ctx.fillText(`CONFIDENCE: ${Math.round(signal.confidence)}%`, 46, 124)
-
-  const panelW = 210
-  const panelH = 122
-  const panelX = Math.max(28, width - panelW - 34)
-  const panelY = Math.max(34, height - panelH - 34)
-  ctx.fillStyle = "rgba(2,6,23,0.72)"
-  drawRoundedRect(ctx, panelX, panelY, panelW, panelH, 14)
-  ctx.fill()
-  ctx.strokeStyle = "rgba(56,189,248,0.28)"
-  ctx.stroke()
-  ctx.fillStyle = "#7dd3fc"
-  ctx.font = "700 12px ui-monospace, SFMono-Regular, Menlo, monospace"
-  ctx.fillText("ANALYSIS", panelX + 18, panelY + 28)
-  ctx.font = "500 12px ui-monospace, SFMono-Regular, Menlo, monospace"
-  ctx.fillText(`FACE: ${signal.facePresent ? "LOCK" : "WAIT"}`, panelX + 18, panelY + 54)
-  ctx.fillText(`HAND: ${signal.handPresent ? "LOCK" : "WAIT"}`, panelX + 18, panelY + 76)
-  ctx.fillText(`YAW: ${signal.yaw.toFixed(2)}`, panelX + 18, panelY + 98)
-
   ctx.restore()
+
+  const panelWidth = Math.min(348, Math.max(250, width - 48))
+  drawHudPanel(ctx, 28, 28, panelWidth, "FACE SCAN", [
+    `FACE LOCK: ${signal.facePresent ? "LOCK" : "WAIT"}`,
+    `HAND LOCK: ${signal.handPresent ? "LOCK" : "WAIT"}`,
+    `CONFIDENCE: ${Math.round(signal.confidence)}%`,
+    `CURRENT STEP: ${stepTitle(currentStep).toUpperCase()}`,
+    `YAW: ${signal.yaw.toFixed(2)}`,
+    `DETECTOR MODE: ${detectorLabel}`,
+  ])
+
+  if (width > 720) {
+    const rightX = width - 232
+    drawHudPanel(ctx, rightX, 48, 184, "LANDMARKS", [
+      `POINTS: ${signal.landmarkCount}`,
+      `HAND: ${signal.handLandmarkCount}`,
+      `BLINK: ${Math.round(signal.blinkScore * 100)}%`,
+      `SMILE: ${Math.round(signal.smileScore * 100)}%`,
+    ])
+    drawMiniBars(ctx, rightX + 96, 96, [
+      signal.confidence / 100,
+      signal.blinkScore,
+      signal.smileScore,
+      progress,
+    ])
+  }
+
+  if (height > 420) {
+    drawHudPanel(ctx, 28, height - 104, 184, "POSE", [
+      `YAW ${signal.yaw >= 0 ? "+" : ""}${signal.yaw.toFixed(2)}`,
+      `MOTION ${signal.motion.toFixed(1)}`,
+      `HOLD ${Math.round(progress * 100)}%`,
+    ])
+  }
+
+  drawFallbackStatus(ctx, width, height, detectorLabel)
 }
 
-function drawFaceMesh(ctx: CanvasRenderingContext2D, landmarks: NormalizedLandmark[], width: number, height: number) {
-  if (!landmarks.length) return
-  ctx.save()
-  ctx.lineWidth = 1.05
-  ctx.strokeStyle = "rgba(80,220,255,0.34)"
-  ctx.shadowColor = "rgba(56,189,248,0.35)"
-  ctx.shadowBlur = 4
-  for (const [a, b] of FACE_CONNECTIONS) {
-    const p1 = landmarks[a]
-    const p2 = landmarks[b]
-    if (!p1 || !p2) continue
-    ctx.beginPath()
-    ctx.moveTo(mirrorX(p1, width), p1.y * height)
-    ctx.lineTo(mirrorX(p2, width), p2.y * height)
-    ctx.stroke()
-  }
-  ctx.shadowBlur = 0
-  ctx.fillStyle = "rgba(83, 229, 255, 0.72)"
-  const step = Math.max(1, Math.floor(landmarks.length / 150))
-  for (let i = 0; i < landmarks.length; i += step) {
-    const p = landmarks[i]
-    ctx.beginPath()
-    ctx.arc(mirrorX(p, width), p.y * height, 1.35, 0, Math.PI * 2)
-    ctx.fill()
-  }
-  ctx.fillStyle = "rgba(255,255,255,0.95)"
-  ctx.shadowColor = "rgba(56,189,248,0.95)"
-  ctx.shadowBlur = 10
-  for (const index of FEATURE_POINTS) {
-    const p = landmarks[index]
-    if (!p) continue
-    ctx.beginPath()
-    ctx.arc(mirrorX(p, width), p.y * height, 2.8, 0, Math.PI * 2)
-    ctx.fill()
-  }
-  ctx.restore()
-}
-
-function drawHandMesh(ctx: CanvasRenderingContext2D, landmarks: NormalizedLandmark[], width: number, height: number) {
-  if (!landmarks.length) return
-  ctx.save()
-  ctx.strokeStyle = "rgba(196, 181, 253, 0.95)"
-  ctx.fillStyle = "rgba(216, 180, 254, 0.95)"
-  ctx.lineWidth = 3
-  ctx.shadowColor = "rgba(168,85,247,0.7)"
-  ctx.shadowBlur = 8
-  for (const chain of HAND_CHAINS) {
-    ctx.beginPath()
-    chain.forEach((index, offset) => {
-      const p = landmarks[index]
-      if (!p) return
-      const x = mirrorX(p, width)
-      const y = p.y * height
-      if (offset === 0) ctx.moveTo(x, y)
-      else ctx.lineTo(x, y)
-    })
-    ctx.stroke()
-  }
-  for (const p of landmarks) {
-    ctx.beginPath()
-    ctx.arc(mirrorX(p, width), p.y * height, 4, 0, Math.PI * 2)
-    ctx.fill()
-  }
-  ctx.restore()
+function smoothLandmarks(previous: NormalizedLandmark[], current: NormalizedLandmark[]) {
+  if (!current.length) return []
+  if (previous.length !== current.length) return current
+  return current.map((point, index) => {
+    const old = previous[index]
+    return {
+      x: old.x * 0.72 + point.x * 0.28,
+      y: old.y * 0.72 + point.y * 0.28,
+      z: point.z === undefined ? old.z : (old.z ?? point.z) * 0.72 + point.z * 0.28,
+    }
+  })
 }
 
 export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }: { campaignId: string; walletAddress: string; walletChain: string }) {
@@ -316,6 +573,8 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
   const streamRef = useRef<MediaStream | null>(null)
   const mediaPipeRef = useRef<MediaPipeFaceSampler | null>(null)
   const previousPixelsRef = useRef<Uint8ClampedArray | null>(null)
+  const smoothedFaceLandmarksRef = useRef<NormalizedLandmark[]>([])
+  const smoothedHandLandmarksRef = useRef<NormalizedLandmark[]>([])
   const samplesRef = useRef<FrameSample[]>([])
   const timingsRef = useRef<number[]>([])
   const cancelRef = useRef(false)
@@ -338,6 +597,8 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
     mediaPipeRef.current = null
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
+    smoothedFaceLandmarksRef.current = []
+    smoothedHandLandmarksRef.current = []
   }
 
   useEffect(() => () => stopCamera(), [])
@@ -351,9 +612,11 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
     const ctx = canvas.getContext("2d")
     if (!ctx) return
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    drawProfessionalHud(ctx, canvas.width, canvas.height, signal, currentProgress, currentStep)
-    drawFaceMesh(ctx, signal.faceLandmarks, canvas.width, canvas.height)
-    drawHandMesh(ctx, signal.handLandmarks, canvas.width, canvas.height)
+    const activeDetectorLabel = mediaPipeRef.current ? "MediaPipe Face + Hand Mesh" : "Canvas fallback"
+    const faceConnections = mediaPipeRef.current?.faceConnections ?? EMPTY_FACE_CONNECTIONS
+    drawProfessionalFaceMesh(ctx, signal.faceLandmarks, canvas.width, canvas.height, faceConnections)
+    drawProfessionalHandMesh(ctx, signal.handLandmarks, canvas.width, canvas.height)
+    drawScanHud(ctx, canvas.width, canvas.height, signal, currentProgress, currentStep, activeDetectorLabel)
   }
 
   function sampleFrame(): FrameSample | null {
@@ -383,6 +646,12 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
     const sharpness = edgeSum / pixelCount
     const motion = previous ? motionSum / pixelCount : 0
     const fallbackFace = brightness > 35 && brightness < 235 && sharpness > 1.1
+    const rawFaceLandmarks = mp?.faceLandmarks ?? []
+    const rawHandLandmarks = mp?.handLandmarks ?? []
+    const faceLandmarks = smoothLandmarks(smoothedFaceLandmarksRef.current, rawFaceLandmarks)
+    const handLandmarks = smoothLandmarks(smoothedHandLandmarksRef.current, rawHandLandmarks)
+    smoothedFaceLandmarksRef.current = faceLandmarks
+    smoothedHandLandmarksRef.current = handLandmarks
     const signal: LiveSignal = {
       facePresent: mp?.facePresent ?? fallbackFace,
       handPresent: mp?.handPresent ?? false,
@@ -391,8 +660,10 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
       smileScore: mp?.smileScore ?? 0,
       confidence: mp?.confidence ?? (fallbackFace ? 55 : 0),
       motion: Math.max(motion, mp?.centerMotion ?? 0),
-      faceLandmarks: mp?.faceLandmarks ?? [],
-      handLandmarks: mp?.handLandmarks ?? [],
+      landmarkCount: mp?.landmarkCount ?? 0,
+      handLandmarkCount: mp?.handLandmarkCount ?? 0,
+      faceLandmarks,
+      handLandmarks,
     }
     liveSignalRef.current = signal
     setLiveSignal(signal)
@@ -403,8 +674,8 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
       facePresent: signal.facePresent,
       handPresent: signal.handPresent,
       faceConfidence: signal.confidence,
-      landmarkCount: mp?.landmarkCount ?? 0,
-      handLandmarkCount: mp?.handLandmarkCount ?? 0,
+      landmarkCount: signal.landmarkCount,
+      handLandmarkCount: signal.handLandmarkCount,
       yaw: signal.yaw,
       blinkScore: signal.blinkScore,
       smileScore: signal.smileScore,
@@ -427,6 +698,8 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
     samplesRef.current = []
     timingsRef.current = []
     previousPixelsRef.current = null
+    smoothedFaceLandmarksRef.current = []
+    smoothedHandLandmarksRef.current = []
     liveSignalRef.current = emptySignal()
     setLiveSignal(liveSignalRef.current)
     cancelRef.current = false
@@ -524,9 +797,10 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
     const faceConfidenceAvg = average(samples.map((sample) => sample.faceConfidence), 55)
     const yawRange = Math.max(0, ...samples.map((sample) => sample.yaw)) - Math.min(0, ...samples.map((sample) => sample.yaw))
     const blinkMax = Math.max(0, ...samples.map((sample) => sample.blinkScore))
+    const smileMax = Math.max(0, ...samples.map((sample) => sample.smileScore))
     const faceSeenCount = samples.filter((sample) => sample.facePresent).length
     const handSeenCount = samples.filter((sample) => sample.handPresent).length
-    const mediaPipeActive = samples.some((sample) => sample.landmarkCount > 0) && faceSeenCount > 12
+    const mediaPipeActive = samples.some((sample) => sample.landmarkCount >= 468) && faceSeenCount > 12
     const brightnessOk = brightnessAvg > 35 && brightnessAvg < 235
     const scores = {
       facePresenceScore: clamp(mediaPipeActive ? faceConfidenceAvg : brightnessOk ? 68 + sharpnessAvg * 2 : 35),
@@ -535,7 +809,7 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
       handGestureScore: clamp(session.challengeSequence.includes("RAISE_HAND") ? (handSeenCount > 8 ? 92 : 35) : 80),
       motionTimingScore: clamp(70 + Math.min(20, motionAvg * 2)),
       frameConsistencyScore: clamp(88 - Math.abs(110 - brightnessAvg) * 0.18),
-      replayRiskScore: clamp(mediaPipeActive ? Math.max(5, 42 - motionAvg - yawRange * 40) : sharpnessAvg < 2 ? 72 : 25 - motionAvg),
+      replayRiskScore: clamp(mediaPipeActive ? Math.max(5, 42 - motionAvg - yawRange * 40 - smileMax * 10) : sharpnessAvg < 2 ? 72 : 25 - motionAvg),
       injectionRiskScore: clamp(samples.length < 40 ? 68 : 10),
     }
     try {
@@ -557,6 +831,7 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
             avgMotion: Math.round(motionAvg),
             yawRange: Number(yawRange.toFixed(3)),
             maxBlinkScore: Math.round(blinkMax * 100),
+            maxSmileScore: Math.round(smileMax * 100),
             rawVideoUploaded: false,
           },
         }),
@@ -607,6 +882,8 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
     samplesRef.current = []
     timingsRef.current = []
     previousPixelsRef.current = null
+    smoothedFaceLandmarksRef.current = []
+    smoothedHandLandmarksRef.current = []
     liveSignalRef.current = emptySignal()
     setLiveSignal(liveSignalRef.current)
     const overlay = overlayCanvasRef.current
@@ -643,7 +920,7 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
                 <p className="font-semibold text-white">{phase === "running" ? stepTitle(currentStep) : phase === "submitting" ? "Submitting verified signals" : "Camera ready"}</p>
                 <p className="text-slate-300">{phase === "running" ? stepHelp(currentStep) : stepReason}</p>
               </div>
-              <span className="font-mono text-cyan-200">Face {liveSignal.facePresent ? "LOCK" : "WAIT"} · Hand {liveSignal.handPresent ? "LOCK" : "WAIT"}</span>
+              <span className="font-mono text-cyan-200">Face {liveSignal.facePresent ? "LOCK" : "WAIT"} / Hand {liveSignal.handPresent ? "LOCK" : "WAIT"}</span>
             </div>
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800"><div className="h-full bg-primary transition-all" style={{ width: `${Math.round(progress * 100)}%` }} /></div>
             <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-slate-300"><span>Status: {stepReason}</span><span>Confidence: {Math.round(liveSignal.confidence)}%</span><span>Yaw: {liveSignal.yaw.toFixed(2)}</span></div>
@@ -659,9 +936,9 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
         {phase === "submitting" && <p className="text-sm text-cyan-200"><Loader2 className="mr-2 inline size-4 animate-spin" /> Submitting liveness evidence...</p>}
         {phase === "result" && result && (
           <div className={`rounded-2xl border p-4 ${decisionClass(result.decision)}`}>
-            <p className="font-semibold text-white">Result: {result.decision.replace("_", " ")} · Score {Math.round(result.humanSessionScore)}</p>
+            <p className="font-semibold text-white">Result: {result.decision.replace("_", " ")} / Score {Math.round(result.humanSessionScore)}</p>
             <p className="mt-2 font-mono text-xs text-slate-200">{JSON.stringify(result.reasonCodes)}</p>
-            {result.decision === "APPROVED" && <button onClick={signWithWallet} className={`${buttonVariants()} mt-4`}><Signature data-icon="inline-start" /> Continue · Sign wallet</button>}
+            {result.decision === "APPROVED" && <button onClick={signWithWallet} className={`${buttonVariants()} mt-4`}><Signature data-icon="inline-start" /> Continue / Sign wallet</button>}
             {result.decision !== "APPROVED" && <button onClick={reset} className={`${buttonVariants({ variant: "outline" })} mt-4`}><RefreshCw data-icon="inline-start" /> Try again</button>}
           </div>
         )}

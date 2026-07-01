@@ -1,5 +1,19 @@
 export type NormalizedLandmark = { x: number; y: number; z?: number }
 
+export type LandmarkConnection = { start: number; end: number }
+
+export type FaceConnectionSets = {
+  tessellation: LandmarkConnection[]
+  contours: LandmarkConnection[]
+  lips: LandmarkConnection[]
+  leftEye: LandmarkConnection[]
+  rightEye: LandmarkConnection[]
+  leftEyebrow: LandmarkConnection[]
+  rightEyebrow: LandmarkConnection[]
+  leftIris: LandmarkConnection[]
+  rightIris: LandmarkConnection[]
+}
+
 export type MediaPipeFaceSample = {
   facePresent: boolean
   handPresent: boolean
@@ -26,16 +40,74 @@ type LandmarkDetector = {
 }
 
 export type MediaPipeFaceSampler = {
+  faceConnections: FaceConnectionSets
   sample: () => MediaPipeFaceSample
   dispose: () => void
+}
+
+type FaceConnectionSource = Record<
+  | "FACE_LANDMARKS_TESSELATION"
+  | "FACE_LANDMARKS_CONTOURS"
+  | "FACE_LANDMARKS_LIPS"
+  | "FACE_LANDMARKS_LEFT_EYE"
+  | "FACE_LANDMARKS_RIGHT_EYE"
+  | "FACE_LANDMARKS_LEFT_EYEBROW"
+  | "FACE_LANDMARKS_RIGHT_EYEBROW"
+  | "FACE_LANDMARKS_LEFT_IRIS"
+  | "FACE_LANDMARKS_RIGHT_IRIS",
+  Array<{ start: number; end: number }>
+>
+
+function clamp01(value: number) {
+  return Math.max(0, Math.min(1, value))
+}
+
+function distance(a: NormalizedLandmark | undefined, b: NormalizedLandmark | undefined) {
+  if (!a || !b) return 0
+  return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2)
+}
+
+function toConnections(connections: Array<{ start: number; end: number }> | undefined): LandmarkConnection[] {
+  return (connections ?? []).map((connection) => ({ start: connection.start, end: connection.end }))
+}
+
+function createFaceConnectionSets(faceLandmarker: FaceConnectionSource): FaceConnectionSets {
+  return {
+    tessellation: toConnections(faceLandmarker.FACE_LANDMARKS_TESSELATION),
+    contours: toConnections(faceLandmarker.FACE_LANDMARKS_CONTOURS),
+    lips: toConnections(faceLandmarker.FACE_LANDMARKS_LIPS),
+    leftEye: toConnections(faceLandmarker.FACE_LANDMARKS_LEFT_EYE),
+    rightEye: toConnections(faceLandmarker.FACE_LANDMARKS_RIGHT_EYE),
+    leftEyebrow: toConnections(faceLandmarker.FACE_LANDMARKS_LEFT_EYEBROW),
+    rightEyebrow: toConnections(faceLandmarker.FACE_LANDMARKS_RIGHT_EYEBROW),
+    leftIris: toConnections(faceLandmarker.FACE_LANDMARKS_LEFT_IRIS),
+    rightIris: toConnections(faceLandmarker.FACE_LANDMARKS_RIGHT_IRIS),
+  }
 }
 
 function categoryScore(result: VisionResult, names: string[]) {
   const categories = result.faceBlendshapes?.[0]?.categories ?? []
   const wanted = new Set(names)
-  return categories
-    .filter((category) => category.categoryName && wanted.has(category.categoryName))
-    .reduce((sum, category) => sum + (category.score ?? 0), 0)
+  return Math.max(
+    0,
+    ...categories
+      .filter((category) => category.categoryName && wanted.has(category.categoryName))
+      .map((category) => category.score ?? 0)
+  )
+}
+
+function estimateBlinkFromGeometry(landmarks: NormalizedLandmark[]) {
+  const leftRatio = distance(landmarks[159], landmarks[145]) / Math.max(0.001, distance(landmarks[33], landmarks[133]))
+  const rightRatio = distance(landmarks[386], landmarks[374]) / Math.max(0.001, distance(landmarks[362], landmarks[263]))
+  const eyeRatio = Math.min(leftRatio || 1, rightRatio || 1)
+  return clamp01((0.18 - eyeRatio) * 8)
+}
+
+function estimateSmileFromGeometry(landmarks: NormalizedLandmark[]) {
+  const faceWidth = Math.max(0.001, distance(landmarks[234], landmarks[454]))
+  const mouthWidth = distance(landmarks[61], landmarks[291]) / faceWidth
+  const mouthOpen = distance(landmarks[13], landmarks[14]) / faceWidth
+  return clamp01((mouthWidth - 0.34) * 4 + mouthOpen * 0.55)
 }
 
 function estimateYaw(landmarks: NormalizedLandmark[]) {
@@ -78,33 +150,48 @@ function emptySample(): MediaPipeFaceSample {
 export async function createMediaPipeFaceSampler(video: HTMLVideoElement): Promise<MediaPipeFaceSampler> {
   const vision = await import("@mediapipe/tasks-vision")
   const fileset = await vision.FilesetResolver.forVisionTasks(
-    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm"
   )
 
-  const faceLandmarker = (await vision.FaceLandmarker.createFromOptions(fileset, {
-    baseOptions: {
-      modelAssetPath:
-        "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task",
-      delegate: "GPU",
-    },
-    runningMode: "VIDEO",
-    numFaces: 1,
-    outputFaceBlendshapes: true,
-  })) as LandmarkDetector
+  async function createFaceLandmarker(delegate: "GPU" | "CPU") {
+    return vision.FaceLandmarker.createFromOptions(fileset, {
+      baseOptions: {
+        modelAssetPath:
+          "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task",
+        delegate,
+      },
+      runningMode: "VIDEO",
+      numFaces: 1,
+      minFaceDetectionConfidence: 0.5,
+      minFacePresenceConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+      outputFaceBlendshapes: true,
+    })
+  }
 
-  const handLandmarker = (await vision.HandLandmarker.createFromOptions(fileset, {
-    baseOptions: {
-      modelAssetPath:
-        "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task",
-      delegate: "GPU",
-    },
-    runningMode: "VIDEO",
-    numHands: 1,
-  })) as LandmarkDetector
+  async function createHandLandmarker(delegate: "GPU" | "CPU") {
+    return vision.HandLandmarker.createFromOptions(fileset, {
+      baseOptions: {
+        modelAssetPath:
+          "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task",
+        delegate,
+      },
+      runningMode: "VIDEO",
+      numHands: 1,
+      minHandDetectionConfidence: 0.5,
+      minHandPresenceConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+    })
+  }
+
+  const faceLandmarker = (await createFaceLandmarker("GPU").catch(() => createFaceLandmarker("CPU"))) as LandmarkDetector
+  const handLandmarker = (await createHandLandmarker("GPU").catch(() => createHandLandmarker("CPU"))) as LandmarkDetector
+  const faceConnections = createFaceConnectionSets(vision.FaceLandmarker as unknown as FaceConnectionSource)
 
   let previousCenter: { x: number; y: number } | null = null
 
   return {
+    faceConnections,
     sample() {
       const timestamp = performance.now()
       const faceResult = faceLandmarker.detectForVideo(video, timestamp)
@@ -125,7 +212,9 @@ export async function createMediaPipeFaceSampler(video: HTMLVideoElement): Promi
 
       const eyeBlinkLeft = categoryScore(faceResult, ["eyeBlinkLeft"])
       const eyeBlinkRight = categoryScore(faceResult, ["eyeBlinkRight"])
-      const smileScore = categoryScore(faceResult, ["mouthSmileLeft", "mouthSmileRight"])
+      const blendshapeSmileScore = categoryScore(faceResult, ["mouthSmileLeft", "mouthSmileRight"])
+      const geometryBlinkScore = estimateBlinkFromGeometry(faceLandmarks)
+      const geometrySmileScore = estimateSmileFromGeometry(faceLandmarks)
 
       return {
         facePresent: true,
@@ -133,10 +222,10 @@ export async function createMediaPipeFaceSampler(video: HTMLVideoElement): Promi
         landmarkCount: faceLandmarks.length,
         handLandmarkCount: handLandmarks.length,
         centerMotion,
-        confidence: Math.min(100, 60 + faceLandmarks.length / 4),
+        confidence: Math.min(100, 62 + faceLandmarks.length / 4),
         yaw: estimateYaw(faceLandmarks),
-        blinkScore: Math.max(eyeBlinkLeft, eyeBlinkRight),
-        smileScore,
+        blinkScore: Math.max(eyeBlinkLeft, eyeBlinkRight, geometryBlinkScore),
+        smileScore: Math.max(blendshapeSmileScore, geometrySmileScore),
         faceLandmarks,
         handLandmarks,
       }
