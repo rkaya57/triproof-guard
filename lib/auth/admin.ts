@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/lib/auth/session"
 
 export function getAdminEmails() {
   return [
+    "ortadogununsesi@gmail.com",
     "info@triproofprotocol.com",
     "mcogen@triproofprotocol.com",
     "sdemirbozan@triproofprotocol.com",
@@ -14,7 +15,7 @@ export function getAdminEmails() {
 
 export function isAdminEmail(email: string | null | undefined) {
   if (!email) return false
-  return getAdminEmails().includes(email.toLowerCase())
+  return getAdminEmails().includes(email.trim().toLowerCase())
 }
 
 export async function getAdminUser() {
