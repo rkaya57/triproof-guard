@@ -1,10 +1,11 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Camera, CheckCircle2, Loader2, RefreshCw, ShieldCheck, Signature, Video, XCircle } from "lucide-react"
+import { Camera, CheckCircle2, Loader2, RefreshCw, Signature, Video, XCircle } from "lucide-react"
 
-import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { requestBrowserWalletSignature } from "@/lib/humanity/browser-wallet-signature"
 
 type Session = {
   sessionId: string
@@ -159,7 +160,7 @@ export function AdminCameraChallenge({
         videoRef.current.srcObject = stream
         await videoRef.current.play().catch(() => undefined)
       }
-      runChallenge()
+      void runChallenge()
     } catch (err) {
       setError(err instanceof Error ? `Camera access failed: ${err.message}` : "Camera access failed")
       setPhase("error")
@@ -242,15 +243,11 @@ export function AdminCameraChallenge({
     setSignatureStatus(null)
     setError(null)
     try {
-      let signature = ""
-      const solana = (window as unknown as { solana?: { signMessage?: (message: Uint8Array, encoding?: string) => Promise<{ signature: Uint8Array }> } }).solana
-      if (walletChain === "solana" && solana?.signMessage) {
-        const encoded = new TextEncoder().encode(result.signMessage)
-        const signed = await solana.signMessage(encoded, "utf8")
-        signature = Array.from(signed.signature).map((byte) => byte.toString(16).padStart(2, "0")).join("")
-      } else {
-        signature = `ADMIN_CAPTURE_${crypto.randomUUID()}`
-      }
+      const walletSignature = await requestBrowserWalletSignature({
+        walletChain,
+        walletAddress,
+        message: result.signMessage,
+      })
 
       const res = await fetch("/api/humanity/challenge/sign", {
         method: "POST",
@@ -260,12 +257,16 @@ export function AdminCameraChallenge({
           walletAddress,
           walletChain,
           signedMessage: result.signMessage,
-          signature,
+          signature: walletSignature.signature,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? "Signature step failed")
-      setSignatureStatus(data.signatureVerified ? "Signature captured and bound to wallet message." : "Signature saved but not fully verified.")
+      setSignatureStatus(
+        data.signatureVerified
+          ? `Cryptographic signature verified via ${data.verificationMethod}.`
+          : `Signature saved but not verified${data.error ? `: ${data.error}` : "."}`
+      )
       setPhase("joined")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signature step failed")
