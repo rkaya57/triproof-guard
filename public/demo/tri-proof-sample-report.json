@@ -1,0 +1,34 @@
+{
+  "version": "V1.8 Sample Report",
+  "project": "Solana Public Demo Wallet Audit",
+  "chain": "Solana",
+  "riskPolicy": "balanced",
+  "datasetUrl": "/demo/tri-proof-public-demo-wallets.csv",
+  "summary": {
+    "totalWallets": 20,
+    "approved": 6,
+    "grayZoneManualReview": 5,
+    "rejectedNotEligible": 9,
+    "averageRiskScore": 42.8,
+    "suspiciousClusters": 2,
+    "noOnchainData": 4
+  },
+  "decisionLanguage": {
+    "approved": "Wallets that look eligible for reward inclusion based on available evidence.",
+    "grayZoneManualReview": "Wallets that need project-side review before a final reward decision.",
+    "rejectedNotEligible": "Wallets that are high-risk, inactive, unreadable, protocol-owned, known entities, or otherwise not eligible for automatic reward inclusion."
+  },
+  "sampleSignals": [
+    "V1.3 behavior intelligence: limited behavior diversity",
+    "V1.4 reputation/policy signal: manual_review",
+    "V1.5 No On-chain Data: no reliable provider-readable wallet history was available",
+    "V1.6 risk policy: Balanced",
+    "Solana account intelligence: known_protocol_or_program"
+  ],
+  "exports": {
+    "approvedCandidates": "approved_reward_candidates.csv",
+    "grayZone": "gray_zone_manual_review_wallets.csv",
+    "rejectedNotEligible": "rejected_not_eligible_wallets.csv",
+    "fullReport": "full_analysis_report.csv"
+  }
+}
