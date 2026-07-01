@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server"
 
-import { getCurrentUser } from "@/lib/auth/session"
+import { getAdminUser } from "@/lib/auth/admin"
 import { buildProductionHealthReport } from "@/lib/health/production"
 
 export const runtime = "nodejs"
 
 export async function GET() {
-  const user = await getCurrentUser()
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const admin = await getAdminUser()
+  if (!admin) {
+    return NextResponse.json({ error: "Admin access required" }, { status: 403 })
   }
 
   const report = await buildProductionHealthReport()
