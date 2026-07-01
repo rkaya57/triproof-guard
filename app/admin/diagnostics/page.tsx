@@ -4,7 +4,7 @@ import { AlertTriangle, CheckCircle2, Database, ExternalLink, HeartPulse, Server
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { getCurrentUser } from "@/lib/auth/session"
+import { getAdminUser } from "@/lib/auth/admin"
 import { buildProductionHealthReport, type HealthCheck, type HealthStatus } from "@/lib/health/production"
 
 function statusClass(status: HealthStatus) {
@@ -50,18 +50,20 @@ function CheckCard({ check }: { check: HealthCheck }) {
 }
 
 export default async function DiagnosticsPage() {
-  const user = await getCurrentUser()
+  const admin = await getAdminUser()
 
-  if (!user) {
+  if (!admin) {
     return (
       <main className="premium-page min-h-screen bg-background px-5 py-10 text-foreground sm:px-8">
-        <Card className="glass-panel mx-auto max-w-xl">
+        <Card className="glass-panel mx-auto max-w-xl border-red-400/30">
           <CardHeader>
-            <CardTitle>Login required</CardTitle>
-            <CardDescription>Production diagnostics are available to authenticated dashboard users.</CardDescription>
+            <CardTitle className="text-red-200">Admin access required</CardTitle>
+            <CardDescription className="text-slate-300">
+              Production diagnostics are only available to approved Tri-Proof admin email accounts.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link href="/login" className={buttonVariants()}>Login</Link>
+            <Link href="/dashboard" className={buttonVariants({ variant: "outline" })}>Back to dashboard</Link>
           </CardContent>
         </Card>
       </main>
@@ -84,8 +86,8 @@ export default async function DiagnosticsPage() {
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link href="/api/health" className={`${buttonVariants()} glow-primary`}>Open health API <ExternalLink data-icon="inline-end" /></Link>
+            <Link href="/dashboard/admin/diagnostics" className={`${buttonVariants({ variant: "outline" })} text-white`}>Dashboard admin panel</Link>
             <Link href="/docs/queue" className={`${buttonVariants({ variant: "outline" })} text-white`}>Queue docs</Link>
-            <Link href="/docs/webhooks" className={`${buttonVariants({ variant: "outline" })} text-white`}>Webhook docs</Link>
           </div>
         </div>
       </section>
