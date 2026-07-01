@@ -7,26 +7,45 @@ import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
 import type { AnalysisDetail as AnalysisDetailData } from "@/types"
 
+async function getAnalysisWithReviewData(id: string, userId: string) {
+  return db.analysis.findFirst({
+    where: { id, project: { userId } },
+    include: {
+      project: true,
+      wallets: { orderBy: [{ riskScore: "desc" }, { walletAddress: "asc" }] },
+      clusters: { orderBy: [{ averageRiskScore: "desc" }, { clusterLabel: "asc" }] },
+      teamReviews: { include: { reviewer: { select: { name: true } } } },
+      feedbackEvents: true,
+    },
+  })
+}
+
+async function getAnalysisWithoutReviewData(id: string, userId: string) {
+  return db.analysis.findFirst({
+    where: { id, project: { userId } },
+    include: {
+      project: true,
+      wallets: { orderBy: [{ riskScore: "desc" }, { walletAddress: "asc" }] },
+      clusters: { orderBy: [{ averageRiskScore: "desc" }, { clusterLabel: "asc" }] },
+    },
+  })
+}
+
 async function getInitialAnalysis(
   id: string,
   userId: string
 ): Promise<AnalysisDetailData | undefined> {
   try {
-    const analysis = await db.analysis.findFirst({
-      where: { id, project: { userId } },
-      include: {
-        project: true,
-        wallets: { orderBy: [{ riskScore: "desc" }, { walletAddress: "asc" }] },
-        clusters: { orderBy: [{ averageRiskScore: "desc" }, { clusterLabel: "asc" }] },
-        teamReviews: { include: { reviewer: { select: { name: true } } } },
-        feedbackEvents: true,
-      },
-    })
-
-    return analysis ? serializeAnalysis(analysis) : undefined
+    try {
+      const analysis = await getAnalysisWithReviewData(id, userId)
+      return analysis ? serializeAnalysis(analysis) : undefined
+    } catch {
+      const fallbackAnalysis = await getAnalysisWithoutReviewData(id, userId)
+      return fallbackAnalysis ? serializeAnalysis(fallbackAnalysis) : undefined
+    }
   } catch (error) {
     if (!isDatabaseConnectionError(error)) {
-      throw error
+      console.error("Analysis detail load failed", error)
     }
 
     return (await getDevAnalysisForUser(userId, id)) ?? undefined
