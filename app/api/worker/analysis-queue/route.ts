@@ -20,14 +20,21 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url)
   const analysisId = url.searchParams.get("analysisId")
-  const staleMinutes = boundedNumber(url.searchParams.get("staleMinutes"), 15, 1, 120)
+  const maxBatches = boundedNumber(url.searchParams.get("maxBatches"), 8, 1, 25)
+  const timeBudgetMs = boundedNumber(url.searchParams.get("timeBudgetMs"), 45000, 1000, 50000)
 
   try {
-    const queue = await getAnalysisQueueStatus({ analysisId, staleMinutes })
-    return NextResponse.json({ queue, analysisId })
+    const result = await processAnalysisQueue({
+      analysisId,
+      maxBatches,
+      timeBudgetMs,
+      recoverStale: true,
+    })
+
+    return NextResponse.json({ ok: true, source: "get", analysisId, ...result })
   } catch (error) {
     if (isDatabaseConnectionError(error)) {
-      return NextResponse.json({ error: "Database is required for queue status" }, { status: 503 })
+      return NextResponse.json({ error: "Database is required for queue worker" }, { status: 503 })
     }
     throw error
   }
