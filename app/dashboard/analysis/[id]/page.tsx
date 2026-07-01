@@ -18,6 +18,8 @@ async function getInitialAnalysis(
         project: true,
         wallets: { orderBy: [{ riskScore: "desc" }, { walletAddress: "asc" }] },
         clusters: { orderBy: [{ averageRiskScore: "desc" }, { clusterLabel: "asc" }] },
+        teamReviews: { include: { reviewer: { select: { name: true } } } },
+        feedbackEvents: true,
       },
     })
 
