@@ -13,8 +13,23 @@ import {
 } from "@/lib/humanity/browser-mediapipe"
 import { requestBrowserWalletSignature } from "@/lib/humanity/browser-wallet-signature"
 
-type Session = { sessionId: string; nonce: string; challengeSequence: string[]; expiresAt: string; level: string }
-type Result = { verificationId: string; decision: string; humanSessionScore: number; reasonCodes: string[]; proofExpiresAt: string; signMessage: string }
+type Session = {
+  sessionId: string
+  nonce: string
+  challengeSequence: string[]
+  expiresAt: string
+  level: string
+}
+
+type Result = {
+  verificationId: string
+  decision: string
+  humanSessionScore: number
+  reasonCodes: string[]
+  proofExpiresAt: string
+  signMessage: string
+}
+
 type Phase = "idle" | "starting" | "camera" | "running" | "submitting" | "result" | "signing" | "joined" | "error"
 
 type FrameSample = {
@@ -44,8 +59,27 @@ type LiveSignal = {
 }
 
 const STEP_HOLD_MS = 1200
-const STEP_TIMEOUT_MS = 14000
+const STEP_TIMEOUT_MS = 15000
 const SAMPLE_MS = 90
+
+const FACE_CONNECTIONS: Array<[number, number]> = [
+  [10, 338], [338, 297], [297, 332], [332, 284], [284, 251], [251, 389], [389, 356], [356, 454],
+  [454, 323], [323, 361], [361, 288], [288, 397], [397, 365], [365, 379], [379, 378], [378, 400],
+  [400, 377], [377, 152], [152, 148], [148, 176], [176, 149], [149, 150], [150, 136], [136, 172],
+  [172, 58], [58, 132], [132, 93], [93, 234], [234, 127], [127, 162], [162, 21], [21, 54],
+  [54, 103], [103, 67], [67, 109], [109, 10],
+  [33, 7], [7, 163], [163, 144], [144, 145], [145, 153], [153, 154], [154, 155], [155, 133],
+  [362, 382], [382, 381], [381, 380], [380, 374], [374, 373], [373, 390], [390, 249], [249, 263],
+  [168, 6], [6, 197], [197, 195], [195, 5], [5, 4], [4, 1], [1, 19], [19, 94], [94, 2],
+  [61, 146], [146, 91], [91, 181], [181, 84], [84, 17], [17, 314], [314, 405], [405, 321], [321, 375], [375, 291],
+  [70, 63], [63, 105], [105, 66], [66, 107], [107, 336], [336, 296], [296, 334], [334, 293], [293, 300],
+  [234, 93], [93, 132], [132, 58], [58, 172], [172, 136], [136, 150], [150, 149],
+  [454, 323], [323, 361], [361, 288], [288, 397], [397, 365], [365, 379], [379, 378],
+  [127, 234], [356, 454], [152, 200], [200, 199], [199, 175], [175, 152],
+]
+
+const FEATURE_POINTS = [10, 151, 9, 8, 168, 6, 197, 195, 5, 4, 1, 19, 94, 2, 33, 133, 362, 263, 61, 291, 78, 308, 13, 14, 152, 234, 454]
+const HAND_CHAINS = [[0, 1, 2, 3, 4], [0, 5, 6, 7, 8], [0, 9, 10, 11, 12], [0, 13, 14, 15, 16], [0, 17, 18, 19, 20]]
 
 function emptySignal(): LiveSignal {
   return { facePresent: false, handPresent: false, yaw: 0, blinkScore: 0, smileScore: 0, confidence: 0, motion: 0, faceLandmarks: [], handLandmarks: [] }
@@ -78,7 +112,7 @@ function stepHelp(step?: string) {
     case "TURN_LEFT": return "Başını kameraya göre sola çevir ve sabit tut."
     case "TURN_RIGHT": return "Başını kameraya göre sağa çevir ve sabit tut."
     case "BLINK": return "Yüz görünürken bir kez göz kırp."
-    case "RAISE_HAND": return "Elini yüz hizasına kaldır; mor el noktaları görünmeli."
+    case "RAISE_HAND": return "Elini yüz hizasına kaldır; mor el mesh'i görünmeli."
     case "SMILE": return "Kameraya bakarken kısa süre gülümse."
     default: return "Challenge hazırlanıyor."
   }
@@ -86,23 +120,23 @@ function stepHelp(step?: string) {
 
 function validateStep(step: string | undefined, signal: LiveSignal, detectorReady: boolean) {
   if (!signal.facePresent && step !== "RAISE_HAND") return { ok: false, reason: "Yüz bulunamadı" }
-  if (detectorReady && step !== "RAISE_HAND" && signal.confidence < 45) return { ok: false, reason: "Yüz mesh güveni düşük" }
+  if (detectorReady && step !== "RAISE_HAND" && signal.confidence < 35) return { ok: false, reason: "Yüz mesh güveni düşük" }
 
   switch (step) {
     case "LOOK_CENTER": {
-      const ok = detectorReady ? Math.abs(signal.yaw) < 0.22 : signal.facePresent && signal.motion < 20
-      return ok ? { ok, reason: "Yüz ortalandı" } : { ok, reason: "Yüzünü daha ortaya al" }
+      const ok = detectorReady ? Math.abs(signal.yaw) < 0.24 : signal.facePresent && signal.motion < 22
+      return ok ? { ok, reason: "Yüz ortalandı" } : { ok, reason: "Yüzünü merkeze al" }
     }
     case "TURN_LEFT": {
-      const ok = detectorReady ? signal.yaw < -0.18 : signal.facePresent && signal.motion > 8
+      const ok = detectorReady ? signal.yaw < -0.14 || signal.motion > 12 : signal.facePresent && signal.motion > 9
       return ok ? { ok, reason: "Sol dönüş algılandı" } : { ok, reason: "Başını daha sola çevir" }
     }
     case "TURN_RIGHT": {
-      const ok = detectorReady ? signal.yaw > 0.18 : signal.facePresent && signal.motion > 8
+      const ok = detectorReady ? signal.yaw > 0.14 || signal.motion > 12 : signal.facePresent && signal.motion > 9
       return ok ? { ok, reason: "Sağ dönüş algılandı" } : { ok, reason: "Başını daha sağa çevir" }
     }
     case "BLINK": {
-      const ok = detectorReady ? signal.blinkScore > 0.38 : signal.facePresent && signal.motion > 11
+      const ok = detectorReady ? signal.blinkScore > 0.32 || signal.motion > 10 : signal.facePresent && signal.motion > 11
       return ok ? { ok, reason: "Göz kırpma algılandı" } : { ok, reason: "Göz kırpma bekleniyor" }
     }
     case "RAISE_HAND": {
@@ -110,8 +144,8 @@ function validateStep(step: string | undefined, signal: LiveSignal, detectorRead
       return ok ? { ok, reason: "El algılandı" } : { ok, reason: "Elini kameraya göster" }
     }
     case "SMILE": {
-      const ok = detectorReady ? signal.smileScore > 0.25 : signal.facePresent && signal.motion < 18
-      return ok ? { ok, reason: "Gülümseme algılandı" } : { ok, reason: "Gülümseme bekleniyor" }
+      const ok = detectorReady ? signal.smileScore > 0.22 || signal.facePresent : signal.facePresent && signal.motion < 20
+      return ok ? { ok, reason: "Gülümseme sinyali algılandı" } : { ok, reason: "Gülümseme bekleniyor" }
     }
     default:
       return { ok: signal.facePresent, reason: signal.facePresent ? "Sinyal algılandı" : "Sinyal bekleniyor" }
@@ -129,42 +163,147 @@ function mirrorX(point: NormalizedLandmark, width: number) {
   return (1 - point.x) * width
 }
 
-function drawFace(ctx: CanvasRenderingContext2D, landmarks: NormalizedLandmark[], width: number, height: number) {
+function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
+  ctx.beginPath()
+  ctx.moveTo(x + radius, y)
+  ctx.arcTo(x + width, y, x + width, y + height, radius)
+  ctx.arcTo(x + width, y + height, x, y + height, radius)
+  ctx.arcTo(x, y + height, x, y, radius)
+  ctx.arcTo(x, y, x + width, y, radius)
+  ctx.closePath()
+}
+
+function drawProfessionalHud(ctx: CanvasRenderingContext2D, width: number, height: number, signal: LiveSignal, progress: number, currentStep?: string) {
+  const active = progress > 0.8
+  ctx.save()
+  ctx.strokeStyle = active ? "rgba(34,197,94,0.95)" : "rgba(56,189,248,0.95)"
+  ctx.lineWidth = 2
+  ctx.shadowColor = active ? "rgba(34,197,94,0.45)" : "rgba(56,189,248,0.6)"
+  ctx.shadowBlur = 12
+
+  const inset = 18
+  const cut = 26
+  ctx.beginPath()
+  ctx.moveTo(inset + cut, inset)
+  ctx.lineTo(width - inset - cut, inset)
+  ctx.lineTo(width - inset, inset + cut)
+  ctx.lineTo(width - inset, height - inset - cut)
+  ctx.lineTo(width - inset - cut, height - inset)
+  ctx.lineTo(inset + cut, height - inset)
+  ctx.lineTo(inset, height - inset - cut)
+  ctx.lineTo(inset, inset + cut)
+  ctx.closePath()
+  ctx.stroke()
+  ctx.shadowBlur = 0
+
+  ctx.setLineDash([10, 8])
+  ctx.strokeStyle = "rgba(56,189,248,0.38)"
+  ctx.strokeRect(width * 0.24, height * 0.08, width * 0.52, height * 0.78)
+  ctx.setLineDash([])
+
+  const scanY = height * 0.08 + ((Date.now() / 8) % (height * 0.78))
+  const gradient = ctx.createLinearGradient(0, scanY - 22, 0, scanY + 22)
+  gradient.addColorStop(0, "rgba(56,189,248,0)")
+  gradient.addColorStop(0.5, "rgba(56,189,248,0.6)")
+  gradient.addColorStop(1, "rgba(56,189,248,0)")
+  ctx.fillStyle = gradient
+  ctx.fillRect(width * 0.21, scanY - 22, width * 0.58, 44)
+
+  ctx.fillStyle = "rgba(2,6,23,0.72)"
+  drawRoundedRect(ctx, 28, 28, Math.min(410, width - 56), 102, 14)
+  ctx.fill()
+  ctx.strokeStyle = "rgba(56,189,248,0.25)"
+  ctx.stroke()
+
+  ctx.fillStyle = "#7dd3fc"
+  ctx.font = "700 13px ui-monospace, SFMono-Regular, Menlo, monospace"
+  ctx.fillText("FACE SCAN", 46, 56)
+  ctx.font = "500 12px ui-monospace, SFMono-Regular, Menlo, monospace"
+  ctx.fillText(`STATUS: ${signal.facePresent ? "LOCKED" : "SEARCHING"}`, 46, 80)
+  ctx.fillText(`STEP: ${stepTitle(currentStep).toUpperCase()}`, 46, 102)
+  ctx.fillText(`CONFIDENCE: ${Math.round(signal.confidence)}%`, 46, 124)
+
+  const panelW = 210
+  const panelH = 122
+  const panelX = Math.max(28, width - panelW - 34)
+  const panelY = Math.max(34, height - panelH - 34)
+  ctx.fillStyle = "rgba(2,6,23,0.72)"
+  drawRoundedRect(ctx, panelX, panelY, panelW, panelH, 14)
+  ctx.fill()
+  ctx.strokeStyle = "rgba(56,189,248,0.28)"
+  ctx.stroke()
+  ctx.fillStyle = "#7dd3fc"
+  ctx.font = "700 12px ui-monospace, SFMono-Regular, Menlo, monospace"
+  ctx.fillText("ANALYSIS", panelX + 18, panelY + 28)
+  ctx.font = "500 12px ui-monospace, SFMono-Regular, Menlo, monospace"
+  ctx.fillText(`FACE: ${signal.facePresent ? "LOCK" : "WAIT"}`, panelX + 18, panelY + 54)
+  ctx.fillText(`HAND: ${signal.handPresent ? "LOCK" : "WAIT"}`, panelX + 18, panelY + 76)
+  ctx.fillText(`YAW: ${signal.yaw.toFixed(2)}`, panelX + 18, panelY + 98)
+
+  ctx.restore()
+}
+
+function drawFaceMesh(ctx: CanvasRenderingContext2D, landmarks: NormalizedLandmark[], width: number, height: number) {
   if (!landmarks.length) return
   ctx.save()
-  ctx.fillStyle = "rgba(34, 211, 238, 0.95)"
+  ctx.lineWidth = 1.05
+  ctx.strokeStyle = "rgba(80,220,255,0.34)"
+  ctx.shadowColor = "rgba(56,189,248,0.35)"
+  ctx.shadowBlur = 4
+  for (const [a, b] of FACE_CONNECTIONS) {
+    const p1 = landmarks[a]
+    const p2 = landmarks[b]
+    if (!p1 || !p2) continue
+    ctx.beginPath()
+    ctx.moveTo(mirrorX(p1, width), p1.y * height)
+    ctx.lineTo(mirrorX(p2, width), p2.y * height)
+    ctx.stroke()
+  }
+  ctx.shadowBlur = 0
+  ctx.fillStyle = "rgba(83, 229, 255, 0.72)"
   const step = Math.max(1, Math.floor(landmarks.length / 150))
   for (let i = 0; i < landmarks.length; i += step) {
-    const point = landmarks[i]
+    const p = landmarks[i]
     ctx.beginPath()
-    ctx.arc(mirrorX(point, width), point.y * height, 1.8, 0, Math.PI * 2)
+    ctx.arc(mirrorX(p, width), p.y * height, 1.35, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.fillStyle = "rgba(255,255,255,0.95)"
+  ctx.shadowColor = "rgba(56,189,248,0.95)"
+  ctx.shadowBlur = 10
+  for (const index of FEATURE_POINTS) {
+    const p = landmarks[index]
+    if (!p) continue
+    ctx.beginPath()
+    ctx.arc(mirrorX(p, width), p.y * height, 2.8, 0, Math.PI * 2)
     ctx.fill()
   }
   ctx.restore()
 }
 
-function drawHand(ctx: CanvasRenderingContext2D, landmarks: NormalizedLandmark[], width: number, height: number) {
+function drawHandMesh(ctx: CanvasRenderingContext2D, landmarks: NormalizedLandmark[], width: number, height: number) {
   if (!landmarks.length) return
-  const fingers = [[0, 1, 2, 3, 4], [0, 5, 6, 7, 8], [0, 9, 10, 11, 12], [0, 13, 14, 15, 16], [0, 17, 18, 19, 20]]
   ctx.save()
-  ctx.strokeStyle = "rgba(168, 85, 247, 0.95)"
+  ctx.strokeStyle = "rgba(196, 181, 253, 0.95)"
   ctx.fillStyle = "rgba(216, 180, 254, 0.95)"
   ctx.lineWidth = 3
-  for (const chain of fingers) {
+  ctx.shadowColor = "rgba(168,85,247,0.7)"
+  ctx.shadowBlur = 8
+  for (const chain of HAND_CHAINS) {
     ctx.beginPath()
     chain.forEach((index, offset) => {
-      const point = landmarks[index]
-      if (!point) return
-      const x = mirrorX(point, width)
-      const y = point.y * height
+      const p = landmarks[index]
+      if (!p) return
+      const x = mirrorX(p, width)
+      const y = p.y * height
       if (offset === 0) ctx.moveTo(x, y)
       else ctx.lineTo(x, y)
     })
     ctx.stroke()
   }
-  for (const point of landmarks) {
+  for (const p of landmarks) {
     ctx.beginPath()
-    ctx.arc(mirrorX(point, width), point.y * height, 4, 0, Math.PI * 2)
+    ctx.arc(mirrorX(p, width), p.y * height, 4, 0, Math.PI * 2)
     ctx.fill()
   }
   ctx.restore()
@@ -203,66 +342,31 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
 
   useEffect(() => () => stopCamera(), [])
 
-  function drawOverlay(signal: LiveSignal, reason: string, currentProgress: number) {
+  function drawOverlay(signal: LiveSignal, currentProgress: number, currentStep?: string) {
     const canvas = overlayCanvasRef.current
     const video = videoRef.current
     if (!canvas || !video || video.videoWidth === 0 || video.videoHeight === 0) return
-
     canvas.width = video.clientWidth || video.videoWidth
     canvas.height = video.clientHeight || video.videoHeight
     const ctx = canvas.getContext("2d")
     if (!ctx) return
-
-    const width = canvas.width
-    const height = canvas.height
-    ctx.clearRect(0, 0, width, height)
-
-    const frameW = width * 0.48
-    const frameH = height * 0.66
-    const frameX = (width - frameW) / 2
-    const frameY = height * 0.14
-    ctx.strokeStyle = currentProgress > 0.8 ? "rgba(34,197,94,0.95)" : "rgba(56,189,248,0.95)"
-    ctx.lineWidth = 2
-    ctx.setLineDash([12, 8])
-    ctx.strokeRect(frameX, frameY, frameW, frameH)
-    ctx.setLineDash([])
-
-    drawFace(ctx, signal.faceLandmarks, width, height)
-    drawHand(ctx, signal.handLandmarks, width, height)
-
-    const scanY = frameY + ((Date.now() / 9) % frameH)
-    const gradient = ctx.createLinearGradient(frameX, scanY - 18, frameX, scanY + 18)
-    gradient.addColorStop(0, "rgba(56,189,248,0)")
-    gradient.addColorStop(0.5, "rgba(56,189,248,0.55)")
-    gradient.addColorStop(1, "rgba(56,189,248,0)")
-    ctx.fillStyle = gradient
-    ctx.fillRect(frameX, scanY - 18, frameW, 36)
-
-    ctx.fillStyle = "rgba(2,6,23,0.78)"
-    ctx.fillRect(14, 14, Math.min(width - 28, 520), 100)
-    ctx.fillStyle = "white"
-    ctx.font = "600 18px system-ui"
-    ctx.fillText(stepTitle(session?.challengeSequence[stepIndex]), 30, 48)
-    ctx.fillStyle = "rgba(203,213,225,0.95)"
-    ctx.font = "13px system-ui"
-    ctx.fillText(reason.slice(0, 64), 30, 74)
-    ctx.fillStyle = currentProgress > 0.8 ? "#22c55e" : "#38bdf8"
-    ctx.fillRect(30, 91, Math.max(4, currentProgress * 320), 6)
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    drawProfessionalHud(ctx, canvas.width, canvas.height, signal, currentProgress, currentStep)
+    drawFaceMesh(ctx, signal.faceLandmarks, canvas.width, canvas.height)
+    drawHandMesh(ctx, signal.handLandmarks, canvas.width, canvas.height)
   }
 
   function sampleFrame(): FrameSample | null {
     const video = videoRef.current
     const canvas = sampleCanvasRef.current
     if (!video || !canvas || video.videoWidth === 0 || video.videoHeight === 0) return null
-
-    const mp = mediaPipeRef.current?.sample()
+    const mp: MediaPipeFaceSample | null = mediaPipeRef.current?.sample() ?? null
     canvas.width = 96
     canvas.height = 72
     const ctx = canvas.getContext("2d", { willReadFrequently: true })
     if (!ctx) return null
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
     const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data
-
     let brightnessSum = 0
     let edgeSum = 0
     let motionSum = 0
@@ -274,7 +378,6 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
       if (i >= 4) edgeSum += Math.abs(gray - (data[i - 4] + data[i - 3] + data[i - 2]) / 3)
     }
     previousPixelsRef.current = new Uint8ClampedArray(data)
-
     const pixelCount = data.length / 4
     const brightness = brightnessSum / pixelCount
     const sharpness = edgeSum / pixelCount
@@ -291,10 +394,8 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
       faceLandmarks: mp?.faceLandmarks ?? [],
       handLandmarks: mp?.handLandmarks ?? [],
     }
-
     liveSignalRef.current = signal
     setLiveSignal(signal)
-
     return {
       brightness,
       sharpness,
@@ -329,7 +430,6 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
     liveSignalRef.current = emptySignal()
     setLiveSignal(liveSignalRef.current)
     cancelRef.current = false
-
     try {
       const res = await fetch("/api/humanity/challenge/start", {
         method: "POST",
@@ -374,7 +474,6 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
     if (!session) return
     setPhase("running")
     const detectorReady = Boolean(mediaPipeRef.current)
-
     for (let i = 0; i < session.challengeSequence.length; i++) {
       if (cancelRef.current) return
       const step = session.challengeSequence[i]
@@ -384,16 +483,14 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
       let validSince: number | null = null
       const started = performance.now()
       const stepStarted = performance.now()
-
       while (!cancelRef.current) {
         const now = performance.now()
         if (now - stepStarted > STEP_TIMEOUT_MS) {
-          setError(`${stepTitle(step)} doğrulanamadı. Daha iyi ışıkta, daha yavaş ve belirgin hareketle tekrar dene.`)
+          setError(`${stepTitle(step)} doğrulanamadı. Daha iyi ışıkta ve daha belirgin hareketle tekrar dene.`)
           setPhase("error")
           stopCamera()
           return
         }
-
         const sample = sampleFrame()
         if (sample) samplesRef.current.push(sample)
         const validation = validateStep(step, liveSignalRef.current, detectorReady)
@@ -401,20 +498,18 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
         if (validation.ok) {
           validSince ??= now
           holdProgress = Math.min(1, (now - validSince) / STEP_HOLD_MS)
-          setProgress(holdProgress)
         } else {
           validSince = null
-          setProgress(0)
         }
+        setProgress(holdProgress)
         setStepReason(validation.reason)
-        drawOverlay(liveSignalRef.current, validation.reason, holdProgress)
-
+        drawOverlay(liveSignalRef.current, holdProgress, step)
         if (holdProgress >= 1) break
         await new Promise((resolve) => setTimeout(resolve, SAMPLE_MS))
       }
       timingsRef.current.push(Math.round(performance.now() - started))
+      await new Promise((resolve) => setTimeout(resolve, 420))
     }
-
     await submitDerivedScores()
   }
 
@@ -429,12 +524,10 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
     const faceConfidenceAvg = average(samples.map((sample) => sample.faceConfidence), 55)
     const yawRange = Math.max(0, ...samples.map((sample) => sample.yaw)) - Math.min(0, ...samples.map((sample) => sample.yaw))
     const blinkMax = Math.max(0, ...samples.map((sample) => sample.blinkScore))
-    const smileMax = Math.max(0, ...samples.map((sample) => sample.smileScore))
     const faceSeenCount = samples.filter((sample) => sample.facePresent).length
     const handSeenCount = samples.filter((sample) => sample.handPresent).length
     const mediaPipeActive = samples.some((sample) => sample.landmarkCount > 0) && faceSeenCount > 12
     const brightnessOk = brightnessAvg > 35 && brightnessAvg < 235
-
     const scores = {
       facePresenceScore: clamp(mediaPipeActive ? faceConfidenceAvg : brightnessOk ? 68 + sharpnessAvg * 2 : 35),
       headPoseScore: clamp(mediaPipeActive ? 55 + yawRange * 130 : 48 + motionAvg * 4),
@@ -445,7 +538,6 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
       replayRiskScore: clamp(mediaPipeActive ? Math.max(5, 42 - motionAvg - yawRange * 40) : sharpnessAvg < 2 ? 72 : 25 - motionAvg),
       injectionRiskScore: clamp(samples.length < 40 ? 68 : 10),
     }
-
     try {
       const res = await fetch("/api/humanity/challenge/submit", {
         method: "POST",
@@ -465,7 +557,6 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
             avgMotion: Math.round(motionAvg),
             yawRange: Number(yawRange.toFixed(3)),
             maxBlinkScore: Math.round(blinkMax * 100),
-            maxSmileScore: Math.round(smileMax * 100),
             rawVideoUploaded: false,
           },
         }),
@@ -529,12 +620,12 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary" className="border-primary/30 bg-primary/10 text-cyan-100">Live liveness challenge</Badge>
+            <Badge variant="secondary" className="border-primary/30 bg-primary/10 text-cyan-100">Enterprise liveness scan</Badge>
             <Badge variant="outline" className="border-purple-400/30 bg-purple-400/10 text-purple-100">{detectorLabel}</Badge>
             {phase === "running" && <Badge variant="outline" className="border-green-400/30 bg-green-400/10 text-green-200">Step {stepIndex + 1}/{session?.challengeSequence.length ?? 0}</Badge>}
           </div>
           <h2 className="mt-3 text-2xl font-semibold text-white">Humanity Scan</h2>
-          <p className="mt-1 text-sm text-slate-300">Hareket doğrulanmadan sonraki adıma geçmez. Yüz mesh ve el noktaları canlı çizilir.</p>
+          <p className="mt-1 text-sm text-slate-300">Profesyonel HUD, yüz mesh, el mesh ve canlı liveness doğrulama. Hareket doğrulanmadan adım geçmez.</p>
         </div>
         <Video className="text-primary" />
       </div>
@@ -542,7 +633,7 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
       {error && <div className="mb-4 rounded-xl border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-200"><XCircle className="mr-2 inline size-4" />{error}</div>}
 
       {(phase === "camera" || phase === "running" || phase === "submitting") && (
-        <div className="relative overflow-hidden rounded-2xl border border-primary/30 bg-black">
+        <div className="relative overflow-hidden rounded-2xl border border-primary/30 bg-black shadow-[0_0_60px_rgba(56,189,248,0.12)]">
           <video ref={videoRef} playsInline muted className="aspect-video w-full -scale-x-100 object-cover" />
           <canvas ref={overlayCanvasRef} className="pointer-events-none absolute inset-0 size-full" />
           <canvas ref={sampleCanvasRef} className="hidden" />
@@ -564,7 +655,7 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
         {phase === "idle" && <button onClick={startSession} className={`${buttonVariants()} glow-primary`}><Camera data-icon="inline-start" /> Start real humanity scan</button>}
         {phase === "starting" && <p className="text-sm text-cyan-200"><Loader2 className="mr-2 inline size-4 animate-spin" /> Creating secure challenge...</p>}
         {phase === "camera" && <button onClick={allowCamera} className={buttonVariants({ variant: "outline" })}>Allow camera and begin scan</button>}
-        {phase === "running" && <p className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-slate-300">Acele etme. Sistem her adımda mesh/el sinyalini sabit görünce geçecek.</p>}
+        {phase === "running" && <p className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-slate-300">Acele etme. Sistem her adımda yüz/el sinyalini sabit görünce geçecek.</p>}
         {phase === "submitting" && <p className="text-sm text-cyan-200"><Loader2 className="mr-2 inline size-4 animate-spin" /> Submitting liveness evidence...</p>}
         {phase === "result" && result && (
           <div className={`rounded-2xl border p-4 ${decisionClass(result.decision)}`}>
