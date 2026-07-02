@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { AlertTriangle, Loader2, RotateCcw } from "lucide-react"
 
@@ -78,8 +78,11 @@ function DashboardLabelNormalizer() {
 export function AnalysisRouteClient({ analysisId }: { analysisId: string }) {
   const [state, setState] = useState<RouteState>({ status: "loading" })
 
-  async function load() {
-    setState({ status: "loading" })
+  const markCompleted = useCallback(() => {
+    setState({ status: "completed" })
+  }, [])
+
+  const fetchRouteState = useCallback(async (): Promise<RouteState> => {
     try {
       const response = await fetch(`/api/analysis/${analysisId}/status`, { cache: "no-store" })
       const body = (await response.json().catch(() => ({}))) as Partial<AnalysisProcessingStatus> & { error?: string }
@@ -89,22 +92,36 @@ export function AnalysisRouteClient({ analysisId }: { analysisId: string }) {
       }
 
       if (body.status === "completed" || body.status === "failed") {
-        setState({ status: "completed" })
-        return
+        return { status: "completed" }
       }
 
-      setState({ status: "processing", data: body })
+      return { status: "processing", data: body }
     } catch (error) {
-      setState({
+      return {
         status: "error",
         message: error instanceof Error ? error.message : "Analysis could not be loaded",
-      })
+      }
     }
-  }
+  }, [analysisId])
 
   useEffect(() => {
+    let active = true
+    async function load() {
+      const nextState = await fetchRouteState()
+      if (active) setState(nextState)
+    }
+
     void load()
-  }, [analysisId])
+
+    return () => {
+      active = false
+    }
+  }, [fetchRouteState])
+
+  const retry = useCallback(async () => {
+    setState({ status: "loading" })
+    setState(await fetchRouteState())
+  }, [fetchRouteState])
 
   if (state.status === "loading") {
     return (
@@ -126,7 +143,7 @@ export function AnalysisRouteClient({ analysisId }: { analysisId: string }) {
     return (
       <main className="premium-page min-h-screen bg-background px-5 py-10 text-foreground sm:px-8">
         <DashboardLabelNormalizer />
-        <AnalysisProcessing analysisId={analysisId} initialStatus={state.data} />
+        <AnalysisProcessing analysisId={analysisId} initialStatus={state.data} onCompleted={markCompleted} />
       </main>
     )
   }
@@ -157,7 +174,7 @@ export function AnalysisRouteClient({ analysisId }: { analysisId: string }) {
             {state.message}
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => void load()}>
+            <Button variant="outline" onClick={() => void retry()}>
               <RotateCcw data-icon="inline-start" /> Retry
             </Button>
             <Link href="/dashboard/new-analysis" className={buttonVariants({ variant: "outline" })}>

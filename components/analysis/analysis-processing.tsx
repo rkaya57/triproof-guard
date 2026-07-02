@@ -24,9 +24,11 @@ export type AnalysisProcessingStatus = {
 export function AnalysisProcessing({
   analysisId,
   initialStatus,
+  onCompleted,
 }: {
   analysisId: string
   initialStatus?: Partial<AnalysisProcessingStatus>
+  onCompleted?: () => void
 }) {
   const router = useRouter()
   const inFlight = useRef(false)
@@ -47,10 +49,11 @@ export function AnalysisProcessing({
     setStatus(nextStatus)
 
     if (nextStatus.status === "completed") {
+      onCompleted?.()
       router.refresh()
     }
     return nextStatus
-  }, [analysisId, router])
+  }, [analysisId, onCompleted, router])
 
   const processOneBatch = useCallback(async () => {
     const response = await fetch(`/api/analysis/${analysisId}/process`, {
