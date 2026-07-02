@@ -8,6 +8,7 @@ import { AdminCameraChallenge } from "@/components/humanity/admin-camera-challen
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { formatTimeUTC } from "@/lib/format"
 
 type Campaign = {
   id: string
@@ -58,20 +59,28 @@ export default function HumanityGateDemoPage() {
 
   const currentStep = session?.challengeSequence[stepIndex]
 
-  async function loadCampaigns() {
-    setError(null)
-    const res = await fetch("/api/humanity/campaigns", { cache: "no-store" })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      setError(data.error ?? "Could not load Humanity campaigns")
-      return
-    }
-    setCampaigns(data.campaigns ?? [])
-    if (!campaignId && data.campaigns?.[0]) setCampaignId(data.campaigns[0].id)
-  }
-
   useEffect(() => {
+    let cancelled = false
+
+    async function loadCampaigns() {
+      const res = await fetch("/api/humanity/campaigns", { cache: "no-store" })
+      const data = await res.json().catch(() => ({}))
+      if (cancelled) return
+      if (!res.ok) {
+        setError(data.error ?? "Could not load Humanity campaigns")
+        return
+      }
+      const nextCampaigns = data.campaigns ?? []
+      setError(null)
+      setCampaigns(nextCampaigns)
+      setCampaignId((current) => current || nextCampaigns[0]?.id || "")
+    }
+
     void loadCampaigns()
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   async function startChallenge() {
@@ -224,7 +233,7 @@ export default function HumanityGateDemoPage() {
                   <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
                     <p className="text-xs uppercase tracking-wide text-slate-400">Session</p>
                     <p className="mt-1 font-mono text-xs text-cyan-200">{session.sessionId}</p>
-                    <p className="mt-2 text-sm text-slate-300">Level: {session.level} · expires: {new Date(session.expiresAt).toLocaleTimeString()}</p>
+                    <p className="mt-2 text-sm text-slate-300">Level: {session.level} / expires: {formatTimeUTC(session.expiresAt)}</p>
                   </div>
                   <div className="grid gap-2">
                     {session.challengeSequence.map((step, index) => (

@@ -4,11 +4,9 @@ import {
   ArrowRight,
   BadgeCheck,
   BrainCircuit,
-  CheckCircle2,
   CircleHelp,
   DatabaseZap,
   FileDown,
-  Fingerprint,
   GitBranch,
   Landmark,
   Layers3,
@@ -26,7 +24,6 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -141,7 +138,7 @@ export default function DocsPage() {
               </Link>
             ))}
           </nav>
-          <Link href="/dashboard/new-analysis" className={`${buttonVariants()} glow-primary hover-lift`}>Start Free</Link>
+          <Link href="/audit" className={`${buttonVariants()} glow-primary hover-lift`}>Start Free</Link>
         </header>
 
         <div className="relative z-10 mx-auto grid max-w-7xl gap-10 px-5 pb-16 pt-10 sm:px-8 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:pb-24 lg:pt-20">
@@ -157,7 +154,7 @@ export default function DocsPage() {
               Tri-Proof Guard helps Web3 teams understand campaign wallet lists before they distribute rewards. Upload wallets, enrich them with real on-chain evidence, review suspicious clusters and export cleaner decision lists.
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Link href="/dashboard/new-analysis" className={`${buttonVariants({ size: "lg" })} glow-primary hover-lift`}>Run a free analysis <ArrowRight data-icon="inline-end" /></Link>
+              <Link href="/audit" className={`${buttonVariants({ size: "lg" })} glow-primary hover-lift`}>Run a mini audit <ArrowRight data-icon="inline-end" /></Link>
               <Link href="/dashboard/demo" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>View demo report</Link>
             </div>
           </div>
@@ -297,7 +294,7 @@ export default function DocsPage() {
           <h2 className="text-gradient text-3xl font-semibold">Ready to check your own wallet list?</h2>
           <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">Start with a free analysis, then upgrade when your campaign needs larger wallet capacity or operational exports.</p>
           <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
-            <Link href="/dashboard/new-analysis" className={`${buttonVariants({ size: "lg" })} glow-primary hover-lift`}>Start free analysis</Link>
+            <Link href="/audit" className={`${buttonVariants({ size: "lg" })} glow-primary hover-lift`}>Start mini audit</Link>
             <Link href="/contact" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>Contact the team</Link>
           </div>
         </div>

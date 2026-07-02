@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { MetricCard } from "@/components/dashboard/metric-card"
+import { formatNumber } from "@/lib/format"
 
  type DashboardResponse = {
   user: { name: string; email: string }
@@ -128,7 +129,7 @@ export function DashboardHome() {
         <div className="reveal-up delay-100">
           <MetricCard
             title="Total projects"
-            value={stats.projectCount.toLocaleString()}
+            value={formatNumber(stats.projectCount)}
             description="Campaigns created in this workspace."
             icon={Layers3}
           />
@@ -136,7 +137,7 @@ export function DashboardHome() {
         <div className="reveal-up delay-200">
           <MetricCard
             title="Wallets analyzed"
-            value={stats.totalWallets.toLocaleString()}
+            value={formatNumber(stats.totalWallets)}
             description="Valid wallet rows scored by the risk engine."
             icon={WalletCards}
           />
@@ -205,7 +206,7 @@ export function DashboardHome() {
               </div>
               <Badge variant="secondary" className="w-fit capitalize">{analysis.status}</Badge>
               <span className="text-sm text-muted-foreground">
-                {analysis.totalWallets.toLocaleString()} wallets
+                {formatNumber(analysis.totalWallets)} wallets
               </span>
               <span className="text-sm text-muted-foreground">
                 Avg risk {analysis.averageRiskScore}

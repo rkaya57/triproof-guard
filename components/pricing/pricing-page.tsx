@@ -14,6 +14,19 @@ import {
 
 const plans = [
   {
+    name: "Mini Audit",
+    price: "Free",
+    detail: "Browser-side first-pass wallet list triage for sales and campaign prep.",
+    cta: "Start mini audit",
+    href: "/audit",
+    features: [
+      "100-500 wallet sample",
+      "Duplicate and invalid row checks",
+      "Simple cluster hints",
+      "No raw data submission",
+    ],
+  },
+  {
     name: "Starter",
     price: "29 USDC",
     detail: "Small campaign audits and first paid customer reports.",
@@ -76,8 +89,8 @@ export function PricingPage() {
           <Link href="/dashboard/demo" className={buttonVariants({ variant: "outline" })}>
             View Demo
           </Link>
-          <Link href="/dashboard/new-analysis" className={`${buttonVariants()} glow-primary`}>
-            Free 100-wallet Trial
+          <Link href="/audit" className={`${buttonVariants()} glow-primary`}>
+            Free Mini Audit
           </Link>
         </div>
       </header>
@@ -96,7 +109,7 @@ export function PricingPage() {
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-5 px-5 py-16 sm:px-8 lg:grid-cols-3">
+      <section className="mx-auto grid max-w-7xl gap-5 px-5 py-16 sm:px-8 lg:grid-cols-4">
         {plans.map((plan) => (
           <Card
             key={plan.name}

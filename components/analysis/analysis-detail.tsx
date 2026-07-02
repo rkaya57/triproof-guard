@@ -60,6 +60,12 @@ import {
 } from "@/components/ui/table"
 import { MetricCard } from "@/components/dashboard/metric-card"
 import { useToast } from "@/components/ui/toast"
+import {
+  getCampaignPolicy,
+  getDecisionIntelligence,
+  getWalletReasonCodes,
+} from "@/lib/campaign-decision"
+import { formatDateTimeUTC, formatDateUTC, formatNumber } from "@/lib/format"
 import type {
   AnalysisDetail as AnalysisDetailType,
   EntityType,
@@ -264,11 +270,19 @@ function ReasonSummary({
   wallet: WalletRiskResult
   onOpen: (walletAddress: string) => void
 }) {
+  const reasonCodes = getWalletReasonCodes(wallet).slice(0, 3)
   const visibleReasons = wallet.reasons.slice(0, 2)
   const hiddenCount = Math.max(0, wallet.reasons.length - visibleReasons.length)
 
   return (
     <div className="flex min-w-0 max-w-full flex-col gap-1" title={wallet.reasons.join("\n")}>
+      <div className="mb-1 flex flex-wrap gap-1">
+        {reasonCodes.map((code) => (
+          <Badge key={code} variant="outline" className="border-primary/25 bg-primary/5 font-mono text-[10px] text-primary">
+            {code}
+          </Badge>
+        ))}
+      </div>
       {visibleReasons.map((reason) => (
         <div key={reason} className="truncate text-xs text-muted-foreground">
           {reason}
@@ -333,12 +347,6 @@ function SortableHead({
   )
 }
 
-function formatDate(value: string | null | undefined) {
-  if (!value) return "-"
-  const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime()) ? "-" : parsed.toLocaleDateString("en-US")
-}
-
 function OnChainDataSection({ wallet }: { wallet: WalletRiskResult }) {
   const hasData =
     Boolean(wallet.enrichmentProvider) ||
@@ -358,8 +366,8 @@ function OnChainDataSection({ wallet }: { wallet: WalletRiskResult }) {
         <div className="grid gap-3 sm:grid-cols-2">
           <DetailRow label="Provider">{wallet.enrichmentProvider ?? "-"}</DetailRow>
           <DetailRow label="Enrichment status">{wallet.enrichmentStatus ?? "-"}</DetailRow>
-          <DetailRow label="First seen">{formatDate(wallet.firstSeen)}</DetailRow>
-          <DetailRow label="Last seen">{formatDate(wallet.lastSeen)}</DetailRow>
+          <DetailRow label="First seen">{formatDateUTC(wallet.firstSeen)}</DetailRow>
+          <DetailRow label="Last seen">{formatDateUTC(wallet.lastSeen)}</DetailRow>
           <DetailRow label="Wallet age">{wallet.walletAgeDays ?? "-"} days</DetailRow>
           <DetailRow label="Transaction count">{wallet.txCount ?? "-"}</DetailRow>
           <DetailRow label="Funding source">
@@ -507,6 +515,16 @@ function ReviewDrawer({
               {wallet.statusExplanation ??
                 "Status is based on risk score and contextual wallet signals."}
             </p>
+          </DetailRow>
+
+          <DetailRow label="Reason codes">
+            <div className="flex flex-wrap gap-2">
+              {getWalletReasonCodes(wallet).map((code) => (
+                <Badge key={code} variant="outline" className="border-primary/30 bg-primary/10 font-mono text-xs text-primary">
+                  {code}
+                </Badge>
+              ))}
+            </div>
           </DetailRow>
 
           <DetailRow label="All risk reasons">
@@ -774,6 +792,8 @@ export function AnalysisDetail({
   ).sort()
 
   const exportPath = exportBasePath ?? `/api/analysis/${analysis.id}/export`
+  const campaignPolicy = getCampaignPolicy(analysis)
+  const decisionIntelligence = getDecisionIntelligence(analysis)
 
   return (
     <div className="flex flex-col gap-6">
@@ -788,7 +808,7 @@ export function AnalysisDetail({
           </div>
           <h2 className="text-gradient text-3xl font-semibold">{analysis.project.name}</h2>
           <p className="mt-2 text-muted-foreground">
-            Created {new Date(analysis.createdAt).toLocaleString("en-US")} from {analysis.csvFileName ?? "uploaded CSV"}.
+            Created {formatDateTimeUTC(analysis.createdAt)} from {analysis.csvFileName ?? "uploaded CSV"}.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -825,25 +845,25 @@ export function AnalysisDetail({
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Total wallets"
-          value={analysis.totalWallets.toLocaleString()}
+          value={formatNumber(analysis.totalWallets)}
           description="Valid rows included in scoring."
           icon={WalletCards}
         />
         <MetricCard
           title="Approved"
-          value={analysis.approvedCount.toLocaleString()}
+          value={formatNumber(analysis.approvedCount)}
           description="Suggested clean reward list."
           icon={CheckCircle2}
         />
         <MetricCard
           title="Manual review"
-          value={analysis.manualReviewCount.toLocaleString()}
+          value={formatNumber(analysis.manualReviewCount)}
           description="Needs project team decision."
           icon={AlertTriangle}
         />
         <MetricCard
           title="Rejected"
-          value={analysis.rejectedCount.toLocaleString()}
+          value={formatNumber(analysis.rejectedCount)}
           description="High risk reward exclusions."
           icon={ShieldX}
         />
@@ -858,17 +878,88 @@ export function AnalysisDetail({
         />
         <MetricCard
           title="Suspicious clusters"
-          value={analysis.suspiciousClustersCount.toLocaleString()}
+          value={formatNumber(analysis.suspiciousClustersCount)}
           description="Funding and behavior groups."
           icon={Layers3}
         />
         <MetricCard
           title="Known Entities"
-          value={knownEntitiesCount.toLocaleString()}
-          description={`${exchangeServiceWalletsCount.toLocaleString()} exchange / service wallets.`}
+          value={formatNumber(knownEntitiesCount)}
+          description={`${formatNumber(exchangeServiceWalletsCount)} exchange / service wallets.`}
           icon={Landmark}
         />
       </div>
+
+      <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
+        <Card className="glass-panel premium-card animated-border">
+          <CardHeader>
+            <CardTitle>Campaign Decision Engine</CardTitle>
+            <CardDescription>
+              {campaignPolicy.label} for {campaignPolicy.scope}. These thresholds turn wallet evidence into approve, review and reject lists.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-3">
+            {campaignPolicy.rules.map((rule) => (
+              <div key={rule.label} className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">{rule.label}</p>
+                <p className="mt-1 text-2xl font-semibold text-primary">{rule.value}</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{rule.detail}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card className="glass-panel premium-card">
+          <CardHeader>
+            <CardTitle>Clean List Proof</CardTitle>
+            <CardDescription>
+              Campaign-scoped proof package. It is not a global identity record and does not require raw personal data.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-green-400/25 bg-green-400/10 p-4">
+              <p className="text-xs uppercase tracking-wide text-green-200">Clean list</p>
+              <p className="mt-1 text-2xl font-semibold text-green-200">{decisionIntelligence.cleanRate}%</p>
+              <p className="mt-2 text-sm text-muted-foreground">{formatNumber(decisionIntelligence.cleanWallets.length)} wallets approved.</p>
+            </div>
+            <div className="rounded-lg border border-amber-400/25 bg-amber-400/10 p-4">
+              <p className="text-xs uppercase tracking-wide text-amber-200">Review queue</p>
+              <p className="mt-1 text-2xl font-semibold text-amber-200">{decisionIntelligence.reviewRate}%</p>
+              <p className="mt-2 text-sm text-muted-foreground">{formatNumber(decisionIntelligence.reviewWallets.length)} wallets need a team call.</p>
+            </div>
+            <div className="rounded-lg border border-red-400/25 bg-red-400/10 p-4">
+              <p className="text-xs uppercase tracking-wide text-red-200">Excluded</p>
+              <p className="mt-1 text-2xl font-semibold text-red-200">{decisionIntelligence.rejectRate}%</p>
+              <p className="mt-2 text-sm text-muted-foreground">{formatNumber(decisionIntelligence.rejectedWallets.length)} wallets rejected.</p>
+            </div>
+            <div className="rounded-lg border border-primary/20 bg-background/45 p-4 sm:col-span-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Proof ID</p>
+              <p className="mt-1 break-all font-mono text-sm text-primary">{decisionIntelligence.proofId}</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {formatNumber(decisionIntelligence.clusteredWallets)} clustered wallets and top reason codes are retained for explainable customer review.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="glass-panel premium-card">
+        <CardHeader>
+          <CardTitle>Explainable Reason Codes</CardTitle>
+          <CardDescription>
+            Human-readable evidence is normalized into compact codes for API responses, clean-list exports and manual review.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {decisionIntelligence.topReasonCodes.map((item) => (
+            <div key={item.code} className="rounded-lg border border-border bg-background/45 p-4">
+              <p className="break-all font-mono text-xs text-primary">{item.code}</p>
+              <p className="mt-2 text-2xl font-semibold">{formatNumber(item.count)}</p>
+              <p className="text-xs text-muted-foreground">wallets</p>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       {analysis.enrichment && (
         <>
@@ -887,19 +978,19 @@ export function AnalysisDetail({
             />
             <MetricCard
               title="Enriched wallets"
-              value={analysis.enrichment.enrichedCount.toLocaleString()}
+              value={formatNumber(analysis.enrichment.enrichedCount)}
               description="Wallets with on-chain data."
               icon={CheckCircle2}
             />
             <MetricCard
               title="Failed enrichments"
-              value={analysis.enrichment.failedCount.toLocaleString()}
+              value={formatNumber(analysis.enrichment.failedCount)}
               description="Fell back to available data."
               icon={AlertTriangle}
             />
             <MetricCard
               title="Cache hits"
-              value={analysis.enrichment.cacheHits.toLocaleString()}
+              value={formatNumber(analysis.enrichment.cacheHits)}
               description="Reused recent enrichment."
               icon={RotateCcw}
             />
@@ -1028,7 +1119,7 @@ export function AnalysisDetail({
                   <div>
                     <CardTitle>{cluster.clusterLabel}</CardTitle>
                     <CardDescription>
-                      {cluster.walletCount.toLocaleString()} linked wallets
+                      {formatNumber(cluster.walletCount)} linked wallets
                     </CardDescription>
                   </div>
                   <div className="flex flex-col items-end gap-1">
@@ -1274,13 +1365,13 @@ export function AnalysisDetail({
             <p className="text-sm text-muted-foreground">
               {sortedWallets.length === 0
                 ? "No matching wallets."
-                : `Showing ${(
+                : `Showing ${formatNumber(
                     (currentPage - 1) * pageSize +
                     1
-                  ).toLocaleString()}–${Math.min(
+                  )}-${formatNumber(Math.min(
                     currentPage * pageSize,
                     sortedWallets.length
-                  ).toLocaleString()} of ${sortedWallets.length.toLocaleString()} matching wallets.`}
+                  ))} of ${formatNumber(sortedWallets.length)} matching wallets.`}
             </p>
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 text-xs text-muted-foreground">

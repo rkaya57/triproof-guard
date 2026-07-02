@@ -24,6 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useToast } from "@/components/ui/toast"
+import { formatNumber } from "@/lib/format"
 import type { AnalysisDetail, FeedbackLabel, WalletRiskResult, WalletStatus } from "@/types"
 
 type Draft = {
@@ -254,9 +255,9 @@ export function TeamReviewDashboard({ initialAnalysis }: { initialAnalysis: Anal
       </div>
 
       <div className="grid gap-5 md:grid-cols-4">
-        <Card className="glass-panel"><CardHeader><CardTitle>{reviewSummary.reviewedWallets.toLocaleString()}</CardTitle><CardDescription>Reviewed wallets</CardDescription></CardHeader></Card>
-        <Card className="glass-panel"><CardHeader><CardTitle>{reviewSummary.pendingReview.toLocaleString()}</CardTitle><CardDescription>Pending team review</CardDescription></CardHeader></Card>
-        <Card className="glass-panel"><CardHeader><CardTitle>{feedbackSummary.totalFeedback.toLocaleString()}</CardTitle><CardDescription>Feedback events</CardDescription></CardHeader></Card>
+        <Card className="glass-panel"><CardHeader><CardTitle>{formatNumber(reviewSummary.reviewedWallets)}</CardTitle><CardDescription>Reviewed wallets</CardDescription></CardHeader></Card>
+        <Card className="glass-panel"><CardHeader><CardTitle>{formatNumber(reviewSummary.pendingReview)}</CardTitle><CardDescription>Pending team review</CardDescription></CardHeader></Card>
+        <Card className="glass-panel"><CardHeader><CardTitle>{formatNumber(feedbackSummary.totalFeedback)}</CardTitle><CardDescription>Feedback events</CardDescription></CardHeader></Card>
         <Card className="glass-panel"><CardHeader><CardTitle>{feedbackSummary.falsePositive + feedbackSummary.falseNegative}</CardTitle><CardDescription>Calibration corrections</CardDescription></CardHeader></Card>
       </div>
 

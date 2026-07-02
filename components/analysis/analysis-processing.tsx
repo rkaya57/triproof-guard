@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2, RefreshCw, Zap } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { formatNumber } from "@/lib/format"
 
 export type AnalysisProcessingStatus = {
   analysisId: string
@@ -35,7 +36,7 @@ export function AnalysisProcessing({
   const [error, setError] = useState("")
   const [lastWorkerMessage, setLastWorkerMessage] = useState("")
 
-  async function loadStatus() {
+  const loadStatus = useCallback(async () => {
     const response = await fetch(`/api/analysis/${analysisId}/status`, { cache: "no-store" })
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null
@@ -49,9 +50,9 @@ export function AnalysisProcessing({
       router.refresh()
     }
     return nextStatus
-  }
+  }, [analysisId, router])
 
-  async function processOneBatch() {
+  const processOneBatch = useCallback(async () => {
     const response = await fetch(`/api/analysis/${analysisId}/process`, {
       method: "POST",
       cache: "no-store",
@@ -59,14 +60,14 @@ export function AnalysisProcessing({
     const body = (await response.json().catch(() => ({}))) as { message?: string; error?: string; status?: string }
     if (!response.ok) throw new Error(body.error ?? "Could not process analysis batch")
     setLastWorkerMessage(body.message ?? body.status ?? "Batch trigger sent")
-  }
+  }, [analysisId])
 
-  async function tick() {
+  const tick = useCallback(async () => {
     if (inFlight.current) return
     inFlight.current = true
-    setError("")
     try {
       const current = await loadStatus()
+      setError("")
       if (current.status !== "completed") {
         await processOneBatch()
         await loadStatus()
@@ -76,7 +77,7 @@ export function AnalysisProcessing({
     } finally {
       inFlight.current = false
     }
-  }
+  }, [loadStatus, processOneBatch])
 
   useEffect(() => {
     let active = true
@@ -93,7 +94,7 @@ export function AnalysisProcessing({
       active = false
       window.clearInterval(timer)
     }
-  }, [analysisId])
+  }, [tick])
 
   const progress = Math.max(0, Math.min(100, status.progressPercent ?? 0))
 
@@ -127,13 +128,13 @@ export function AnalysisProcessing({
           <div className="rounded-lg border border-border bg-muted/20 p-3">
             <p className="text-xs text-muted-foreground">Wallets</p>
             <p className="text-lg font-semibold">
-              {(status.processedWalletCount ?? 0).toLocaleString()} / {(status.totalWallets ?? 0).toLocaleString()}
+              {formatNumber(status.processedWalletCount ?? 0)} / {formatNumber(status.totalWallets ?? 0)}
             </p>
           </div>
           <div className="rounded-lg border border-border bg-muted/20 p-3">
             <p className="text-xs text-muted-foreground">Batches</p>
             <p className="text-lg font-semibold">
-              {(status.completedBatchCount ?? 0).toLocaleString()} / {(status.batchCount ?? 0).toLocaleString()}
+              {formatNumber(status.completedBatchCount ?? 0)} / {formatNumber(status.batchCount ?? 0)}
             </p>
           </div>
           <div className="rounded-lg border border-border bg-muted/20 p-3">

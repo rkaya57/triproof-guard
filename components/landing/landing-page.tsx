@@ -34,6 +34,7 @@ import {
 const navLinks = [
   ["Workflow", "#workflow"],
   ["Features", "#features"],
+  ["Mini Audit", "/audit"],
   ["Docs", "/docs"],
   ["Blog", "/blog"],
   ["Pricing", "/pricing"],
@@ -105,7 +106,7 @@ const useCases = [
 ]
 
 const plans = [
-  ["Free Trial", "100 wallets", "Try the core report before payment", "/dashboard/new-analysis"],
+  ["Free Trial", "100 wallets", "Try the mini audit before payment", "/audit"],
   ["Starter", "29 USDC", "Up to 1,000 wallet credits", "/checkout?plan=starter"],
   ["Growth", "99 USDC", "Up to 10,000 wallet credits", "/checkout?plan=growth"],
   ["Pro", "249 USDC", "Up to 50,000 wallet credits", "/checkout?plan=pro"],
@@ -140,7 +141,7 @@ export function LandingPage() {
           </nav>
           <div className="flex items-center gap-3">
             <Link href="/login" className={`${buttonVariants({ variant: "outline" })} hover-lift hidden sm:inline-flex`}>Login</Link>
-            <Link href="/dashboard/new-analysis" className={`${buttonVariants()} glow-primary hover-lift`}>Start Free</Link>
+            <Link href="/audit" className={`${buttonVariants()} glow-primary hover-lift`}>Start Free</Link>
           </div>
         </header>
 
@@ -159,7 +160,7 @@ export function LandingPage() {
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Link href="/dashboard/new-analysis" className={`${buttonVariants({ size: "lg" })} glow-primary hover-lift`}>Start 100-wallet trial <ArrowRight data-icon="inline-end" /></Link>
+              <Link href="/audit" className={`${buttonVariants({ size: "lg" })} glow-primary hover-lift`}>Get free mini audit <ArrowRight data-icon="inline-end" /></Link>
               <Link href="/docs" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>Read docs <BookOpen data-icon="inline-end" /></Link>
             </div>
             <div className="grid max-w-2xl gap-3 sm:grid-cols-3">
@@ -280,7 +281,7 @@ export function LandingPage() {
       <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
         <div className="glass-panel scan-accent premium-card animated-border relative flex flex-col items-start justify-between gap-6 overflow-hidden rounded-2xl p-8 sm:p-10 md:flex-row md:items-center">
           <div className="relative z-10"><div className="mb-3 flex items-center gap-2 text-primary"><Sparkles className="size-5" /><span className="font-mono text-xs uppercase tracking-[0.2em]">Live MVP</span></div><h2 className="text-gradient text-2xl font-semibold sm:text-3xl">Test the first 100 wallets free today.</h2><p className="mt-2 max-w-xl text-muted-foreground">Upload a CSV, review risk signals and see whether Tri-Proof Guard fits your Web3 campaign workflow.</p></div>
-          <div className="relative z-10 flex flex-col gap-3 sm:flex-row"><Link href="/dashboard/new-analysis" className={`${buttonVariants()} glow-primary hover-lift`}>Start free analysis</Link><Link href="/docs" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>Read docs</Link><Link href="/contact" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>Contact</Link></div>
+          <div className="relative z-10 flex flex-col gap-3 sm:flex-row"><Link href="/audit" className={`${buttonVariants()} glow-primary hover-lift`}>Start mini audit</Link><Link href="/docs" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>Read docs</Link><Link href="/contact" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>Contact</Link></div>
         </div>
       </section>
 

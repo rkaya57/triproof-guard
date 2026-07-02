@@ -92,7 +92,7 @@ export default function ContactPage() {
               </Link>
             ))}
           </nav>
-          <Link href="/dashboard/new-analysis" className={`${buttonVariants()} glow-primary hover-lift`}>Start Free</Link>
+          <Link href="/audit" className={`${buttonVariants()} glow-primary hover-lift`}>Start Free</Link>
         </header>
 
         <div className="relative z-10 mx-auto grid max-w-7xl gap-10 px-5 pb-16 pt-10 sm:px-8 lg:grid-cols-[1fr_0.95fr] lg:items-center lg:pb-24 lg:pt-20">
