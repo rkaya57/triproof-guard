@@ -37,6 +37,7 @@ export const metadata = {
 
 const navLinks = [
   ["Home", "/"],
+  ["Trust", "/docs/trust"],
   ["Blog", "/blog"],
   ["Pricing", "/pricing"],
   ["Contact", "/contact"],
@@ -155,7 +156,8 @@ export default function DocsPage() {
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Link href="/audit" className={`${buttonVariants({ size: "lg" })} glow-primary hover-lift`}>Run a mini audit <ArrowRight data-icon="inline-end" /></Link>
-              <Link href="/dashboard/demo" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>View demo report</Link>
+            <Link href="/dashboard/demo" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>View demo report</Link>
+            <Link href="/docs/trust" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>Trust methodology</Link>
             </div>
           </div>
 
@@ -295,6 +297,7 @@ export default function DocsPage() {
           <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">Start with a free analysis, then upgrade when your campaign needs larger wallet capacity or operational exports.</p>
           <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
             <Link href="/audit" className={`${buttonVariants({ size: "lg" })} glow-primary hover-lift`}>Start mini audit</Link>
+            <Link href="/docs/trust" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>Read trust page</Link>
             <Link href="/contact" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>Contact the team</Link>
           </div>
         </div>

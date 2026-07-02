@@ -87,6 +87,10 @@ function toPayload(draft: Draft | FormState, id?: string) {
   }
 }
 
+function coverImageStyle(url: string) {
+  return { backgroundImage: `url("${url.replace(/"/g, "%22")}")` }
+}
+
 export function BlogDraftConsole() {
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [form, setForm] = useState<FormState>(emptyForm)
@@ -331,7 +335,18 @@ export function BlogDraftConsole() {
           <CardHeader><CardTitle className="flex items-center gap-2"><Eye className="text-primary" /> Live preview</CardTitle><CardDescription>How the card will look on /blog.</CardDescription></CardHeader>
           <CardContent>
             <div className="overflow-hidden rounded-2xl border border-border bg-background/60">
-              <div className="flex h-52 items-center justify-center bg-primary/10">{previewImage ? <img src={previewImage} alt="Cover preview" className="h-full w-full object-cover" /> : <div className="text-center text-sm text-muted-foreground"><ImagePlus className="mx-auto mb-2 text-primary" /> Cover image preview</div>}</div>
+              <div className="flex h-52 items-center justify-center bg-primary/10">
+                {previewImage ? (
+                  <div
+                    role="img"
+                    aria-label="Cover preview"
+                    className="h-full w-full bg-cover bg-center"
+                    style={coverImageStyle(previewImage)}
+                  />
+                ) : (
+                  <div className="text-center text-sm text-muted-foreground"><ImagePlus className="mx-auto mb-2 text-primary" /> Cover image preview</div>
+                )}
+              </div>
               <div className="p-5"><span className="cyber-chip">{form.status === "draft" ? "Draft" : previewCategory}</span><h3 className="mt-4 text-2xl font-semibold">{previewTitle}</h3><p className="mt-3 text-sm leading-6 text-muted-foreground">{previewExcerpt}</p></div>
             </div>
           </CardContent>
@@ -345,7 +360,18 @@ export function BlogDraftConsole() {
           {!loading && drafts.length === 0 && <p className="text-sm text-muted-foreground">No posts yet.</p>}
           {drafts.map((draft) => (
             <div key={draft.id} className={`overflow-hidden rounded-xl border bg-background/50 ${editingId === draft.id ? "border-primary" : "border-border"}`}>
-              <div className="flex h-36 items-center justify-center bg-primary/10">{draft.coverImageUrl ? <img src={draft.coverImageUrl} alt="Cover" className="h-full w-full object-cover" /> : <ImagePlus className="text-primary" />}</div>
+              <div className="flex h-36 items-center justify-center bg-primary/10">
+                {draft.coverImageUrl ? (
+                  <div
+                    role="img"
+                    aria-label="Cover"
+                    className="h-full w-full bg-cover bg-center"
+                    style={coverImageStyle(draft.coverImageUrl)}
+                  />
+                ) : (
+                  <ImagePlus className="text-primary" />
+                )}
+              </div>
               <div className="p-4">
                 <div className="mb-2 flex items-center justify-between gap-2"><span className="cyber-chip">{draft.category || "Blog"}</span><span className={draft.status === "draft" ? "text-xs text-muted-foreground" : "text-xs text-primary"}>{draft.status}</span></div>
                 <p className="font-medium">{draft.title}</p>

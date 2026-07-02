@@ -127,6 +127,10 @@ function average(values: number[], fallback = 0) {
   return clean.length ? clean.reduce((sum, value) => sum + value, 0) / clean.length : fallback
 }
 
+function getTimestampMs() {
+  return performance.now()
+}
+
 function stepTitle(step?: string) {
   switch (step) {
     case "LOOK_CENTER": return "Yüzünü ortala"
@@ -589,7 +593,7 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
   const [stepReason, setStepReason] = useState("Hazır")
   const [detectorLabel, setDetectorLabel] = useState("Canvas fallback")
   const [signatureStatus, setSignatureStatus] = useState<string | null>(null)
-  const [liveSignal, setLiveSignal] = useState<LiveSignal>(liveSignalRef.current)
+  const [liveSignal, setLiveSignal] = useState<LiveSignal>(() => emptySignal())
 
   function stopCamera() {
     cancelRef.current = true
@@ -700,8 +704,9 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
     previousPixelsRef.current = null
     smoothedFaceLandmarksRef.current = []
     smoothedHandLandmarksRef.current = []
-    liveSignalRef.current = emptySignal()
-    setLiveSignal(liveSignalRef.current)
+    const resetSignal = emptySignal()
+    liveSignalRef.current = resetSignal
+    setLiveSignal(resetSignal)
     cancelRef.current = false
     try {
       const res = await fetch("/api/humanity/challenge/start", {
@@ -754,10 +759,10 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
       setProgress(0)
       setStepReason(stepHelp(step))
       let validSince: number | null = null
-      const started = performance.now()
-      const stepStarted = performance.now()
+      const started = getTimestampMs()
+      const stepStarted = getTimestampMs()
       while (!cancelRef.current) {
-        const now = performance.now()
+        const now = getTimestampMs()
         if (now - stepStarted > STEP_TIMEOUT_MS) {
           setError(`${stepTitle(step)} doğrulanamadı. Daha iyi ışıkta ve daha belirgin hareketle tekrar dene.`)
           setPhase("error")
@@ -780,7 +785,7 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
         if (holdProgress >= 1) break
         await new Promise((resolve) => setTimeout(resolve, SAMPLE_MS))
       }
-      timingsRef.current.push(Math.round(performance.now() - started))
+      timingsRef.current.push(Math.round(getTimestampMs() - started))
       await new Promise((resolve) => setTimeout(resolve, 420))
     }
     await submitDerivedScores()
@@ -884,8 +889,9 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
     previousPixelsRef.current = null
     smoothedFaceLandmarksRef.current = []
     smoothedHandLandmarksRef.current = []
-    liveSignalRef.current = emptySignal()
-    setLiveSignal(liveSignalRef.current)
+    const resetSignal = emptySignal()
+    liveSignalRef.current = resetSignal
+    setLiveSignal(resetSignal)
     const overlay = overlayCanvasRef.current
     overlay?.getContext("2d")?.clearRect(0, 0, overlay.width, overlay.height)
   }

@@ -22,6 +22,10 @@ function renderContent(content: string) {
     .filter(Boolean)
 }
 
+function coverImageStyle(url: string) {
+  return { backgroundImage: `url("${url.replace(/"/g, "%22")}")` }
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
   const post = await getPostBySlugFromDb(slug).catch(() => null)
@@ -66,7 +70,12 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
         <div className="glass-panel overflow-hidden rounded-3xl">
           {post.coverImageUrl && (
             <div className="h-72 border-b border-border bg-primary/10 sm:h-96">
-              <img src={post.coverImageUrl} alt={post.title} className="h-full w-full object-cover" />
+              <div
+                role="img"
+                aria-label={post.title}
+                className="h-full w-full bg-cover bg-center"
+                style={coverImageStyle(post.coverImageUrl)}
+              />
             </div>
           )}
           <div className="p-8 sm:p-10">

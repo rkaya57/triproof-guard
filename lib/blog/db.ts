@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 
+import { databaseUnavailableMessage } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
 
 export type BlogPostRecord = {
@@ -64,7 +65,17 @@ function normalizeStatus(status: string | undefined) {
   return "draft"
 }
 
+function hasDatabaseUrl() {
+  return Boolean(process.env.DATABASE_URL)
+}
+
+function requireDatabaseUrl() {
+  if (!hasDatabaseUrl()) throw new Error(databaseUnavailableMessage)
+}
+
 export async function listPublishedPosts() {
+  if (!hasDatabaseUrl()) return []
+  await ensureBlogTable()
   return db.$queryRaw<BlogPostRecord[]>`
     SELECT * FROM "BlogPost"
     WHERE "status" IN ('published', 'ready')
@@ -73,6 +84,8 @@ export async function listPublishedPosts() {
 }
 
 export async function listAdminPosts() {
+  if (!hasDatabaseUrl()) return []
+  await ensureBlogTable()
   return db.$queryRaw<BlogPostRecord[]>`
     SELECT * FROM "BlogPost"
     ORDER BY "updatedAt" DESC, "createdAt" DESC
@@ -80,6 +93,8 @@ export async function listAdminPosts() {
 }
 
 export async function getPostBySlugFromDb(slug: string) {
+  if (!hasDatabaseUrl()) return null
+  await ensureBlogTable()
   const rows = await db.$queryRaw<BlogPostRecord[]>`
     SELECT * FROM "BlogPost"
     WHERE "slug" = ${slug} AND "status" IN ('published', 'ready')
@@ -89,6 +104,7 @@ export async function getPostBySlugFromDb(slug: string) {
 }
 
 export async function upsertBlogPost(input: BlogPostInput) {
+  requireDatabaseUrl()
   await ensureBlogTable()
   const id = input.id || randomUUID()
   const status = normalizeStatus(input.status)
@@ -126,6 +142,7 @@ export async function upsertBlogPost(input: BlogPostInput) {
 }
 
 export async function deleteBlogPost(id: string) {
+  requireDatabaseUrl()
   await ensureBlogTable()
   await db.$executeRaw`DELETE FROM "BlogPost" WHERE "id" = ${id}`
 }

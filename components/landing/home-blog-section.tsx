@@ -5,6 +5,10 @@ import { listPublishedPosts } from "@/lib/blog/db"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
+function coverImageStyle(url: string) {
+  return { backgroundImage: `url("${url.replace(/"/g, "%22")}")` }
+}
+
 export async function HomeBlogSection() {
   const posts = await listPublishedPosts().catch(() => [])
 
@@ -24,7 +28,16 @@ export async function HomeBlogSection() {
             {posts.slice(0, 3).map((post) => (
               <Card key={post.slug} className="glass-panel premium-card hover-lift overflow-hidden">
                 <div className="flex h-40 items-center justify-center bg-primary/10">
-                  {post.coverImageUrl ? <img src={post.coverImageUrl} alt={post.title} className="h-full w-full object-cover" /> : <BookOpen className="text-primary" />}
+                  {post.coverImageUrl ? (
+                    <div
+                      role="img"
+                      aria-label={post.title}
+                      className="h-full w-full bg-cover bg-center"
+                      style={coverImageStyle(post.coverImageUrl)}
+                    />
+                  ) : (
+                    <BookOpen className="text-primary" />
+                  )}
                 </div>
                 <CardHeader>
                   <CardTitle>{post.title}</CardTitle>

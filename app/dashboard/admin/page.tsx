@@ -9,7 +9,6 @@ import {
   CreditCard,
   DatabaseZap,
   FileText,
-  HeartPulse,
   Layers3,
   ScanFace,
   ShieldCheck,

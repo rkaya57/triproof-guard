@@ -7,20 +7,29 @@ import {
   ArrowDown,
   ArrowUp,
   CheckCircle2,
+  ClipboardCheck,
   ChevronLeft,
   ChevronRight,
   ChevronsUpDown,
   Copy,
   Download,
+  ExternalLink,
   FileText,
+  GitBranch,
   Gauge,
+  KeyRound,
   Landmark,
   Layers3,
+  LockKeyhole,
+  Mail,
   RotateCcw,
   Search,
+  Share2,
   ShieldX,
+  SlidersHorizontal,
   Users,
   WalletCards,
+  Webhook,
   X,
 } from "lucide-react"
 import {
@@ -122,7 +131,9 @@ const entityReviewTypes = new Set<EntityType>([
 ])
 
 function displayStatus(status: WalletStatus) {
-  return status.replace("_", " ")
+  if (status === "approved") return "approved"
+  if (status === "manual_review") return "gray zone"
+  return "rejected / not eligible"
 }
 
 function displayAction(action: WalletRiskResult["recommendedAction"]) {
@@ -145,6 +156,61 @@ function isEntityReviewWallet(wallet: Pick<WalletRiskResult, "entityLabel" | "en
 
 function hasSharedFundingSignal(wallet: Pick<WalletRiskResult, "reasons">) {
   return wallet.reasons.some((reason) => reason.startsWith("Shared funding source"))
+}
+
+function policyStatusForScore(score: number, policy: "conservative" | "balanced" | "strict"): WalletStatus {
+  if (policy === "conservative") {
+    if (score <= 35) return "approved"
+    if (score <= 74) return "manual_review"
+    return "rejected"
+  }
+  if (policy === "strict") {
+    if (score <= 25) return "approved"
+    if (score <= 49) return "manual_review"
+    return "rejected"
+  }
+  if (score <= 35) return "approved"
+  if (score <= 59) return "manual_review"
+  return "rejected"
+}
+
+function getPolicyScenario(wallets: WalletRiskResult[], policy: "conservative" | "balanced" | "strict") {
+  const counts = wallets.reduce(
+    (summary, wallet) => {
+      const status = policyStatusForScore(wallet.riskScore, policy)
+      summary[status] += 1
+      return summary
+    },
+    { approved: 0, manual_review: 0, rejected: 0 } satisfies Record<WalletStatus, number>
+  )
+  return {
+    policy,
+    label: `${policy[0].toUpperCase()}${policy.slice(1)}`,
+    ...counts,
+  }
+}
+
+function getClusterGraph(analysis: AnalysisDetailType) {
+  const topClusters = analysis.clusters.slice(0, 4)
+  return topClusters.map((cluster, index) => {
+    const wallets = analysis.wallets
+      .filter((wallet) => wallet.clusterId === cluster.clusterLabel)
+      .slice(0, 5)
+    return {
+      cluster,
+      wallets,
+      x: 28 + (index % 2) * 44,
+      y: 30 + Math.floor(index / 2) * 38,
+    }
+  })
+}
+
+function buildMailto(subject: string, body: string) {
+  return `mailto:info@triproofprotocol.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+}
+
+function svgPoint(value: number) {
+  return Math.round(value * 100) / 100
 }
 
 function rowToneClass(status: WalletStatus) {
@@ -310,6 +376,315 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
   )
 }
 
+function ReportReadyExperience({
+  analysis,
+  exportPath,
+  onShare,
+}: {
+  analysis: AnalysisDetailType
+  exportPath: string
+  onShare: () => void
+}) {
+  const decision = getDecisionIntelligence(analysis)
+  const completedLabel = analysis.completedAt ? formatDateTimeUTC(analysis.completedAt) : "ready now"
+
+  return (
+    <section className="glass-panel premium-card animated-border grid gap-5 rounded-2xl p-5 lg:grid-cols-[1.05fr_0.95fr]">
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="secondary" className="border-green-400/30 bg-green-400/10 text-green-200">
+            <CheckCircle2 className="size-3.5" />
+            Report ready
+          </Badge>
+          <Badge variant="outline" className="border-primary/30 bg-primary/10 font-mono text-primary">
+            {decision.proofId}
+          </Badge>
+          <Badge variant="outline">{analysis.riskPolicy ?? "balanced"} policy</Badge>
+        </div>
+        <div>
+          <h2 className="text-gradient text-3xl font-semibold">Clean-list decision package is ready.</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            Completed {completedLabel}. Export approved wallets, keep gray-zone wallets in review, and retain reason-code evidence for customer or community questions.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <a href={`${exportPath}?type=approved`} className={`${buttonVariants()} glow-primary`}>
+            <ClipboardCheck data-icon="inline-start" />
+            Export clean list
+          </a>
+          <a href={`${exportPath}?type=manual_review`} className={buttonVariants({ variant: "outline" })}>
+            <Users data-icon="inline-start" />
+            Review queue
+          </a>
+          <a href={`${exportPath}?type=pdf`} className={buttonVariants({ variant: "outline" })}>
+            <FileText data-icon="inline-start" />
+            PDF proof
+          </a>
+          <Button variant="outline" onClick={onShare}>
+            <Share2 data-icon="inline-start" />
+            Share report link
+          </Button>
+          <a
+            href={buildMailto(
+              "Tri-Proof Guard report review",
+              `Please review this Tri-Proof Guard report:\n\n${analysis.project.name}\nApproved: ${analysis.approvedCount}\nGray zone: ${analysis.manualReviewCount}\nNot eligible: ${analysis.rejectedCount}\nProof: ${decision.proofId}`
+            )}
+            className={buttonVariants({ variant: "outline" })}
+          >
+            <Mail data-icon="inline-start" />
+            Request review
+          </a>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+        <div className="rounded-lg border border-green-400/25 bg-green-400/10 p-4">
+          <p className="text-xs uppercase tracking-wide text-green-200">Approved</p>
+          <p className="mt-1 text-3xl font-semibold text-green-100">{formatNumber(analysis.approvedCount)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{decision.cleanRate}% of list</p>
+        </div>
+        <div className="rounded-lg border border-amber-400/25 bg-amber-400/10 p-4">
+          <p className="text-xs uppercase tracking-wide text-amber-200">Gray zone</p>
+          <p className="mt-1 text-3xl font-semibold text-amber-100">{formatNumber(analysis.manualReviewCount)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{decision.reviewRate}% needs review</p>
+        </div>
+        <div className="rounded-lg border border-red-400/25 bg-red-400/10 p-4">
+          <p className="text-xs uppercase tracking-wide text-red-200">Not eligible</p>
+          <p className="mt-1 text-3xl font-semibold text-red-100">{formatNumber(analysis.rejectedCount)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{decision.rejectRate}% excluded</p>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function PolicySimulator({ analysis }: { analysis: AnalysisDetailType }) {
+  const scenarios = (["conservative", "balanced", "strict"] as const).map((policy) =>
+    getPolicyScenario(analysis.wallets, policy)
+  )
+  const currentPolicy = analysis.riskPolicy ?? "balanced"
+
+  return (
+    <Card className="glass-panel premium-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <SlidersHorizontal className="text-primary" />
+          Campaign Policy Simulator
+        </CardTitle>
+        <CardDescription>
+          Preview how stricter or looser thresholds change the operational decision list before distribution.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3 md:grid-cols-3">
+        {scenarios.map((scenario) => (
+          <div
+            key={scenario.policy}
+            className={cn(
+              "rounded-lg border bg-background/45 p-4",
+              scenario.policy === currentPolicy ? "border-primary/50 bg-primary/10" : "border-border"
+            )}
+          >
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className="font-medium">{scenario.label}</p>
+              {scenario.policy === currentPolicy && <Badge variant="secondary">Current</Badge>}
+            </div>
+            <div className="grid gap-2 text-sm">
+              <div className="flex items-center justify-between text-green-200">
+                <span>Approve</span>
+                <span className="font-semibold">{formatNumber(scenario.approved)}</span>
+              </div>
+              <div className="flex items-center justify-between text-amber-200">
+                <span>Gray zone</span>
+                <span className="font-semibold">{formatNumber(scenario.manual_review)}</span>
+              </div>
+              <div className="flex items-center justify-between text-red-200">
+                <span>Reject</span>
+                <span className="font-semibold">{formatNumber(scenario.rejected)}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  )
+}
+
+function ClusterGraphView({ analysis }: { analysis: AnalysisDetailType }) {
+  const graph = getClusterGraph(analysis)
+
+  return (
+    <Card className="glass-panel premium-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <GitBranch className="text-primary" />
+          Cluster Graph View
+        </CardTitle>
+        <CardDescription>
+          Visual triage map for shared funding, similar behavior, and high-risk wallet groups.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {!graph.length ? (
+          <div className="rounded-lg border border-dashed border-border p-8 text-sm text-muted-foreground">
+            No suspicious clusters detected in this analysis.
+          </div>
+        ) : (
+          <div className="grid gap-5 xl:grid-cols-[1fr_0.85fr]">
+            <div className="relative min-h-[320px] overflow-hidden rounded-lg border border-primary/20 bg-background/45">
+              <svg viewBox="0 0 100 100" className="absolute inset-0 size-full">
+                <defs>
+                  <radialGradient id="clusterGlow" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.9" />
+                    <stop offset="100%" stopColor="var(--primary)" stopOpacity="0.08" />
+                  </radialGradient>
+                </defs>
+                {graph.map((item) => (
+                  <g key={item.cluster.clusterLabel}>
+                    {item.wallets.map((wallet, index) => {
+                      const angle = (Math.PI * 2 * index) / Math.max(item.wallets.length, 1)
+                      const x = svgPoint(item.x + Math.cos(angle) * 10)
+                      const y = svgPoint(item.y + Math.sin(angle) * 10)
+                      return (
+                        <g key={wallet.walletAddress}>
+                          <line x1={item.x} y1={item.y} x2={x} y2={y} stroke="var(--primary)" strokeOpacity="0.35" />
+                          <circle cx={x} cy={y} r="2.1" fill={wallet.status === "rejected" ? "var(--guard-red)" : wallet.status === "manual_review" ? "var(--guard-yellow)" : "var(--guard-green)"} />
+                        </g>
+                      )
+                    })}
+                    <circle cx={item.x} cy={item.y} r="7" fill="url(#clusterGlow)" stroke="var(--primary)" strokeOpacity="0.75" />
+                  </g>
+                ))}
+              </svg>
+            </div>
+            <div className="grid gap-3">
+              {graph.map((item) => (
+                <div key={item.cluster.clusterLabel} className="rounded-lg border border-border bg-background/45 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-medium">{item.cluster.clusterLabel}</p>
+                    <Badge variant="outline">{formatNumber(item.cluster.walletCount)} wallets</Badge>
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Avg risk {item.cluster.averageRiskScore}. Shared source:{" "}
+                    <span className="break-all font-mono text-xs">{item.cluster.sharedFundingSource ?? "mixed"}</span>
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function ReviewOpsPanel({ analysis }: { analysis: AnalysisDetailType }) {
+  const summary = analysis.teamReviewSummary
+  const secondReviewerCandidates = analysis.wallets.filter(
+    (wallet) => wallet.status === "manual_review" && (wallet.riskLevel === "high" || wallet.riskLevel === "critical" || Boolean(wallet.clusterId))
+  ).length
+
+  return (
+    <Card className="glass-panel premium-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Users className="text-primary" />
+          Team Review Workflow
+        </CardTitle>
+        <CardDescription>
+          Turn gray-zone wallets into assigned, auditable team decisions before the clean list is finalized.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3 md:grid-cols-4">
+        <div className="rounded-lg border border-border bg-background/45 p-4">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Pending</p>
+          <p className="mt-1 text-2xl font-semibold">{formatNumber(summary?.pendingReview ?? analysis.manualReviewCount)}</p>
+          <p className="mt-2 text-sm text-muted-foreground">Wallets still waiting for a team call.</p>
+        </div>
+        <div className="rounded-lg border border-border bg-background/45 p-4">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Reviewed</p>
+          <p className="mt-1 text-2xl font-semibold">{formatNumber(summary?.reviewedWallets ?? 0)}</p>
+          <p className="mt-2 text-sm text-muted-foreground">Persistent decisions saved.</p>
+        </div>
+        <div className="rounded-lg border border-amber-400/25 bg-amber-400/10 p-4">
+          <p className="text-xs uppercase tracking-wide text-amber-200">Second reviewer</p>
+          <p className="mt-1 text-2xl font-semibold text-amber-100">{formatNumber(secondReviewerCandidates)}</p>
+          <p className="mt-2 text-sm text-muted-foreground">High-risk gray-zone candidates.</p>
+        </div>
+        <div className="flex flex-col justify-between rounded-lg border border-primary/25 bg-primary/10 p-4">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-primary">Next action</p>
+            <p className="mt-2 text-sm text-muted-foreground">Assign gray-zone review and save final status.</p>
+          </div>
+          <Link href={`/dashboard/analysis/${analysis.id}/review`} className={`${buttonVariants({ variant: "outline" })} mt-4`}>
+            Open review queue
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function IntegrationReadinessPanel() {
+  const integrations = [
+    [Webhook, "Webhook automation", "Receive analysis.completed events and sync decisions into your ops stack.", "/docs/webhooks"],
+    [KeyRound, "API access", "Queue analysis jobs and fetch report status from campaign tooling.", "/docs/api"],
+    [FileText, "Export formats", "CSV/PDF outputs for Galxe, Zealy, Discord allowlists, token ops and internal review.", "/docs"],
+  ] as const
+
+  return (
+    <Card className="glass-panel premium-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <ExternalLink className="text-primary" />
+          Integration Readiness
+        </CardTitle>
+        <CardDescription>
+          Connect Tri-Proof outputs to campaign tools without changing the risk methodology.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3 md:grid-cols-3">
+        {integrations.map(([Icon, title, text, href]) => (
+          <Link key={title} href={href} className="rounded-lg border border-border bg-background/45 p-4 transition-colors hover:border-primary/50 hover:bg-primary/5">
+            <Icon className="mb-3 text-primary" />
+            <p className="font-medium">{title}</p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p>
+          </Link>
+        ))}
+      </CardContent>
+    </Card>
+  )
+}
+
+function TrustMethodologyPanel() {
+  return (
+    <Card className="glass-panel premium-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <LockKeyhole className="text-primary" />
+          Methodology, Privacy and Humanity Signals
+        </CardTitle>
+        <CardDescription>
+          Tri-Proof is risk decision support, not KYC. Optional proof-of-human signals can strengthen campaign registration without exposing raw personal data.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-lg border border-border bg-background/45 p-4">
+          <p className="font-medium">No global identity claim</p>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">Risk labels are campaign-scoped and evidence-based. They do not claim a wallet owner is definitively malicious.</p>
+        </div>
+        <div className="rounded-lg border border-border bg-background/45 p-4">
+          <p className="font-medium">Humanity Gate optional</p>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">Use liveness or external proof systems as extra signals at registration, while keeping wallet risk scoring separate.</p>
+        </div>
+        <Link href="/docs/trust" className="rounded-lg border border-primary/25 bg-primary/10 p-4 transition-colors hover:border-primary/60">
+          <p className="font-medium text-primary">Open trust page</p>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">Reason-code dictionary, privacy stance, false-positive handling and evidence boundaries.</p>
+        </Link>
+      </CardContent>
+    </Card>
+  )
+}
+
 function SortableHead({
   label,
   sortValue,
@@ -397,6 +772,7 @@ function OnChainDataSection({ wallet }: { wallet: WalletRiskResult }) {
 
 function ReviewDrawer({
   wallet,
+  relatedWallets,
   notes,
   copied,
   onClose,
@@ -405,6 +781,7 @@ function ReviewDrawer({
   onStatusChange,
 }: {
   wallet: WalletRiskResult
+  relatedWallets: WalletRiskResult[]
   notes: string
   copied: boolean
   onClose: () => void
@@ -510,6 +887,29 @@ function ReviewDrawer({
 
           <OnChainDataSection wallet={wallet} />
 
+          <DetailRow label="Linked wallet evidence">
+            <div className="grid gap-2">
+              {relatedWallets.length ? (
+                relatedWallets.slice(0, 6).map((related) => (
+                  <div key={related.walletAddress} className="flex items-center justify-between gap-3 rounded-md border border-border bg-background/60 px-3 py-2">
+                    <span className="break-all font-mono text-xs text-muted-foreground">{shortAddress(related.walletAddress)}</span>
+                    <div className="flex flex-wrap justify-end gap-1">
+                      {related.clusterId === wallet.clusterId && related.clusterId && (
+                        <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">same cluster</Badge>
+                      )}
+                      {related.fundingSource === wallet.fundingSource && related.fundingSource && (
+                        <Badge variant="outline" className="border-amber-400/30 bg-amber-400/10 text-amber-200">same funding</Badge>
+                      )}
+                      <StatusBadge status={related.status} />
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">No directly linked wallets found in this report.</p>
+              )}
+            </div>
+          </DetailRow>
+
           <DetailRow label="Why this action?">
             <p className="text-sm text-muted-foreground">
               {wallet.statusExplanation ??
@@ -534,6 +934,22 @@ function ReviewDrawer({
                   {reason}
                 </div>
               ))}
+            </div>
+          </DetailRow>
+
+          <DetailRow label="Audit trail">
+            <div className="grid gap-2 text-sm text-muted-foreground">
+              <p>Original Tri-Proof decision: <span className="text-foreground">{displayStatus(wallet.status)}</span></p>
+              <p>Team override: <span className="text-foreground">{wallet.teamReview ? displayStatus(wallet.teamReview.finalStatus) : "not reviewed yet"}</span></p>
+              <p>Reviewer: <span className="text-foreground">{wallet.teamReview?.reviewerName ?? "unassigned"}</span></p>
+              <p>Updated: <span className="text-foreground">{wallet.teamReview?.updatedAt ? formatDateTimeUTC(wallet.teamReview.updatedAt) : "-"}</span></p>
+            </div>
+          </DetailRow>
+
+          <DetailRow label="External proof signals">
+            <div className="grid gap-2 text-sm text-muted-foreground">
+              <p>Humanity Gate: optional campaign registration signal, not a replacement for wallet risk scoring.</p>
+              <p>External proof systems: ready for Human Passport, World ID or partner attestations as hashed/derived signals.</p>
             </div>
           </DetailRow>
 
@@ -696,6 +1112,17 @@ export function AnalysisDetail({
     )
   }, [analysis, selectedWalletAddress])
 
+  const selectedRelatedWallets = useMemo(() => {
+    if (!analysis || !selectedWallet) return []
+    return analysis.wallets.filter((wallet) => {
+      if (wallet.walletAddress === selectedWallet.walletAddress) return false
+      return (
+        Boolean(selectedWallet.clusterId && wallet.clusterId === selectedWallet.clusterId) ||
+        Boolean(selectedWallet.fundingSource && wallet.fundingSource === selectedWallet.fundingSource)
+      )
+    })
+  }, [analysis, selectedWallet])
+
   function updateSelectedWalletStatus(status: WalletStatus) {
     if (!selectedWalletAddress) return
 
@@ -726,6 +1153,16 @@ export function AnalysisDetail({
     } catch {
       setCopiedAddress("")
       toast("Could not copy address", "error")
+    }
+  }
+
+  async function shareReport() {
+    const url = window.location.href
+    try {
+      await navigator.clipboard.writeText(url)
+      toast("Report link copied")
+    } catch {
+      toast("Could not copy report link", "error")
     }
   }
 
@@ -797,6 +1234,27 @@ export function AnalysisDetail({
 
   return (
     <div className="flex flex-col gap-6">
+      <ReportReadyExperience analysis={analysis} exportPath={exportPath} onShare={() => void shareReport()} />
+
+      <div className="sticky top-0 z-20 hidden rounded-lg border border-border bg-background/90 p-3 shadow-lg backdrop-blur md:flex md:items-center md:justify-between">
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <span className="font-medium">Distribution summary</span>
+          <Badge variant="outline" className="border-green-400/30 bg-green-400/10 text-green-200">{formatNumber(analysis.approvedCount)} approved</Badge>
+          <Badge variant="outline" className="border-amber-400/30 bg-amber-400/10 text-amber-200">{formatNumber(analysis.manualReviewCount)} gray zone</Badge>
+          <Badge variant="outline" className="border-red-400/30 bg-red-400/10 text-red-200">{formatNumber(analysis.rejectedCount)} not eligible</Badge>
+        </div>
+        <div className="flex gap-2">
+          <a href={`${exportPath}?type=approved`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <Download data-icon="inline-start" />
+            Clean list
+          </a>
+          <Link href={`/dashboard/analysis/${analysis.id}/review`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <Users data-icon="inline-start" />
+            Review
+          </Link>
+        </div>
+      </div>
+
       <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
         <div>
           <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -960,6 +1418,18 @@ export function AnalysisDetail({
           ))}
         </CardContent>
       </Card>
+
+      <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+        <PolicySimulator analysis={analysis} />
+        <ClusterGraphView analysis={analysis} />
+      </div>
+
+      <ReviewOpsPanel analysis={analysis} />
+
+      <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
+        <IntegrationReadinessPanel />
+        <TrustMethodologyPanel />
+      </div>
 
       {analysis.enrichment && (
         <>
@@ -1436,6 +1906,7 @@ export function AnalysisDetail({
       {selectedWallet && (
         <ReviewDrawer
           wallet={selectedWallet}
+          relatedWallets={selectedRelatedWallets}
           notes={reviewNotes[selectedWallet.walletAddress] ?? ""}
           copied={copiedAddress === selectedWallet.walletAddress}
           onClose={() => setSelectedWalletAddress(null)}

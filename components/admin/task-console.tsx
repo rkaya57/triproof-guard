@@ -8,13 +8,19 @@ import { Input } from "@/components/ui/input"
 type Item = { id: string; title: string; status: string }
 const key = "tri-proof-admin-tasks"
 
-export function TaskConsole() {
-  const [items, setItems] = useState<Item[]>([])
+function readStoredItems() {
+  if (typeof window === "undefined") return []
+  const raw = window.localStorage.getItem(key)
+  if (!raw) return []
+  try {
+    return JSON.parse(raw) as Item[]
+  } catch {
+    return []
+  }
+}
 
-  useEffect(() => {
-    const raw = localStorage.getItem(key)
-    if (raw) setItems(JSON.parse(raw) as Item[])
-  }, [])
+export function TaskConsole() {
+  const [items, setItems] = useState<Item[]>(readStoredItems)
 
   useEffect(() => {
     localStorage.setItem(key, JSON.stringify(items))

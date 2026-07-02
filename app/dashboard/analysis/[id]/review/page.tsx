@@ -8,6 +8,25 @@ import { serializeAnalysis } from "@/lib/analysis/serializers"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
 
+async function loadReviewAnalysis(id: string, userId: string) {
+  try {
+    const analysis = await db.analysis.findFirst({
+      where: { id, project: { userId } },
+      include: {
+        project: true,
+        wallets: { orderBy: [{ status: "desc" }, { riskScore: "desc" }, { walletAddress: "asc" }] },
+        clusters: { orderBy: [{ averageRiskScore: "desc" }, { clusterLabel: "asc" }] },
+        teamReviews: { include: { reviewer: { select: { name: true } } } },
+        feedbackEvents: true,
+      },
+    })
+    return { analysis, databaseRequired: false }
+  } catch (error) {
+    if (!isDatabaseConnectionError(error)) throw error
+    return { analysis: null, databaseRequired: true }
+  }
+}
+
 export default async function ReviewPage({
   params,
 }: {
@@ -32,42 +51,9 @@ export default async function ReviewPage({
     )
   }
 
-  try {
-    const analysis = await db.analysis.findFirst({
-      where: { id, project: { userId: user.id } },
-      include: {
-        project: true,
-        wallets: { orderBy: [{ status: "desc" }, { riskScore: "desc" }, { walletAddress: "asc" }] },
-        clusters: { orderBy: [{ averageRiskScore: "desc" }, { clusterLabel: "asc" }] },
-        teamReviews: { include: { reviewer: { select: { name: true } } } },
-        feedbackEvents: true,
-      },
-    })
+  const { analysis, databaseRequired } = await loadReviewAnalysis(id, user.id)
 
-    if (!analysis) {
-      return (
-        <main className="premium-page min-h-screen bg-background px-5 py-10 text-foreground sm:px-8">
-          <Card className="glass-panel mx-auto max-w-xl">
-            <CardHeader>
-              <CardTitle>Analysis not found</CardTitle>
-              <CardDescription>This review dashboard could not find the requested analysis.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Link href="/dashboard" className={buttonVariants({ variant: "outline" })}>Back to dashboard</Link>
-            </CardContent>
-          </Card>
-        </main>
-      )
-    }
-
-    return (
-      <main className="premium-page min-h-screen bg-background text-foreground">
-        <TeamReviewDashboard initialAnalysis={serializeAnalysis(analysis)} />
-      </main>
-    )
-  } catch (error) {
-    if (!isDatabaseConnectionError(error)) throw error
-
+  if (databaseRequired) {
     return (
       <main className="premium-page min-h-screen bg-background px-5 py-10 text-foreground sm:px-8">
         <Card className="glass-panel mx-auto max-w-xl">
@@ -82,4 +68,26 @@ export default async function ReviewPage({
       </main>
     )
   }
+
+  if (!analysis) {
+    return (
+      <main className="premium-page min-h-screen bg-background px-5 py-10 text-foreground sm:px-8">
+        <Card className="glass-panel mx-auto max-w-xl">
+          <CardHeader>
+            <CardTitle>Analysis not found</CardTitle>
+            <CardDescription>This review dashboard could not find the requested analysis.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/dashboard" className={buttonVariants({ variant: "outline" })}>Back to dashboard</Link>
+          </CardContent>
+        </Card>
+      </main>
+    )
+  }
+
+  return (
+    <main className="premium-page min-h-screen bg-background text-foreground">
+      <TeamReviewDashboard initialAnalysis={serializeAnalysis(analysis)} />
+    </main>
+  )
 }

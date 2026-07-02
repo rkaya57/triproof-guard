@@ -19,6 +19,10 @@ function readingTime(content: string) {
   return `${Math.max(1, Math.ceil(words / 220))} min read`
 }
 
+function coverImageStyle(url: string) {
+  return { backgroundImage: `url("${url.replace(/"/g, "%22")}")` }
+}
+
 export default async function Page() {
   const posts = await listPublishedPosts().catch(() => [])
   const featured = posts[0]
@@ -61,7 +65,12 @@ export default async function Page() {
             <Link href={`/blog/${featured.slug}`} className="glass-panel premium-card hover-lift group overflow-hidden rounded-3xl border border-primary/35">
               <div className="flex h-72 items-center justify-center bg-primary/10 lg:h-full">
                 {featured.coverImageUrl ? (
-                  <img src={featured.coverImageUrl} alt={featured.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                  <div
+                    role="img"
+                    aria-label={featured.title}
+                    className="h-full w-full bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
+                    style={coverImageStyle(featured.coverImageUrl)}
+                  />
                 ) : (
                   <div className="text-center text-muted-foreground"><ShieldCheck className="mx-auto mb-3 size-12 text-primary" /> Featured insight</div>
                 )}
@@ -97,7 +106,16 @@ export default async function Page() {
             {rest.map((post) => (
               <Card key={post.slug} className="glass-panel premium-card hover-lift overflow-hidden">
                 <div className="flex h-44 items-center justify-center bg-primary/10">
-                  {post.coverImageUrl ? <img src={post.coverImageUrl} alt={post.title} className="h-full w-full object-cover" /> : <BookOpen className="text-primary" />}
+                  {post.coverImageUrl ? (
+                    <div
+                      role="img"
+                      aria-label={post.title}
+                      className="h-full w-full bg-cover bg-center"
+                      style={coverImageStyle(post.coverImageUrl)}
+                    />
+                  ) : (
+                    <BookOpen className="text-primary" />
+                  )}
                 </div>
                 <CardHeader>
                   <div className="mb-3 flex flex-wrap gap-2">

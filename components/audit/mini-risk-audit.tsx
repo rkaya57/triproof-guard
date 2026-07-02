@@ -7,6 +7,7 @@ import {
   ArrowRight,
   CheckCircle2,
   ClipboardPaste,
+  Download,
   FileSearch,
   Gauge,
   Mail,
@@ -118,10 +119,51 @@ function decisionTone(decision: AuditWallet["decision"]) {
   return "border-red-400/30 bg-red-400/10 text-red-200"
 }
 
+function buildMiniAuditBrief(report: ReturnType<typeof analyzeInput>) {
+  const findings = report.wallets
+    .slice(0, 12)
+    .map((wallet) => `- ${wallet.address}: ${wallet.decision} (${wallet.reasonCodes.join(", ")})`)
+    .join("\n")
+
+  return [
+    "Tri-Proof Guard Mini Wallet Risk Audit",
+    "",
+    `Sample quality: ${report.score}/100`,
+    `Rows: ${report.total}`,
+    `Unique wallets: ${report.unique}`,
+    `Sample OK: ${report.clean}`,
+    `Needs review: ${report.review}`,
+    `Exclude from sample: ${report.exclude}`,
+    `Invalid rows: ${report.invalid}`,
+    `Duplicate rows: ${report.duplicates}`,
+    "",
+    "First-pass findings:",
+    findings || "- No wallet rows supplied.",
+    "",
+    "Note: This browser-only mini audit is a pre-analysis signal. Full Tri-Proof Guard analysis adds on-chain enrichment, campaign policy, cluster graph evidence, review workflow and exportable clean-list proof.",
+  ].join("\n")
+}
+
 export function MiniRiskAudit() {
   const [walletInput, setWalletInput] = useState(sampleWallets)
   const report = useMemo(() => analyzeInput(walletInput), [walletInput])
+  const brief = useMemo(() => buildMiniAuditBrief(report), [report])
+  const mailto = useMemo(
+    () =>
+      `mailto:info@triproofprotocol.com?subject=${encodeURIComponent("Free Mini Wallet Risk Audit Review")}&body=${encodeURIComponent(brief)}`,
+    [brief]
+  )
   const hasInput = report.total > 0
+
+  function downloadBrief() {
+    const blob = new Blob([brief], { type: "text/plain;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = "triproof-mini-audit-brief.txt"
+    link.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
@@ -162,7 +204,7 @@ export function MiniRiskAudit() {
               Run full analysis
             </Link>
             <a
-              href="mailto:info@triproofprotocol.com?subject=Free%20Mini%20Wallet%20Risk%20Audit"
+              href={mailto}
               className={buttonVariants({ variant: "outline" })}
             >
               <Mail data-icon="inline-start" />
@@ -275,6 +317,14 @@ export function MiniRiskAudit() {
               Full Guard report
               <ArrowRight data-icon="inline-end" />
             </Link>
+            <button type="button" onClick={downloadBrief} className={buttonVariants({ variant: "outline" })}>
+              <Download data-icon="inline-start" />
+              Download brief
+            </button>
+            <a href={mailto} className={buttonVariants({ variant: "outline" })}>
+              <Mail data-icon="inline-start" />
+              Email review
+            </a>
             <Link href="/docs" className={buttonVariants({ variant: "outline" })}>
               Read methodology
             </Link>

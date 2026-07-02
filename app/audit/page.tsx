@@ -50,6 +50,9 @@ export default function AuditPage() {
         <Link href="/dashboard/new-analysis" className="text-primary hover:underline">
           Run full analysis
         </Link>
+        <Link href="/docs/trust" className="text-primary hover:underline">
+          Trust methodology
+        </Link>
       </footer>
     </main>
   )

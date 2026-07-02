@@ -13,6 +13,19 @@ function metricValue(value: number | null) {
   return value === null ? "N/A" : `${value}%`
 }
 
+async function loadMetricsAnalysis(id: string, userId: string) {
+  try {
+    const analysis = await db.analysis.findFirst({
+      where: { id, project: { userId } },
+      include: { project: true, teamReviews: true, feedbackEvents: true },
+    })
+    return { analysis, databaseRequired: false }
+  } catch (error) {
+    if (!isDatabaseConnectionError(error)) throw error
+    return { analysis: null, databaseRequired: true }
+  }
+}
+
 export default async function MetricsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const user = await getCurrentUser()
@@ -28,31 +41,35 @@ export default async function MetricsPage({ params }: { params: Promise<{ id: st
     )
   }
 
-  try {
-    const analysis = await db.analysis.findFirst({
-      where: { id, project: { userId: user.id } },
-      include: { project: true, teamReviews: true, feedbackEvents: true },
-    })
+  const { analysis, databaseRequired } = await loadMetricsAnalysis(id, user.id)
 
-    if (!analysis) {
-      return (
-        <main className="premium-page min-h-screen bg-background px-5 py-10 text-foreground sm:px-8">
-          <Card className="glass-panel mx-auto max-w-xl">
-            <CardHeader><CardTitle>Analysis not found</CardTitle><CardDescription>The requested metrics report could not be loaded.</CardDescription></CardHeader>
-            <CardContent><Link href="/dashboard" className={buttonVariants({ variant: "outline" })}>Back to dashboard</Link></CardContent>
-          </Card>
-        </main>
-      )
-    }
-
-    const metrics = buildAccuracyMetrics({
-      totalWallets: analysis.totalWallets,
-      teamReviews: analysis.teamReviews,
-      feedbackEvents: analysis.feedbackEvents,
-    })
-
+  if (databaseRequired) {
     return (
-      <main className="premium-page min-h-screen bg-background px-5 py-8 text-foreground sm:px-8">
+      <main className="premium-page min-h-screen bg-background px-5 py-10 text-foreground sm:px-8">
+        <Card className="glass-panel mx-auto max-w-xl"><CardHeader><CardTitle>Database required</CardTitle><CardDescription>Accuracy metrics require the production database.</CardDescription></CardHeader><CardContent><Link href={`/dashboard/analysis/${id}`} className={buttonVariants({ variant: "outline" })}>Back to analysis</Link></CardContent></Card>
+      </main>
+    )
+  }
+
+  if (!analysis) {
+    return (
+      <main className="premium-page min-h-screen bg-background px-5 py-10 text-foreground sm:px-8">
+        <Card className="glass-panel mx-auto max-w-xl">
+          <CardHeader><CardTitle>Analysis not found</CardTitle><CardDescription>The requested metrics report could not be loaded.</CardDescription></CardHeader>
+          <CardContent><Link href="/dashboard" className={buttonVariants({ variant: "outline" })}>Back to dashboard</Link></CardContent>
+        </Card>
+      </main>
+    )
+  }
+
+  const metrics = buildAccuracyMetrics({
+    totalWallets: analysis.totalWallets,
+    teamReviews: analysis.teamReviews,
+    feedbackEvents: analysis.feedbackEvents,
+  })
+
+  return (
+    <main className="premium-page min-h-screen bg-background px-5 py-8 text-foreground sm:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-6">
           <div>
             <Link href={`/dashboard/analysis/${id}`} className={`${buttonVariants({ variant: "outline" })} mb-4`}><ArrowLeft data-icon="inline-start" /> Back to analysis</Link>
@@ -101,14 +118,6 @@ export default async function MetricsPage({ params }: { params: Promise<{ id: st
             </CardContent>
           </Card>
         </div>
-      </main>
-    )
-  } catch (error) {
-    if (!isDatabaseConnectionError(error)) throw error
-    return (
-      <main className="premium-page min-h-screen bg-background px-5 py-10 text-foreground sm:px-8">
-        <Card className="glass-panel mx-auto max-w-xl"><CardHeader><CardTitle>Database required</CardTitle><CardDescription>Accuracy metrics require the production database.</CardDescription></CardHeader><CardContent><Link href={`/dashboard/analysis/${id}`} className={buttonVariants({ variant: "outline" })}>Back to analysis</Link></CardContent></Card>
-      </main>
-    )
-  }
+    </main>
+  )
 }

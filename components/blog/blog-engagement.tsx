@@ -51,18 +51,23 @@ export function BlogEngagement({ slug, title }: { slug: string; title: string })
     return window.location.href
   }, [])
 
-  async function load(id: string) {
-    const response = await fetch(`/api/blog/${slug}/engagement?visitorId=${encodeURIComponent(id)}`, {
-      cache: "no-store",
-    })
-    if (!response.ok) return
-    setEngagement((await response.json()) as Engagement)
-  }
-
   useEffect(() => {
-    const id = getVisitorId()
-    setVisitorId(id)
-    void load(id)
+    let cancelled = false
+
+    async function loadEngagement() {
+      const id = getVisitorId()
+      const response = await fetch(`/api/blog/${slug}/engagement?visitorId=${encodeURIComponent(id)}`, {
+        cache: "no-store",
+      })
+      if (cancelled || !response.ok) return
+      setVisitorId(id)
+      setEngagement((await response.json()) as Engagement)
+    }
+
+    void loadEngagement()
+    return () => {
+      cancelled = true
+    }
   }, [slug])
 
   async function action(payload: Record<string, unknown>) {

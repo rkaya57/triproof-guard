@@ -16,7 +16,14 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 })
 
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : "https://triproofprotocol.com")
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: "Tri-Proof Guard | Web3 Wallet Risk Analysis",
   description:
     "Upload wallets, detect suspicious Sybil clusters, and export clean reward winner lists.",

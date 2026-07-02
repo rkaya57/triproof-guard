@@ -31,6 +31,14 @@ function shortWallet(wallet: string) {
   return wallet.length > 14 ? `${wallet.slice(0, 6)}...${wallet.slice(-6)}` : wallet
 }
 
+async function fetchVerificationRows(filter: string) {
+  const params = filter === "ALL" ? "" : `?decision=${filter}`
+  const res = await fetch(`/api/humanity/admin/verifications${params}`, { cache: "no-store" })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error ?? "Could not load verifications")
+  return (data.verifications ?? []) as VerificationRow[]
+}
+
 export default function HumanityVerificationsPage() {
   const [rows, setRows] = useState<VerificationRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -41,11 +49,7 @@ export default function HumanityVerificationsPage() {
     setLoading(true)
     setError(null)
     try {
-      const params = filter === "ALL" ? "" : `?decision=${filter}`
-      const res = await fetch(`/api/humanity/admin/verifications${params}`, { cache: "no-store" })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error ?? "Could not load verifications")
-      setRows(data.verifications ?? [])
+      setRows(await fetchVerificationRows(filter))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load verifications")
     } finally {
@@ -54,7 +58,27 @@ export default function HumanityVerificationsPage() {
   }
 
   useEffect(() => {
-    void loadRows()
+    let cancelled = false
+
+    async function loadFilteredRows() {
+      await Promise.resolve()
+      if (cancelled) return
+      setLoading(true)
+      setError(null)
+      try {
+        const nextRows = await fetchVerificationRows(filter)
+        if (!cancelled) setRows(nextRows)
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Could not load verifications")
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    void loadFilteredRows()
+    return () => {
+      cancelled = true
+    }
   }, [filter])
 
   function downloadCsv(decision: string) {

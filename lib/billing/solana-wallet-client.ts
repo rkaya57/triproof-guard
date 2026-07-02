@@ -8,13 +8,58 @@ const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 type WalletProvider = {
   publicKey?: { toString(): string }
   connect(): Promise<{ publicKey?: { toString(): string } } | void>
-  signAndSendTransaction(transaction: unknown): Promise<{ signature?: string } | string>
+  signAndSendTransaction(transaction: TransactionInstance): Promise<{ signature?: string } | string>
+}
+
+type PublicKeyInstance = {
+  toString(): string
+  toBuffer(): Uint8Array
+}
+
+type TransactionInstructionInstance = unknown
+
+type AccountMeta = {
+  pubkey: PublicKeyInstance
+  isSigner: boolean
+  isWritable: boolean
+}
+
+type TransactionInstructionInput = {
+  programId: PublicKeyInstance
+  keys: AccountMeta[]
+  data: Uint8Array
+}
+
+type TransactionInstance = {
+  add(...instructions: TransactionInstructionInstance[]): TransactionInstance
+  feePayer?: PublicKeyInstance
+  recentBlockhash?: string
+}
+
+type ConnectionInstance = {
+  getAccountInfo(publicKey: PublicKeyInstance, commitment: "confirmed"): Promise<unknown | null>
+  getLatestBlockhash(commitment: "confirmed"): Promise<{ blockhash: string; lastValidBlockHeight: number }>
+  confirmTransaction(
+    strategy: { signature: string; blockhash: string; lastValidBlockHeight: number },
+    commitment: "confirmed"
+  ): Promise<unknown>
+}
+
+type SolanaWeb3 = {
+  PublicKey: {
+    new (value: string): PublicKeyInstance
+    findProgramAddressSync(seeds: Uint8Array[], programId: PublicKeyInstance): [PublicKeyInstance, number]
+  }
+  Transaction: new () => TransactionInstance
+  TransactionInstruction: new (input: TransactionInstructionInput) => TransactionInstructionInstance
+  Connection: new (endpoint: string, commitment: "confirmed") => ConnectionInstance
+  SystemProgram: { programId: PublicKeyInstance }
 }
 
 type BrowserWindow = Window & {
   solana?: WalletProvider
   solflare?: WalletProvider
-  solanaWeb3?: any
+  solanaWeb3?: SolanaWeb3
 }
 
 function getWallet() {
@@ -66,14 +111,28 @@ function transferCheckedData(amount: bigint) {
   return data
 }
 
-function associatedTokenAddress(web3: any, mint: any, owner: any, tokenProgramId: any, associatedProgramId: any) {
+function associatedTokenAddress(
+  web3: SolanaWeb3,
+  mint: PublicKeyInstance,
+  owner: PublicKeyInstance,
+  tokenProgramId: PublicKeyInstance,
+  associatedProgramId: PublicKeyInstance
+) {
   return web3.PublicKey.findProgramAddressSync(
     [owner.toBuffer(), tokenProgramId.toBuffer(), mint.toBuffer()],
     associatedProgramId
   )[0]
 }
 
-function createAssociatedTokenAccountInstruction(web3: any, payer: any, ata: any, owner: any, mint: any, tokenProgramId: any, associatedProgramId: any) {
+function createAssociatedTokenAccountInstruction(
+  web3: SolanaWeb3,
+  payer: PublicKeyInstance,
+  ata: PublicKeyInstance,
+  owner: PublicKeyInstance,
+  mint: PublicKeyInstance,
+  tokenProgramId: PublicKeyInstance,
+  associatedProgramId: PublicKeyInstance
+) {
   return new web3.TransactionInstruction({
     programId: associatedProgramId,
     keys: [
@@ -88,7 +147,15 @@ function createAssociatedTokenAccountInstruction(web3: any, payer: any, ata: any
   })
 }
 
-function createTransferCheckedInstruction(web3: any, source: any, mint: any, destination: any, owner: any, amount: bigint, tokenProgramId: any) {
+function createTransferCheckedInstruction(
+  web3: SolanaWeb3,
+  source: PublicKeyInstance,
+  mint: PublicKeyInstance,
+  destination: PublicKeyInstance,
+  owner: PublicKeyInstance,
+  amount: bigint,
+  tokenProgramId: PublicKeyInstance
+) {
   return new web3.TransactionInstruction({
     programId: tokenProgramId,
     keys: [
