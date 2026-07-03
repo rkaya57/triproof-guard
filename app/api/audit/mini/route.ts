@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { parseWalletCsv } from "@/lib/csv/parser"
-import { analyzeWallets, normalizeRiskPolicy } from "@/lib/risk-engine"
+import { analyzeWallets } from "@/lib/risk-engine"
 import { enrichWallets } from "@/lib/onchain/enrich-wallet"
 import { getOnChainConfig, isEnrichableChain } from "@/lib/onchain/enrichment-types"
 import type { EnrichmentSummary } from "@/lib/onchain/enrichment-types"
@@ -35,7 +35,8 @@ function normalizeCampaignType(value: unknown): CampaignType {
 }
 
 function normalizePolicy(value: unknown): RiskPolicy {
-  return normalizeRiskPolicy(typeof value === "string" ? value : null)
+  if (value === "conservative" || value === "balanced" || value === "strict") return value
+  return "strict"
 }
 
 function looksLikeCsvHeader(firstLine: string) {

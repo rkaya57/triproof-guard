@@ -120,7 +120,7 @@ function walletSortValue(wallet: WalletRiskResult) {
 export function MiniRiskAudit() {
   const [walletInput, setWalletInput] = useState(sampleWallets)
   const [chain, setChain] = useState<Chain>("Ethereum")
-  const [riskPolicy, setRiskPolicy] = useState<RiskPolicy>("balanced")
+  const [riskPolicy, setRiskPolicy] = useState<RiskPolicy>("strict")
   const [report, setReport] = useState<MiniAuditResponse | null>(null)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState("")
@@ -187,7 +187,7 @@ export function MiniRiskAudit() {
           Paste campaign wallets and run a real Tri-Proof engine preview.
         </h1>
         <p className="mt-4 text-sm leading-6 text-muted-foreground">
-          This public mini audit submits the sample to Tri-Proof Guard&apos;s server-side decision engine. If an on-chain provider is configured, the preview enriches the sample before scoring; otherwise it clearly falls back to engine-only scoring.
+          This public mini audit submits the sample to Tri-Proof Guard&apos;s server-side decision engine with a strict first-pass policy. If an on-chain provider is configured, the preview enriches the sample before scoring; otherwise it clearly falls back to engine-only scoring.
         </p>
 
         <form onSubmit={runMiniAudit} className="mt-6 grid gap-4">
@@ -203,9 +203,9 @@ export function MiniRiskAudit() {
             <label className="grid gap-2 text-sm font-medium">
               Risk policy
               <select value={riskPolicy} onChange={(event) => setRiskPolicy(event.target.value as RiskPolicy)} className={selectClass}>
-                <option value="conservative">Conservative</option>
-                <option value="balanced">Balanced</option>
                 <option value="strict">Strict</option>
+                <option value="balanced">Balanced</option>
+                <option value="conservative">Conservative</option>
               </select>
             </label>
           </div>
