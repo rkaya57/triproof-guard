@@ -30,6 +30,8 @@ type BatchReadinessRow = {
   failed: number
 }
 
+type BatchWriteClient = Pick<Prisma.TransactionClient, "$executeRaw">
+
 function toDate(value: string | null | undefined) {
   if (!value) return null
   const parsed = new Date(value)
@@ -111,11 +113,16 @@ function mergeSummary(mode: AnalysisMode, summaries: EnrichmentSummary[]): Enric
   }
 }
 
-export async function createAnalysisBatches(analysisId: string, wallets: ParsedWallet[], batchSize: number) {
+export async function createAnalysisBatches(
+  analysisId: string,
+  wallets: ParsedWallet[],
+  batchSize: number,
+  client: BatchWriteClient = db
+) {
   const chunks = chunkArray(wallets, batchSize)
 
   for (let index = 0; index < chunks.length; index += 1) {
-    await db.$executeRaw`
+    await client.$executeRaw`
       INSERT INTO "AnalysisBatch" (
         "id", "analysisId", "batchIndex", "status", "walletData", "createdAt", "updatedAt"
       ) VALUES (

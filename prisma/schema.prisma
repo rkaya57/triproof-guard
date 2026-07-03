@@ -73,6 +73,18 @@ enum WebhookDeliveryStatus {
   failed
 }
 
+enum PaymentStatus {
+  pending
+  verified
+  failed
+}
+
+enum CreditLedgerKind {
+  payment_credit
+  analysis_debit
+  admin_adjustment
+}
+
 enum HumanityChallengeLevel {
   BASIC
   STANDARD
@@ -93,16 +105,18 @@ enum HumanityDecision {
 }
 
 model User {
-  id               String            @id @default(cuid())
-  name             String
-  email            String            @unique
-  passwordHash     String
-  projects         Project[]
-  teamReviews      TeamReview[]
-  feedbacks        FeedbackEvent[]
-  webhookEndpoints WebhookEndpoint[]
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  id                  String               @id @default(cuid())
+  name                String
+  email               String               @unique
+  passwordHash        String
+  projects            Project[]
+  teamReviews         TeamReview[]
+  feedbacks           FeedbackEvent[]
+  webhookEndpoints    WebhookEndpoint[]
+  paymentTransactions PaymentTransaction[]
+  creditLedgerEntries CreditLedger[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 }
 
 model Project {
@@ -147,6 +161,7 @@ model Analysis {
   teamReviews             TeamReview[]
   feedbackEvents          FeedbackEvent[]
   webhookDeliveries       WebhookDelivery[]
+  creditLedgerEntries     CreditLedger[]
   createdAt               DateTime           @default(now())
   completedAt             DateTime?
 
@@ -155,18 +170,18 @@ model Analysis {
 }
 
 model WalletAnalysis {
-  id                   String       @id @default(cuid())
+  id                   String            @id @default(cuid())
   analysisId           String
-  analysis             Analysis     @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  analysis             Analysis          @relation(fields: [analysisId], references: [id], onDelete: Cascade)
   walletAddress        String
   chain                String
   entityLabel          String?
-  entityType           EntityType    @default(user)
+  entityType           EntityType        @default(user)
   entityRiskReason     String?
   riskScore            Int
   riskLevel            RiskLevel
   status               WalletStatus
-  recommendedAction    SuggestedAction @default(approve)
+  recommendedAction    SuggestedAction   @default(approve)
   statusExplanation    String?
   fundingSource        String?
   txCount              Int?
@@ -187,55 +202,55 @@ model WalletAnalysis {
   enrichmentStatus     EnrichmentStatus?
   teamReviews          TeamReview[]
   feedbackEvents       FeedbackEvent[]
-  createdAt            DateTime     @default(now())
+  createdAt            DateTime          @default(now())
 
+  @@unique([analysisId, walletAddress])
   @@index([analysisId])
   @@index([walletAddress])
   @@index([clusterId])
-  @@unique([analysisId, walletAddress])
 }
 
 model TeamReview {
-  id                  String         @id @default(cuid())
-  analysisId          String
-  analysis            Analysis       @relation(fields: [analysisId], references: [id], onDelete: Cascade)
-  walletAnalysisId    String?
-  walletAnalysis      WalletAnalysis? @relation(fields: [walletAnalysisId], references: [id], onDelete: SetNull)
-  walletAddress       String
-  reviewerId          String
-  reviewer            User           @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
-  previousStatus      WalletStatus
-  finalStatus         WalletStatus
-  feedbackLabel       FeedbackLabel?
-  notes               String?
-  source              String         @default("dashboard")
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
+  id               String          @id @default(cuid())
+  analysisId       String
+  analysis         Analysis        @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  walletAnalysisId String?
+  walletAnalysis   WalletAnalysis? @relation(fields: [walletAnalysisId], references: [id], onDelete: SetNull)
+  walletAddress    String
+  reviewerId       String
+  reviewer         User            @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+  previousStatus   WalletStatus
+  finalStatus      WalletStatus
+  feedbackLabel    FeedbackLabel?
+  notes            String?
+  source           String          @default("dashboard")
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
+  @@unique([analysisId, walletAddress])
   @@index([analysisId])
   @@index([walletAddress])
   @@index([reviewerId])
-  @@unique([analysisId, walletAddress])
 }
 
 model FeedbackEvent {
-  id                  String          @id @default(cuid())
-  analysisId          String
-  analysis            Analysis        @relation(fields: [analysisId], references: [id], onDelete: Cascade)
-  walletAnalysisId    String?
-  walletAnalysis      WalletAnalysis? @relation(fields: [walletAnalysisId], references: [id], onDelete: SetNull)
-  walletAddress       String
-  userId              String
-  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  label               FeedbackLabel
-  originalStatus      WalletStatus
-  finalStatus         WalletStatus?
-  riskScore           Int
-  riskLevel           RiskLevel
-  reasonsSnapshot     Json?
-  notes               String?
-  source              String          @default("dashboard")
-  createdAt           DateTime        @default(now())
+  id               String          @id @default(cuid())
+  analysisId       String
+  analysis         Analysis        @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  walletAnalysisId String?
+  walletAnalysis   WalletAnalysis? @relation(fields: [walletAnalysisId], references: [id], onDelete: SetNull)
+  walletAddress    String
+  userId           String
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label            FeedbackLabel
+  originalStatus   WalletStatus
+  finalStatus      WalletStatus?
+  riskScore        Int
+  riskLevel        RiskLevel
+  reasonsSnapshot  Json?
+  notes            String?
+  source           String          @default("dashboard")
+  createdAt        DateTime        @default(now())
 
   @@index([analysisId])
   @@index([walletAddress])
@@ -244,37 +259,37 @@ model FeedbackEvent {
 }
 
 model WebhookEndpoint {
-  id          String             @id @default(cuid())
+  id          String            @id @default(cuid())
   userId      String
-  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   url         String
   secret      String
   eventTypes  Json
-  isActive    Boolean            @default(true)
+  isActive    Boolean           @default(true)
   description String?
   deliveries  WebhookDelivery[]
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
   @@index([userId])
   @@index([isActive])
 }
 
 model WebhookDelivery {
-  id                 String                @id @default(cuid())
-  endpointId         String
-  endpoint           WebhookEndpoint       @relation(fields: [endpointId], references: [id], onDelete: Cascade)
-  analysisId         String?
-  analysis           Analysis?             @relation(fields: [analysisId], references: [id], onDelete: SetNull)
-  eventType          String
-  status             WebhookDeliveryStatus @default(pending)
-  statusCode         Int?
-  errorMessage       String?
-  requestPayload     Json
-  responseBody       String?
-  attemptCount       Int                   @default(0)
-  deliveredAt        DateTime?
-  createdAt          DateTime              @default(now())
+  id             String                @id @default(cuid())
+  endpointId     String
+  endpoint       WebhookEndpoint       @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  analysisId     String?
+  analysis       Analysis?             @relation(fields: [analysisId], references: [id], onDelete: SetNull)
+  eventType      String
+  status         WebhookDeliveryStatus @default(pending)
+  statusCode     Int?
+  errorMessage   String?
+  requestPayload Json
+  responseBody   String?
+  attemptCount   Int                   @default(0)
+  deliveredAt    DateTime?
+  createdAt      DateTime              @default(now())
 
   @@index([endpointId])
   @@index([analysisId])
@@ -328,24 +343,66 @@ model Cluster {
   reasons                 Json
   createdAt               DateTime        @default(now())
 
-  @@index([analysisId])
   @@unique([analysisId, clusterLabel])
+  @@index([analysisId])
+}
+
+model PaymentTransaction {
+  id                  String         @id @default(cuid())
+  userId              String
+  user                User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider            String
+  network             String
+  plan                String
+  txHash              String         @unique
+  reference           String?
+  amountUsdc          Decimal        @db.Decimal(18, 6)
+  walletCredits       Int
+  confirmations       Int            @default(0)
+  status              PaymentStatus  @default(verified)
+  rawData             Json?
+  creditLedgerEntries CreditLedger[]
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model CreditLedger {
+  id                   String              @id @default(cuid())
+  userId               String
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paymentTransactionId String?
+  paymentTransaction   PaymentTransaction? @relation(fields: [paymentTransactionId], references: [id], onDelete: SetNull)
+  analysisId           String?
+  analysis             Analysis?           @relation(fields: [analysisId], references: [id], onDelete: SetNull)
+  kind                 CreditLedgerKind
+  amount               Int
+  balanceAfter         Int
+  idempotencyKey       String              @unique
+  metadata             Json?
+  createdAt            DateTime            @default(now())
+
+  @@index([userId, createdAt])
+  @@index([analysisId])
+  @@index([paymentTransactionId])
 }
 
 model HumanityCampaign {
-  id                   String                 @id @default(cuid())
+  id                   String                     @id @default(cuid())
   projectId            String?
   name                 String
-  slug                 String                 @unique
+  slug                 String                     @unique
   description          String?
-  humanityGateEnabled  Boolean                @default(true)
-  challengeLevel       HumanityChallengeLevel @default(STANDARD)
-  proofExpiresInDays   Int                    @default(30)
-  maxAttemptsPerWallet Int                    @default(3)
+  humanityGateEnabled  Boolean                    @default(true)
+  challengeLevel       HumanityChallengeLevel     @default(STANDARD)
+  proofExpiresInDays   Int                        @default(30)
+  maxAttemptsPerWallet Int                        @default(3)
   sessions             HumanityChallengeSession[]
   verifications        HumanityVerification[]
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime               @updatedAt
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
 
   @@index([projectId])
 }
@@ -369,14 +426,14 @@ model HumanityChallengeSession {
 }
 
 model HumanityVerification {
-  id                    String                    @id @default(cuid())
+  id                    String                   @id @default(cuid())
   campaignId            String
-  campaign              HumanityCampaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  sessionId             String                    @unique
-  session               HumanityChallengeSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  campaign              HumanityCampaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  sessionId             String                   @unique
+  session               HumanityChallengeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   walletAddress         String
   walletChain           String?
-  nullifierHash         String                    @unique
+  nullifierHash         String                   @unique
   humanSessionScore     Float
   facePresenceScore     Float?
   headPoseScore         Float?
@@ -390,10 +447,10 @@ model HumanityVerification {
   reasonCodes           Json
   signedMessage         String?
   signature             String?
-  signatureVerified     Boolean                   @default(false)
+  signatureVerified     Boolean                  @default(false)
   proofExpiresAt        DateTime
-  createdAt             DateTime                  @default(now())
-  updatedAt             DateTime                  @updatedAt
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
 
   @@index([campaignId, walletAddress])
   @@index([decision])

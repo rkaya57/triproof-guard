@@ -9,7 +9,11 @@ import { getOnChainConfig, isEnrichableChain } from "@/lib/onchain/enrichment-ty
 import { getOnChainProvider } from "@/lib/onchain/provider-router"
 import { createAnalysisBatches } from "@/lib/analysis/batch-worker"
 import { dispatchAnalysisWorker } from "@/lib/analysis/worker-dispatch"
-import { getAccessPassForUser } from "@/lib/billing/access-pass"
+import {
+  commitAnalysisCreditDebit,
+  isBillingCreditError,
+  prepareAnalysisBillingGate,
+} from "@/lib/billing/credits"
 import type { AnalysisMode } from "@/types"
 import type { Prisma } from "@prisma/client"
 
@@ -19,15 +23,6 @@ const freeTrialWalletLimit = Number.parseInt(
   process.env.FREE_TRIAL_WALLET_LIMIT ?? "100",
   10
 )
-
-async function getUsedWalletCount(userId: string) {
-  const result = await db.analysis.aggregate({
-    _sum: { totalWallets: true },
-    where: { project: { userId } },
-  })
-
-  return result._sum.totalWallets ?? 0
-}
 
 function checkoutUrl(walletCount: number, remainingWallets: number) {
   const params = new URLSearchParams({
@@ -60,6 +55,8 @@ function isSchemaOrMigrationError(error: unknown) {
     message.includes("relation") ||
     message.includes("column") ||
     message.includes("analysisbatch") ||
+    message.includes("paymenttransaction") ||
+    message.includes("creditledger") ||
     message.includes("migration")
   )
 }
@@ -109,33 +106,6 @@ export async function POST(request: Request) {
         },
         { status: 400 }
       )
-    }
-
-    try {
-      const usedWallets = await getUsedWalletCount(user.id)
-      const remainingWallets = Math.max(freeTrialWalletLimit - usedWallets, 0)
-      const accessPass = await getAccessPassForUser(user.id)
-      const paidAccessCoversUpload =
-        accessPass !== null && accessPass.walletCredits >= parsedCsv.wallets.length
-
-      if (parsedCsv.wallets.length > remainingWallets && !paidAccessCoversUpload) {
-        return NextResponse.json(
-          {
-            code: "PAYMENT_REQUIRED",
-            error: `Free trial includes ${freeTrialWalletLimit.toLocaleString()} wallets. This upload has ${parsedCsv.wallets.length.toLocaleString()} valid wallets, but you have ${remainingWallets.toLocaleString()} free wallets remaining. Please choose a paid USDC plan to continue.`,
-            freeTrialWalletLimit,
-            usedWallets,
-            remainingWallets,
-            requiredWallets: parsedCsv.wallets.length,
-            checkoutUrl: checkoutUrl(parsedCsv.wallets.length, remainingWallets),
-          },
-          { status: 402 }
-        )
-      }
-    } catch (error) {
-      if (!isDatabaseConnectionError(error)) {
-        throw error
-      }
     }
 
     const mode = parsedForm.data.analysisMode as AnalysisMode
@@ -195,6 +165,12 @@ export async function POST(request: Request) {
       .join("\n")
 
     const created = await db.$transaction(async (tx: Prisma.TransactionClient) => {
+      const billingGate = await prepareAnalysisBillingGate(tx, {
+        userId: user.id,
+        walletCount: parsedCsv.wallets.length,
+        freeTrialWalletLimit,
+      })
+
       const project = await tx.project.create({
         data: {
           userId: user.id,
@@ -205,7 +181,7 @@ export async function POST(request: Request) {
         },
       })
 
-      return tx.analysis.create({
+      const analysis = await tx.analysis.create({
         data: {
           projectId: project.id,
           status: "processing",
@@ -215,37 +191,43 @@ export async function POST(request: Request) {
           enrichmentStatus: "pending",
         },
       })
+
+      await commitAnalysisCreditDebit(tx, {
+        gate: billingGate,
+        analysisId: analysis.id,
+        metadata: {
+          source: "dashboard_analysis",
+          walletCount: parsedCsv.wallets.length,
+          fileName: file.name,
+          chain: parsedForm.data.chain,
+          campaignType: parsedForm.data.campaignType,
+          freeTrialWalletLimit,
+          remainingFreeWallets: billingGate.remainingFreeWallets,
+        },
+      })
+
+      const batchCount = await createAnalysisBatches(
+        analysis.id,
+        parsedCsv.wallets,
+        config.batchSize,
+        tx
+      )
+
+      return { analysis, batchCount, billingGate }
     })
 
-    let batchCount = 0
-    try {
-      batchCount = await createAnalysisBatches(
-        created.id,
-        parsedCsv.wallets,
-        config.batchSize
-      )
-      dispatchAnalysisWorker({ analysisId: created.id, reason: "dashboard-upload" })
-    } catch (error) {
-      const message = errorMessage(error)
-      console.error("Analysis batch creation failed", error)
-      return NextResponse.json(
-        {
-          error: isSchemaOrMigrationError(error)
-            ? "Analysis was created, but the background queue table is not ready. Run Prisma migrations in Vercel/Postgres, then retry the analysis."
-            : `Analysis was created, but queue creation failed: ${message}`,
-          code: isSchemaOrMigrationError(error) ? "MIGRATION_REQUIRED" : "QUEUE_CREATE_FAILED",
-          analysisId: created.id,
-          details: message.slice(0, 500),
-          migrationCommand: "npx prisma generate && npx prisma migrate deploy",
-        },
-        { status: 500 }
-      )
-    }
+    dispatchAnalysisWorker({ analysisId: created.analysis.id, reason: "dashboard-upload" })
 
     return NextResponse.json({
-      analysisId: created.id,
+      analysisId: created.analysis.id,
       status: "processing",
-      batchCount,
+      batchCount: created.batchCount,
+      billing: {
+        source: created.billingGate.source,
+        creditsDeducted: created.billingGate.creditsToDeduct,
+        creditBalance: created.billingGate.balanceAfter,
+        remainingFreeWallets: created.billingGate.remainingFreeWallets,
+      },
       parseSummary: {
         mode: parsedCsv.mode,
         analysisMode: mode,
@@ -254,11 +236,28 @@ export async function POST(request: Request) {
         issues: parsedCsv.issues,
         duplicates: parsedCsv.duplicates,
         warnings,
-        note: `Real on-chain analysis queued in ${batchCount.toLocaleString()} batches using ${selection.provider.id}. Risk policy: ${parsedForm.data.riskPolicy}. No CSV-only or mock wallet history will be used.`,
+        note: `Real on-chain analysis queued in ${created.batchCount.toLocaleString()} batches using ${selection.provider.id}. Risk policy: ${parsedForm.data.riskPolicy}. No CSV-only or mock wallet history will be used.`,
       },
     })
   } catch (error) {
     const message = errorMessage(error)
+
+    if (isBillingCreditError(error)) {
+      return NextResponse.json(
+        {
+          code: error.code,
+          error: `Free trial includes ${freeTrialWalletLimit.toLocaleString()} wallets. This upload needs ${error.requiredCredits.toLocaleString()} persistent wallet credits, but your DB credit balance is ${error.availableCredits.toLocaleString()}. Please choose a paid USDC plan to continue.`,
+          freeTrialWalletLimit,
+          remainingWallets: error.remainingFreeWallets,
+          requiredWallets: error.walletCount,
+          requiredCredits: error.requiredCredits,
+          availableCredits: error.availableCredits,
+          checkoutUrl: checkoutUrl(error.walletCount, error.remainingFreeWallets),
+        },
+        { status: 402 }
+      )
+    }
+
     console.error("Analysis creation failed", error)
 
     if (isDatabaseConnectionError(error) || isSchemaOrMigrationError(error)) {

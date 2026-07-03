@@ -2,9 +2,13 @@ import { NextResponse } from "next/server"
 import type { Prisma } from "@prisma/client"
 
 import { getV1ApiUser, apiError } from "@/lib/api/v1-auth"
-import { getAccessPassForUser } from "@/lib/billing/access-pass"
 import { createAnalysisBatches } from "@/lib/analysis/batch-worker"
 import { dispatchAnalysisWorker } from "@/lib/analysis/worker-dispatch"
+import {
+  commitAnalysisCreditDebit,
+  isBillingCreditError,
+  prepareAnalysisBillingGate,
+} from "@/lib/billing/credits"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
 import { getOnChainConfig, isEnrichableChain } from "@/lib/onchain/enrichment-types"
@@ -24,12 +28,31 @@ export const runtime = "nodejs"
 const freeTrialWalletLimit = Number.parseInt(process.env.FREE_TRIAL_WALLET_LIMIT ?? "100", 10)
 const apiWalletLimit = Number.parseInt(process.env.TRIPROOF_API_MAX_WALLETS ?? "50000", 10)
 
-async function getUsedWalletCount(userId: string) {
-  const result = await db.analysis.aggregate({
-    _sum: { totalWallets: true },
-    where: { project: { userId } },
-  })
-  return result._sum.totalWallets ?? 0
+function errorCode(error: unknown) {
+  return typeof error === "object" && error !== null && "code" in error
+    ? String((error as { code?: unknown }).code)
+    : null
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown API analysis error"
+}
+
+function isSchemaOrMigrationError(error: unknown) {
+  const message = errorMessage(error).toLowerCase()
+  const code = errorCode(error)
+  return (
+    code === "P2010" ||
+    code === "P2021" ||
+    code === "P2022" ||
+    message.includes("does not exist") ||
+    message.includes("relation") ||
+    message.includes("column") ||
+    message.includes("analysisbatch") ||
+    message.includes("paymenttransaction") ||
+    message.includes("creditledger") ||
+    message.includes("migration")
+  )
 }
 
 function normalizeCampaignType(value: unknown): CampaignType {
@@ -136,31 +159,6 @@ export async function POST(request: Request) {
     return apiError(`No real on-chain provider is configured for ${chain}`, 400)
   }
 
-  try {
-    const usedWallets = await getUsedWalletCount(auth.user.id)
-    const remainingWallets = Math.max(freeTrialWalletLimit - usedWallets, 0)
-    const accessPass = await getAccessPassForUser(auth.user.id)
-    const paidAccessCoversUpload = accessPass !== null && accessPass.walletCredits >= wallets.length
-
-    if (wallets.length > remainingWallets && !paidAccessCoversUpload) {
-      return NextResponse.json(
-        {
-          code: "PAYMENT_REQUIRED",
-          error: "Wallet credit limit reached. Upgrade with USDC checkout before running this API analysis.",
-          freeTrialWalletLimit,
-          usedWallets,
-          remainingWallets,
-          requiredWallets: wallets.length,
-          checkoutUrl: `/checkout?requiredWallets=${wallets.length}&reason=api_wallet_limit`,
-        },
-        { status: 402 }
-      )
-    }
-  } catch (error) {
-    if (!isDatabaseConnectionError(error)) throw error
-    return apiError("Database is required for API usage", 503)
-  }
-
   const projectName = String(body.projectName ?? `${chain} ${campaignType} API Wallet Audit`).trim().slice(0, 120)
   const notesInput = typeof body.notes === "string" ? body.notes : ""
   const campaignContractsInput = Array.isArray(body.campaignContracts) ? body.campaignContracts.join("\n") : typeof body.campaignContracts === "string" ? body.campaignContracts : ""
@@ -174,6 +172,12 @@ export async function POST(request: Request) {
 
   try {
     const created = await db.$transaction(async (tx: Prisma.TransactionClient) => {
+      const billingGate = await prepareAnalysisBillingGate(tx, {
+        userId: auth.user.id,
+        walletCount: wallets.length,
+        freeTrialWalletLimit,
+      })
+
       const project = await tx.project.create({
         data: {
           userId: auth.user.id,
@@ -184,7 +188,7 @@ export async function POST(request: Request) {
         },
       })
 
-      return tx.analysis.create({
+      const analysis = await tx.analysis.create({
         data: {
           projectId: project.id,
           status: "processing",
@@ -194,35 +198,93 @@ export async function POST(request: Request) {
           enrichmentStatus: "pending",
         },
       })
+
+      await commitAnalysisCreditDebit(tx, {
+        gate: billingGate,
+        analysisId: analysis.id,
+        metadata: {
+          source: "api_v1_analysis",
+          walletCount: wallets.length,
+          chain,
+          campaignType,
+          riskPolicy,
+          freeTrialWalletLimit,
+          remainingFreeWallets: billingGate.remainingFreeWallets,
+        },
+      })
+
+      const batchCount = await createAnalysisBatches(
+        analysis.id,
+        wallets,
+        config.batchSize,
+        tx
+      )
+
+      return { analysis, batchCount, billingGate }
     })
 
-    const batchCount = await createAnalysisBatches(created.id, wallets, config.batchSize)
-    dispatchAnalysisWorker({ analysisId: created.id, reason: "api-v1-analyze" })
+    dispatchAnalysisWorker({ analysisId: created.analysis.id, reason: "api-v1-analyze" })
 
     return NextResponse.json({
-      analysisId: created.id,
+      analysisId: created.analysis.id,
       status: "processing",
       walletCount: wallets.length,
-      batchCount,
+      batchCount: created.batchCount,
+      billing: {
+        source: created.billingGate.source,
+        creditsDeducted: created.billingGate.creditsToDeduct,
+        creditBalance: created.billingGate.balanceAfter,
+        remainingFreeWallets: created.billingGate.remainingFreeWallets,
+      },
       chain,
       campaignType,
       analysisMode,
       riskPolicy,
       provider: selection.provider.id,
       issues,
-      statusUrl: `/api/v1/analysis/${created.id}`,
-      dashboardUrl: `/dashboard/analysis/${created.id}`,
+      statusUrl: `/api/v1/analysis/${created.analysis.id}`,
+      dashboardUrl: `/dashboard/analysis/${created.analysis.id}`,
       exports: {
-        approved: `/api/analysis/${created.id}/export?type=approved`,
-        grayZone: `/api/analysis/${created.id}/export?type=manual_review`,
-        rejectedNotEligible: `/api/analysis/${created.id}/export?type=rejected`,
-        fullCsv: `/api/analysis/${created.id}/export?type=full`,
-        pdf: `/api/analysis/${created.id}/export?type=pdf`,
+        approved: `/api/analysis/${created.analysis.id}/export?type=approved`,
+        grayZone: `/api/analysis/${created.analysis.id}/export?type=manual_review`,
+        rejectedNotEligible: `/api/analysis/${created.analysis.id}/export?type=rejected`,
+        fullCsv: `/api/analysis/${created.analysis.id}/export?type=full`,
+        pdf: `/api/analysis/${created.analysis.id}/export?type=pdf`,
       },
     })
   } catch (error) {
-    if (isDatabaseConnectionError(error)) {
-      return apiError("Database is required for API usage", 503)
+    if (isBillingCreditError(error)) {
+      const params = new URLSearchParams({
+        requiredWallets: String(error.walletCount),
+        remainingWallets: String(Math.max(error.remainingFreeWallets, 0)),
+        reason: "api_wallet_limit",
+      })
+
+      return NextResponse.json(
+        {
+          code: error.code,
+          error: "Wallet credit limit reached. Add persistent USDC wallet credits before running this API analysis.",
+          freeTrialWalletLimit,
+          remainingWallets: error.remainingFreeWallets,
+          requiredWallets: error.walletCount,
+          requiredCredits: error.requiredCredits,
+          availableCredits: error.availableCredits,
+          checkoutUrl: `/checkout?${params.toString()}`,
+        },
+        { status: 402 }
+      )
+    }
+
+    if (isDatabaseConnectionError(error) || isSchemaOrMigrationError(error)) {
+      return NextResponse.json(
+        {
+          error: "Database schema is not ready for API analysis creation. Run Prisma migrations, then redeploy.",
+          code: "MIGRATION_REQUIRED",
+          details: errorMessage(error).slice(0, 500),
+          migrationCommand: "npx prisma generate && npx prisma migrate deploy",
+        },
+        { status: 503 }
+      )
     }
     throw error
   }

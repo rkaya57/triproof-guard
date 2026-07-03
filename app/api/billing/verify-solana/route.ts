@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 
 import { getCurrentUser } from "@/lib/auth/session"
 import { attachAccessPassCookie } from "@/lib/billing/access-pass"
+import { recordVerifiedSolanaPayment } from "@/lib/billing/credits"
+import { isDatabaseConnectionError } from "@/lib/db/errors"
 import {
   verifySolanaUsdcTransfer,
   verifySolanaUsdcTransferByReference,
@@ -24,6 +26,21 @@ const solanaNetwork = {
 } as const
 
 type PlanId = keyof typeof plans
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Verification failed."
+}
+
+function isBillingSchemaError(error: unknown) {
+  const message = errorMessage(error).toLowerCase()
+  return (
+    isDatabaseConnectionError(error) ||
+    message.includes("paymenttransaction") ||
+    message.includes("creditledger") ||
+    message.includes("does not exist") ||
+    message.includes("migration")
+  )
+}
 
 export async function POST(request: Request) {
   const user = await getCurrentUser()
@@ -82,6 +99,25 @@ export async function POST(request: Request) {
       )
     }
 
+    const persisted = await recordVerifiedSolanaPayment({
+      userId: user.id,
+      plan: planId,
+      txHash: verification.txHash,
+      reference: reference || null,
+      amountUsdc: verification.receivedAmountUsdc,
+      walletCredits: plan.walletCredits,
+      confirmations: verification.confirmations,
+      network: "solana",
+      rawData: {
+        reference: reference || null,
+        requestedTxHash: txHash || null,
+        verifiedTxHash: verification.txHash,
+        expectedAmountUsdc: plan.amountUsdc,
+        receivedAmountUsdc: verification.receivedAmountUsdc,
+        confirmations: verification.confirmations,
+      },
+    })
+
     const response = NextResponse.json({
       ok: true,
       plan: planId,
@@ -91,7 +127,11 @@ export async function POST(request: Request) {
       amountUsdc: verification.receivedAmountUsdc,
       confirmations: verification.confirmations,
       walletCredits: plan.walletCredits,
-      message: "Solana USDC payment verified. Analysis credits are active for this browser session.",
+      creditBalance: persisted.balance,
+      alreadyRecorded: persisted.alreadyRecorded,
+      message: persisted.alreadyRecorded
+        ? "Solana USDC payment was already verified. Persistent analysis credits are available."
+        : "Solana USDC payment verified. Persistent analysis credits are active.",
     })
 
     await attachAccessPassCookie(response, {
@@ -105,8 +145,20 @@ export async function POST(request: Request) {
 
     return response
   } catch (error) {
+    if (isBillingSchemaError(error)) {
+      return NextResponse.json(
+        {
+          error: "Billing database schema is not ready. Run Prisma migrations, then redeploy.",
+          code: "MIGRATION_REQUIRED",
+          details: errorMessage(error).slice(0, 500),
+          migrationCommand: "npx prisma generate && npx prisma migrate deploy",
+        },
+        { status: 503 }
+      )
+    }
+
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Verification failed." },
+      { error: errorMessage(error) },
       { status: 500 }
     )
   }
