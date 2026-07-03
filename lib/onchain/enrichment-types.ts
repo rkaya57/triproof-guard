@@ -187,6 +187,9 @@ export type OnChainConfig = {
   batchSize: number
   requestDelayMs: number
   cacheTtlHours: number
+  staleCacheTtlHours: number
+  persistentCacheEnabled: boolean
+  providerCooldownMs: number
 }
 
 export function getOnChainConfig(): OnChainConfig {
@@ -194,6 +197,7 @@ export function getOnChainConfig(): OnChainConfig {
     .split(",")
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean)
+  const cacheTtlHours = envNumber("ONCHAIN_CACHE_TTL_HOURS", 24)
 
   return {
     enabled: (process.env.ONCHAIN_ENRICHMENT_ENABLED ?? "true") !== "false",
@@ -201,7 +205,10 @@ export function getOnChainConfig(): OnChainConfig {
     maxWalletsPerAnalysis: envWalletCap("ONCHAIN_MAX_WALLETS_PER_ANALYSIS", null),
     batchSize: envNumber("ONCHAIN_BATCH_SIZE", 25),
     requestDelayMs: envNumber("ONCHAIN_REQUEST_DELAY_MS", 250),
-    cacheTtlHours: envNumber("ONCHAIN_CACHE_TTL_HOURS", 24),
+    cacheTtlHours,
+    staleCacheTtlHours: envNumber("ONCHAIN_STALE_CACHE_TTL_HOURS", cacheTtlHours * 7),
+    persistentCacheEnabled: (process.env.ONCHAIN_PERSISTENT_CACHE_ENABLED ?? "true") !== "false",
+    providerCooldownMs: envNumber("ONCHAIN_PROVIDER_COOLDOWN_MS", 30_000),
   }
 }
 

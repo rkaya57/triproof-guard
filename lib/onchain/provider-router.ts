@@ -22,27 +22,35 @@ export type ProviderSelection = {
   usedMockFallback: boolean
 }
 
-export function getOnChainProvider(chain: string): ProviderSelection {
+export function getOnChainProviders(chain: string): ProviderSelection[] {
   if (!isEnrichableChain(chain)) {
-    return { provider: mockProvider, usedMockFallback: true }
+    return [{ provider: mockProvider, usedMockFallback: true }]
   }
 
   if (chain === "Solana") {
     return heliusProvider.isConfigured(chain)
-      ? { provider: heliusProvider, usedMockFallback: false }
-      : { provider: mockProvider, usedMockFallback: true }
+      ? [{ provider: heliusProvider, usedMockFallback: false }]
+      : [{ provider: mockProvider, usedMockFallback: true }]
   }
 
   const { providerPriority } = getOnChainConfig()
+  const providers: ProviderSelection[] = []
+  const seen = new Set<string>()
+
   for (const id of providerPriority) {
     if (id === "mock" || id === "helius") continue
     const provider = REGISTRY[id]
-    if (provider && provider.isConfigured(chain)) {
-      return { provider, usedMockFallback: false }
+    if (provider && !seen.has(provider.id) && provider.isConfigured(chain)) {
+      seen.add(provider.id)
+      providers.push({ provider, usedMockFallback: false })
     }
   }
 
-  return { provider: mockProvider, usedMockFallback: true }
+  return providers.length ? providers : [{ provider: mockProvider, usedMockFallback: true }]
+}
+
+export function getOnChainProvider(chain: string): ProviderSelection {
+  return getOnChainProviders(chain)[0] ?? { provider: mockProvider, usedMockFallback: true }
 }
 
 export { mockProvider }
