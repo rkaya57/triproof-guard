@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import type { Prisma } from "@prisma/client"
 
 import { getV1ApiUser, apiError } from "@/lib/api/v1-auth"
+import { isAdminEmail } from "@/lib/auth/admin"
 import { createAnalysisBatches } from "@/lib/analysis/batch-worker"
 import { dispatchAnalysisWorker } from "@/lib/analysis/worker-dispatch"
 import {
@@ -124,6 +125,9 @@ export async function POST(request: Request) {
   const auth = await getV1ApiUser(request)
   if (auth.error) return auth.error
 
+  const isAdmin = isAdminEmail(auth.user.email)
+  const effectiveFreeTrialWalletLimit = isAdmin ? Number.MAX_SAFE_INTEGER : freeTrialWalletLimit
+
   let body: Record<string, unknown>
   try {
     body = (await request.json()) as Record<string, unknown>
@@ -175,7 +179,7 @@ export async function POST(request: Request) {
       const billingGate = await prepareAnalysisBillingGate(tx, {
         userId: auth.user.id,
         walletCount: wallets.length,
-        freeTrialWalletLimit,
+        freeTrialWalletLimit: effectiveFreeTrialWalletLimit,
       })
 
       const project = await tx.project.create({
@@ -203,12 +207,12 @@ export async function POST(request: Request) {
         gate: billingGate,
         analysisId: analysis.id,
         metadata: {
-          source: "api_v1_analysis",
+          source: isAdmin ? "admin_api_v1_analysis" : "api_v1_analysis",
           walletCount: wallets.length,
           chain,
           campaignType,
           riskPolicy,
-          freeTrialWalletLimit,
+          freeTrialWalletLimit: effectiveFreeTrialWalletLimit,
           remainingFreeWallets: billingGate.remainingFreeWallets,
         },
       })
@@ -231,7 +235,7 @@ export async function POST(request: Request) {
       walletCount: wallets.length,
       batchCount: created.batchCount,
       billing: {
-        source: created.billingGate.source,
+        source: isAdmin ? "admin_unlimited" : created.billingGate.source,
         creditsDeducted: created.billingGate.creditsToDeduct,
         creditBalance: created.billingGate.balanceAfter,
         remainingFreeWallets: created.billingGate.remainingFreeWallets,
