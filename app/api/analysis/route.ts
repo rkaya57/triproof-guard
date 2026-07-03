@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 
+import { isAdminEmail } from "@/lib/auth/admin"
 import { getCurrentUser } from "@/lib/auth/session"
 import { parseWalletCsv } from "@/lib/csv/parser"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
@@ -68,6 +69,10 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    const effectiveFreeTrialWalletLimit = isAdminEmail(user.email)
+      ? Number.MAX_SAFE_INTEGER
+      : freeTrialWalletLimit
 
     const formData = await request.formData()
     const parsedForm = newAnalysisSchema.safeParse({
@@ -168,7 +173,7 @@ export async function POST(request: Request) {
       const billingGate = await prepareAnalysisBillingGate(tx, {
         userId: user.id,
         walletCount: parsedCsv.wallets.length,
-        freeTrialWalletLimit,
+        freeTrialWalletLimit: effectiveFreeTrialWalletLimit,
       })
 
       const project = await tx.project.create({
@@ -196,12 +201,12 @@ export async function POST(request: Request) {
         gate: billingGate,
         analysisId: analysis.id,
         metadata: {
-          source: "dashboard_analysis",
+          source: isAdminEmail(user.email) ? "admin_dashboard_analysis" : "dashboard_analysis",
           walletCount: parsedCsv.wallets.length,
           fileName: file.name,
           chain: parsedForm.data.chain,
           campaignType: parsedForm.data.campaignType,
-          freeTrialWalletLimit,
+          freeTrialWalletLimit: effectiveFreeTrialWalletLimit,
           remainingFreeWallets: billingGate.remainingFreeWallets,
         },
       })
@@ -223,7 +228,7 @@ export async function POST(request: Request) {
       status: "processing",
       batchCount: created.batchCount,
       billing: {
-        source: created.billingGate.source,
+        source: isAdminEmail(user.email) ? "admin_unlimited" : created.billingGate.source,
         creditsDeducted: created.billingGate.creditsToDeduct,
         creditBalance: created.billingGate.balanceAfter,
         remainingFreeWallets: created.billingGate.remainingFreeWallets,
