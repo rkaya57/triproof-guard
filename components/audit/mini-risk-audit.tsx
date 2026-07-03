@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useMemo, useState } from "react"
+import { FormEvent, useMemo, useState } from "react"
 import {
   AlertTriangle,
   ArrowRight,
@@ -10,6 +10,7 @@ import {
   Download,
   FileSearch,
   Gauge,
+  Loader2,
   Mail,
   Network,
   ShieldX,
@@ -23,144 +24,150 @@ import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { formatNumber } from "@/lib/format"
+import type { AnalysisResult, Chain, CsvIssue, RiskPolicy, WalletRiskResult, WalletStatus } from "@/types"
 
-type AuditWallet = {
-  address: string
-  valid: boolean
-  risk: "low" | "medium" | "high"
-  decision: "sample_ok" | "review" | "exclude"
-  reasonCodes: string[]
+type MiniAuditResponse = {
+  status: "completed"
+  source: string
+  chain: Chain
+  campaignType: string
+  riskPolicy: RiskPolicy
+  engineMode: string
+  limit: number
+  parseSummary: {
+    mode: "basic" | "enriched"
+    validWallets: number
+    issues: CsvIssue[]
+    duplicates: CsvIssue[]
+  }
+  result: AnalysisResult
 }
 
 const sampleWallets = [
+  "0x8f3c2a6b4e9d1f705c8a9b2d3e4f5061728394ab",
+  "0x4c1a9e8b7d6f5032a1b0c9d8e7f6543210ab9cde",
+  "0xa2b4c6d8e0f13579bdf2468ace13579bdf2468ac",
+  "0x19f8e7d6c5b4a3928172635445362718f9e8d7c6",
   "0x0000000000000000000000000000000000000001",
-  "0x0000000000000000000000000000000000000002",
-  "0x0000000000000000000000000000000000000003",
-  "Ch8kCo2FW4HXQMTm2wpbLeaVZJxXa4Rg8S4KVXUxcdVm",
-  "DNfVbKqY2d4uGz9jMx3YcJqS2f4Q7w8e9rT1yUiopLmN",
   "bad-wallet-row",
-  "0x0000000000000000000000000000000000000001",
 ].join("\n")
 
-function parseLines(value: string) {
-  return value
-    .split(/[\n,;\t ]+/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-}
-
-function isValidWallet(address: string) {
-  return /^0x[a-fA-F0-9]{40}$/.test(address) || /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)
-}
+const selectClass =
+  "h-9 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
 
 function shortAddress(address: string) {
   if (address.length <= 16) return address
   return `${address.slice(0, 8)}...${address.slice(-5)}`
 }
 
-function inspectWallet(address: string, duplicate: boolean, nearbySimilar: number): AuditWallet {
-  const valid = isValidWallet(address)
-  const reasonCodes: string[] = []
-  if (!valid) reasonCodes.push("INVALID_FORMAT")
-  if (duplicate) reasonCodes.push("DUPLICATE_ROW")
-  if (nearbySimilar >= 4) reasonCodes.push("SIMILAR_PREFIX_CLUSTER")
-  if (/^0x0{28,}/i.test(address)) reasonCodes.push("SYNTHETIC_LOOKING_EVM")
-  if (valid && !duplicate && nearbySimilar < 4) reasonCodes.push("READY_FOR_FULL_ANALYSIS")
-
-  const severity = !valid || duplicate || nearbySimilar >= 8 ? "high" : nearbySimilar >= 4 ? "medium" : "low"
-  return {
-    address,
-    valid,
-    risk: severity,
-    decision: severity === "high" ? "exclude" : severity === "medium" ? "review" : "sample_ok",
-    reasonCodes,
-  }
+function displayStatus(status: WalletStatus) {
+  if (status === "approved") return "approved candidate"
+  if (status === "manual_review") return "manual review"
+  return "rejected / not eligible"
 }
 
-function analyzeInput(value: string) {
-  const lines = parseLines(value)
-  const counts = new Map<string, number>()
-  const prefixCounts = new Map<string, number>()
-
-  lines.forEach((address) => {
-    const normalized = address.toLowerCase()
-    counts.set(normalized, (counts.get(normalized) ?? 0) + 1)
-    prefixCounts.set(normalized.slice(0, 10), (prefixCounts.get(normalized.slice(0, 10)) ?? 0) + 1)
-  })
-
-  const wallets = lines.map((address) => {
-    const normalized = address.toLowerCase()
-    return inspectWallet(address, (counts.get(normalized) ?? 0) > 1, prefixCounts.get(normalized.slice(0, 10)) ?? 0)
-  })
-
-  const invalid = wallets.filter((wallet) => !wallet.valid).length
-  const duplicates = Array.from(counts.values()).reduce((sum, count) => sum + Math.max(0, count - 1), 0)
-  const review = wallets.filter((wallet) => wallet.decision === "review").length
-  const exclude = wallets.filter((wallet) => wallet.decision === "exclude").length
-  const clean = wallets.filter((wallet) => wallet.decision === "sample_ok").length
-  const score = Math.max(0, Math.min(100, Math.round(100 - invalid * 12 - duplicates * 10 - review * 4 - exclude * 9)))
-
-  return {
-    wallets,
-    total: lines.length,
-    unique: counts.size,
-    invalid,
-    duplicates,
-    review,
-    exclude,
-    clean,
-    score,
-  }
-}
-
-function decisionTone(decision: AuditWallet["decision"]) {
-  if (decision === "sample_ok") return "border-green-400/30 bg-green-400/10 text-green-200"
-  if (decision === "review") return "border-amber-400/30 bg-amber-400/10 text-amber-200"
+function statusTone(status: WalletStatus) {
+  if (status === "approved") return "border-green-400/30 bg-green-400/10 text-green-200"
+  if (status === "manual_review") return "border-amber-400/30 bg-amber-400/10 text-amber-200"
   return "border-red-400/30 bg-red-400/10 text-red-200"
 }
 
-function buildMiniAuditBrief(report: ReturnType<typeof analyzeInput>) {
-  const findings = report.wallets
+function buildMiniAuditBrief(report: MiniAuditResponse | null, walletInput: string) {
+  if (!report) {
+    return [
+      "Tri-Proof Guard Mini Wallet Risk Audit",
+      "",
+      "No engine result has been generated yet.",
+      "",
+      "Wallet sample:",
+      walletInput.trim() || "- No wallet rows supplied.",
+    ].join("\n")
+  }
+
+  const findings = report.result.wallets
     .slice(0, 12)
-    .map((wallet) => `- ${wallet.address}: ${wallet.decision} (${wallet.reasonCodes.join(", ")})`)
+    .map((wallet) => `- ${wallet.walletAddress}: ${wallet.status} / risk ${wallet.riskScore} (${wallet.reasons.slice(0, 3).join("; ")})`)
     .join("\n")
 
   return [
     "Tri-Proof Guard Mini Wallet Risk Audit",
     "",
-    `Sample quality: ${report.score}/100`,
-    `Rows: ${report.total}`,
-    `Unique wallets: ${report.unique}`,
-    `Sample OK: ${report.clean}`,
-    `Needs review: ${report.review}`,
-    `Exclude from sample: ${report.exclude}`,
-    `Invalid rows: ${report.invalid}`,
-    `Duplicate rows: ${report.duplicates}`,
+    `Source: ${report.source}`,
+    `Chain: ${report.chain}`,
+    `Risk policy: ${report.riskPolicy}`,
+    `Engine mode: ${report.engineMode}`,
+    `Wallets analyzed: ${report.result.totalWallets}`,
+    `Average risk score: ${report.result.averageRiskScore}/100`,
+    `Approved candidates: ${report.result.approvedCount}`,
+    `Manual review: ${report.result.manualReviewCount}`,
+    `Rejected / not eligible: ${report.result.rejectedCount}`,
+    `Parse issues: ${report.parseSummary.issues.length}`,
+    `Duplicates skipped: ${report.parseSummary.duplicates.length}`,
     "",
-    "First-pass findings:",
+    "First-pass engine findings:",
     findings || "- No wallet rows supplied.",
     "",
-    "Note: This browser-only mini audit is a pre-analysis signal. Full Tri-Proof Guard analysis adds on-chain enrichment, campaign policy, cluster graph evidence, review workflow and exportable clean-list proof.",
+    "Note: This public mini audit runs the Tri-Proof Guard decision engine immediately. Full Guard analysis adds account history persistence, queue processing, review workflow, exports and clean-list proof.",
   ].join("\n")
+}
+
+function walletSortValue(wallet: WalletRiskResult) {
+  if (wallet.status === "rejected") return 3
+  if (wallet.status === "manual_review") return 2
+  return 1
 }
 
 export function MiniRiskAudit() {
   const [walletInput, setWalletInput] = useState(sampleWallets)
-  const report = useMemo(() => analyzeInput(walletInput), [walletInput])
-  const brief = useMemo(() => buildMiniAuditBrief(report), [report])
+  const [chain, setChain] = useState<Chain>("Ethereum")
+  const [riskPolicy, setRiskPolicy] = useState<RiskPolicy>("balanced")
+  const [report, setReport] = useState<MiniAuditResponse | null>(null)
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState("")
+
+  const brief = useMemo(() => buildMiniAuditBrief(report, walletInput), [report, walletInput])
   const mailto = useMemo(
     () =>
-      `mailto:info@triproofprotocol.com?subject=${encodeURIComponent("Free Mini Wallet Risk Audit Review")}&body=${encodeURIComponent(brief)}`,
+      `mailto:info@triproofprotocol.com?subject=${encodeURIComponent("Mini Guard Engine Audit Review")}&body=${encodeURIComponent(brief)}`,
     [brief]
   )
-  const hasInput = report.total > 0
+  const wallets = useMemo(
+    () =>
+      [...(report?.result.wallets ?? [])]
+        .sort((left, right) => walletSortValue(right) - walletSortValue(left) || right.riskScore - left.riskScore)
+        .slice(0, 8),
+    [report]
+  )
+
+  async function runMiniAudit(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault()
+    setPending(true)
+    setError("")
+
+    try {
+      const response = await fetch("/api/audit/mini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ walletInput, chain, riskPolicy, campaignType: "Airdrop" }),
+      })
+      const body = (await response.json().catch(() => ({}))) as Partial<MiniAuditResponse> & { error?: string }
+      if (!response.ok || !body.result) {
+        throw new Error(body.error ?? "Mini audit could not run.")
+      }
+      setReport(body as MiniAuditResponse)
+    } catch (runError) {
+      setError(runError instanceof Error ? runError.message : "Mini audit could not run.")
+    } finally {
+      setPending(false)
+    }
+  }
 
   function downloadBrief() {
     const blob = new Blob([brief], { type: "text/plain;charset=utf-8" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     link.href = url
-    link.download = "triproof-mini-audit-brief.txt"
+    link.download = "triproof-mini-engine-audit.txt"
     link.click()
     URL.revokeObjectURL(url)
   }
@@ -170,20 +177,39 @@ export function MiniRiskAudit() {
       <section className="glass-panel premium-card animated-border rounded-3xl p-5">
         <div className="mb-5 flex flex-wrap items-center gap-2">
           <Badge variant="secondary" className="border-primary/30 bg-primary/10 text-cyan-100">
-            Free mini wallet risk audit
+            Free Guard engine trial
           </Badge>
           <Badge variant="outline" className="border-green-400/30 bg-green-400/10 text-green-200">
-            Browser-only sample
+            Real decision engine
           </Badge>
         </div>
         <h1 className="text-gradient text-4xl font-semibold sm:text-5xl">
-          Paste 100-500 campaign wallets and get a first-pass risk read.
+          Paste campaign wallets and run a real Tri-Proof engine preview.
         </h1>
         <p className="mt-4 text-sm leading-6 text-muted-foreground">
-          This mini audit checks list quality, duplicates, invalid rows and simple clustering hints. Full Guard analysis still runs the on-chain enrichment and decision engine.
+          This public mini audit submits the sample to Tri-Proof Guard&apos;s server-side decision engine. If an on-chain provider is configured, the preview enriches the sample before scoring; otherwise it clearly falls back to engine-only scoring.
         </p>
 
-        <div className="mt-6 grid gap-3">
+        <form onSubmit={runMiniAudit} className="mt-6 grid gap-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="grid gap-2 text-sm font-medium">
+              Chain
+              <select value={chain} onChange={(event) => setChain(event.target.value as Chain)} className={selectClass}>
+                {["Ethereum", "Base", "Arbitrum", "Optimism", "Polygon", "BNB Chain", "Solana"].map((item) => (
+                  <option key={item} value={item}>{item}</option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-2 text-sm font-medium">
+              Risk policy
+              <select value={riskPolicy} onChange={(event) => setRiskPolicy(event.target.value as RiskPolicy)} className={selectClass}>
+                <option value="conservative">Conservative</option>
+                <option value="balanced">Balanced</option>
+                <option value="strict">Strict</option>
+              </select>
+            </label>
+          </div>
+
           <label className="grid gap-2 text-sm font-medium">
             Wallet list
             <Textarea
@@ -194,24 +220,24 @@ export function MiniRiskAudit() {
               placeholder="Paste one wallet address per line"
             />
           </label>
+
+          {error && <div className="rounded-xl border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-200">{error}</div>}
+
           <div className="flex flex-col gap-3 sm:flex-row">
+            <button type="submit" disabled={pending} className={`${buttonVariants()} glow-primary`}>
+              {pending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Gauge data-icon="inline-start" />}
+              Run engine audit
+            </button>
             <button type="button" onClick={() => setWalletInput(sampleWallets)} className={buttonVariants({ variant: "outline" })}>
               <ClipboardPaste data-icon="inline-start" />
               Load sample
             </button>
-            <Link href="/dashboard/new-analysis" className={`${buttonVariants()} glow-primary`}>
+            <Link href="/dashboard/new-analysis" className={buttonVariants({ variant: "outline" })}>
               <Upload data-icon="inline-start" />
-              Run full analysis
+              Full analysis
             </Link>
-            <a
-              href={mailto}
-              className={buttonVariants({ variant: "outline" })}
-            >
-              <Mail data-icon="inline-start" />
-              Request review
-            </a>
           </div>
-        </div>
+        </form>
       </section>
 
       <section className="grid gap-5">
@@ -219,27 +245,35 @@ export function MiniRiskAudit() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Gauge className="text-primary" />
-              Mini audit score
+              Engine result
             </CardTitle>
-            <CardDescription>Fast signal for sales calls and pre-analysis triage. No data is submitted from this widget.</CardDescription>
+            <CardDescription>
+              {report
+                ? `${report.source} completed with ${report.engineMode} mode on ${report.chain}.`
+                : "Run the mini audit to get a live Guard engine result."}
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-4">
             <div className="rounded-lg border border-primary/25 bg-primary/10 p-4 sm:col-span-2">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Sample quality</p>
-              <p className="mt-1 text-4xl font-semibold text-primary">{hasInput ? report.score : 0}/100</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Average risk score</p>
+              <p className="mt-1 text-4xl font-semibold text-primary">{report ? report.result.averageRiskScore : 0}/100</p>
               <p className="mt-2 text-sm text-muted-foreground">
-                {report.score >= 80 ? "Ready for full Guard analysis." : report.score >= 55 ? "Needs cleanup before distribution." : "High-risk or malformed sample."}
+                {report
+                  ? report.engineMode === "onchain"
+                    ? "Scored with live enrichment where provider data was available."
+                    : "Scored by the Guard engine without live on-chain enrichment."
+                  : "No result yet."}
               </p>
             </div>
             <div className="rounded-lg border border-border bg-background/45 p-4">
               <WalletCards className="mb-2 text-primary" />
-              <p className="text-2xl font-semibold">{formatNumber(report.total)}</p>
-              <p className="text-xs text-muted-foreground">Rows</p>
+              <p className="text-2xl font-semibold">{formatNumber(report?.result.totalWallets)}</p>
+              <p className="text-xs text-muted-foreground">Analyzed</p>
             </div>
             <div className="rounded-lg border border-border bg-background/45 p-4">
               <Network className="mb-2 text-primary" />
-              <p className="text-2xl font-semibold">{formatNumber(report.unique)}</p>
-              <p className="text-xs text-muted-foreground">Unique wallets</p>
+              <p className="text-2xl font-semibold">{formatNumber(report?.result.clusters.length)}</p>
+              <p className="text-xs text-muted-foreground">Clusters</p>
             </div>
           </CardContent>
         </Card>
@@ -248,55 +282,76 @@ export function MiniRiskAudit() {
           <Card className="glass-panel border-green-400/25 bg-green-400/10">
             <CardHeader>
               <CheckCircle2 className="text-green-300" />
-              <CardTitle className="text-green-100">{formatNumber(report.clean)}</CardTitle>
-              <CardDescription>Sample OK</CardDescription>
+              <CardTitle className="text-green-100">{formatNumber(report?.result.approvedCount)}</CardTitle>
+              <CardDescription>Approved candidates</CardDescription>
             </CardHeader>
           </Card>
           <Card className="glass-panel border-amber-400/25 bg-amber-400/10">
             <CardHeader>
               <AlertTriangle className="text-amber-300" />
-              <CardTitle className="text-amber-100">{formatNumber(report.review)}</CardTitle>
-              <CardDescription>Needs review</CardDescription>
+              <CardTitle className="text-amber-100">{formatNumber(report?.result.manualReviewCount)}</CardTitle>
+              <CardDescription>Manual review</CardDescription>
             </CardHeader>
           </Card>
           <Card className="glass-panel border-red-400/25 bg-red-400/10">
             <CardHeader>
               <ShieldX className="text-red-300" />
-              <CardTitle className="text-red-100">{formatNumber(report.exclude)}</CardTitle>
-              <CardDescription>Exclude from sample</CardDescription>
+              <CardTitle className="text-red-100">{formatNumber(report?.result.rejectedCount)}</CardTitle>
+              <CardDescription>Rejected / not eligible</CardDescription>
             </CardHeader>
           </Card>
         </div>
+
+        {report?.result.enrichment && (
+          <Card className="glass-panel premium-card">
+            <CardHeader>
+              <CardTitle>Provider evidence</CardTitle>
+              <CardDescription>
+                Provider: {report.result.enrichment.provider}. Enriched {formatNumber(report.result.enrichment.enrichedCount)}, failed {formatNumber(report.result.enrichment.failedCount)}, cache hits {formatNumber(report.result.enrichment.cacheHits)}.
+              </CardDescription>
+            </CardHeader>
+            {report.result.enrichment.warnings.length > 0 && (
+              <CardContent className="grid gap-2">
+                {report.result.enrichment.warnings.map((warning) => (
+                  <div key={warning} className="rounded-lg border border-amber-400/25 bg-amber-400/10 p-3 text-sm text-amber-100">
+                    {warning}
+                  </div>
+                ))}
+              </CardContent>
+            )}
+          </Card>
+        )}
 
         <Card className="glass-panel premium-card">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileSearch className="text-primary" />
-              First-pass findings
+              Engine findings
             </CardTitle>
-            <CardDescription>Reason codes are intentionally compact so they can later map to API and clean-list exports.</CardDescription>
+            <CardDescription>These statuses come from the same Guard scoring engine used by the full dashboard.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
-            {report.wallets.slice(0, 8).map((wallet, index) => (
-              <div key={`${wallet.address}-${index}`} className="grid gap-3 rounded-lg border border-border bg-background/45 p-3 sm:grid-cols-[1fr_auto] sm:items-center">
+            {wallets.map((wallet) => (
+              <div key={wallet.walletAddress} className="grid gap-3 rounded-lg border border-border bg-background/45 p-3 sm:grid-cols-[1fr_auto] sm:items-center">
                 <div>
-                  <p className="font-mono text-xs text-muted-foreground">{shortAddress(wallet.address)}</p>
+                  <p className="font-mono text-xs text-muted-foreground">{shortAddress(wallet.walletAddress)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Risk {wallet.riskScore}/100 · {wallet.riskLevel}</p>
                   <div className="mt-2 flex flex-wrap gap-1">
-                    {wallet.reasonCodes.map((code) => (
-                      <Badge key={code} variant="outline" className="border-primary/25 bg-primary/5 font-mono text-[10px] text-primary">
-                        {code}
+                    {wallet.reasons.slice(0, 3).map((reason) => (
+                      <Badge key={reason} variant="outline" className="border-primary/25 bg-primary/5 text-[10px] text-primary">
+                        {reason}
                       </Badge>
                     ))}
                   </div>
                 </div>
-                <Badge variant="outline" className={decisionTone(wallet.decision)}>
-                  {wallet.decision.replace("_", " ")}
+                <Badge variant="outline" className={statusTone(wallet.status)}>
+                  {displayStatus(wallet.status)}
                 </Badge>
               </div>
             ))}
-            {!hasInput && (
+            {!report && (
               <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-                Paste a wallet list to generate a mini audit.
+                Paste wallets and run the engine audit.
               </div>
             )}
           </CardContent>
@@ -309,7 +364,7 @@ export function MiniRiskAudit() {
               Next best action
             </CardTitle>
             <CardDescription>
-              Turn this sample into a defensible customer report with on-chain evidence, campaign policy and exportable clean lists.
+              Turn this engine preview into a defensible customer report with saved on-chain evidence, team review and exportable clean lists.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 sm:flex-row">
@@ -325,11 +380,8 @@ export function MiniRiskAudit() {
               <Mail data-icon="inline-start" />
               Email review
             </a>
-            <Link href="/docs" className={buttonVariants({ variant: "outline" })}>
-              Read methodology
-            </Link>
-            <Link href="/contact" className={buttonVariants({ variant: "outline" })}>
-              Talk to us
+            <Link href="/docs/trust" className={buttonVariants({ variant: "outline" })}>
+              Methodology
             </Link>
           </CardContent>
         </Card>
