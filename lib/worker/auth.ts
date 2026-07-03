@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
 function configuredWorkerSecrets() {
-  return [process.env.WORKER_SECRET, process.env.ANALYSIS_WORKER_SECRET]
+  return [process.env.WORKER_SECRET, process.env.ANALYSIS_WORKER_SECRET, process.env.CRON_SECRET]
     .map((secret) => secret?.trim())
     .filter((secret): secret is string => Boolean(secret))
 }

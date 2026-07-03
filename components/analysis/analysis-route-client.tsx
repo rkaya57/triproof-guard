@@ -82,6 +82,10 @@ export function AnalysisRouteClient({ analysisId }: { analysisId: string }) {
     setState({ status: "completed" })
   }, [])
 
+  const markFailed = useCallback((message: string) => {
+    setState({ status: "error", message })
+  }, [])
+
   const fetchRouteState = useCallback(async (): Promise<RouteState> => {
     try {
       const response = await fetch(`/api/analysis/${analysisId}/status`, { cache: "no-store" })
@@ -91,8 +95,15 @@ export function AnalysisRouteClient({ analysisId }: { analysisId: string }) {
         throw new Error(body.error ?? "Analysis status could not be loaded")
       }
 
-      if (body.status === "completed" || body.status === "failed") {
+      if (body.status === "completed") {
         return { status: "completed" }
+      }
+
+      if (body.status === "failed") {
+        return {
+          status: "error",
+          message: "Analysis failed after the worker retried one or more batches. Start a new analysis or review worker diagnostics.",
+        }
       }
 
       return { status: "processing", data: body }
@@ -143,7 +154,7 @@ export function AnalysisRouteClient({ analysisId }: { analysisId: string }) {
     return (
       <main className="premium-page min-h-screen bg-background px-5 py-10 text-foreground sm:px-8">
         <DashboardLabelNormalizer />
-        <AnalysisProcessing analysisId={analysisId} initialStatus={state.data} onCompleted={markCompleted} />
+        <AnalysisProcessing analysisId={analysisId} initialStatus={state.data} onCompleted={markCompleted} onFailed={markFailed} />
       </main>
     )
   }

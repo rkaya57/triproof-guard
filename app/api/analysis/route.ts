@@ -8,6 +8,7 @@ import { newAnalysisSchema, parseCampaignContracts } from "@/lib/validators/wall
 import { getOnChainConfig, isEnrichableChain } from "@/lib/onchain/enrichment-types"
 import { getOnChainProvider } from "@/lib/onchain/provider-router"
 import { createAnalysisBatches } from "@/lib/analysis/batch-worker"
+import { dispatchAnalysisWorker } from "@/lib/analysis/worker-dispatch"
 import { getAccessPassForUser } from "@/lib/billing/access-pass"
 import type { AnalysisMode } from "@/types"
 import type { Prisma } from "@prisma/client"
@@ -223,6 +224,7 @@ export async function POST(request: Request) {
         parsedCsv.wallets,
         config.batchSize
       )
+      dispatchAnalysisWorker({ analysisId: created.id, reason: "dashboard-upload" })
     } catch (error) {
       const message = errorMessage(error)
       console.error("Analysis batch creation failed", error)

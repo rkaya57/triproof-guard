@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth/session"
 import { db } from "@/lib/db/prisma"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
-import { processAnalysisBatchForAnalysis } from "@/lib/analysis/batch-worker"
+import { dispatchAnalysisWorker } from "@/lib/analysis/worker-dispatch"
 
 export const runtime = "nodejs"
 
@@ -30,8 +30,13 @@ export async function POST(
       return NextResponse.json({ processed: false, status: "completed", analysisId: id })
     }
 
-    const result = await processAnalysisBatchForAnalysis(id)
-    return NextResponse.json(result)
+    dispatchAnalysisWorker({ analysisId: id, reason: "legacy-analysis-process-route" })
+    return NextResponse.json({
+      processed: false,
+      status: "queued",
+      analysisId: id,
+      message: "Server-side worker dispatch queued for this analysis.",
+    })
   } catch (error) {
     if (isDatabaseConnectionError(error)) {
       return NextResponse.json({ error: "Database unavailable" }, { status: 503 })

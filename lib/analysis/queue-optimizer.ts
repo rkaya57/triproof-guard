@@ -1,5 +1,6 @@
 import { db } from "@/lib/db/prisma"
 import {
+  finalizeReadyAnalyses,
   finalizeAnalysisIfReady,
   processAnalysisBatchForAnalysis,
   processNextAnalysisBatch,
@@ -165,6 +166,10 @@ export async function recoverStaleAnalysisBatches({
         END,
         "retryCount" = COALESCE("retryCount", 0) + 1,
         "errorMessage" = 'V2.4 recovered stale processing batch',
+        "completedAt" = CASE
+          WHEN COALESCE("retryCount", 0) + 1 >= ${MAX_BATCH_RETRIES} THEN NOW()
+          ELSE NULL
+        END,
         "updatedAt" = NOW()
       WHERE "analysisId" = ${analysisId}
         AND "status" = 'processing'
@@ -182,6 +187,10 @@ export async function recoverStaleAnalysisBatches({
       END,
       "retryCount" = COALESCE("retryCount", 0) + 1,
       "errorMessage" = 'V2.4 recovered stale processing batch',
+      "completedAt" = CASE
+        WHEN COALESCE("retryCount", 0) + 1 >= ${MAX_BATCH_RETRIES} THEN NOW()
+        ELSE NULL
+      END,
       "updatedAt" = NOW()
     WHERE "status" = 'processing'
       AND "startedAt" IS NOT NULL
@@ -219,6 +228,8 @@ export async function processAnalysisQueue({
     if (!result.processed) break
   }
 
+  const finalizedReadyAnalyses = analysisId ? { checked: 0, finalized: 0 } : await finalizeReadyAnalyses(limit)
+
   if (analysisId) {
     await finalizeAnalysisIfReady(analysisId)
   }
@@ -231,6 +242,7 @@ export async function processAnalysisQueue({
     maxBatches: limit,
     timeBudgetMs: budget,
     elapsedMs: Date.now() - startedAt,
+    finalizedReadyAnalyses,
     results,
     queue,
   }

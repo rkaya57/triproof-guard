@@ -6,6 +6,7 @@ import {
   processAnalysisQueue,
   recoverStaleAnalysisBatches,
 } from "@/lib/analysis/queue-optimizer"
+import { finalizeReadyAnalyses } from "@/lib/analysis/batch-worker"
 import { boundedNumber, isWorkerAuthorized, workerUnauthorized } from "@/lib/worker/auth"
 
 export const runtime = "nodejs"
@@ -53,8 +54,11 @@ export async function POST(request: Request) {
   try {
     if (recoverOnly) {
       const recovered = await recoverStaleAnalysisBatches({ analysisId })
+      const finalizedReadyAnalyses = analysisId
+        ? { checked: 0, finalized: 0 }
+        : await finalizeReadyAnalyses(maxBatches)
       const queue = await getAnalysisQueueStatus({ analysisId })
-      return NextResponse.json({ recoveredStaleBatches: recovered, queue, analysisId })
+      return NextResponse.json({ recoveredStaleBatches: recovered, finalizedReadyAnalyses, queue, analysisId })
     }
 
     const result = await processAnalysisQueue({

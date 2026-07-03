@@ -1,8 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/analysis/process-next-batch",
-      "schedule": "0 3 * * *"
+      "path": "/api/worker/analysis-queue",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

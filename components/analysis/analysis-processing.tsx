@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, RefreshCw, Zap } from "lucide-react"
+import { Loader2, RefreshCw } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -25,10 +25,12 @@ export function AnalysisProcessing({
   analysisId,
   initialStatus,
   onCompleted,
+  onFailed,
 }: {
   analysisId: string
   initialStatus?: Partial<AnalysisProcessingStatus>
   onCompleted?: () => void
+  onFailed?: (message: string) => void
 }) {
   const router = useRouter()
   const inFlight = useRef(false)
@@ -36,7 +38,6 @@ export function AnalysisProcessing({
     initialStatus ?? { analysisId, status: "processing", progressPercent: 0 }
   )
   const [error, setError] = useState("")
-  const [lastWorkerMessage, setLastWorkerMessage] = useState("")
 
   const loadStatus = useCallback(async () => {
     const response = await fetch(`/api/analysis/${analysisId}/status`, { cache: "no-store" })
@@ -52,35 +53,26 @@ export function AnalysisProcessing({
       onCompleted?.()
       router.refresh()
     }
+    if (nextStatus.status === "failed") {
+      const message = "Analysis failed after the server-side worker retried one or more batches."
+      setError(message)
+      onFailed?.(message)
+    }
     return nextStatus
-  }, [analysisId, onCompleted, router])
-
-  const processOneBatch = useCallback(async () => {
-    const response = await fetch(`/api/analysis/${analysisId}/process`, {
-      method: "POST",
-      cache: "no-store",
-    })
-    const body = (await response.json().catch(() => ({}))) as { message?: string; error?: string; status?: string }
-    if (!response.ok) throw new Error(body.error ?? "Could not process analysis batch")
-    setLastWorkerMessage(body.message ?? body.status ?? "Batch trigger sent")
-  }, [analysisId])
+  }, [analysisId, onCompleted, onFailed, router])
 
   const tick = useCallback(async () => {
     if (inFlight.current) return
     inFlight.current = true
     try {
-      const current = await loadStatus()
+      await loadStatus()
       setError("")
-      if (current.status !== "completed") {
-        await processOneBatch()
-        await loadStatus()
-      }
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Processing failed")
     } finally {
       inFlight.current = false
     }
-  }, [loadStatus, processOneBatch])
+  }, [loadStatus])
 
   useEffect(() => {
     let active = true
@@ -111,7 +103,7 @@ export function AnalysisProcessing({
           <div>
             <CardTitle>Analysis is processing</CardTitle>
             <CardDescription>
-              Tri-Proof Guard is enriching wallets with real on-chain data. Keep this page open while batches run.
+              Tri-Proof Guard is enriching wallets with real on-chain data in the server-side worker queue.
             </CardDescription>
           </div>
         </div>
@@ -150,18 +142,12 @@ export function AnalysisProcessing({
           </div>
         </div>
 
-        {lastWorkerMessage && (
-          <p className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-primary">
-            {lastWorkerMessage}
-          </p>
-        )}
+        <p className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-primary">
+          Background worker is processing queued batches. You can close this page and return later.
+        </p>
         {error && <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
 
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => tick()}>
-            <Zap data-icon="inline-start" />
-            Process next batch
-          </Button>
           <Button variant="outline" onClick={() => loadStatus()}>
             <RefreshCw data-icon="inline-start" />
             Refresh status

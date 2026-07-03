@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client"
 import { getV1ApiUser, apiError } from "@/lib/api/v1-auth"
 import { getAccessPassForUser } from "@/lib/billing/access-pass"
 import { createAnalysisBatches } from "@/lib/analysis/batch-worker"
+import { dispatchAnalysisWorker } from "@/lib/analysis/worker-dispatch"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
 import { getOnChainConfig, isEnrichableChain } from "@/lib/onchain/enrichment-types"
@@ -196,6 +197,7 @@ export async function POST(request: Request) {
     })
 
     const batchCount = await createAnalysisBatches(created.id, wallets, config.batchSize)
+    dispatchAnalysisWorker({ analysisId: created.id, reason: "api-v1-analyze" })
 
     return NextResponse.json({
       analysisId: created.id,

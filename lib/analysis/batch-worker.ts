@@ -22,6 +22,14 @@ type BatchRow = {
   retryCount: number
 }
 
+type BatchReadinessRow = {
+  total: number
+  pending: number
+  processing: number
+  completed: number
+  failed: number
+}
+
 function toDate(value: string | null | undefined) {
   if (!value) return null
   const parsed = new Date(value)
@@ -122,80 +130,119 @@ export async function createAnalysisBatches(analysisId: string, wallets: ParsedW
 async function claimNextBatch(analysisId?: string) {
   const rows = analysisId
     ? await db.$queryRaw<BatchRow[]>`
-        SELECT b.*
-        FROM "AnalysisBatch" b
-        JOIN "Analysis" a ON a."id" = b."analysisId"
-        WHERE b."status" = 'pending'
-          AND b."analysisId" = ${analysisId}
-          AND a."status" IN ('pending', 'processing', 'enriching')
-        ORDER BY b."batchIndex" ASC, b."createdAt" ASC
-        LIMIT 1
+        WITH next_batch AS (
+          SELECT b."id"
+          FROM "AnalysisBatch" b
+          JOIN "Analysis" a ON a."id" = b."analysisId"
+          WHERE b."status" = 'pending'
+            AND b."analysisId" = ${analysisId}
+            AND a."status" IN ('pending', 'processing', 'enriching')
+          ORDER BY b."batchIndex" ASC, b."createdAt" ASC
+          LIMIT 1
+          FOR UPDATE SKIP LOCKED
+        )
+        UPDATE "AnalysisBatch" b
+        SET "status" = 'processing',
+            "startedAt" = NOW(),
+            "updatedAt" = NOW(),
+            "completedAt" = NULL,
+            "errorMessage" = NULL
+        FROM next_batch
+        WHERE b."id" = next_batch."id"
+          AND b."status" = 'pending'
+        RETURNING b.*
       `
     : await db.$queryRaw<BatchRow[]>`
-        SELECT b.*
-        FROM "AnalysisBatch" b
-        JOIN "Analysis" a ON a."id" = b."analysisId"
-        WHERE b."status" = 'pending'
-          AND a."status" IN ('pending', 'processing', 'enriching')
-        ORDER BY b."createdAt" ASC, b."batchIndex" ASC
-        LIMIT 1
+        WITH next_batch AS (
+          SELECT b."id"
+          FROM "AnalysisBatch" b
+          JOIN "Analysis" a ON a."id" = b."analysisId"
+          WHERE b."status" = 'pending'
+            AND a."status" IN ('pending', 'processing', 'enriching')
+          ORDER BY b."createdAt" ASC, b."batchIndex" ASC
+          LIMIT 1
+          FOR UPDATE SKIP LOCKED
+        )
+        UPDATE "AnalysisBatch" b
+        SET "status" = 'processing',
+            "startedAt" = NOW(),
+            "updatedAt" = NOW(),
+            "completedAt" = NULL,
+            "errorMessage" = NULL
+        FROM next_batch
+        WHERE b."id" = next_batch."id"
+          AND b."status" = 'pending'
+        RETURNING b.*
       `
 
-  const batch = rows[0]
-  if (!batch) return null
-
-  const claimed = await db.$executeRaw`
-    UPDATE "AnalysisBatch"
-    SET "status" = 'processing', "startedAt" = NOW(), "updatedAt" = NOW(), "errorMessage" = NULL
-    WHERE "id" = ${batch.id} AND "status" = 'pending'
-  `
-  return claimed === 1 ? batch : null
-}
-
-async function openBatchCount(analysisId: string) {
-  const rows = await db.$queryRaw<Array<{ count: number }>>`
-    SELECT COUNT(*)::int AS count
-    FROM "AnalysisBatch"
-    WHERE "analysisId" = ${analysisId} AND "status" IN ('pending', 'processing')
-  `
-  return rows[0]?.count ?? 0
-}
-
-async function batchesForAnalysis(analysisId: string) {
-  return db.$queryRaw<BatchRow[]>`
-    SELECT * FROM "AnalysisBatch"
-    WHERE "analysisId" = ${analysisId}
-    ORDER BY "batchIndex" ASC
-  `
+  return rows[0] ?? null
 }
 
 export async function finalizeAnalysisIfReady(analysisId: string) {
-  if ((await openBatchCount(analysisId)) > 0) return false
-
-  const analysis = await db.analysis.findUnique({ where: { id: analysisId }, include: { project: true } })
-  if (!analysis || analysis.status === "completed") return false
-
-  const batches = await batchesForAnalysis(analysisId)
-  const originalWallets: ParsedWallet[] = []
-  const enrichmentResults = new Map<string, WalletEnrichmentResult>()
-  const summaries: EnrichmentSummary[] = []
-
-  batches.forEach((batch) => {
-    originalWallets.push(...parseJson<ParsedWallet[]>(batch.walletData, []))
-    resultMap(batch.enrichmentResults).forEach((result, address) => enrichmentResults.set(address, result))
-    const summary = parseJson<EnrichmentSummary | null>(batch.enrichmentSummary, null)
-    if (summary) summaries.push(summary)
-  })
-
-  const mode = (analysis.analysisMode ?? "onchain") as AnalysisMode
-  const riskPolicy = riskPolicyFromNotes(analysis.project.notes)
-  const enrichmentMeta = mergeSummary(mode, summaries)
-  const walletsForAnalysis = enrichmentResults.size
-    ? mergeEnrichment(originalWallets, enrichmentResults, mode)
-    : originalWallets
-  const result = analyzeWallets(walletsForAnalysis, enrichmentMeta, riskPolicy)
+  let completed = false
 
   await db.$transaction(async (tx: Prisma.TransactionClient) => {
+    const lockRows = await tx.$queryRaw<Array<{ locked: boolean }>>`
+      SELECT pg_try_advisory_xact_lock(hashtext(${analysisId})) AS locked
+    `
+    if (!lockRows[0]?.locked) return
+
+    const readinessRows = await tx.$queryRaw<BatchReadinessRow[]>`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE "status" = 'pending')::int AS pending,
+        COUNT(*) FILTER (WHERE "status" = 'processing')::int AS processing,
+        COUNT(*) FILTER (WHERE "status" = 'completed')::int AS completed,
+        COUNT(*) FILTER (WHERE "status" = 'failed')::int AS failed
+      FROM "AnalysisBatch"
+      WHERE "analysisId" = ${analysisId}
+    `
+    const readiness = readinessRows[0]
+    if (!readiness || readiness.total === 0 || readiness.pending > 0 || readiness.processing > 0) return
+
+    const analysis = await tx.analysis.findUnique({ where: { id: analysisId }, include: { project: true } })
+    if (!analysis || analysis.status === "completed" || analysis.status === "failed") return
+
+    if (readiness.failed > 0) {
+      await tx.analysis.update({
+        where: { id: analysisId },
+        data: {
+          status: "failed",
+          enrichmentStatus: "failed",
+          failedEnrichmentCount: readiness.failed,
+          enrichmentWarnings: [
+            `${readiness.failed.toLocaleString()} analysis batch(es) failed after retries. The analysis was not finalized with partial wallet results.`,
+          ],
+          completedAt: new Date(),
+        },
+      })
+      return
+    }
+
+    const batches = await tx.$queryRaw<BatchRow[]>`
+      SELECT * FROM "AnalysisBatch"
+      WHERE "analysisId" = ${analysisId}
+      ORDER BY "batchIndex" ASC
+    `
+    const originalWallets: ParsedWallet[] = []
+    const enrichmentResults = new Map<string, WalletEnrichmentResult>()
+    const summaries: EnrichmentSummary[] = []
+
+    batches.forEach((batch) => {
+      originalWallets.push(...parseJson<ParsedWallet[]>(batch.walletData, []))
+      resultMap(batch.enrichmentResults).forEach((result, address) => enrichmentResults.set(address, result))
+      const summary = parseJson<EnrichmentSummary | null>(batch.enrichmentSummary, null)
+      if (summary) summaries.push(summary)
+    })
+
+    const mode = (analysis.analysisMode ?? "onchain") as AnalysisMode
+    const riskPolicy = riskPolicyFromNotes(analysis.project.notes)
+    const enrichmentMeta = mergeSummary(mode, summaries)
+    const walletsForAnalysis = enrichmentResults.size
+      ? mergeEnrichment(originalWallets, enrichmentResults, mode)
+      : originalWallets
+    const result = analyzeWallets(walletsForAnalysis, enrichmentMeta, riskPolicy)
+
     await tx.analysis.update({ where: { id: analysisId }, data: { status: "analyzing" } })
     await tx.walletAnalysis.deleteMany({ where: { analysisId } })
     await tx.walletEnrichment.deleteMany({ where: { analysisId } })
@@ -310,13 +357,43 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
         completedAt: new Date(),
       },
     })
+
+    completed = true
   })
 
-  deliverAnalysisCompletedWebhook(analysisId).catch((error) => {
-    console.error("Webhook delivery failed", error)
-  })
+  if (completed) {
+    deliverAnalysisCompletedWebhook(analysisId).catch((error) => {
+      console.error("Webhook delivery failed", error)
+    })
+  }
 
-  return true
+  return completed
+}
+
+export async function finalizeReadyAnalyses(limit = 25) {
+  const rows = await db.$queryRaw<Array<{ id: string }>>`
+    SELECT a."id"
+    FROM "Analysis" a
+    WHERE a."status" IN ('pending', 'processing', 'enriching', 'analyzing')
+      AND EXISTS (
+        SELECT 1 FROM "AnalysisBatch" b WHERE b."analysisId" = a."id"
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM "AnalysisBatch" b
+        WHERE b."analysisId" = a."id"
+          AND b."status" IN ('pending', 'processing')
+      )
+    ORDER BY a."createdAt" ASC
+    LIMIT ${Math.min(100, Math.max(1, limit))}
+  `
+
+  let finalized = 0
+  for (const row of rows) {
+    if (await finalizeAnalysisIfReady(row.id)) finalized += 1
+  }
+
+  return { checked: rows.length, finalized }
 }
 
 async function processBatch(batch: BatchRow) {
@@ -347,6 +424,7 @@ async function processBatch(batch: BatchRow) {
           "updatedAt" = NOW(),
           "errorMessage" = NULL
       WHERE "id" = ${batch.id}
+        AND "status" = 'processing'
     `
 
     const completed = await finalizeAnalysisIfReady(batch.analysisId)
@@ -361,8 +439,10 @@ async function processBatch(batch: BatchRow) {
       SET "status" = ${retrying ? "pending" : "failed"},
           "retryCount" = ${nextRetryCount},
           "errorMessage" = ${message},
-          "updatedAt" = NOW()
+          "updatedAt" = NOW(),
+          "completedAt" = CASE WHEN ${retrying} THEN NULL ELSE NOW() END
       WHERE "id" = ${batch.id}
+        AND "status" = 'processing'
     `
 
     if (!retrying) await finalizeAnalysisIfReady(batch.analysisId)
