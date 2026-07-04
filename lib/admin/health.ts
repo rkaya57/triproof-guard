@@ -1,4 +1,5 @@
 import { db } from "@/lib/db/prisma"
+import { configuredProductionSecretStatus } from "@/lib/env/validation"
 
 function toNumber(value: unknown) {
   if (typeof value === "bigint") return Number(value)
@@ -181,11 +182,15 @@ export async function getAdminWarnings(): Promise<AdminWarning[]> {
     })
   }
 
-  if (!process.env.WORKER_SECRET) {
+  const workerSecret = configuredProductionSecretStatus().find(
+    (secret) => secret.name === "WORKER_SECRET"
+  )
+
+  if (!workerSecret?.configured) {
     warnings.push({
       title: "Worker secret not configured",
       severity: "warning",
-      detail: "WORKER_SECRET is missing. Add it in Vercel environment variables before using scheduled workers.",
+      detail: "WORKER_SECRET, ANALYSIS_WORKER_SECRET or CRON_SECRET is missing. Add one in Vercel environment variables before using scheduled workers.",
       action: "Open production docs",
       href: "/docs/production",
     })
@@ -231,8 +236,14 @@ export async function getAdminHealthChecks() {
   checks.push({ name: "Admin emails", ok: Boolean(process.env.ADMIN_EMAILS), detail: process.env.ADMIN_EMAILS ? "Configured" : "Missing ADMIN_EMAILS" })
   checks.push({ name: "Helius", ok: Boolean(process.env.HELIUS_API_KEY || process.env.SOLANA_RPC_URL), detail: process.env.HELIUS_API_KEY || process.env.SOLANA_RPC_URL ? "Configured" : "Missing Solana provider" })
   checks.push({ name: "Treasury Solana", ok: Boolean(process.env.TRIPROOF_TREASURY_SOLANA_ADDRESS), detail: process.env.TRIPROOF_TREASURY_SOLANA_ADDRESS ? "Configured" : "Missing Solana treasury" })
-  checks.push({ name: "Session secret", ok: Boolean(process.env.NEXTAUTH_SECRET), detail: process.env.NEXTAUTH_SECRET ? "Configured" : "Missing NEXTAUTH_SECRET" })
-  checks.push({ name: "Worker secret", ok: Boolean(process.env.WORKER_SECRET), detail: process.env.WORKER_SECRET ? "Configured" : "Missing WORKER_SECRET" })
+
+  configuredProductionSecretStatus().forEach((secret) => {
+    checks.push({
+      name: secret.purpose,
+      ok: secret.configured,
+      detail: secret.configured ? "Configured" : `Missing ${secret.displayName}`,
+    })
+  })
 
   const queue = await getAdminQueueBreakdown()
   checks.push({ name: "Active queue", ok: queue.pending + queue.processing === 0, detail: `${queue.pending + queue.processing} active batch jobs` })

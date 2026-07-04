@@ -2,6 +2,7 @@ import { db } from "@/lib/db/prisma"
 import { getOnChainConfig } from "@/lib/onchain/enrichment-types"
 import { getOnChainProvider } from "@/lib/onchain/provider-router"
 import { getAnalysisQueueStatus } from "@/lib/analysis/queue-optimizer"
+import { configuredProductionSecretStatus } from "@/lib/env/validation"
 
 export type HealthStatus = "ok" | "warning" | "error"
 
@@ -100,9 +101,15 @@ function checkEnvironment(): HealthCheck {
     "SOLANA_RPC_URL",
     "TRIPROOF_TREASURY_SOLANA_ADDRESS",
     "NEXT_PUBLIC_SOLANA_RPC_URL",
-    "WORKER_SECRET",
   ]
-  const missingRequired = required.filter((name) => !envPresent(name))
+  const secretStatus = configuredProductionSecretStatus()
+  const missingRequiredSecrets = secretStatus
+    .filter((secret) => !secret.configured)
+    .map((secret) => secret.displayName)
+  const missingRequired = [
+    ...required.filter((name) => !envPresent(name)),
+    ...missingRequiredSecrets,
+  ]
   const missingRecommended = recommended.filter((name) => !envPresent(name))
 
   return {
@@ -122,6 +129,12 @@ function checkEnvironment(): HealthCheck {
         workerMaxBatches: process.env.WORKER_MAX_BATCHES ?? "5",
         workerTimeBudgetMs: process.env.WORKER_TIME_BUDGET_MS ?? "25000",
       },
+      requiredSecrets: secretStatus.map((secret) => ({
+        name: secret.name,
+        aliases: secret.aliases,
+        purpose: secret.purpose,
+        configured: secret.configured,
+      })),
     },
   }
 }

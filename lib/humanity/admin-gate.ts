@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "crypto"
 
 import { db } from "@/lib/db/prisma"
+import { getHumanityNullifierSecret } from "@/lib/env/validation"
 
 export type HumanityDecision = "APPROVED" | "MANUAL_REVIEW" | "REJECTED"
 export type HumanityChallengeLevel = "BASIC" | "STANDARD" | "STRICT"
@@ -100,7 +101,7 @@ export function computeHumanityDecision(scores: HumanityScoreInput) {
 }
 
 export function nullifierHash(campaignId: string, walletAddress: string, nonce: string) {
-  const secret = process.env.HUMANITY_NULLIFIER_SECRET || process.env.NEXTAUTH_SECRET || "triproof-humanity-dev"
+  const secret = getHumanityNullifierSecret()
   return createHash("sha256")
     .update(`${secret}:${campaignId}:${walletAddress.toLowerCase()}:${nonce}`)
     .digest("hex")

@@ -2,6 +2,8 @@ import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { jwtVerify, SignJWT } from "jose"
 
+import { getAccessPassSigningSecret } from "@/lib/env/validation"
+
 const cookieName = "tri-proof-access-pass"
 const maxAge = 60 * 60 * 24 * 30
 
@@ -15,9 +17,11 @@ export type AccessPass = {
 }
 
 function secretKey() {
-  return new TextEncoder().encode(
-    process.env.NEXTAUTH_SECRET ?? "development-secret-change-me"
-  )
+  return new TextEncoder().encode(getAccessPassSigningSecret())
+}
+
+export function assertAccessPassSigningConfigured() {
+  secretKey()
 }
 
 export async function createAccessPassToken(pass: AccessPass) {
@@ -33,8 +37,9 @@ export async function getAccessPassForUser(userId: string) {
   const token = cookieStore.get(cookieName)?.value
   if (!token) return null
 
+  const key = secretKey()
   try {
-    const verified = await jwtVerify(token, secretKey())
+    const verified = await jwtVerify(token, key)
     const payload = verified.payload
     if (payload.userId !== userId) return null
 

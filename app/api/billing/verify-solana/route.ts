@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server"
 
 import { getCurrentUser } from "@/lib/auth/session"
-import { attachAccessPassCookie } from "@/lib/billing/access-pass"
+import {
+  assertAccessPassSigningConfigured,
+  attachAccessPassCookie,
+} from "@/lib/billing/access-pass"
 import { recordVerifiedSolanaPayment } from "@/lib/billing/credits"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import {
@@ -79,6 +82,8 @@ export async function POST(request: Request) {
   }
 
   try {
+    assertAccessPassSigningConfigured()
+
     const verification = reference
       ? await verifySolanaUsdcTransferByReference({
           reference,

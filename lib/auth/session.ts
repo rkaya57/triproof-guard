@@ -5,14 +5,13 @@ import { jwtVerify, SignJWT } from "jose"
 import { findDevUserById } from "@/lib/dev-store/store"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
+import { getSessionSigningSecret } from "@/lib/env/validation"
 
 const sessionCookieName = "tri-proof-session"
 const maxAge = 60 * 60 * 24 * 7
 
 function secretKey() {
-  return new TextEncoder().encode(
-    process.env.NEXTAUTH_SECRET ?? "development-secret-change-me"
-  )
+  return new TextEncoder().encode(getSessionSigningSecret())
 }
 
 export async function createSessionToken(userId: string) {
@@ -28,8 +27,9 @@ export async function getSessionUserId() {
   const token = cookieStore.get(sessionCookieName)?.value
   if (!token) return null
 
+  const key = secretKey()
   try {
-    const verified = await jwtVerify(token, secretKey())
+    const verified = await jwtVerify(token, key)
     const userId = verified.payload.userId
     return typeof userId === "string" ? userId : null
   } catch {

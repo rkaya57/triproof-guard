@@ -25,7 +25,17 @@ npm install
 copy .env.example .env
 ```
 
-3. Set `DATABASE_URL` to a PostgreSQL database and set `NEXTAUTH_SECRET`.
+3. Set `DATABASE_URL` to a PostgreSQL database and configure required secrets:
+
+```env
+NEXTAUTH_SECRET="long-random-session-secret"
+ACCESS_PASS_SIGNING_SECRET="long-random-access-pass-secret"
+HUMANITY_NULLIFIER_SECRET="long-random-humanity-secret"
+WORKER_SECRET="long-random-worker-secret"
+```
+
+For local development only, you can opt into insecure fallback secrets with
+`DEV_ALLOW_INSECURE_SECRETS=true`. Never enable that in production.
 
 4. Generate Prisma Client and migrate:
 
