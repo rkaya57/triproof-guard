@@ -7,12 +7,18 @@ import { isDatabaseConnectionError } from "@/lib/db/errors"
 
 export const runtime = "nodejs"
 
+const staleBatchMinutes = Math.min(
+  120,
+  Math.max(1, Number.parseInt(process.env.ANALYSIS_BATCH_STALE_MINUTES ?? "15", 10))
+)
+
 type BatchStatusRow = {
   batchCount: number
   pendingBatchCount: number
   completedBatchCount: number
   failedBatchCount: number
   processingBatchCount: number
+  staleProcessingBatchCount: number
   processedWalletCount: number
   failedWalletCount: number
 }
@@ -45,6 +51,11 @@ export async function GET(
         COUNT(*) FILTER (WHERE "status" = 'completed')::int AS "completedBatchCount",
         COUNT(*) FILTER (WHERE "status" = 'failed')::int AS "failedBatchCount",
         COUNT(*) FILTER (WHERE "status" = 'processing')::int AS "processingBatchCount",
+        COUNT(*) FILTER (
+          WHERE "status" = 'processing'
+            AND "startedAt" IS NOT NULL
+            AND "startedAt" < NOW() - (${staleBatchMinutes} * INTERVAL '1 minute')
+        )::int AS "staleProcessingBatchCount",
         COALESCE(SUM("processedCount"), 0)::int AS "processedWalletCount",
         COALESCE(SUM("failedCount"), 0)::int AS "failedWalletCount"
       FROM "AnalysisBatch"
@@ -57,6 +68,7 @@ export async function GET(
       completedBatchCount: 0,
       failedBatchCount: 0,
       processingBatchCount: 0,
+      staleProcessingBatchCount: 0,
       processedWalletCount: 0,
       failedWalletCount: 0,
     }
@@ -71,14 +83,15 @@ export async function GET(
     if (
       analysis.status !== "completed" &&
       analysis.status !== "failed" &&
-      batchStatus.pendingBatchCount > 0 &&
-      batchStatus.processingBatchCount === 0
+      (batchStatus.staleProcessingBatchCount > 0 ||
+        (batchStatus.pendingBatchCount > 0 && batchStatus.processingBatchCount === 0))
     ) {
       dispatchAnalysisWorkerContinuation({
         analysisId: analysis.id,
         queue: {
           pending: batchStatus.pendingBatchCount,
           processing: batchStatus.processingBatchCount,
+          staleProcessing: batchStatus.staleProcessingBatchCount,
         },
         reason: "status-poll",
       })
@@ -98,6 +111,7 @@ export async function GET(
       batchCount: batchStatus.batchCount,
       completedBatchCount: batchStatus.completedBatchCount,
       processingBatchCount: batchStatus.processingBatchCount,
+      staleProcessingBatchCount: batchStatus.staleProcessingBatchCount,
       failedBatchCount: batchStatus.failedBatchCount,
       warnings: analysis.enrichmentWarnings ?? [],
       completedAt: analysis.completedAt?.toISOString() ?? null,

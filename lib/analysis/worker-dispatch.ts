@@ -10,6 +10,7 @@ const CONTINUATION_TIME_BUDGET_MS = Number.parseInt(process.env.WORKER_CONTINUAT
 type QueueSnapshot = {
   pending: number
   processing: number
+  staleProcessing?: number
 }
 
 function safeNumber(value: number, fallback: number, min: number, max: number) {
@@ -38,7 +39,8 @@ function workerSecret() {
 }
 
 function needsContinuation(queue: QueueSnapshot | null | undefined) {
-  return Boolean(queue && queue.pending > 0 && queue.processing === 0)
+  if (!queue) return false
+  return (queue.staleProcessing ?? 0) > 0 || (queue.pending > 0 && queue.processing === 0)
 }
 
 async function requestWorkerContinuation({
