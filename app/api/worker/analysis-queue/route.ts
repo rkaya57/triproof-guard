@@ -6,6 +6,7 @@ import {
   processAnalysisQueue,
   recoverStaleAnalysisBatches,
 } from "@/lib/analysis/queue-optimizer"
+import { dispatchAnalysisWorkerContinuation } from "@/lib/analysis/worker-dispatch"
 import { finalizeReadyAnalyses } from "@/lib/analysis/batch-worker"
 import { boundedNumber, isWorkerAuthorized, workerUnauthorized } from "@/lib/worker/auth"
 
@@ -31,6 +32,13 @@ export async function GET(request: Request) {
       timeBudgetMs,
       recoverStale: true,
     })
+    if (analysisId) {
+      dispatchAnalysisWorkerContinuation({
+        analysisId,
+        queue: result.queue,
+        reason: "worker-get",
+      })
+    }
 
     return NextResponse.json({ ok: true, source: "get", analysisId, ...result })
   } catch (error) {
@@ -67,6 +75,13 @@ export async function POST(request: Request) {
       timeBudgetMs,
       recoverStale,
     })
+    if (analysisId) {
+      dispatchAnalysisWorkerContinuation({
+        analysisId,
+        queue: result.queue,
+        reason: "worker-post",
+      })
+    }
 
     return NextResponse.json({ ok: true, analysisId, ...result })
   } catch (error) {

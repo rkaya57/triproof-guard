@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { getCurrentUser } from "@/lib/auth/session"
+import { dispatchAnalysisWorkerContinuation } from "@/lib/analysis/worker-dispatch"
 import { db } from "@/lib/db/prisma"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 
@@ -8,6 +9,7 @@ export const runtime = "nodejs"
 
 type BatchStatusRow = {
   batchCount: number
+  pendingBatchCount: number
   completedBatchCount: number
   failedBatchCount: number
   processingBatchCount: number
@@ -39,6 +41,7 @@ export async function GET(
     const rows = await db.$queryRaw<BatchStatusRow[]>`
       SELECT
         COUNT(*)::int AS "batchCount",
+        COUNT(*) FILTER (WHERE "status" = 'pending')::int AS "pendingBatchCount",
         COUNT(*) FILTER (WHERE "status" = 'completed')::int AS "completedBatchCount",
         COUNT(*) FILTER (WHERE "status" = 'failed')::int AS "failedBatchCount",
         COUNT(*) FILTER (WHERE "status" = 'processing')::int AS "processingBatchCount",
@@ -50,6 +53,7 @@ export async function GET(
 
     const batchStatus = rows[0] ?? {
       batchCount: 0,
+      pendingBatchCount: 0,
       completedBatchCount: 0,
       failedBatchCount: 0,
       processingBatchCount: 0,
@@ -64,6 +68,22 @@ export async function GET(
         ? 100
         : 0
 
+    if (
+      analysis.status !== "completed" &&
+      analysis.status !== "failed" &&
+      batchStatus.pendingBatchCount > 0 &&
+      batchStatus.processingBatchCount === 0
+    ) {
+      dispatchAnalysisWorkerContinuation({
+        analysisId: analysis.id,
+        queue: {
+          pending: batchStatus.pendingBatchCount,
+          processing: batchStatus.processingBatchCount,
+        },
+        reason: "status-poll",
+      })
+    }
+
     return NextResponse.json({
       analysisId: analysis.id,
       status: analysis.status,
@@ -72,6 +92,7 @@ export async function GET(
       totalWallets,
       processedWalletCount: batchStatus.processedWalletCount,
       progressPercent,
+      pendingBatchCount: batchStatus.pendingBatchCount,
       enrichedWalletCount: analysis.enrichedWalletCount,
       failedEnrichmentCount: analysis.failedEnrichmentCount || batchStatus.failedWalletCount,
       batchCount: batchStatus.batchCount,
