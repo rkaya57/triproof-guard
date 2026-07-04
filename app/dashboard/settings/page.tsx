@@ -25,7 +25,7 @@ export default function Page() {
         </div>
       </CardHeader>
       <CardContent className="text-sm text-muted-foreground">
-        Settings are intentionally minimal in the MVP. Manual review policy,
+        Settings are intentionally minimal in the MVP. Gray Zone policy,
         export defaults and team access can be added here as the product grows.
       </CardContent>
     </Card>

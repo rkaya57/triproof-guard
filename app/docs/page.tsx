@@ -62,14 +62,14 @@ const workflow = [
   {
     icon: FileDown,
     title: "Export decision lists",
-    text: "Download approved, manual review and rejected wallet outputs as CSV or PDF for internal reward decisions.",
+    text: "Download approved, Gray Zone and rejected wallet outputs as CSV or PDF for internal reward decisions.",
   },
 ]
 
 const signals = [
   [WalletCards, "Wallet age", "Newly created wallets are reviewed more carefully when combined with other weak signals."],
   [Radar, "Transaction history", "Low activity or limited historical usage can be a risk signal before reward distribution."],
-  [Network, "Funding source", "Groups funded from the same on-chain origin can be surfaced for manual review."],
+  [Network, "Funding source", "Groups funded from the same on-chain origin can be surfaced for Gray Zone review."],
   [Layers3, "Contract diversity", "The engine checks whether wallets show real usage or narrow one-purpose activity."],
   [Landmark, "Known entities", "Exchange, bridge, service and protocol wallets are marked as review-only entities."],
   [GitBranch, "Suspicious clusters", "Similar behavior and shared funding patterns are grouped into readable cluster evidence."],
@@ -82,12 +82,12 @@ const outcomes = [
     text: "Low-risk wallets with no known entity, suspicious cluster or shared funding-source signal.",
   },
   {
-    title: "Manual Review",
+    title: "Gray Zone",
     tone: "border-amber-400/30 bg-amber-400/10 text-amber-300",
     text: "Wallets that need human review because of entity, funding, cluster or contextual risk evidence.",
   },
   {
-    title: "Rejected",
+    title: "Rejected / Not Eligible",
     tone: "border-red-400/30 bg-red-400/10 text-red-300",
     text: "Wallets with severe combined risk signals that may be excluded from reward distribution.",
   },
@@ -108,7 +108,7 @@ const faqs = [
   ],
   [
     "Can reports be exported?",
-    "Yes. Teams can export approved, manual review, rejected and full report files for internal operations.",
+    "Yes. Teams can export approved, Gray Zone, rejected and full report files for internal operations.",
   ],
 ]
 

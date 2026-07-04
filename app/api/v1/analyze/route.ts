@@ -10,6 +10,7 @@ import {
   isBillingCreditError,
   prepareAnalysisBillingGate,
 } from "@/lib/billing/credits"
+import { decisionLegendForApi } from "@/lib/decision-labels"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
 import { getOnChainConfig, isEnrichableChain } from "@/lib/onchain/enrichment-types"
@@ -246,6 +247,7 @@ export async function POST(request: Request) {
       riskPolicy,
       provider: selection.provider.id,
       issues,
+      decisionLegend: decisionLegendForApi(),
       statusUrl: `/api/v1/analysis/${created.analysis.id}`,
       dashboardUrl: `/dashboard/analysis/${created.analysis.id}`,
       exports: {

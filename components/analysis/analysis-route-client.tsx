@@ -15,66 +15,6 @@ type RouteState =
   | { status: "completed" }
   | { status: "error"; message: string }
 
-const dashboardTextReplacements = new Map<string, string>([
-  ["Manual Review", "Gray Zone"],
-  ["manual review", "Gray Zone"],
-  ["Mark Manual Review", "Mark Gray Zone"],
-  ["Export Manual Review CSV", "Export Gray-Zone CSV"],
-  ["Rejected", "Rejected / Not Eligible"],
-  ["rejected", "Rejected / Not Eligible"],
-  ["Mark Rejected", "Mark Rejected / Not Eligible"],
-  ["Export Rejected CSV", "Export Rejected / Not Eligible CSV"],
-  ["Failed enrichments", "No On-chain Data"],
-  ["Fell back to available data.", "No reliable on-chain history found."],
-  ["Needs project team decision.", "Needs project-side review."],
-  ["High risk reward exclusions.", "High-risk or not-eligible reward exclusions."],
-])
-
-function normalizeTextNode(node: Text) {
-  const current = node.nodeValue ?? ""
-  const trimmed = current.trim()
-  const replacement = dashboardTextReplacements.get(trimmed)
-  if (!replacement || current.includes(replacement)) return
-  node.nodeValue = current.replace(trimmed, replacement)
-}
-
-function normalizeDashboardLabels(root: ParentNode = document.body) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-  const textNodes: Text[] = []
-  while (walker.nextNode()) {
-    textNodes.push(walker.currentNode as Text)
-  }
-  textNodes.forEach(normalizeTextNode)
-}
-
-function DashboardLabelNormalizer() {
-  useEffect(() => {
-    normalizeDashboardLabels()
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        mutation.addedNodes.forEach((node) => {
-          if (node.nodeType === Node.TEXT_NODE) {
-            normalizeTextNode(node as Text)
-            return
-          }
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            normalizeDashboardLabels(node as Element)
-          }
-        })
-      })
-    })
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    })
-
-    return () => observer.disconnect()
-  }, [])
-
-  return null
-}
-
 export function AnalysisRouteClient({ analysisId }: { analysisId: string }) {
   const [state, setState] = useState<RouteState>({ status: "loading" })
 
@@ -137,7 +77,6 @@ export function AnalysisRouteClient({ analysisId }: { analysisId: string }) {
   if (state.status === "loading") {
     return (
       <main className="premium-page min-h-screen bg-background px-5 py-10 text-foreground sm:px-8">
-        <DashboardLabelNormalizer />
         <Card className="glass-panel mx-auto max-w-xl">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -153,7 +92,6 @@ export function AnalysisRouteClient({ analysisId }: { analysisId: string }) {
   if (state.status === "processing") {
     return (
       <main className="premium-page min-h-screen bg-background px-5 py-10 text-foreground sm:px-8">
-        <DashboardLabelNormalizer />
         <AnalysisProcessing analysisId={analysisId} initialStatus={state.data} onCompleted={markCompleted} onFailed={markFailed} />
       </main>
     )
@@ -162,7 +100,6 @@ export function AnalysisRouteClient({ analysisId }: { analysisId: string }) {
   if (state.status === "completed") {
     return (
       <main className="premium-page min-h-screen bg-background text-foreground">
-        <DashboardLabelNormalizer />
         <AnalysisDetail analysisId={analysisId} />
       </main>
     )
@@ -170,7 +107,6 @@ export function AnalysisRouteClient({ analysisId }: { analysisId: string }) {
 
   return (
     <main className="premium-page min-h-screen bg-background px-5 py-10 text-foreground sm:px-8">
-      <DashboardLabelNormalizer />
       <Card className="glass-panel mx-auto max-w-2xl border-destructive/30">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-destructive">

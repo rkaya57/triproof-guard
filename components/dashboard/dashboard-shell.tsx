@@ -102,7 +102,7 @@ export function DashboardShell({
               <Sparkles className="text-primary" />
               Guard MVP
             </div>
-            <p>Wallet risk analysis, clustering, manual review and exports.</p>
+            <p>Wallet risk analysis, clustering, Gray Zone review and exports.</p>
             <div className="mt-4 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-primary/80">
               <span className="pulse-dot" /> Batch queue ready
             </div>

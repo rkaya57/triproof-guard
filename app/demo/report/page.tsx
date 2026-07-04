@@ -14,7 +14,7 @@ import {
 const summaryCards = [
   ["20", "Total wallets", "Public demo dataset"],
   ["6", "Approved", "Reward candidates"],
-  ["5", "Gray zone", "Manual review"],
+  ["5", "Gray Zone", "Project-side review"],
   ["9", "Rejected / Not Eligible", "Excluded candidates"],
 ]
 

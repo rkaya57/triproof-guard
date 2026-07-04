@@ -3,6 +3,7 @@ import path from "node:path"
 
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from "pdf-lib"
 
+import { actionLabel, decisionExplanation, decisionLabel } from "@/lib/decision-labels"
 import type { AnalysisDetail } from "@/types"
 
 // ---------------------------------------------------------------------------
@@ -503,9 +504,9 @@ export async function buildPdfReport(analysis: AnalysisDetail) {
   gap(ctx, 10)
   statCards(ctx, [
     { label: "Total wallets", value: analysis.totalWallets.toLocaleString(), accent: C.cyan },
-    { label: "Approved", value: analysis.approvedCount.toLocaleString(), accent: C.green },
-    { label: "Manual review", value: analysis.manualReviewCount.toLocaleString(), accent: C.yellow },
-    { label: "Rejected", value: analysis.rejectedCount.toLocaleString(), accent: C.red },
+    { label: decisionLabel("approved"), value: analysis.approvedCount.toLocaleString(), accent: C.green },
+    { label: decisionLabel("manual_review"), value: analysis.manualReviewCount.toLocaleString(), accent: C.yellow },
+    { label: decisionLabel("rejected"), value: analysis.rejectedCount.toLocaleString(), accent: C.red },
     { label: "Avg risk", value: String(analysis.averageRiskScore), accent: C.purple },
   ])
 
@@ -513,22 +514,22 @@ export async function buildPdfReport(analysis: AnalysisDetail) {
   sectionHeading(ctx, "Decision Summary")
   bullet(
     ctx,
-    `${analysis.approvedCount.toLocaleString()} approved wallets — clean reward candidates.`,
+    `${analysis.approvedCount.toLocaleString()} ${decisionLabel("approved")} wallets - ${decisionExplanation("approved")}`,
     C.green
   )
   bullet(
     ctx,
-    `${analysis.manualReviewCount.toLocaleString()} wallets need a project team decision.`,
+    `${analysis.manualReviewCount.toLocaleString()} ${decisionLabel("manual_review")} wallets - ${decisionExplanation("manual_review")}`,
     C.yellow
   )
   bullet(
     ctx,
-    `${analysis.rejectedCount.toLocaleString()} rejected wallets — high-risk reward exclusions.`,
+    `${analysis.rejectedCount.toLocaleString()} ${decisionLabel("rejected")} wallets - ${decisionExplanation("rejected")}`,
     C.red
   )
   bullet(
     ctx,
-    `${analysis.suspiciousClustersCount.toLocaleString()} suspicious clusters detected — coordinated wallet groups requiring review.`,
+    `${analysis.suspiciousClustersCount.toLocaleString()} suspicious clusters detected - coordinated wallet groups requiring review.`,
     C.purple
   )
 
@@ -558,7 +559,7 @@ export async function buildPdfReport(analysis: AnalysisDetail) {
   gap(ctx, 4)
   paragraph(
     ctx,
-    "Known entities are not automatically malicious, but they are not typical individual campaign participants and should be manually reviewed.",
+    "Known entities are not automatically malicious, but they are not typical individual campaign participants and should be placed in the Gray Zone.",
     { size: 8.5, color: C.muted }
   )
 
@@ -577,7 +578,7 @@ export async function buildPdfReport(analysis: AnalysisDetail) {
         cluster.clusterLabel,
         cluster.walletCount.toLocaleString(),
         String(cluster.averageRiskScore),
-        cluster.suggestedAction.replace("_", " "),
+        actionLabel(cluster.suggestedAction),
       ])
     )
   }

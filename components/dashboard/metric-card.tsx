@@ -20,9 +20,9 @@ export function MetricCard({ title, value, description, icon: Icon }: MetricCard
   const tone =
     title === "Approved"
       ? "from-green-400/10"
-      : title === "Manual review"
+      : title === "Gray Zone"
         ? "from-amber-400/10"
-        : title === "Rejected"
+        : title === "Rejected" || title === "Rejected / Not Eligible"
           ? "from-red-400/10"
           : title === "Known Entities"
             ? "from-violet-400/10"

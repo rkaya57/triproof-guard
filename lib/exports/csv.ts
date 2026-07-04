@@ -1,3 +1,4 @@
+import { decisionCsvLabel } from "@/lib/decision-labels"
 import type { WalletRiskResult, WalletStatus } from "@/types"
 
 function escapeCsv(value: unknown) {
@@ -7,12 +8,6 @@ function escapeCsv(value: unknown) {
   }
 
   return normalized
-}
-
-function decisionLabel(status: WalletStatus) {
-  if (status === "approved") return "Approved"
-  if (status === "manual_review") return "Gray Zone / Manual Review"
-  return "Rejected / Not Eligible"
 }
 
 function hasNoOnChainData(wallet: WalletRiskResult) {
@@ -69,7 +64,7 @@ export function walletsToCsv(wallets: WalletRiskResult[], full = false) {
   const rows = wallets.map((wallet) => {
     const baseValues = [
       wallet.walletAddress,
-      decisionLabel(wallet.status),
+      decisionCsvLabel(wallet.status),
       wallet.entityLabel ?? "",
       wallet.entityType,
       wallet.riskScore,

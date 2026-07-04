@@ -341,7 +341,7 @@ function policyDecision(
     return {
       status: "manual_review",
       recommendedAction: "manual_review",
-      statusExplanation: `Manual review required by V1.4 reputation/policy override (${label}).${reason}`,
+      statusExplanation: `Gray Zone review required by V1.4 reputation/policy override (${label}).${reason}`,
     }
   }
 
@@ -363,7 +363,7 @@ function policyDecision(
       status: "manual_review",
       recommendedAction: "manual_review",
       statusExplanation:
-        `Allowlist/trusted-user policy (${label}) was present, but the wallet failed basic eligibility or on-chain evidence checks. Manual review required.${reason}`,
+        `Allowlist/trusted-user policy (${label}) was present, but the wallet failed basic eligibility or on-chain evidence checks. Gray Zone review required.${reason}`,
     }
   }
 

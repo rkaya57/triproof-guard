@@ -12,7 +12,7 @@ export const runtime = "nodejs"
 
 const csvFileNames = {
   approved: "approved_reward_candidates.csv",
-  manual_review: "gray_zone_manual_review_wallets.csv",
+  manual_review: "gray_zone_wallets.csv",
   rejected: "rejected_not_eligible_wallets.csv",
   full: "full_analysis_report.csv",
 } as const

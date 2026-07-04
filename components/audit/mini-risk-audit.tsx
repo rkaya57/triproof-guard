@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
+import { decisionExplanation, decisionLabel } from "@/lib/decision-labels"
 import { formatNumber } from "@/lib/format"
 import type { AnalysisResult, Chain, CsvIssue, RiskPolicy, WalletRiskResult, WalletStatus } from "@/types"
 
@@ -61,9 +62,7 @@ function shortAddress(address: string) {
 }
 
 function displayStatus(status: WalletStatus) {
-  if (status === "approved") return "approved candidate"
-  if (status === "manual_review") return "manual review"
-  return "rejected / not eligible"
+  return decisionLabel(status)
 }
 
 function statusTone(status: WalletStatus) {
@@ -98,9 +97,9 @@ function buildMiniAuditBrief(report: MiniAuditResponse | null, walletInput: stri
     `Engine mode: ${report.engineMode}`,
     `Wallets analyzed: ${report.result.totalWallets}`,
     `Average risk score: ${report.result.averageRiskScore}/100`,
-    `Approved candidates: ${report.result.approvedCount}`,
-    `Manual review: ${report.result.manualReviewCount}`,
-    `Rejected / not eligible: ${report.result.rejectedCount}`,
+    `${decisionLabel("approved")}: ${report.result.approvedCount}`,
+    `${decisionLabel("manual_review")}: ${report.result.manualReviewCount}`,
+    `${decisionLabel("rejected")}: ${report.result.rejectedCount}`,
     `Parse issues: ${report.parseSummary.issues.length}`,
     `Duplicates skipped: ${report.parseSummary.duplicates.length}`,
     "",
@@ -290,14 +289,14 @@ export function MiniRiskAudit() {
             <CardHeader>
               <AlertTriangle className="text-amber-300" />
               <CardTitle className="text-amber-100">{formatNumber(report?.result.manualReviewCount)}</CardTitle>
-              <CardDescription>Manual review</CardDescription>
+              <CardDescription title={decisionExplanation("manual_review")}>Gray Zone</CardDescription>
             </CardHeader>
           </Card>
           <Card className="glass-panel border-red-400/25 bg-red-400/10">
             <CardHeader>
               <ShieldX className="text-red-300" />
               <CardTitle className="text-red-100">{formatNumber(report?.result.rejectedCount)}</CardTitle>
-              <CardDescription>Rejected / not eligible</CardDescription>
+              <CardDescription title={decisionExplanation("rejected")}>Rejected / Not Eligible</CardDescription>
             </CardHeader>
           </Card>
         </div>
@@ -344,7 +343,7 @@ export function MiniRiskAudit() {
                     ))}
                   </div>
                 </div>
-                <Badge variant="outline" className={statusTone(wallet.status)}>
+                <Badge variant="outline" className={statusTone(wallet.status)} title={decisionExplanation(wallet.status)}>
                   {displayStatus(wallet.status)}
                 </Badge>
               </div>

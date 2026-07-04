@@ -22,7 +22,7 @@ export const blogPosts: BlogPost[] = [
     content: [
       "A Sybil attack happens when one actor creates or controls many wallets to appear like many different users. In Web3 campaigns this can distort airdrops, quests, testnets and allowlists.",
       "The problem is not only the number of wallets. The deeper issue is repeated behavior: shared funding sources, similar transaction patterns, very young wallets, low wallet history and coordinated campaign actions.",
-      "A good review process should not claim to prove who is human with 100% certainty. It should surface risk signals and help the campaign team separate clean wallets, manual review wallets and rejected wallets.",
+      "A good review process should not claim to prove who is human with 100% certainty. It should surface risk signals and help the campaign team separate clean wallets, Gray Zone wallets and rejected wallets.",
       "Tri-Proof Guard focuses on this exact workflow: upload a campaign wallet CSV, generate wallet risk scores, detect suspicious clusters and export cleaner reward decision lists before payouts happen."
     ],
   },
@@ -37,7 +37,7 @@ export const blogPosts: BlogPost[] = [
     tags: ["Clustering", "Funding Source", "Risk Score"],
     content: [
       "Wallet clustering groups addresses by shared signals. These signals can include funding source, timing, transaction count, contract interaction patterns and campaign behavior.",
-      "One suspicious wallet may not prove much. But twenty wallets funded from the same origin, created around the same period and interacting with the same campaign in the same way deserve manual review.",
+      "One suspicious wallet may not prove much. But twenty wallets funded from the same origin, created around the same period and interacting with the same campaign in the same way deserve Gray Zone review.",
       "This is why Tri-Proof Guard combines wallet-level scoring with cluster-level review. The output is easier for teams to use because it explains which groups need attention and why.",
       "The end goal is operational: reduce reward leakage, protect real users and give the project team a defensible review trail."
     ],
@@ -53,8 +53,8 @@ export const blogPosts: BlogPost[] = [
     tags: ["Rewards", "CSV", "Operations"],
     content: [
       "Most Web3 teams collect wallet addresses through forms, quests, community campaigns or testnet participation. The list grows quickly, but quality is not guaranteed.",
-      "Before rewards are distributed, teams should run a wallet risk analysis to identify suspicious clusters, low-quality wallets and manual review cases.",
-      "The best output is not a vague dashboard. It is an action list: approved wallets, manual review wallets and rejected wallets, supported by clear reasons.",
+      "Before rewards are distributed, teams should run a wallet risk analysis to identify suspicious clusters, low-quality wallets and Gray Zone cases.",
+      "The best output is not a vague dashboard. It is an action list: approved wallets, Gray Zone wallets and rejected wallets, supported by clear reasons.",
       "Tri-Proof Guard is built around this campaign workflow so teams can make faster and cleaner reward decisions."
     ],
   },

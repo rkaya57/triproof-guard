@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { parseWalletCsv } from "@/lib/csv/parser"
+import { decisionLegendForApi } from "@/lib/decision-labels"
 import { analyzeWallets } from "@/lib/risk-engine"
 import { enrichWallets } from "@/lib/onchain/enrich-wallet"
 import { getOnChainConfig, isEnrichableChain } from "@/lib/onchain/enrichment-types"
@@ -177,6 +178,7 @@ export async function POST(request: Request) {
     riskPolicy,
     engineMode,
     limit,
+    decisionLegend: decisionLegendForApi(),
     parseSummary: {
       mode: parsedCsv.mode,
       validWallets: parsedCsv.wallets.length,

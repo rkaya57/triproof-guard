@@ -180,7 +180,7 @@ only applied when the value is present in the CSV.
 
 ## Demo Mode
 
-Use `/dashboard/demo` or the landing page “View Demo Report” button. Demo mode includes 500 wallets, 320 approved, 110 manual review, 70 rejected, 8 suspicious clusters, and exportable CSV/PDF reports.
+Use `/dashboard/demo` or the landing page “View Demo Report” button. Demo mode includes 500 wallets, 320 approved, 110 Gray Zone, 70 rejected, 8 suspicious clusters, and exportable CSV/PDF reports.
 
 ## Sample Data
 

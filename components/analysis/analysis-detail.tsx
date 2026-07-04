@@ -74,6 +74,7 @@ import {
   getDecisionIntelligence,
   getWalletReasonCodes,
 } from "@/lib/campaign-decision"
+import { actionLabel, decisionExplanation, decisionLabel } from "@/lib/decision-labels"
 import { formatDateTimeUTC, formatDateUTC, formatNumber } from "@/lib/format"
 import type {
   AnalysisDetail as AnalysisDetailType,
@@ -93,8 +94,8 @@ type AnalysisDetailProps = {
 const filterOptions = [
   { value: "all", label: "All" },
   { value: "approved", label: "Approved" },
-  { value: "manual_review", label: "Manual Review" },
-  { value: "rejected", label: "Rejected" },
+  { value: "manual_review", label: "Gray Zone" },
+  { value: "rejected", label: "Rejected / Not Eligible" },
   { value: "low", label: "Low Risk" },
   { value: "medium", label: "Medium Risk" },
   { value: "high", label: "High Risk" },
@@ -131,13 +132,11 @@ const entityReviewTypes = new Set<EntityType>([
 ])
 
 function displayStatus(status: WalletStatus) {
-  if (status === "approved") return "approved"
-  if (status === "manual_review") return "gray zone"
-  return "rejected / not eligible"
+  return decisionLabel(status)
 }
 
 function displayAction(action: WalletRiskResult["recommendedAction"]) {
-  return action.replace("_", " ")
+  return actionLabel(action)
 }
 
 function displayEntityType(entityType: EntityType | null | undefined) {
@@ -245,7 +244,7 @@ function StatusBadge({ status }: { status: WalletStatus }) {
         : "border-red-400/40 bg-red-400/10 text-red-300"
 
   return (
-    <Badge variant="outline" className={cn("capitalize", className)}>
+    <Badge variant="outline" className={className} title={decisionExplanation(status)}>
       {displayStatus(status)}
     </Badge>
   )
@@ -260,7 +259,7 @@ function ActionBadge({ action }: { action: WalletRiskResult["recommendedAction"]
         : "border-red-400/40 bg-red-400/10 text-red-300"
 
   return (
-    <Badge variant="outline" className={cn("capitalize", className)}>
+    <Badge variant="outline" className={className} title={actionLabel(action)}>
       {displayAction(action)}
     </Badge>
   )
@@ -968,6 +967,7 @@ function ReviewDrawer({
             variant="outline"
             className="border-green-400/40 text-green-300 hover:bg-green-400/10"
             onClick={() => onStatusChange("approved")}
+            title={decisionExplanation("approved")}
           >
             Mark Approved
           </Button>
@@ -975,15 +975,17 @@ function ReviewDrawer({
             variant="outline"
             className="border-amber-400/40 text-amber-300 hover:bg-amber-400/10"
             onClick={() => onStatusChange("manual_review")}
+            title={decisionExplanation("manual_review")}
           >
-            Mark Manual Review
+            Mark Gray Zone
           </Button>
           <Button
             variant="outline"
             className="border-red-400/40 text-red-300 hover:bg-red-400/10"
             onClick={() => onStatusChange("rejected")}
+            title={decisionExplanation("rejected")}
           >
-            Mark Rejected
+            Mark Rejected / Not Eligible
           </Button>
         </div>
 
@@ -1142,7 +1144,7 @@ export function AnalysisDetail({
         rejectedCount: wallets.filter((wallet) => wallet.status === "rejected").length,
       }
     })
-    toast(`Wallet marked ${status.replace("_", " ")}`)
+    toast(`Wallet marked ${decisionLabel(status)}`)
   }
 
   async function copyAddress(address: string) {
@@ -1272,8 +1274,8 @@ export function AnalysisDetail({
         <div className="flex flex-wrap gap-2">
           {[
             ["approved", "Export Approved CSV"],
-            ["manual_review", "Export Manual Review CSV"],
-            ["rejected", "Export Rejected CSV"],
+            ["manual_review", "Export Gray Zone CSV"],
+            ["rejected", "Export Rejected / Not Eligible CSV"],
             ["full", "Export Full Report CSV"],
             ["pdf", "Export PDF Report"],
           ].map(([type, label]) => (
@@ -1314,15 +1316,15 @@ export function AnalysisDetail({
           icon={CheckCircle2}
         />
         <MetricCard
-          title="Manual review"
+          title="Gray Zone"
           value={formatNumber(analysis.manualReviewCount)}
-          description="Needs project team decision."
+          description={decisionExplanation("manual_review")}
           icon={AlertTriangle}
         />
         <MetricCard
-          title="Rejected"
+          title="Rejected / Not Eligible"
           value={formatNumber(analysis.rejectedCount)}
-          description="High risk reward exclusions."
+          description={decisionExplanation("rejected")}
           icon={ShieldX}
         />
       </div>
@@ -1353,7 +1355,7 @@ export function AnalysisDetail({
           <CardHeader>
             <CardTitle>Campaign Decision Engine</CardTitle>
             <CardDescription>
-              {campaignPolicy.label} for {campaignPolicy.scope}. These thresholds turn wallet evidence into approve, review and reject lists.
+              {campaignPolicy.label} for {campaignPolicy.scope}. These thresholds turn wallet evidence into approve, Gray Zone and reject lists.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-3">
@@ -1405,7 +1407,7 @@ export function AnalysisDetail({
         <CardHeader>
           <CardTitle>Explainable Reason Codes</CardTitle>
           <CardDescription>
-            Human-readable evidence is normalized into compact codes for API responses, clean-list exports and manual review.
+            Human-readable evidence is normalized into compact codes for API responses, clean-list exports and Gray Zone review.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">

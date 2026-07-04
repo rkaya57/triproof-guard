@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import { getV1ApiUser, apiError } from "@/lib/api/v1-auth"
 import { serializeAnalysis } from "@/lib/analysis/serializers"
+import { apiDecisionValue, decisionExplanation, decisionLabel, decisionLegendForApi } from "@/lib/decision-labels"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
 
@@ -42,6 +43,7 @@ export async function GET(
       totals: {
         totalWallets: serialized.totalWallets,
         approved: serialized.approvedCount,
+        grayZone: serialized.manualReviewCount,
         grayZoneManualReview: serialized.manualReviewCount,
         rejectedNotEligible: serialized.rejectedCount,
         averageRiskScore: serialized.averageRiskScore,
@@ -55,12 +57,15 @@ export async function GET(
         fullCsv: `${baseUrl}/api/analysis/${serialized.id}/export?type=full`,
         pdf: `${baseUrl}/api/analysis/${serialized.id}/export?type=pdf`,
       },
+      decisionLegend: decisionLegendForApi(),
       topWallets: serialized.wallets.slice(0, 25).map((wallet) => ({
         walletAddress: wallet.walletAddress,
         chain: wallet.chain,
         riskScore: wallet.riskScore,
         riskLevel: wallet.riskLevel,
-        decision: wallet.status === "manual_review" ? "gray_zone_manual_review" : wallet.status === "rejected" ? "rejected_not_eligible" : "approved",
+        decision: apiDecisionValue(wallet.status),
+        decisionLabel: decisionLabel(wallet.status),
+        decisionExplanation: decisionExplanation(wallet.status),
         status: wallet.status,
         statusExplanation: wallet.statusExplanation,
         clusterId: wallet.clusterId,

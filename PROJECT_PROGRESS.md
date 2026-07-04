@@ -24,13 +24,13 @@ The app builds successfully and the core known-entity plus cluster scenarios wer
 - Cluster members and wallets sharing large funding groups are no longer approved automatically.
 - Status decision order now follows the requested operational logic:
   - invalid wallet -> rejected
-  - known entity -> manual review
+  - known entity -> Gray Zone
   - critical + severe cluster -> rejected
-  - critical weak cluster -> manual review
-  - high risk -> manual review
-  - suspicious cluster member -> manual review minimum
-  - shared funding source with 5+ wallets -> manual review minimum
-  - medium risk -> manual review
+  - critical weak cluster -> Gray Zone
+  - high risk -> Gray Zone
+  - suspicious cluster member -> Gray Zone minimum
+  - shared funding source with 5+ wallets -> Gray Zone minimum
+  - medium risk -> Gray Zone
   - low risk with no contextual signal -> approved
 - Known entity reason language was softened so exchange/service wallets are flagged for review, not labeled malicious.
 
@@ -51,7 +51,7 @@ Key files:
 - Entity Review badge added for known entity wallets.
 - Status badge colors clarified:
   - Approved: green
-  - Manual Review: amber/orange
+  - Gray Zone: amber/orange
   - Rejected: red
 - Review button now opens a right-side detail drawer.
 - Drawer includes:
@@ -73,7 +73,7 @@ Key files:
   - UI-only status buttons
 - Added filters for:
   - approved
-  - manual review
+  - Gray Zone
   - rejected
   - low/medium/high/critical
   - cluster members
@@ -102,7 +102,7 @@ Dashboard summary card order is now:
 
 1. Total wallets
 2. Approved
-3. Manual Review
+3. Gray Zone
 4. Rejected
 5. Average Risk
 6. Suspicious Clusters
@@ -148,7 +148,7 @@ Key files:
   - `risk_reasons`
   - `status_explanation`
 - Approved CSV excludes cluster/shared-funding wallets.
-- Manual review CSV includes known/high/cluster/shared-funding cases.
+- Gray Zone CSV includes known/high/cluster/shared-funding cases.
 - PDF now includes:
   - Decision Summary
   - Known Entity Findings
@@ -185,7 +185,7 @@ Known entity API test passed:
 
 - Total wallets: 11
 - Known entities: 5
-- Manual Review: 5
+- Gray Zone: 5
 - Approved: 6
 - Rejected: 0
 

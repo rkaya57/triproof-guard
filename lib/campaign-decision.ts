@@ -9,17 +9,17 @@ type PolicyRule = {
 const policyRules: Record<RiskPolicy, PolicyRule[]> = {
   conservative: [
     { label: "Auto approve", value: "0-35", detail: "Only clean wallets without cluster or shared funding signals." },
-    { label: "Manual review", value: "36-74", detail: "Gray-zone wallets stay in the team review queue." },
+    { label: "Gray Zone", value: "36-74", detail: "Ambiguous wallets stay in the team review queue." },
     { label: "Auto reject", value: "75+", detail: "Severe risk or missing evidence is not approved automatically." },
   ],
   balanced: [
     { label: "Auto approve", value: "0-35", detail: "Clean wallets with enough on-chain evidence." },
-    { label: "Manual review", value: "36-59", detail: "Weak contextual signals require a human decision." },
+    { label: "Gray Zone", value: "36-59", detail: "Weak contextual signals require a human decision." },
     { label: "Auto reject", value: "60+", detail: "High-risk cluster, funding or behavior evidence is excluded." },
   ],
   strict: [
     { label: "Auto approve", value: "0-25", detail: "Only the strongest clean profiles pass automatically." },
-    { label: "Manual review", value: "26-49", detail: "Most ambiguous wallets are held for reviewer action." },
+    { label: "Gray Zone", value: "26-49", detail: "Most ambiguous wallets are held for reviewer action." },
     { label: "Auto reject", value: "50+", detail: "Aggressive campaign protection for high-value drops." },
   ],
 }
