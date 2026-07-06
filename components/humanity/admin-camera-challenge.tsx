@@ -31,11 +31,22 @@ type Landmark = { x: number; y: number; z?: number }
 type DetectorResult = {
   faceLandmarks?: Landmark[][]
   faceBlendshapes?: Array<{ categories?: Array<{ categoryName?: string; score?: number }> }>
+  landmarks?: Landmark[][]
 }
 
 type FaceDetector = {
   detectForVideo: (video: HTMLVideoElement, timestampMs: number) => DetectorResult
   close?: () => void
+}
+
+type HandDetector = {
+  detectForVideo: (video: HTMLVideoElement, timestampMs: number) => DetectorResult
+  close?: () => void
+}
+
+type DetectorBundle = {
+  face: FaceDetector
+  hand: HandDetector | null
 }
 
 type FrameSample = {
@@ -48,10 +59,13 @@ type FrameSample = {
   blinkScore: number
   smileScore: number
   landmarkCount: number
+  handPresent: boolean
+  handLandmarkCount: number
 }
 
 type LiveSignal = {
   facePresent: boolean
+  handPresent: boolean
   confidence: number
   motion: number
   brightness: number
@@ -60,20 +74,32 @@ type LiveSignal = {
   blinkScore: number
   smileScore: number
   landmarkCount: number
+  handLandmarkCount: number
   faceLandmarks: Landmark[]
+  handLandmarks: Landmark[]
 }
 
 const REQUIRED_STEPS = ["LOOK_CENTER", "TURN_LEFT", "TURN_RIGHT", "BLINK", "RAISE_HAND", "SMILE"]
 const STEP_HOLD_MS = 1050
-const STEP_TIMEOUT_MS = 16000
+const STEP_TIMEOUT_MS = 18000
 const DESKTOP_SAMPLE_MS = 160
 const MOBILE_SAMPLE_MS = 240
 const UI_UPDATE_MS = 240
 const OVERLAY_UPDATE_MS = 130
 
+const HAND_CONNECTIONS = [
+  [0, 1], [1, 2], [2, 3], [3, 4],
+  [0, 5], [5, 6], [6, 7], [7, 8],
+  [5, 9], [9, 10], [10, 11], [11, 12],
+  [9, 13], [13, 14], [14, 15], [15, 16],
+  [13, 17], [17, 18], [18, 19], [19, 20],
+  [0, 17],
+]
+
 function emptySignal(): LiveSignal {
   return {
     facePresent: false,
+    handPresent: false,
     confidence: 0,
     motion: 0,
     brightness: 0,
@@ -82,7 +108,9 @@ function emptySignal(): LiveSignal {
     blinkScore: 0,
     smileScore: 0,
     landmarkCount: 0,
+    handLandmarkCount: 0,
     faceLandmarks: [],
+    handLandmarks: [],
   }
 }
 
@@ -146,6 +174,10 @@ function estimateYaw(landmarks: Landmark[]) {
   return Math.max(-1, Math.min(1, (noseRatio - 0.5) * 2))
 }
 
+function screenPoint(point: Landmark, width: number, height: number) {
+  return { x: (1 - point.x) * width, y: point.y * height }
+}
+
 function faceBounds(landmarks: Landmark[], width: number, height: number) {
   if (!landmarks.length) return null
   let minX = width
@@ -154,12 +186,11 @@ function faceBounds(landmarks: Landmark[], width: number, height: number) {
   let maxY = 0
   for (const point of landmarks) {
     if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) continue
-    const x = (1 - point.x) * width
-    const y = point.y * height
-    minX = Math.min(minX, x)
-    minY = Math.min(minY, y)
-    maxX = Math.max(maxX, x)
-    maxY = Math.max(maxY, y)
+    const p = screenPoint(point, width, height)
+    minX = Math.min(minX, p.x)
+    minY = Math.min(minY, p.y)
+    maxX = Math.max(maxX, p.x)
+    maxY = Math.max(maxY, p.y)
   }
   if (minX >= maxX || minY >= maxY) return null
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
@@ -188,13 +219,13 @@ function stepHelp(step?: string) {
     case "TURN_LEFT": return "Başını belirgin şekilde sola çevir ve sabit tut."
     case "TURN_RIGHT": return "Başını belirgin şekilde sağa çevir ve sabit tut."
     case "BLINK": return "Yüzün görünürken net şekilde göz kırp."
-    case "RAISE_HAND": return "Elini yüz hizasına kaldır ve kamerada kısa hareket ettir."
+    case "RAISE_HAND": return "Elini yüz hizasına kaldır; mor el çizimi görünene kadar tut."
     case "SMILE": return "Kameraya bakıp kısa süre gülümse."
     default: return "Challenge hazırlanıyor."
   }
 }
 
-function validateStep(step: string | undefined, signal: LiveSignal, stepMotionPeak: number) {
+function validateStep(step: string | undefined, signal: LiveSignal) {
   if (!signal.facePresent) return { ok: false, reason: "Yüz bulunamadı" }
   if (signal.landmarkCount < 450) return { ok: false, reason: "Yüz çizimi bekleniyor" }
   if (signal.confidence < 68) return { ok: false, reason: "Yüz güveni düşük: ışığı artır / yaklaş" }
@@ -217,8 +248,8 @@ function validateStep(step: string | undefined, signal: LiveSignal, stepMotionPe
       return ok ? { ok, reason: "Göz kırpma algılandı" } : { ok, reason: "Göz kırpma bekleniyor" }
     }
     case "RAISE_HAND": {
-      const ok = stepMotionPeak > 18
-      return ok ? { ok, reason: "El / belirgin hareket algılandı" } : { ok, reason: "Elini yüz hizasına kaldır ve hareket ettir" }
+      const ok = signal.handPresent && signal.handLandmarkCount >= 16
+      return ok ? { ok, reason: "El mesh algılandı" } : { ok, reason: "Elini yüz hizasına kaldır; mor el çizimi görünmeli" }
     }
     case "SMILE": {
       const ok = signal.smileScore > 0.22
@@ -247,10 +278,10 @@ function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width:
   ctx.closePath()
 }
 
-async function createFaceDetector(preferCpu: boolean): Promise<FaceDetector> {
+async function createDetectors(preferCpu: boolean): Promise<DetectorBundle> {
   const vision = await import("@mediapipe/tasks-vision")
   const fileset = await vision.FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm")
-  const create = (delegate: "GPU" | "CPU") =>
+  const createFace = (delegate: "GPU" | "CPU") =>
     vision.FaceLandmarker.createFromOptions(fileset, {
       baseOptions: {
         modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task",
@@ -263,9 +294,53 @@ async function createFaceDetector(preferCpu: boolean): Promise<FaceDetector> {
       minTrackingConfidence: 0.55,
       outputFaceBlendshapes: true,
     })
+  const createHand = (delegate: "GPU" | "CPU") =>
+    vision.HandLandmarker.createFromOptions(fileset, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task",
+        delegate,
+      },
+      runningMode: "VIDEO",
+      numHands: 1,
+      minHandDetectionConfidence: 0.52,
+      minHandPresenceConfidence: 0.52,
+      minTrackingConfidence: 0.5,
+    })
   const primary = preferCpu ? "CPU" : "GPU"
   const secondary = primary === "GPU" ? "CPU" : "GPU"
-  return (await create(primary).catch(() => create(secondary))) as FaceDetector
+  const face = (await createFace(primary).catch(() => createFace(secondary))) as FaceDetector
+  const hand = (await createHand(primary).catch(() => createHand(secondary)).catch(() => null)) as HandDetector | null
+  return { face, hand }
+}
+
+function drawHandMesh(ctx: CanvasRenderingContext2D, landmarks: Landmark[], width: number, height: number) {
+  if (!landmarks.length) return
+  ctx.save()
+  ctx.strokeStyle = "rgba(216,180,254,0.96)"
+  ctx.lineWidth = 2.4
+  ctx.shadowColor = "rgba(168,85,247,0.85)"
+  ctx.shadowBlur = 10
+  ctx.lineCap = "round"
+  ctx.lineJoin = "round"
+  ctx.beginPath()
+  for (const [startIndex, endIndex] of HAND_CONNECTIONS) {
+    const start = landmarks[startIndex]
+    const end = landmarks[endIndex]
+    if (!start || !end) continue
+    const a = screenPoint(start, width, height)
+    const b = screenPoint(end, width, height)
+    ctx.moveTo(a.x, a.y)
+    ctx.lineTo(b.x, b.y)
+  }
+  ctx.stroke()
+  ctx.fillStyle = "rgba(250,245,255,0.98)"
+  for (const point of landmarks) {
+    const p = screenPoint(point, width, height)
+    ctx.beginPath()
+    ctx.arc(p.x, p.y, 3.2, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.restore()
 }
 
 function drawOverlay(ctx: CanvasRenderingContext2D, width: number, height: number, signal: LiveSignal, progress: number, currentStep?: string) {
@@ -288,8 +363,9 @@ function drawOverlay(ctx: CanvasRenderingContext2D, width: number, height: numbe
     for (const index of points) {
       const point = signal.faceLandmarks[index]
       if (!point) continue
+      const p = screenPoint(point, width, height)
       ctx.beginPath()
-      ctx.arc((1 - point.x) * width, point.y * height, 2.2, 0, Math.PI * 2)
+      ctx.arc(p.x, p.y, 2.2, 0, Math.PI * 2)
       ctx.fill()
     }
   } else {
@@ -301,14 +377,16 @@ function drawOverlay(ctx: CanvasRenderingContext2D, width: number, height: numbe
     ctx.stroke()
   }
 
+  drawHandMesh(ctx, signal.handLandmarks, width, height)
+
   ctx.fillStyle = "rgba(2,6,23,0.72)"
-  roundedRect(ctx, 14, 14, Math.min(360, width - 28), 78, 12)
+  roundedRect(ctx, 14, 14, Math.min(390, width - 28), 78, 12)
   ctx.fill()
   ctx.fillStyle = "#e0f2fe"
   ctx.font = "700 13px ui-sans-serif, system-ui, sans-serif"
   ctx.fillText(stepTitle(currentStep), 28, 40)
   ctx.font = "500 12px ui-monospace, SFMono-Regular, Menlo, monospace"
-  ctx.fillText(`FACE ${signal.facePresent ? "LOCK" : "WAIT"} · CONF ${Math.round(signal.confidence)}% · YAW ${signal.yaw.toFixed(2)}`, 28, 66)
+  ctx.fillText(`FACE ${signal.facePresent ? "LOCK" : "WAIT"} · HAND ${signal.handPresent ? "LOCK" : "WAIT"} · YAW ${signal.yaw.toFixed(2)}`, 28, 66)
 
   const barX = 18
   const barY = height - 30
@@ -325,7 +403,8 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
   const sampleCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
-  const detectorRef = useRef<FaceDetector | null>(null)
+  const faceDetectorRef = useRef<FaceDetector | null>(null)
+  const handDetectorRef = useRef<HandDetector | null>(null)
   const previousPixelsRef = useRef<Uint8ClampedArray | null>(null)
   const samplesRef = useRef<FrameSample[]>([])
   const timingsRef = useRef<number[]>([])
@@ -344,7 +423,7 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
   const [signatureStatus, setSignatureStatus] = useState<string | null>(null)
   const [liveSignal, setLiveSignal] = useState<LiveSignal>(() => emptySignal())
   const [compactScan, setCompactScan] = useState(false)
-  const [detectorLabel, setDetectorLabel] = useState("Face detector idle")
+  const [detectorLabel, setDetectorLabel] = useState("Detector idle")
 
   useEffect(() => {
     function updateMode() {
@@ -358,8 +437,10 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
 
   function stopCamera() {
     cancelRef.current = true
-    detectorRef.current?.close?.()
-    detectorRef.current = null
+    faceDetectorRef.current?.close?.()
+    handDetectorRef.current?.close?.()
+    faceDetectorRef.current = null
+    handDetectorRef.current = null
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
   }
@@ -391,7 +472,7 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
     drawOverlay(ctx, width, height, signal, currentProgress, currentStep)
   }
 
-  function sampleFrame(): FrameSample | null {
+  function sampleFrame(step?: string): FrameSample | null {
     const video = videoRef.current
     const canvas = sampleCanvasRef.current
     if (!video || !canvas || video.videoWidth === 0 || video.videoHeight === 0) return null
@@ -417,23 +498,31 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
     const sharpness = edgeSum / pixelCount
     const motion = previous ? motionSum / pixelCount : 0
 
-    const detector = detectorRef.current
-    let landmarks: Landmark[] = []
+    const faceDetector = faceDetectorRef.current
+    const handDetector = handDetectorRef.current
+    let faceLandmarks: Landmark[] = []
+    let handLandmarks: Landmark[] = []
     let yaw = 0
     let blinkScore = 0
     let smileScore = 0
-    if (detector) {
-      const detection = detector.detectForVideo(video, nowMs())
-      landmarks = detection.faceLandmarks?.[0] ?? []
-      yaw = landmarks.length ? estimateYaw(landmarks) : 0
-      blinkScore = landmarks.length ? estimateBlink(landmarks, detection) : 0
-      smileScore = landmarks.length ? estimateSmile(landmarks, detection) : 0
+    if (faceDetector) {
+      const detection = faceDetector.detectForVideo(video, nowMs())
+      faceLandmarks = detection.faceLandmarks?.[0] ?? []
+      yaw = faceLandmarks.length ? estimateYaw(faceLandmarks) : 0
+      blinkScore = faceLandmarks.length ? estimateBlink(faceLandmarks, detection) : 0
+      smileScore = faceLandmarks.length ? estimateSmile(faceLandmarks, detection) : 0
+    }
+    if (handDetector && step === "RAISE_HAND") {
+      const handDetection = handDetector.detectForVideo(video, nowMs())
+      handLandmarks = handDetection.landmarks?.[0] ?? []
     }
 
-    const facePresent = landmarks.length >= 450
+    const facePresent = faceLandmarks.length >= 450
+    const handPresent = handLandmarks.length >= 16
     const confidence = facePresent ? clamp(72 + Math.min(24, sharpness * 4)) : 0
     const signal: LiveSignal = {
       facePresent,
+      handPresent,
       confidence,
       motion,
       brightness,
@@ -441,12 +530,26 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
       yaw,
       blinkScore,
       smileScore,
-      landmarkCount: landmarks.length,
-      faceLandmarks: landmarks,
+      landmarkCount: faceLandmarks.length,
+      handLandmarkCount: handLandmarks.length,
+      faceLandmarks,
+      handLandmarks,
     }
     liveSignalRef.current = signal
     updateUi(signal, progress)
-    return { brightness, sharpness, motion, facePresent, faceConfidence: confidence, yaw, blinkScore, smileScore, landmarkCount: landmarks.length }
+    return {
+      brightness,
+      sharpness,
+      motion,
+      facePresent,
+      faceConfidence: confidence,
+      yaw,
+      blinkScore,
+      smileScore,
+      landmarkCount: faceLandmarks.length,
+      handPresent,
+      handLandmarkCount: handLandmarks.length,
+    }
   }
 
   async function startSession() {
@@ -461,7 +564,7 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
     setStepIndex(0)
     setProgress(0)
     setStepReason("Hazır")
-    setDetectorLabel("Face detector idle")
+    setDetectorLabel("Detector idle")
     samplesRef.current = []
     timingsRef.current = []
     previousPixelsRef.current = null
@@ -501,9 +604,11 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         await videoRef.current.play().catch(() => undefined)
-        setDetectorLabel("Loading face detector...")
-        detectorRef.current = await createFaceDetector(compactScan)
-        setDetectorLabel("MediaPipe face lock")
+        setDetectorLabel("Loading face + hand detectors...")
+        const detectors = await createDetectors(compactScan)
+        faceDetectorRef.current = detectors.face
+        handDetectorRef.current = detectors.hand
+        setDetectorLabel(detectors.hand ? "MediaPipe face + hand mesh" : "MediaPipe face / hand fallback")
       }
       await runChallenge()
     } catch (err) {
@@ -524,7 +629,6 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
       setProgress(0)
       setStepReason(stepHelp(step))
       let validSince: number | null = null
-      let stepMotionPeak = 0
       const challengeStarted = nowMs()
       const stepStarted = nowMs()
       while (!cancelRef.current) {
@@ -535,12 +639,9 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
           stopCamera()
           return
         }
-        const sample = sampleFrame()
-        if (sample) {
-          samplesRef.current.push(sample)
-          stepMotionPeak = Math.max(stepMotionPeak, sample.motion)
-        }
-        const validation = validateStep(step, liveSignalRef.current, stepMotionPeak)
+        const sample = sampleFrame(step)
+        if (sample) samplesRef.current.push(sample)
+        const validation = validateStep(step, liveSignalRef.current)
         let holdProgress = 0
         if (validation.ok) {
           validSince ??= now
@@ -570,6 +671,7 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
     const motionAvg = average(samples.map((sample) => sample.motion), 8)
     const faceConfidenceAvg = average(samples.map((sample) => sample.faceConfidence), 55)
     const faceSeenCount = samples.filter((sample) => sample.facePresent).length
+    const handSeenCount = samples.filter((sample) => sample.handPresent).length
     const motionPeak = Math.max(0, ...samples.map((sample) => sample.motion))
     const yawRange = Math.max(0, ...samples.map((sample) => sample.yaw)) - Math.min(0, ...samples.map((sample) => sample.yaw))
     const blinkMax = Math.max(0, ...samples.map((sample) => sample.blinkScore))
@@ -579,11 +681,11 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
       facePresenceScore: clamp(detectorQuality ? faceConfidenceAvg : 30),
       headPoseScore: clamp(detectorQuality ? 55 + yawRange * 130 : 30),
       eyeBlinkScore: clamp(detectorQuality ? blinkMax * 145 : 30),
-      handGestureScore: clamp(motionPeak > 18 ? 86 : 35),
+      handGestureScore: clamp(handSeenCount >= 4 ? 92 : motionPeak > 20 ? 58 : 30),
       motionTimingScore: clamp(detectorQuality ? 70 + Math.min(20, motionAvg * 2) : 35),
       frameConsistencyScore: clamp(detectorQuality ? 88 - Math.abs(110 - brightnessAvg) * 0.18 : 35),
       replayRiskScore: clamp(detectorQuality ? Math.max(5, 42 - motionAvg - yawRange * 40 - smileMax * 10) : 72),
-      injectionRiskScore: clamp(detectorQuality && samples.length >= 35 ? 10 : 68),
+      injectionRiskScore: clamp(detectorQuality && samples.length >= 35 && handSeenCount >= 4 ? 10 : 68),
     }
     try {
       const res = await fetch("/api/humanity/challenge/submit", {
@@ -595,10 +697,11 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
           walletChain,
           scores,
           clientMetadata: {
-            detector: compactScan ? "mediapipe_face_lite_mobile" : "mediapipe_face_lite_desktop",
+            detector: compactScan ? "mediapipe_face_hand_lite_mobile" : "mediapipe_face_hand_lite_desktop",
             stepTimingsMs: timingsRef.current,
             sampleCount: samples.length,
             faceSeenCount,
+            handSeenCount,
             avgBrightness: Math.round(brightnessAvg),
             avgMotion: Math.round(motionAvg),
             yawRange: Number(yawRange.toFixed(3)),
@@ -650,7 +753,7 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
     setProgress(0)
     setStepReason("Hazır")
     setSignatureStatus(null)
-    setDetectorLabel("Face detector idle")
+    setDetectorLabel("Detector idle")
     samplesRef.current = []
     timingsRef.current = []
     previousPixelsRef.current = null
@@ -669,14 +772,14 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary" className="border-primary/30 bg-primary/10 text-cyan-100">Face liveness scan</Badge>
+            <Badge variant="secondary" className="border-primary/30 bg-primary/10 text-cyan-100">Face + hand liveness scan</Badge>
             <Badge variant="outline" className="border-green-400/30 bg-green-400/10 text-green-200">Strict steps</Badge>
             <Badge variant="outline" className="border-purple-400/30 bg-purple-400/10 text-purple-100">{detectorLabel}</Badge>
             {compactScan && <Badge variant="outline" className="border-purple-400/30 bg-purple-400/10 text-purple-100">Mobile portrait</Badge>}
             {phase === "running" && <Badge variant="outline" className="border-green-400/30 bg-green-400/10 text-green-200">Step {stepIndex + 1}/{steps.length}</Badge>}
           </div>
           <h2 className="mt-3 text-2xl font-semibold text-white">Humanity Scan</h2>
-          <p className="mt-1 text-sm text-slate-300">Gerçek yüz kilidi, baş çevirme, göz kırpma, el hareketi ve gülümseme adımları geçmeden onay vermez.</p>
+          <p className="mt-1 text-sm text-slate-300">Yüz, baş çevirme, göz kırpma, mor el mesh ve gülümseme adımları geçmeden onay vermez.</p>
         </div>
         <Video className="text-primary" />
       </div>
@@ -696,10 +799,10 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
                 <p className="font-semibold text-white">{phase === "running" ? stepTitle(currentStep) : phase === "submitting" ? "Submitting verified signals" : "Camera ready"}</p>
                 <p className="text-slate-300">{phase === "running" ? stepHelp(currentStep) : stepReason}</p>
               </div>
-              <span className="font-mono text-cyan-200">Face {liveSignal.facePresent ? "LOCK" : "WAIT"} / Yaw {liveSignal.yaw.toFixed(2)}</span>
+              <span className="font-mono text-cyan-200">Face {liveSignal.facePresent ? "LOCK" : "WAIT"} / Hand {liveSignal.handPresent ? "LOCK" : "WAIT"}</span>
             </div>
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800"><div className="h-full bg-primary transition-all" style={{ width: `${Math.round(progress * 100)}%` }} /></div>
-            <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-slate-300"><span>Status: {stepReason}</span><span>Confidence: {Math.round(liveSignal.confidence)}%</span><span>Blink: {Math.round(liveSignal.blinkScore * 100)}%</span><span>Smile: {Math.round(liveSignal.smileScore * 100)}%</span></div>
+            <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-slate-300"><span>Status: {stepReason}</span><span>Confidence: {Math.round(liveSignal.confidence)}%</span><span>Hand points: {liveSignal.handLandmarkCount}</span><span>Blink: {Math.round(liveSignal.blinkScore * 100)}%</span><span>Smile: {Math.round(liveSignal.smileScore * 100)}%</span></div>
           </div>
         </div>
       )}
@@ -708,7 +811,7 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
         {phase === "idle" && <button onClick={startSession} className={`${buttonVariants()} glow-primary`}><Camera data-icon="inline-start" /> Start real humanity scan</button>}
         {phase === "starting" && <p className="text-sm text-cyan-200"><Loader2 className="mr-2 inline size-4 animate-spin" /> Creating secure challenge...</p>}
         {phase === "camera" && <button onClick={allowCamera} className={buttonVariants({ variant: "outline" })}>Allow camera and begin scan</button>}
-        {phase === "running" && <p className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-slate-300">Acele etme. Her adım ayrı doğrulanır; sistem yüz kilidi olmadan geçmez.</p>}
+        {phase === "running" && <p className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-slate-300">Acele etme. Her adım ayrı doğrulanır; el adımında mor el mesh görünmeden geçmez.</p>}
         {phase === "submitting" && <p className="text-sm text-cyan-200"><Loader2 className="mr-2 inline size-4 animate-spin" /> Submitting liveness evidence...</p>}
         {phase === "result" && result && (
           <div className={`rounded-2xl border p-4 ${decisionClass(result.decision)}`}>
