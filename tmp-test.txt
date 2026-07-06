@@ -1,1 +1,1 @@
-hello gray_zone
+import x from 'y'
