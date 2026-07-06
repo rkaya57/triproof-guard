@@ -13,6 +13,7 @@ import {
 } from "@/lib/onchain/cache"
 import { getOnChainProviders } from "@/lib/onchain/provider-router"
 import type { OnChainProvider } from "@/lib/onchain/providers/provider"
+import { recordProviderUsage } from "@/lib/onchain/provider-usage"
 import { chunk, RateLimitError, sleep, withRetry } from "@/lib/onchain/rate-limit"
 
 export type EnrichWalletsInput = {
@@ -163,6 +164,13 @@ export async function enrichWallets(
                 throw new Error("Mock provider data is not allowed in production analysis.")
               }
 
+              await recordProviderUsage({
+                provider: data.provider,
+                chain,
+                method: "wallet_enrichment",
+                status: "success",
+              })
+
               setCachedEnrichment(data)
               enrichedCount += 1
               usedProviders.add(data.provider)
@@ -183,6 +191,13 @@ export async function enrichWallets(
               return
             } catch (error) {
               lastError = error
+              await recordProviderUsage({
+                provider: provider.id,
+                chain,
+                method: "wallet_enrichment",
+                status: error instanceof RateLimitError ? "rate_limited" : "failed",
+                errorMessage: error instanceof Error ? error.message : String(error),
+              })
               if (error instanceof RateLimitError) {
                 markProviderCooldown(chain, provider, config.providerCooldownMs)
                 warnings.add(`${provider.id} rate limit persisted; trying the next configured provider.`)
