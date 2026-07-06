@@ -15,6 +15,7 @@ type ProviderUsageInput = {
 }
 
 const heliusCreditEstimate: Record<string, number> = {
+  wallet_enrichment: 25,
   getBalance: 1,
   getAccountInfo: 1,
   getSignaturesForAddress: 1,
@@ -22,10 +23,17 @@ const heliusCreditEstimate: Record<string, number> = {
   getTransaction: 10,
 }
 
+const etherscanCreditEstimate: Record<string, number> = {
+  wallet_enrichment: 4,
+}
+
 export function estimateProviderCredits(provider: string, method: string, requestCount = 1) {
   const normalizedProvider = provider.toLowerCase()
   if (normalizedProvider === "helius") {
     return Math.max(1, requestCount) * (heliusCreditEstimate[method] ?? 1)
+  }
+  if (normalizedProvider === "etherscan") {
+    return Math.max(1, requestCount) * (etherscanCreditEstimate[method] ?? 1)
   }
 
   return Math.max(1, requestCount)
