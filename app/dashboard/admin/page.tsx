@@ -24,6 +24,7 @@ import {
   getRecentAnalyses,
   type AdminWarning,
 } from "@/lib/admin/health"
+import { getAdminProviderUsage, type ProviderWarningLevel } from "@/lib/admin/provider-usage"
 import { getAdminUser } from "@/lib/auth/admin"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
@@ -55,6 +56,26 @@ function warningIcon(severity: AdminWarning["severity"]) {
   return <CheckCircle2 className="mt-1 size-5 text-green-300" />
 }
 
+function providerUsageClass(level: ProviderWarningLevel) {
+  if (level === "red") return "border-red-400/30 bg-red-400/10 text-red-100"
+  if (level === "orange") return "border-orange-400/30 bg-orange-400/10 text-orange-100"
+  if (level === "yellow") return "border-yellow-400/30 bg-yellow-400/10 text-yellow-100"
+  if (level === "unknown") return "border-slate-400/30 bg-slate-400/10 text-slate-100"
+  return "border-green-400/30 bg-green-400/10 text-green-100"
+}
+
+function providerUsageLabel(level: ProviderWarningLevel) {
+  if (level === "red") return "Critical"
+  if (level === "orange") return "High"
+  if (level === "yellow") return "Warning"
+  if (level === "unknown") return "Unknown"
+  return "Healthy"
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("en-US").format(value)
+}
+
 function statusCopy(value: unknown) {
   const status = String(value ?? "-")
   if (status === "completed") return "Completed"
@@ -83,11 +104,12 @@ export default async function Page() {
   const admin = await getAdminUser()
   if (!admin) return <AccessDenied />
 
-  const [metrics, analyses, warnings, queue] = await Promise.all([
+  const [metrics, analyses, warnings, queue, providerUsage] = await Promise.all([
     getAdminMetrics(),
     getRecentAnalyses(),
     getAdminWarnings(),
     getAdminQueueBreakdown(),
+    getAdminProviderUsage(),
   ])
   const health = metrics.find((metric) => metric.label === "System Health")
   const activeQueue = queue.pending + queue.processing
@@ -102,7 +124,7 @@ export default async function Page() {
             <Badge variant="secondary" className="mb-4 w-fit border-primary/40 bg-primary/10 text-cyan-100">Admin Command Center</Badge>
             <h2 className="text-gradient text-3xl font-semibold sm:text-5xl">Tri-Proof operasyon merkezi</h2>
             <p className="mt-3 max-w-3xl text-slate-300">
-              Admin: {admin.email}. Sistem sağlığı, analiz kuyruğu, ödeme akışı, Humanity Gate lab, blog ve issue takibi buradan yönetilir.
+              Admin: {admin.email}. Sistem sağlığı, analiz kuyruğu, ödeme akışı, provider limitleri, Humanity Gate lab, blog ve issue takibi buradan yönetilir.
             </p>
           </div>
           <div className={`rounded-2xl border p-5 text-right ${toneBorder(health?.tone ?? "neutral")}`}>
@@ -124,6 +146,56 @@ export default async function Page() {
               <CardTitle className={`text-2xl ${toneClass(metric.tone)}`}>{metric.value}</CardTitle>
               {metric.detail && <p className="pt-1 text-xs text-slate-400">{metric.detail}</p>}
             </CardHeader>
+          </Card>
+        ))}
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        {providerUsage.map((provider) => (
+          <Card key={provider.provider} className={`glass-panel premium-card animated-border ${providerUsageClass(provider.warningLevel)}`}>
+            <CardHeader>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-white">
+                    <Activity className="text-primary" /> {provider.label} usage
+                  </CardTitle>
+                  <CardDescription className="mt-1 text-slate-300">
+                    {provider.limitWindow === "monthly" ? "Monthly" : "Daily"} {provider.limitUnit} limit watch.
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="border-current text-current">{providerUsageLabel(provider.warningLevel)}</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <div>
+                <div className="mb-2 flex items-center justify-between text-sm text-slate-300">
+                  <span>{formatNumber(provider.used)} / {formatNumber(provider.configuredLimit)} {provider.limitUnit}</span>
+                  <span>{provider.usagePercent}%</span>
+                </div>
+                <div className="h-3 overflow-hidden rounded-full bg-background/70">
+                  <div className="h-full rounded-full bg-current transition-all" style={{ width: `${Math.min(100, provider.usagePercent)}%` }} />
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-border bg-background/45 p-3">
+                  <p className="text-xs text-slate-400">Daily requests</p>
+                  <p className="text-xl font-semibold text-white">{formatNumber(provider.dailyRequests)}</p>
+                </div>
+                <div className="rounded-xl border border-border bg-background/45 p-3">
+                  <p className="text-xs text-slate-400">Monthly est. credits</p>
+                  <p className="text-xl font-semibold text-white">{formatNumber(provider.monthlyEstimatedCredits)}</p>
+                </div>
+                <div className="rounded-xl border border-border bg-background/45 p-3">
+                  <p className="text-xs text-slate-400">Rate limits / 24h</p>
+                  <p className="text-xl font-semibold text-white">{formatNumber(provider.rateLimitedLast24h)}</p>
+                </div>
+              </div>
+              <div className="rounded-xl border border-border bg-background/45 p-3 text-xs leading-6 text-slate-300">
+                Last rate limit: {provider.lastRateLimitAt ? new Date(provider.lastRateLimitAt).toLocaleString() : "none"}<br />
+                Failed provider attempts / 24h: {formatNumber(provider.failedLast24h)}<br />
+                {provider.note}
+              </div>
+            </CardContent>
           </Card>
         ))}
       </section>
