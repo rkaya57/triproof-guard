@@ -44,7 +44,6 @@ export async function GET(
         totalWallets: serialized.totalWallets,
         approved: serialized.approvedCount,
         grayZone: serialized.manualReviewCount,
-        grayZoneManualReview: serialized.manualReviewCount,
         rejectedNotEligible: serialized.rejectedCount,
         averageRiskScore: serialized.averageRiskScore,
         suspiciousClusters: serialized.suspiciousClustersCount,
