@@ -1,1 +1,4 @@
-export default function Test() {}
+export function actionLabel(action: string) {
+  if (action === "manual_review") return "Gray Zone"
+  return "Reject / Not Eligible"
+}
