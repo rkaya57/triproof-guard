@@ -615,7 +615,7 @@ export async function buildPdfReport(analysis: AnalysisDetail) {
       [
         ["Provider used", analysis.enrichment.provider],
         ["Enriched wallets", analysis.enrichment.enrichedCount.toLocaleString()],
-        ["Failed enrichments", analysis.enrichment.failedCount.toLocaleString()],
+        ["No On-chain Data", analysis.enrichment.failedCount.toLocaleString()],
         ["Cache hits", analysis.enrichment.cacheHits.toLocaleString()],
         ["Average wallet age", `${avgAge} days`],
         ["Average tx count", String(avgTx)],

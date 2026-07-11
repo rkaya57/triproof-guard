@@ -1455,9 +1455,9 @@ export function AnalysisDetail({
               icon={CheckCircle2}
             />
             <MetricCard
-              title="Failed enrichments"
+              title="No On-chain Data"
               value={formatNumber(analysis.enrichment.failedCount)}
-              description="Fell back to available data."
+              description="No reliable on-chain history found."
               icon={AlertTriangle}
             />
             <MetricCard
