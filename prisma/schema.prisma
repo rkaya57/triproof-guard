@@ -104,19 +104,34 @@ enum HumanityDecision {
   REJECTED
 }
 
+enum AirdropTaskType {
+  X_FOLLOW
+  X_QUOTE
+  HUMANITY_GATE_FEEDBACK
+}
+
+enum AirdropSubmissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
-  id                  String               @id @default(cuid())
-  name                String
-  email               String               @unique
-  passwordHash        String
-  projects            Project[]
-  teamReviews         TeamReview[]
-  feedbacks           FeedbackEvent[]
-  webhookEndpoints    WebhookEndpoint[]
-  paymentTransactions PaymentTransaction[]
-  creditLedgerEntries CreditLedger[]
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  id                         String               @id @default(cuid())
+  name                       String
+  email                      String               @unique
+  passwordHash               String
+  projects                   Project[]
+  teamReviews                TeamReview[]
+  feedbacks                  FeedbackEvent[]
+  webhookEndpoints           WebhookEndpoint[]
+  paymentTransactions        PaymentTransaction[]
+  creditLedgerEntries        CreditLedger[]
+  airdropProfile             AirdropProfile?
+  airdropSubmissions         AirdropSubmission[]  @relation("AirdropSubmissionUser")
+  reviewedAirdropSubmissions AirdropSubmission[]  @relation("AirdropSubmissionReviewer")
+  createdAt                  DateTime             @default(now())
+  updatedAt                  DateTime             @updatedAt
 }
 
 model Project {
@@ -454,4 +469,64 @@ model HumanityVerification {
 
   @@index([campaignId, walletAddress])
   @@index([decision])
+}
+
+model AirdropProfile {
+  id                String              @id @default(cuid())
+  userId            String              @unique
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  xHandle           String?
+  rewardWallet      String?
+  totalPoints       Int                 @default(0)
+  eligibilityStatus String              @default("registered")
+  submissions       AirdropSubmission[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([totalPoints])
+  @@index([eligibilityStatus])
+}
+
+model AirdropTask {
+  id            String              @id @default(cuid())
+  slug          String              @unique
+  title         String
+  description   String              @db.Text
+  type          AirdropTaskType
+  points        Int
+  proofRequired Boolean             @default(true)
+  active        Boolean             @default(true)
+  sortOrder     Int                 @default(0)
+  submissions   AirdropSubmission[]
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([active, sortOrder])
+}
+
+model AirdropSubmission {
+  id                 String                  @id @default(cuid())
+  userId             String
+  user               User                    @relation("AirdropSubmissionUser", fields: [userId], references: [id], onDelete: Cascade)
+  profileId          String
+  profile            AirdropProfile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  taskId             String
+  task               AirdropTask             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  status             AirdropSubmissionStatus @default(PENDING)
+  evidenceUrl        String?
+  evidenceImageData  String?                 @db.Text
+  feedbackText       String?                 @db.Text
+  humanityTestResult Json?
+  pointsAwarded      Int                     @default(0)
+  adminNotes         String?                 @db.Text
+  reviewedById       String?
+  reviewedBy         User?                   @relation("AirdropSubmissionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt         DateTime?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  @@unique([userId, taskId])
+  @@index([status, createdAt])
+  @@index([profileId])
+  @@index([reviewedById])
 }

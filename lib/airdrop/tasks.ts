@@ -1,0 +1,99 @@
+import type { AirdropTaskType, Prisma, PrismaClient } from "@prisma/client"
+
+export const AIRDROP_SEASON_NAME = "Season 0"
+export const TRIPROOF_X_URL = "https://x.com/TriProof_"
+
+export type AirdropTaskDefinition = {
+  slug: string
+  title: string
+  description: string
+  type: AirdropTaskType
+  points: number
+  proofRequired: boolean
+  sortOrder: number
+}
+
+export const AIRDROP_TASK_DEFINITIONS: AirdropTaskDefinition[] = [
+  {
+    slug: "x-follow-triproof",
+    title: "Follow Tri-Proof on X",
+    description:
+      "Follow the official Tri-Proof Protocol X account at https://x.com/TriProof_ and submit a screenshot as proof.",
+    type: "X_FOLLOW",
+    points: 100,
+    proofRequired: true,
+    sortOrder: 10,
+  },
+  {
+    slug: "x-quote-triproof-post",
+    title: "Quote a Tri-Proof post",
+    description:
+      "Quote-share any post from the official Tri-Proof Protocol X account and submit the quote URL plus screenshot evidence.",
+    type: "X_QUOTE",
+    points: 180,
+    proofRequired: true,
+    sortOrder: 20,
+  },
+  {
+    slug: "humanity-gate-feedback",
+    title: "Test Humanity Gate and leave feedback",
+    description:
+      "Run the one-time Humanity Gate readiness test, then submit feedback and optional screenshot evidence for admin review.",
+    type: "HUMANITY_GATE_FEEDBACK",
+    points: 250,
+    proofRequired: false,
+    sortOrder: 30,
+  },
+]
+
+type AirdropTaskClient = Pick<PrismaClient, "airdropTask">
+type AirdropTaskTransaction = Prisma.TransactionClient
+
+export async function ensureAirdropTasks(dbClient: AirdropTaskClient | AirdropTaskTransaction) {
+  await Promise.all(
+    AIRDROP_TASK_DEFINITIONS.map((task) =>
+      dbClient.airdropTask.upsert({
+        where: { slug: task.slug },
+        update: {
+          title: task.title,
+          description: task.description,
+          type: task.type,
+          points: task.points,
+          proofRequired: task.proofRequired,
+          active: true,
+          sortOrder: task.sortOrder,
+        },
+        create: {
+          slug: task.slug,
+          title: task.title,
+          description: task.description,
+          type: task.type,
+          points: task.points,
+          proofRequired: task.proofRequired,
+          active: true,
+          sortOrder: task.sortOrder,
+        },
+      })
+    )
+  )
+}
+
+export function normalizeXHandle(value: string) {
+  const trimmed = value.trim().replace(/^@/, "")
+  return trimmed ? `@${trimmed}` : ""
+}
+
+export function isValidEvidenceImage(value: unknown) {
+  if (typeof value !== "string" || !value) return false
+  if (!value.startsWith("data:image/")) return false
+  return value.length <= 1_750_000
+}
+
+export function isLikelyUrl(value: string) {
+  try {
+    const url = new URL(value)
+    return url.protocol === "https:" || url.protocol === "http:"
+  } catch {
+    return false
+  }
+}

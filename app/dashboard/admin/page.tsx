@@ -9,6 +9,7 @@ import {
   CreditCard,
   DatabaseZap,
   FileText,
+  Gift,
   Layers3,
   ScanFace,
   ShieldCheck,
@@ -261,6 +262,7 @@ export default async function Page() {
         {[
           [ShieldCheck, "System Health", "Database, API keys, treasury wallets and worker queue.", "/dashboard/admin/diagnostics"],
           [ScanFace, "Humanity Gate Lab", "Admin-only test hub for live human verification before campaign registration.", "/dashboard/admin/humanity"],
+          [Gift, "Airdrop Review", "Approve contribution proofs and credit Season 0 task points.", "/dashboard/admin/airdrop"],
           [Bug, "Issue Tracker", "Track bugs, broken flows, visual issues and Codex tasks.", "/dashboard/admin/bugs"],
           [Activity, "Analysis Ops", "Review recent wallet analyses and failed jobs.", "/dashboard/admin/analyses"],
           [CreditCard, "Payments", "USDC checkout configuration and manual payment notes.", "/dashboard/admin/payments"],

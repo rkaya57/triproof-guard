@@ -34,6 +34,7 @@ const navItems = [
 const adminNavItems = [
   { href: "/dashboard/admin", label: "Admin Center", icon: ShieldCheck },
   { href: "/dashboard/admin/humanity", label: "Humanity Gate", icon: ScanFace },
+  { href: "/dashboard/admin/airdrop", label: "Airdrop Review", icon: Gift },
   { href: "/dashboard/admin/diagnostics", label: "Diagnostics", icon: HeartPulse },
 ]
 
