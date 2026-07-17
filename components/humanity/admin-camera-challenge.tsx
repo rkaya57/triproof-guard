@@ -667,7 +667,6 @@ export function AdminCameraChallenge({ campaignId, walletAddress, walletChain }:
     stopCamera()
     const samples = samplesRef.current
     const brightnessAvg = average(samples.map((sample) => sample.brightness), 80)
-    const sharpnessAvg = average(samples.map((sample) => sample.sharpness), 6)
     const motionAvg = average(samples.map((sample) => sample.motion), 8)
     const faceConfidenceAvg = average(samples.map((sample) => sample.faceConfidence), 55)
     const faceSeenCount = samples.filter((sample) => sample.facePresent).length
