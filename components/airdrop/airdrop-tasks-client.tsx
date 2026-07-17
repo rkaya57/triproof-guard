@@ -139,19 +139,35 @@ export function AirdropTasksClient() {
 
   async function refresh() {
     setLoading(true)
-    const response = await fetch("/api/airdrop/me", { cache: "no-store" })
-    if (response.status === 401) {
-      setUnauthorized(true)
+    setError(null)
+
+    try {
+      const response = await fetch("/api/airdrop/me", { cache: "no-store" })
+      if (response.status === 401) {
+        setUnauthorized(true)
+        setLoading(false)
+        return
+      }
+      if (!response.ok) {
+        throw new Error(await readError(response))
+      }
+
+      const body = (await response.json()) as AirdropResponse
+      if (!Array.isArray(body.tasks)) {
+        throw new Error("Airdrop task response is not ready yet.")
+      }
+
+      setData(body)
+      setHumanityResult(
+        body.tasks.find((task) => task.type === "HUMANITY_GATE_FEEDBACK")?.submission
+          ?.humanityTestResult ?? null
+      )
+    } catch (err) {
+      setData(null)
+      setError(err instanceof Error ? err.message : "Could not load airdrop tasks.")
+    } finally {
       setLoading(false)
-      return
     }
-    const body = (await response.json()) as AirdropResponse
-    setData(body)
-    setHumanityResult(
-      body.tasks.find((task) => task.type === "HUMANITY_GATE_FEEDBACK")?.submission
-        ?.humanityTestResult ?? null
-    )
-    setLoading(false)
   }
 
   useEffect(() => {
@@ -276,6 +292,27 @@ export function AirdropTasksClient() {
 
   const profile = data?.profile
   const tasks = data?.tasks ?? []
+
+  if (!data && error) {
+    return (
+      <Card className="glass-panel premium-card mx-auto max-w-2xl border-yellow-400/30 bg-yellow-400/10">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-yellow-100">
+            <AlertCircle className="text-yellow-200" /> Airdrop tasks are not ready
+          </CardTitle>
+          <CardDescription className="text-slate-200">{error}</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3 sm:flex-row">
+          <Button onClick={refresh} variant="outline" className="text-white">
+            Try again
+          </Button>
+          <Link href="/dashboard" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>
+            Back to dashboard
+          </Link>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-7">

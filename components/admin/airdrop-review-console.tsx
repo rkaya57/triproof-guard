@@ -1,13 +1,16 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import {
   AlertCircle,
   CheckCircle2,
   ExternalLink,
   Gift,
   Loader2,
+  Pencil,
+  Plus,
   RefreshCcw,
+  Save,
   ShieldCheck,
   Trophy,
   XCircle,
@@ -16,9 +19,11 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
 type SubmissionStatus = "PENDING" | "APPROVED" | "REJECTED"
+type TaskType = "X_FOLLOW" | "X_QUOTE" | "HUMANITY_GATE_FEEDBACK"
 
 type AdminSubmission = {
   id: string
@@ -60,20 +65,66 @@ type AdminResponse = {
   submissions: AdminSubmission[]
 }
 
+type AdminTask = {
+  id: string
+  slug: string
+  title: string
+  description: string
+  type: TaskType
+  points: number
+  proofRequired: boolean
+  active: boolean
+  sortOrder: number
+  submissionCount: number
+}
+
+const emptyTaskForm = {
+  id: "",
+  title: "",
+  description: "",
+  type: "X_FOLLOW" as TaskType,
+  points: 100,
+  proofRequired: true,
+  active: true,
+  sortOrder: 100,
+}
+
 function statusClass(status: SubmissionStatus) {
   if (status === "APPROVED") return "border-green-400/30 bg-green-400/10 text-green-200"
   if (status === "REJECTED") return "border-red-400/30 bg-red-400/10 text-red-200"
   return "border-yellow-400/30 bg-yellow-400/10 text-yellow-200"
 }
 
+async function readError(response: Response) {
+  const body = await response.json().catch(() => ({}))
+  return body.error ?? "Request failed"
+}
+
 export function AirdropReviewConsole() {
   const [data, setData] = useState<AdminResponse | null>(null)
+  const [tasks, setTasks] = useState<AdminTask[]>([])
+  const [taskForm, setTaskForm] = useState(emptyTaskForm)
   const [loading, setLoading] = useState(true)
+  const [taskLoading, setTaskLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [savingTask, setSavingTask] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  async function load() {
+  const loadTasks = useCallback(async () => {
+    setTaskLoading(true)
+    const response = await fetch("/api/admin/airdrop/tasks", { cache: "no-store" })
+    if (!response.ok) {
+      setError(await readError(response))
+      setTaskLoading(false)
+      return
+    }
+    const body = (await response.json()) as { tasks: AdminTask[] }
+    setTasks(body.tasks)
+    setTaskLoading(false)
+  }, [])
+
+  const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     const response = await fetch("/api/admin/airdrop/submissions", { cache: "no-store" })
@@ -85,15 +136,71 @@ export function AirdropReviewConsole() {
     }
     setData(body)
     setLoading(false)
-  }
+  }, [])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void load()
+      void Promise.all([load(), loadTasks()])
     }, 0)
 
     return () => window.clearTimeout(timer)
-  }, [])
+  }, [load, loadTasks])
+
+  async function saveTask() {
+    setSavingTask(true)
+    setMessage(null)
+    setError(null)
+
+    const response = await fetch("/api/admin/airdrop/tasks", {
+      method: taskForm.id ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(taskForm),
+    })
+
+    if (!response.ok) {
+      setError(await readError(response))
+      setSavingTask(false)
+      return
+    }
+
+    setMessage(taskForm.id ? "Airdrop task updated." : "Airdrop task created.")
+    setTaskForm(emptyTaskForm)
+    setSavingTask(false)
+    await Promise.all([loadTasks(), load()])
+  }
+
+  function editTask(task: AdminTask) {
+    setTaskForm({
+      id: task.id,
+      title: task.title,
+      description: task.description,
+      type: task.type,
+      points: task.points,
+      proofRequired: task.proofRequired,
+      active: task.active,
+      sortOrder: task.sortOrder,
+    })
+  }
+
+  async function toggleTask(task: AdminTask) {
+    setSavingTask(true)
+    setError(null)
+    const response = await fetch("/api/admin/airdrop/tasks", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...task, active: !task.active }),
+    })
+
+    if (!response.ok) {
+      setError(await readError(response))
+      setSavingTask(false)
+      return
+    }
+
+    setMessage(task.active ? "Task paused." : "Task activated.")
+    setSavingTask(false)
+    await loadTasks()
+  }
 
   async function review(id: string, action: "approve" | "reject", notes: string) {
     setBusyId(id)
@@ -128,7 +235,12 @@ export function AirdropReviewConsole() {
               Review X screenshots, quote URLs and Humanity Gate feedback. Approved submissions immediately credit points to the user profile.
             </p>
           </div>
-          <Button onClick={load} variant="outline" className="text-white" disabled={loading}>
+          <Button
+            onClick={() => void Promise.all([load(), loadTasks()])}
+            variant="outline"
+            className="text-white"
+            disabled={loading || taskLoading}
+          >
             <RefreshCcw data-icon="inline-start" /> Refresh
           </Button>
         </div>
@@ -142,6 +254,137 @@ export function AirdropReviewConsole() {
           </CardContent>
         </Card>
       )}
+
+      <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+        <Card className="glass-panel premium-card animated-border">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-white">
+              <Plus className="text-primary" /> Add or edit airdrop task
+            </CardTitle>
+            <CardDescription>
+              Create new community tasks without a code deploy. Active tasks appear on the user airdrop page.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            <label className="grid gap-2 text-sm text-slate-300">
+              Title
+              <Input
+                value={taskForm.title}
+                onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))}
+                placeholder="Follow Tri-Proof on X"
+              />
+            </label>
+            <label className="grid gap-2 text-sm text-slate-300">
+              Description
+              <Textarea
+                value={taskForm.description}
+                onChange={(event) => setTaskForm((current) => ({ ...current, description: event.target.value }))}
+                placeholder="Explain exactly what users must do and what proof admins need."
+              />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="grid gap-2 text-sm text-slate-300">
+                Type
+                <select
+                  value={taskForm.type}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, type: event.target.value as TaskType }))}
+                  className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm text-white"
+                >
+                  <option value="X_FOLLOW">X follow</option>
+                  <option value="X_QUOTE">X quote</option>
+                  <option value="HUMANITY_GATE_FEEDBACK">Humanity feedback</option>
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm text-slate-300">
+                Points
+                <Input
+                  type="number"
+                  min={1}
+                  value={taskForm.points}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, points: Number(event.target.value) }))}
+                />
+              </label>
+              <label className="grid gap-2 text-sm text-slate-300">
+                Sort order
+                <Input
+                  type="number"
+                  value={taskForm.sortOrder}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, sortOrder: Number(event.target.value) }))}
+                />
+              </label>
+            </div>
+            <div className="flex flex-wrap gap-3 text-sm text-slate-300">
+              <label className="flex items-center gap-2 rounded-xl border border-border bg-background/45 px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={taskForm.proofRequired}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, proofRequired: event.target.checked }))}
+                />
+                Screenshot proof required
+              </label>
+              <label className="flex items-center gap-2 rounded-xl border border-border bg-background/45 px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={taskForm.active}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, active: event.target.checked }))}
+                />
+                Active
+              </label>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button type="button" onClick={saveTask} disabled={savingTask}>
+                {savingTask ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Save data-icon="inline-start" />}
+                {taskForm.id ? "Save task" : "Create task"}
+              </Button>
+              {taskForm.id && (
+                <Button type="button" variant="outline" className="text-white" onClick={() => setTaskForm(emptyTaskForm)}>
+                  Cancel edit
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="glass-panel premium-card animated-border">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-white">
+              <Gift className="text-primary" /> Live task catalog
+            </CardTitle>
+            <CardDescription>Existing airdrop tasks and proof rules.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {taskLoading ? (
+              <div className="h-40 animate-pulse rounded-xl border border-border bg-background/45" />
+            ) : (
+              tasks.map((task) => (
+                <div key={task.id} className="grid gap-3 rounded-xl border border-border bg-background/45 p-4 md:grid-cols-[1fr_auto]">
+                  <div>
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <p className="font-medium text-white">{task.title}</p>
+                      <Badge variant="outline" className={task.active ? "border-green-400/30 text-green-200" : "border-slate-400/30 text-slate-300"}>
+                        {task.active ? "Active" : "Paused"}
+                      </Badge>
+                      <Badge variant="secondary">{task.points} pts</Badge>
+                    </div>
+                    <p className="text-sm leading-6 text-slate-300">{task.description}</p>
+                    <p className="mt-2 font-mono text-xs text-slate-400">
+                      {task.type} / {task.proofRequired ? "proof required" : "proof optional"} / {task.submissionCount} submissions
+                    </p>
+                  </div>
+                  <div className="flex flex-row gap-2 md:flex-col">
+                    <Button type="button" variant="outline" className="text-white" onClick={() => editTask(task)}>
+                      <Pencil data-icon="inline-start" /> Edit
+                    </Button>
+                    <Button type="button" variant="outline" className="text-white" onClick={() => toggleTask(task)} disabled={savingTask}>
+                      {task.active ? "Pause" : "Activate"}
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </section>
 
       <section className="grid gap-4 md:grid-cols-4">
         {[

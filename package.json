@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "node scripts/vercel-migrate-deploy.mjs && prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "test": "node --import tsx --test lib/risk-engine/index.test.ts",

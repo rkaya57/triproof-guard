@@ -46,6 +46,12 @@ export const AIRDROP_TASK_DEFINITIONS: AirdropTaskDefinition[] = [
   },
 ]
 
+export const AIRDROP_TASK_TYPES: AirdropTaskType[] = [
+  "X_FOLLOW",
+  "X_QUOTE",
+  "HUMANITY_GATE_FEEDBACK",
+]
+
 type AirdropTaskClient = Pick<PrismaClient, "airdropTask">
 type AirdropTaskTransaction = Prisma.TransactionClient
 
@@ -95,5 +101,27 @@ export function isLikelyUrl(value: string) {
     return url.protocol === "https:" || url.protocol === "http:"
   } catch {
     return false
+  }
+}
+
+export function isAirdropSchemaMissing(error: unknown) {
+  if (typeof error !== "object" || error === null) return false
+  const code = "code" in error ? String((error as { code?: unknown }).code) : ""
+  const message = error instanceof Error ? error.message.toLowerCase() : ""
+  return (
+    code === "P2021" ||
+    code === "P2022" ||
+    message.includes("airdroptask") ||
+    message.includes("airdropprofile") ||
+    message.includes("airdropsubmission") ||
+    message.includes("does not exist")
+  )
+}
+
+export function airdropSchemaMissingResponse() {
+  return {
+    error:
+      "Airdrop database tables are not ready yet. Production migration is being applied; refresh shortly.",
+    code: "AIRDROP_SCHEMA_NOT_READY",
   }
 }
