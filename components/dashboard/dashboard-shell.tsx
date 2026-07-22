@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
   BarChart3,
+  ChevronDown,
   FileText,
   FilePlus2,
   Gift,
@@ -38,6 +39,32 @@ const adminNavItems = [
   { href: "/dashboard/admin/diagnostics", label: "Diagnostics", icon: HeartPulse },
 ]
 
+const routeTitles = [
+  { href: "/dashboard/admin/airdrop", title: "Airdrop Review", eyebrow: "Season 0 task moderation" },
+  { href: "/dashboard/admin/humanity/verifications", title: "Humanity Verifications", eyebrow: "Humanity Gate evidence" },
+  { href: "/dashboard/admin/humanity/demo", title: "Humanity Gate Demo", eyebrow: "Controlled liveness sandbox" },
+  { href: "/dashboard/admin/humanity", title: "Humanity Gate", eyebrow: "Human verification console" },
+  { href: "/dashboard/admin/diagnostics", title: "Diagnostics", eyebrow: "Production hardening checks" },
+  { href: "/dashboard/admin/analyses", title: "Analysis Admin", eyebrow: "Campaign operations" },
+  { href: "/dashboard/admin/blog", title: "Blog Admin", eyebrow: "Content operations" },
+  { href: "/dashboard/admin/bugs", title: "Issue Console", eyebrow: "Product feedback queue" },
+  { href: "/dashboard/admin", title: "Admin Center", eyebrow: "Operations command center" },
+  { href: "/dashboard/new-analysis", title: "New Analysis", eyebrow: "Upload and score wallet lists" },
+  { href: "/dashboard/demo", title: "Demo Report", eyebrow: "Sample campaign intelligence" },
+  { href: "/dashboard/airdrop", title: "Airdrop Tasks", eyebrow: "Community contribution season" },
+  { href: "/dashboard/reports", title: "Reports", eyebrow: "Saved exports and analysis history" },
+  { href: "/dashboard/settings", title: "Settings", eyebrow: "Workspace preferences" },
+  { href: "/dashboard/analysis", title: "Analysis Report", eyebrow: "Risk decision center" },
+  { href: "/dashboard", title: "Overview", eyebrow: "Web3 Campaign Wallet Risk Analysis" },
+]
+
+function getRouteTitle(pathname: string) {
+  return (
+    routeTitles.find((route) => pathname === route.href || (route.href !== "/dashboard" && pathname.startsWith(route.href))) ??
+    routeTitles[routeTitles.length - 1]
+  )
+}
+
 export function DashboardShell({
   children,
   isAdmin = false,
@@ -48,6 +75,7 @@ export function DashboardShell({
   const pathname = usePathname()
   const router = useRouter()
   const items = isAdmin ? [...navItems, ...adminNavItems] : navItems
+  const routeTitle = getRouteTitle(pathname)
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" })
@@ -77,7 +105,7 @@ export function DashboardShell({
               </span>
             </div>
           </Link>
-          <nav className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
+          <nav className="flex max-w-[calc(100vw-8rem)] gap-2 overflow-x-auto pb-1 lg:max-w-none lg:flex-col lg:overflow-visible lg:pb-0">
             {items.map((item) => {
               const active =
                 pathname === item.href ||
@@ -88,14 +116,15 @@ export function DashboardShell({
                   href={item.href}
                   className={cn(
                     buttonVariants({ variant: active ? "secondary" : "ghost" }),
-                    "hover-lift justify-start transition-all",
+                    "hover-lift min-w-[4.6rem] flex-col gap-1 px-2 py-2 text-[10px] leading-tight transition-all sm:min-w-0 sm:flex-row sm:justify-start sm:text-sm lg:w-full",
                     active && "nav-glow-active border-primary/30 bg-primary/10 text-primary",
                     item.href.startsWith("/dashboard/admin") &&
                       "border-yellow-400/20 text-yellow-100 hover:bg-yellow-400/10 hover:text-yellow-100"
                   )}
+                  title={item.label}
                 >
                   <item.icon data-icon="inline-start" />
-                  <span className="hidden sm:inline">{item.label}</span>
+                  <span className="max-w-[4.25rem] truncate sm:max-w-none">{item.label}</span>
                 </Link>
               )
             })}
@@ -120,9 +149,12 @@ export function DashboardShell({
         <header className="scan-accent border-b border-border bg-background/80 px-5 py-4 backdrop-blur-xl sm:px-8">
           <div className="flex flex-col gap-2 reveal-up">
             <span className="cyber-chip w-fit">
-              Web3 Campaign Wallet Risk Analysis
+              {routeTitle.eyebrow}
             </span>
-            <h1 className="text-gradient animate-gradient-text text-2xl font-semibold">Dashboard</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-gradient animate-gradient-text text-2xl font-semibold">{routeTitle.title}</h1>
+              <ChevronDown className="size-4 text-primary/60 lg:hidden" aria-hidden />
+            </div>
           </div>
         </header>
         <main className="px-5 py-6 sm:px-8">{children}</main>

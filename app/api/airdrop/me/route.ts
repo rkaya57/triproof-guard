@@ -17,7 +17,7 @@ export async function GET() {
   try {
     await ensureAirdropTasks(db)
 
-    const [profile, tasks] = await Promise.all([
+    const [profile, tasks, leaderboard] = await Promise.all([
       db.airdropProfile.findUnique({
         where: { userId: user.id },
         include: {
@@ -30,6 +30,18 @@ export async function GET() {
       db.airdropTask.findMany({
         where: { active: true },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      }),
+      db.airdropProfile.findMany({
+        where: { totalPoints: { gt: 0 } },
+        orderBy: [{ totalPoints: "desc" }, { updatedAt: "asc" }],
+        take: 10,
+        include: {
+          user: { select: { id: true, name: true } },
+          submissions: {
+            where: { status: "APPROVED" },
+            select: { id: true },
+          },
+        },
       }),
     ])
 
@@ -59,6 +71,14 @@ export async function GET() {
         rejectedCount: rejected.length,
         registered: Boolean(profile),
       },
+      leaderboard: leaderboard.map((entry, index) => ({
+        rank: index + 1,
+        name: entry.user.name,
+        xHandle: entry.xHandle,
+        totalPoints: entry.totalPoints,
+        approvedCount: entry.submissions.length,
+        isCurrentUser: entry.userId === user.id,
+      })),
       tasks: tasks.map((task) => {
         const submission = submissionsByTaskId.get(task.id)
         return {

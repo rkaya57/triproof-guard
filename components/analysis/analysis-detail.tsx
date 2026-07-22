@@ -457,6 +457,93 @@ function ReportReadyExperience({
   )
 }
 
+function DecisionCenterPanel({ analysis, exportPath }: { analysis: AnalysisDetailType; exportPath: string }) {
+  const decision = getDecisionIntelligence(analysis)
+  const provider = analysis.enrichment?.provider ?? analysis.wallets.find((wallet) => wallet.enrichmentProvider)?.enrichmentProvider ?? "not recorded"
+  const enrichedCount = analysis.enrichment?.enrichedCount ?? analysis.wallets.filter((wallet) => wallet.enrichmentStatus === "completed").length
+  const failedCount = analysis.enrichment?.failedCount ?? analysis.wallets.filter((wallet) => wallet.enrichmentStatus === "failed").length
+  const coverageRate = analysis.totalWallets ? Math.round((enrichedCount / analysis.totalWallets) * 100) : 0
+  const highestRisk = [...analysis.wallets].sort((left, right) => right.riskScore - left.riskScore).slice(0, 3)
+
+  return (
+    <Card className="glass-panel premium-card">
+      <CardHeader className="gap-4 lg:grid lg:grid-cols-[1fr_auto] lg:items-center">
+        <div>
+          <CardTitle className="flex items-center gap-2">
+            <ClipboardCheck className="text-primary" />
+            Decision Center
+          </CardTitle>
+          <CardDescription>
+            One operational view for final export, Gray Zone review and explainable risk evidence.
+          </CardDescription>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <a href={`${exportPath}?type=approved`} className={`${buttonVariants()} glow-primary`}>
+            <CheckCircle2 data-icon="inline-start" />
+            Export clean list
+          </a>
+          <Link href={`/dashboard/analysis/${analysis.id}/review`} className={buttonVariants({ variant: "outline" })}>
+            <Users data-icon="inline-start" />
+            Resolve Gray Zone
+          </Link>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg border border-green-400/25 bg-green-400/10 p-4">
+            <p className="text-xs uppercase tracking-wide text-green-200">Ready to distribute</p>
+            <p className="mt-1 text-3xl font-semibold text-green-100">{formatNumber(decision.cleanWallets.length)}</p>
+            <p className="mt-2 text-sm text-muted-foreground">{decision.cleanRate}% of wallets can move to the clean export.</p>
+          </div>
+          <div className="rounded-lg border border-amber-400/25 bg-amber-400/10 p-4">
+            <p className="text-xs uppercase tracking-wide text-amber-200">Reviewer workload</p>
+            <p className="mt-1 text-3xl font-semibold text-amber-100">{formatNumber(decision.reviewWallets.length)}</p>
+            <p className="mt-2 text-sm text-muted-foreground">Gray Zone wallets should be decided before payout.</p>
+          </div>
+          <div className="rounded-lg border border-primary/20 bg-background/45 p-4">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Provider coverage</p>
+            <p className="mt-1 text-2xl font-semibold text-primary">{coverageRate}%</p>
+            <p className="mt-2 text-sm text-muted-foreground">{formatNumber(enrichedCount)} enriched, {formatNumber(failedCount)} failed via {provider}.</p>
+          </div>
+          <div className="rounded-lg border border-red-400/25 bg-red-400/10 p-4">
+            <p className="text-xs uppercase tracking-wide text-red-200">Risk contained</p>
+            <p className="mt-1 text-2xl font-semibold text-red-100">{formatNumber(decision.rejectedWallets.length)}</p>
+            <p className="mt-2 text-sm text-muted-foreground">Excluded wallets stay traceable with reason codes.</p>
+          </div>
+        </div>
+        <div className="grid gap-3 lg:grid-cols-2">
+          <div className="rounded-lg border border-border bg-background/45 p-4">
+            <p className="mb-3 text-sm font-medium">Top reason codes</p>
+            <div className="grid gap-2">
+              {decision.topReasonCodes.length ? (
+                decision.topReasonCodes.map((reason) => (
+                  <div key={reason.code} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background/50 px-3 py-2 text-sm">
+                    <span className="font-mono text-xs text-primary">{reason.code}</span>
+                    <Badge variant="outline">{formatNumber(reason.count)}</Badge>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">No reason-code concentration found.</p>
+              )}
+            </div>
+          </div>
+          <div className="rounded-lg border border-border bg-background/45 p-4">
+            <p className="mb-3 text-sm font-medium">Highest risk wallets</p>
+            <div className="grid gap-2">
+              {highestRisk.map((wallet) => (
+                <div key={wallet.walletAddress} className="grid grid-cols-[1fr_auto] gap-3 rounded-lg border border-border bg-background/50 px-3 py-2 text-sm">
+                  <span className="truncate font-mono text-xs text-muted-foreground">{wallet.walletAddress}</span>
+                  <Badge variant="outline" className="border-red-400/30 text-red-200">{wallet.riskScore}</Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 function PolicySimulator({ analysis }: { analysis: AnalysisDetailType }) {
   const scenarios = (["conservative", "balanced", "strict"] as const).map((policy) =>
     getPolicyScenario(analysis.wallets, policy)
@@ -1237,6 +1324,7 @@ export function AnalysisDetail({
   return (
     <div className="flex flex-col gap-6">
       <ReportReadyExperience analysis={analysis} exportPath={exportPath} onShare={() => void shareReport()} />
+      <DecisionCenterPanel analysis={analysis} exportPath={exportPath} />
 
       <div className="sticky top-0 z-20 hidden rounded-lg border border-border bg-background/90 p-3 shadow-lg backdrop-blur md:flex md:items-center md:justify-between">
         <div className="flex flex-wrap items-center gap-3 text-sm">

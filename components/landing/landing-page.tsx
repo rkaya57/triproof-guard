@@ -54,6 +54,13 @@ const consoleStats = [
   ["42.8", "Avg risk", "Risk snapshot"],
 ]
 
+const trustSignals = [
+  [LockKeyhole, "No custody", "No seed phrase, no wallet approval, no token transfer."],
+  [Activity, "Evidence-based", "Scores come from on-chain history, clusters and campaign context."],
+  [FileCheck2, "Decision support", "Your team keeps final control over Gray Zone wallets."],
+  [ShieldCheck, "Export-ready", "Clean, Gray Zone and rejected lists stay explainable."],
+]
+
 const riskRows = [
   ["7xC...fxG", "96", "Critical", "Reject"],
   ["DNf...jwM", "72", "High", "Reject"],
@@ -84,6 +91,13 @@ const workflow = [
   { icon: Activity, title: "Enrich on-chain data", text: "Run real on-chain or hybrid analysis with provider evidence from supported chains." },
   { icon: Radar, title: "Detect clusters", text: "Surface suspicious groups, shared funding patterns and similar behavior." },
   { icon: FileDown, title: "Export decision lists", text: "Download approved, gray-zone and rejected/not-eligible wallet outputs." },
+]
+
+const scoringPrinciples = [
+  ["Wallet history", "Age, transaction count, balances, counterparties and protocol diversity."],
+  ["Funding links", "Shared funding sources, suspicious clusters and repeated wallet groups."],
+  ["Campaign behavior", "Campaign-only activity, low organic history and scripted patterns."],
+  ["Known entities", "Exchange, service, contract or protocol accounts are handled separately from normal users."],
 ]
 
 const features = [
@@ -122,7 +136,7 @@ export function LandingPage() {
           <div className="glow-orb bottom-[-10rem] left-1/3 size-96" style={{ background: "var(--guard-cyan)", opacity: 0.32, animationDelay: "5s" }} />
         </div>
 
-        <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
+        <header className="relative z-10 mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-5 py-5 sm:px-8">
           <Link href="/" className="group flex items-center gap-3">
             <span className="glow-primary flex size-11 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 transition-transform group-hover:scale-105">
               <Image src="/logo.svg" alt="Tri-Proof Guard" width={30} height={30} priority className="rounded-lg" />
@@ -145,7 +159,7 @@ export function LandingPage() {
           </div>
         </header>
 
-        <div className="relative z-10 mx-auto grid max-w-7xl gap-10 px-5 pb-16 pt-10 sm:px-8 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:pb-24 lg:pt-20">
+        <div className="relative z-10 mx-auto grid max-w-[1500px] gap-10 px-5 pb-16 pt-10 sm:px-8 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:pb-24 lg:pt-20">
           <div className="reveal-up flex flex-col gap-8">
             <div className="flex flex-col gap-5">
               <div className="flex flex-wrap items-center gap-3">
@@ -168,6 +182,15 @@ export function LandingPage() {
                 <div key={label} className="rounded-xl border border-primary/20 bg-background/45 px-4 py-3 backdrop-blur reveal-up" style={{ animationDelay: `${index * 0.08}s` }}>
                   <p className="text-gradient text-2xl font-semibold">{value}</p>
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+                </div>
+              ))}
+            </div>
+            <div className="grid max-w-3xl gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {trustSignals.map(([Icon, title, text]) => (
+                <div key={title as string} className="rounded-lg border border-border bg-background/35 p-3 backdrop-blur">
+                  <Icon className="mb-2 size-4 text-primary" />
+                  <p className="text-sm font-medium">{title as string}</p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{text as string}</p>
                 </div>
               ))}
             </div>
@@ -214,6 +237,31 @@ export function LandingPage() {
         ))}
       </section>
 
+      <section className="border-y border-border bg-muted/20">
+        <div className="mx-auto grid max-w-7xl gap-8 px-5 py-16 sm:px-8 xl:grid-cols-[0.85fr_1.15fr] xl:items-start">
+          <div>
+            <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Scoring trust</Badge>
+            <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">A clearer score, not a black-box verdict.</h2>
+            <p className="mt-4 leading-7 text-muted-foreground">
+              Mini audit results are framed as campaign risk decisions. Approved wallets look clean enough for export, Gray Zone wallets need a human call, and rejected wallets carry explainable risk evidence.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-2">
+              <Badge variant="outline" className="border-green-400/30 text-green-200">Approved</Badge>
+              <Badge variant="outline" className="border-amber-400/30 text-amber-200">Gray Zone</Badge>
+              <Badge variant="outline" className="border-red-400/30 text-red-200">Rejected / Not Eligible</Badge>
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {scoringPrinciples.map(([title, text]) => (
+              <div key={title} className="premium-card rounded-lg border border-border bg-background/60 p-5">
+                <p className="font-semibold text-white">{title}</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section id="workflow" className="border-y border-border bg-muted/20">
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
           <div className="mb-10 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -236,7 +284,7 @@ export function LandingPage() {
           <div>
             <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Guard engine</Badge>
             <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Built for campaign teams, not generic analytics dashboards.</h2>
-            <p className="mt-4 leading-7 text-muted-foreground">Tri-Proof Guard focuses on one job: help Web3 projects review wallet lists before rewards go out. It returns signals, clusters and suggested actions without making impossible “100% detection” claims.</p>
+            <p className="mt-4 leading-7 text-muted-foreground">Tri-Proof Guard focuses on one job: help Web3 projects review wallet lists before rewards go out. It returns signals, clusters and suggested actions without making impossible &quot;100% detection&quot; claims.</p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link href="/docs" className={`${buttonVariants({ variant: "outline" })} hover-lift`}><BookOpen data-icon="inline-start" /> How it works</Link>
               <Link href="/contact" className={`${buttonVariants({ variant: "outline" })} hover-lift`}><Mail data-icon="inline-start" /> Contact us</Link>
@@ -287,7 +335,7 @@ export function LandingPage() {
 
       <footer className="border-t border-border bg-muted/20">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-8 text-sm text-muted-foreground sm:px-8 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-2"><ShieldCheck className="text-primary" /><span>Tri-Proof Guard — Web3 wallet risk analysis for campaign teams.</span></div>
+          <div className="flex items-center gap-2"><ShieldCheck className="text-primary" /><span>Tri-Proof Guard - Web3 wallet risk analysis for campaign teams.</span></div>
           <div className="flex flex-wrap gap-4"><Link href="/docs" className="hover:text-primary">Docs</Link><Link href="/blog" className="hover:text-primary">Blog</Link><Link href="/contact" className="hover:text-primary">Contact</Link><Link href="/pricing" className="hover:text-primary">Pricing</Link><Link href="/dashboard/demo" className="hover:text-primary">Demo</Link><Link href="/login" className="hover:text-primary">Login</Link></div>
         </div>
       </footer>

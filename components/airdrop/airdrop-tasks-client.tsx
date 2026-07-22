@@ -84,6 +84,14 @@ type AirdropResponse = {
     rejectedCount: number
     registered: boolean
   }
+  leaderboard: Array<{
+    rank: number
+    name: string
+    xHandle: string | null
+    totalPoints: number
+    approvedCount: number
+    isCurrentUser: boolean
+  }>
   tasks: AirdropTask[]
 }
 
@@ -292,6 +300,7 @@ export function AirdropTasksClient() {
 
   const profile = data?.profile
   const tasks = data?.tasks ?? []
+  const leaderboard = data?.leaderboard ?? []
 
   if (!data && error) {
     return (
@@ -417,6 +426,17 @@ export function AirdropTasksClient() {
         </Card>
       )}
 
+      {!profile && (
+        <Card className="glass-panel border-amber-400/25 bg-amber-400/10">
+          <CardContent className="flex flex-col gap-3 p-4 text-sm text-amber-100 sm:flex-row sm:items-center">
+            <LockKeyhole className="size-5 shrink-0 text-amber-200" />
+            <p className="leading-6">
+              Register your X handle and reward wallet first. Task proof buttons unlock after registration so every submission can be tied to one account.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       <section className="grid gap-4 lg:grid-cols-3">
         {tasks.map((task) => {
           const Icon = taskIcon(task.type)
@@ -526,7 +546,7 @@ export function AirdropTasksClient() {
                       className="w-full"
                     >
                       {busyTask === task.slug ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Send data-icon="inline-start" />}
-                      Submit for admin approval
+                      {locked ? "Register to unlock" : "Submit for admin approval"}
                     </Button>
                   </form>
                 )}
@@ -542,7 +562,41 @@ export function AirdropTasksClient() {
         })}
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
+      <section className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+        <Card className="glass-panel premium-card animated-border">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-white">
+              <Trophy className="text-amber-300" /> Season leaderboard
+            </CardTitle>
+            <CardDescription>Top approved contributors. Pending proofs do not count until admin approval.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {leaderboard.length ? (
+              leaderboard.map((entry) => (
+                <div
+                  key={`${entry.rank}-${entry.name}`}
+                  className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl border p-3 ${
+                    entry.isCurrentUser ? "border-primary/40 bg-primary/10" : "border-border bg-background/45"
+                  }`}
+                >
+                  <span className="flex size-9 items-center justify-center rounded-lg border border-amber-400/25 bg-amber-400/10 font-mono text-sm text-amber-200">
+                    #{entry.rank}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-white">{entry.xHandle ?? entry.name}</p>
+                    <p className="text-xs text-slate-400">{entry.approvedCount} approved tasks</p>
+                  </div>
+                  <span className="font-mono text-primary">{entry.totalPoints} pts</span>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-xl border border-dashed border-border bg-background/35 p-6 text-sm text-slate-400">
+                No approved submissions yet. The first approved proofs will start the leaderboard.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         <Card className="glass-panel premium-card animated-border">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-white">
