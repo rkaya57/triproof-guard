@@ -53,20 +53,20 @@ function riskLabel(level) {
 }
 
 function friendlySummary(result) {
-  if (!result) return "ScamGuard is warming up the scanner."
-  if (result.riskLevel === "CRITICAL") return "Stop here. This page has serious drain-style signals."
-  if (result.riskLevel === "HIGH_RISK") return "Careful. ScamGuard found strong reasons to slow down."
-  if (result.riskLevel === "CAUTION") return "Worth a closer look. Verify the source before you click or sign."
-  return "Looks calm from here. Still compare the wallet popup with what you expected."
+  if (!result) return "Booting the signal layer and checking this page."
+  if (result.riskLevel === "CRITICAL") return "High-alert pattern detected. Do not sign until this is verified."
+  if (result.riskLevel === "HIGH_RISK") return "Strong risk signals found. Slow down and verify the route."
+  if (result.riskLevel === "CAUTION") return "A few signals need review before you click or sign."
+  return "No major threat pattern surfaced. Keep matching the wallet prompt to your intent."
 }
 
 function scoreWhisper(score, level) {
-  if (level === "CRITICAL") return "Hard stop energy. Do not sign until this is verified elsewhere."
-  if (level === "HIGH_RISK") return "The guard is leaning forward. Treat this like a risky interaction."
-  if (level === "CAUTION") return "Not a panic button, but definitely a double-check moment."
-  if (score >= 90) return "Clean first pass. Nice, but keep the wallet popup honest."
-  if (score >= 75) return "Mostly steady. One more look before signing is still smart."
-  return "Mixed signals. Slow the flow and verify the source."
+  if (level === "CRITICAL") return "Critical route. Close the flow and verify from an official source."
+  if (level === "HIGH_RISK") return "Risk is elevated. Treat the next wallet popup as hostile until proven otherwise."
+  if (level === "CAUTION") return "Review mode. The site may be fine, but the source needs confirmation."
+  if (score >= 90) return "Clean first pass. The page looks steady from this scan."
+  if (score >= 75) return "Mostly clear. One final wallet-popup check keeps you safer."
+  return "Mixed signal read. Confirm the source before moving forward."
 }
 
 function hostFromUrl(value) {
@@ -81,7 +81,7 @@ function setBusy(message) {
   elements.riskBadge.className = "badge ready"
   elements.riskBadge.textContent = "Scanning"
   elements.summaryLabel.textContent = message
-  elements.scoreWhisper.textContent = "Scanning links, intent, and known risk patterns."
+  elements.scoreWhisper.textContent = "Reading links, intent, reputation, and known risk patterns."
   elements.scoreMeter.className = "score-meter"
   elements.scoreMeter.style.setProperty("--score-angle", "0deg")
 }
