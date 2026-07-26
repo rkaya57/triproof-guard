@@ -124,7 +124,7 @@ const officialDomains = new Set([
   "backpack.app",
   "zerg.app",
   "nestusd.com",
-  "app.nestusd.com",
+  "allox.ai",
 ])
 
 const verifiedProjectDomains = new Set([
@@ -244,6 +244,11 @@ function normalizeChain(chain?: ScamGuardChain): ScamGuardChain {
   return "unknown"
 }
 
+function domainMatchesSet(domain: string | undefined, domains: Set<string>) {
+  if (!domain) return false
+  return [...domains].some((knownDomain) => domain === knownDomain || domain.endsWith(`.${knownDomain}`))
+}
+
 function inferChain(value: string, chain?: ScamGuardChain): ScamGuardChain {
   const explicit = normalizeChain(chain)
   if (explicit !== "unknown") return explicit
@@ -285,10 +290,10 @@ function defaultReputation(): NonNullable<ScamGuardScanResult["metadata"]["reput
 
 function domainReputation(domain?: string): NonNullable<ScamGuardScanResult["metadata"]["reputation"]> {
   if (!domain) return defaultReputation()
-  if (knownScamDomains.has(domain)) {
+  if (domainMatchesSet(domain, knownScamDomains)) {
     return { verdict: "known_bad", source: "seed_intelligence", notes: [`${domain} is in the known suspicious domain seed list.`] }
   }
-  if (verifiedProjectDomains.has(domain)) {
+  if (domainMatchesSet(domain, verifiedProjectDomains)) {
     return { verdict: "trusted", source: "verified_project_registry", notes: [`${domain} is in the local verified project registry.`] }
   }
   return defaultReputation()
@@ -437,6 +442,9 @@ function scanUrl(value: string, chain: ScamGuardChain) {
   const hasClaimLanguage = highRiskWords.some((word) => text.includes(word))
   const hasCampaignSurface = campaignSurfaceWords.some((word) => path.includes(word))
   const isAppSurface = Boolean(domain?.startsWith("app.") || domain?.startsWith("dapp."))
+  const isKnownScamDomain = domainMatchesSet(domain ?? undefined, knownScamDomains)
+  const isOfficialDomain = domainMatchesSet(domain ?? undefined, officialDomains)
+  const isVerifiedProjectDomain = domainMatchesSet(domain ?? undefined, verifiedProjectDomains)
 
   if (!domain) {
     signals.push({
@@ -446,7 +454,7 @@ function scanUrl(value: string, chain: ScamGuardChain) {
       detail: "A malformed URL can hide the real destination or be copied from a suspicious prompt.",
     })
   }
-  if (domain && knownScamDomains.has(domain)) {
+  if (domain && isKnownScamDomain) {
     signals.push({
       code: "KNOWN_SCAM_DOMAIN",
       severity: "critical",
@@ -454,7 +462,7 @@ function scanUrl(value: string, chain: ScamGuardChain) {
       detail: `${domain} is in ScamGuard's seed threat intelligence list.`,
     })
   }
-  if (domain && verifiedProjectDomains.has(domain)) {
+  if (domain && isVerifiedProjectDomain) {
     signals.push({
       code: "VERIFIED_PROJECT_DOMAIN",
       severity: "info",
@@ -470,7 +478,7 @@ function scanUrl(value: string, chain: ScamGuardChain) {
       detail: "Shorteners and redirects hide the final destination from the signer.",
     })
   }
-  if (brand && domain && !officialDomains.has(domain)) {
+  if (brand && domain && !isOfficialDomain) {
     signals.push({
       code: "BRAND_IMPERSONATION",
       severity: "high",
@@ -478,7 +486,7 @@ function scanUrl(value: string, chain: ScamGuardChain) {
       detail: `${brand} is mentioned, but the domain is ${domain}.`,
     })
   }
-  if (domain && suspiciousTlds.has(tld) && hasClaimLanguage) {
+  if (domain && !isVerifiedProjectDomain && suspiciousTlds.has(tld) && hasClaimLanguage) {
     signals.push({
       code: "SUSPICIOUS_TLD_CLAIM",
       severity: "medium",
@@ -486,7 +494,7 @@ function scanUrl(value: string, chain: ScamGuardChain) {
       detail: `The .${tld} domain appears with claim or reward language. This combination is common in throwaway scam campaigns.`,
     })
   }
-  if (domain && /phant[o0]m|s[o0]lflare|jup[i1]ter|mag[i1]ceden/.test(domain) && !officialDomains.has(domain)) {
+  if (domain && /phant[o0]m|s[o0]lflare|jup[i1]ter|mag[i1]ceden/.test(domain) && !isOfficialDomain) {
     signals.push({
       code: "TYPOSQUATTING_PATTERN",
       severity: "high",
@@ -494,7 +502,14 @@ function scanUrl(value: string, chain: ScamGuardChain) {
       detail: `${domain} resembles a known Solana brand but is not an official domain.`,
     })
   }
-  if (hasClaimLanguage) {
+  if (hasClaimLanguage && isVerifiedProjectDomain) {
+    signals.push({
+      code: "VERIFIED_REWARD_SURFACE",
+      severity: "info",
+      title: "Verified reward surface",
+      detail: `${domain} uses reward, points, claim, or campaign language on a verified project domain. Still confirm the wallet prompt before signing.`,
+    })
+  } else if (hasClaimLanguage) {
     signals.push({
       code: "CLAIM_LANGUAGE",
       severity: "medium",
@@ -502,7 +517,7 @@ function scanUrl(value: string, chain: ScamGuardChain) {
       detail: "Scam campaigns often use urgent claim, mint, presale, whitelist, or reward language.",
     })
   }
-  if (domain && hasClaimLanguage && !officialDomains.has(domain)) {
+  if (domain && hasClaimLanguage && !isOfficialDomain && !isVerifiedProjectDomain) {
     signals.push({
       code: "UNVERIFIED_CLAIM_DOMAIN",
       severity: "medium",
@@ -510,7 +525,7 @@ function scanUrl(value: string, chain: ScamGuardChain) {
       detail: `${domain} is not in the trusted Solana domain list. Verify it from the project's official channels before opening or signing.`,
     })
   }
-  if (domain && !officialDomains.has(domain) && (hasCampaignSurface || isAppSurface)) {
+  if (domain && !isOfficialDomain && !isVerifiedProjectDomain && (hasCampaignSurface || isAppSurface)) {
     signals.push({
       code: "UNVERIFIED_WEB3_APP_SURFACE",
       severity: "medium",

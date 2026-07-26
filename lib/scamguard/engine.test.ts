@@ -28,6 +28,22 @@ test("ScamGuard reduces false positives for verified domains", async () => {
   assert.ok(result.signals.some((signal) => signal.code === "VERIFIED_PROJECT_DOMAIN"))
 })
 
+test("ScamGuard treats verified reward subdomains as safe context", async () => {
+  const result = await scanScamGuard({
+    type: "url",
+    value: "https://app.allox.ai/rewards",
+    chain: "evm",
+  })
+
+  assert.equal(result.riskLevel, "SAFE")
+  assert.equal(result.metadata.reputation?.verdict, "trusted")
+  assert.ok(result.signals.some((signal) => signal.code === "VERIFIED_PROJECT_DOMAIN"))
+  assert.ok(result.signals.some((signal) => signal.code === "VERIFIED_REWARD_SURFACE"))
+  assert.ok(!result.signals.some((signal) => signal.code === "CLAIM_LANGUAGE"))
+  assert.ok(!result.signals.some((signal) => signal.code === "UNVERIFIED_CLAIM_DOMAIN"))
+  assert.ok(!result.signals.some((signal) => signal.code === "UNVERIFIED_WEB3_APP_SURFACE"))
+})
+
 test("ScamGuard decodes EVM approval style payloads", async () => {
   const result = await scanScamGuard({
     type: "transaction",
