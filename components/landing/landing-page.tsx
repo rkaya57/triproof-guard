@@ -9,6 +9,7 @@ import {
   FileCheck2,
   FileDown,
   GitBranch,
+  Globe2,
   Layers3,
   LockKeyhole,
   Mail,
@@ -34,6 +35,7 @@ import {
 const navLinks = [
   ["Workflow", "#workflow"],
   ["Features", "#features"],
+  ["ScamGuard", "/scamguard"],
   ["Docs", "/docs"],
   ["Blog", "/blog"],
   ["Pricing", "/pricing"],
@@ -44,7 +46,7 @@ const navLinks = [
 const heroStats = [
   ["100", "free wallet trial"],
   ["Solana", "analysis + checkout"],
-  ["USDC", "simple revenue model"],
+  ["ScamGuard", "pre-sign security"],
 ]
 
 const consoleStats = [
@@ -76,12 +78,18 @@ const painPoints = [
     title: "Teams need defensible reward decisions",
     text: "Projects need clean lists, gray-zone queues and clear explanations before they send rewards.",
   },
+  {
+    icon: ShieldAlert,
+    title: "Users sign risky Solana transactions",
+    text: "Airdrop, mint and claim links can hide delegate approvals, authority changes and drain-style asset movement.",
+  },
 ]
 
 const workflow = [
   { icon: Upload, title: "Upload wallet CSV", text: "Import campaign participants from airdrops, quests, testnets or allowlists." },
   { icon: Activity, title: "Enrich on-chain data", text: "Run real on-chain or hybrid analysis with provider evidence from supported chains." },
   { icon: Radar, title: "Detect clusters", text: "Surface suspicious groups, shared funding patterns and similar behavior." },
+  { icon: ShieldAlert, title: "Scan scam risk", text: "Check suspicious Solana URLs, token mints and transaction intent before users sign." },
   { icon: FileDown, title: "Export decision lists", text: "Download approved, gray-zone and rejected/not-eligible wallet outputs." },
 ]
 
@@ -96,12 +104,15 @@ const features = [
   "CSV and PDF reporting",
   "Policy presets",
   "Solana USDC checkout",
+  "ScamGuard Solana pre-sign scanner",
+  "Suspicious URL and token mint checks",
 ]
 
 const useCases = [
   ["Airdrops", "Clean reward lists before token or USDC distribution."],
   ["Testnets", "Filter low-quality participants before points or whitelist allocation."],
   ["Galxe / Zealy quests", "Review wallet lists before community reward campaigns."],
+  ["Scam prevention", "Scan risky Solana claim links, token mints and transaction intent before users sign."],
 ]
 
 const plans = [
@@ -272,7 +283,7 @@ export function LandingPage() {
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
           <div className="mb-8 flex flex-col gap-3"><Badge variant="secondary" className="w-fit gap-2 border-primary/30 text-primary"><GitBranch className="size-3.5" />Roadmap</Badge><h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Built in layers, without forcing a native token.</h2></div>
           <div className="grid gap-4 md:grid-cols-3">
-            {[["Guard MVP", "On-chain wallet enrichment, risk score, cluster review and PDF/CSV exports."], ["Guard Pro", "Saved decisions, team review workflow, API access and repeat campaign monitoring."], ["Tri-Proof Human", "Future adaptive challenge layer and wallet-bound human signal."]].map(([phase, detail], index) => (<div key={phase} className="glass-panel premium-card hover-lift rounded-lg p-5"><span className="cyber-chip mb-3">Phase {index + 1}</span><p className="mt-1 font-semibold">{phase}</p><p className="mt-3 text-sm leading-6 text-muted-foreground">{detail}</p></div>))}
+            {[["Guard MVP", "On-chain wallet enrichment, risk score, cluster review and PDF/CSV exports."], ["ScamGuard Solana", "Suspicious URL, token mint, wallet and transaction intent scanner for pre-sign protection."], ["Guard Pro", "Saved decisions, team review workflow, API access and repeat campaign monitoring."]].map(([phase, detail], index) => (<div key={phase} className="glass-panel premium-card hover-lift rounded-lg p-5"><span className="cyber-chip mb-3">Phase {index + 1}</span><p className="mt-1 font-semibold">{phase}</p><p className="mt-3 text-sm leading-6 text-muted-foreground">{detail}</p></div>))}
           </div>
         </div>
       </section>
@@ -280,7 +291,7 @@ export function LandingPage() {
       <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
         <div className="glass-panel scan-accent premium-card animated-border relative flex flex-col items-start justify-between gap-6 overflow-hidden rounded-2xl p-8 sm:p-10 md:flex-row md:items-center">
           <div className="relative z-10"><div className="mb-3 flex items-center gap-2 text-primary"><Sparkles className="size-5" /><span className="font-mono text-xs uppercase tracking-[0.2em]">Live MVP</span></div><h2 className="text-gradient text-2xl font-semibold sm:text-3xl">Test the first 100 wallets free today.</h2><p className="mt-2 max-w-xl text-muted-foreground">Upload a CSV, review risk signals and see whether Tri-Proof Guard fits your Web3 campaign workflow.</p></div>
-          <div className="relative z-10 flex flex-col gap-3 sm:flex-row"><Link href="/dashboard/new-analysis" className={`${buttonVariants()} glow-primary hover-lift`}>Start free analysis</Link><Link href="/docs" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>Read docs</Link><Link href="/contact" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>Contact</Link></div>
+          <div className="relative z-10 flex flex-col gap-3 sm:flex-row"><Link href="/dashboard/new-analysis" className={`${buttonVariants()} glow-primary hover-lift`}>Start free analysis</Link><Link href="/scamguard" className={`${buttonVariants({ variant: "outline" })} hover-lift`}><Globe2 data-icon="inline-start" /> Open ScamGuard</Link><Link href="/contact" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>Contact</Link></div>
         </div>
       </section>
 

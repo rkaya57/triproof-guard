@@ -12,6 +12,7 @@ import {
   LogOut,
   Settings,
   ShieldCheck,
+  ShieldAlert,
   Sparkles,
   Tags,
 } from "lucide-react"
@@ -22,6 +23,7 @@ import { cn } from "@/lib/utils"
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: Home },
   { href: "/dashboard/new-analysis", label: "New Analysis", icon: FilePlus2 },
+  { href: "/scamguard", label: "ScamGuard", icon: ShieldAlert },
   { href: "/dashboard/demo", label: "Demo Report", icon: BarChart3 },
   { href: "/dashboard/reports", label: "Reports", icon: FileText },
   { href: "/pricing", label: "Pricing", icon: Tags },
