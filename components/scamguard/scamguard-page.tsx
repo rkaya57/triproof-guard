@@ -7,13 +7,17 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Code2,
+  Download,
   ExternalLink,
   FileSearch,
   Fingerprint,
   Link2,
   Loader2,
+  PackageCheck,
   PlugZap,
+  Puzzle,
   Radar,
+  Settings2,
   ShieldAlert,
   ShieldCheck,
   Siren,
@@ -237,6 +241,9 @@ export function ScamGuardPage() {
           </Link>
           <div className="flex items-center gap-3">
             <Link href="/docs/api" className={`${buttonVariants({ variant: "outline" })} hover-lift hidden sm:inline-flex`}>API</Link>
+            <a href="/downloads/scamguard-chrome-extension.zip" className={`${buttonVariants({ variant: "outline" })} hover-lift hidden md:inline-flex`} download>
+              <Download data-icon="inline-start" /> Extension
+            </a>
             <Link href="/dashboard/new-analysis" className={`${buttonVariants()} glow-primary hover-lift`}>Sybil Analysis</Link>
           </div>
         </header>
@@ -373,6 +380,94 @@ export function ScamGuardPage() {
                   </div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
+        <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+          <div>
+            <Badge variant="secondary" className="mb-4 w-fit gap-2 border-primary/30 text-primary">
+              <Puzzle className="size-3.5" /> Chrome extension
+            </Badge>
+            <h2 className="text-gradient text-3xl font-semibold sm:text-5xl">
+              ScamGuard now follows the user into the browser.
+            </h2>
+            <p className="mt-4 leading-7 text-muted-foreground">
+              The extension connects the web app risk engine to real browsing sessions: it scans the current page, checks links on demand, and places a warning overlay before Solana signing calls continue.
+            </p>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <a href="/downloads/scamguard-chrome-extension.zip" className={`${buttonVariants()} glow-primary hover-lift`} download>
+                <Download data-icon="inline-start" /> Download Chrome extension
+              </a>
+              <Link href="/docs/api" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>
+                API docs <ArrowRight data-icon="inline-end" />
+              </Link>
+            </div>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-2">
+            {[
+              [Puzzle, "Popup scanner", "Open ScamGuard from the Chrome toolbar and scan the active Solana page URL with the same server-side engine."],
+              [FileSearch, "Page link scan", "Scan visible claim, mint, presale, or airdrop links on the page before users click into them."],
+              [ShieldAlert, "Pre-sign overlay", "Intercept Solana signing methods and require a review decision before suspicious transactions continue."],
+              [Settings2, "Local controls", "Configure API base URL, caution warnings, critical page blocking, and locally trusted domains."],
+            ].map(([Icon, title, text]) => (
+              <Card key={title as string} className="glass-panel premium-card hover-lift">
+                <CardHeader>
+                  <Icon className="text-primary" />
+                  <CardTitle>{title as string}</CardTitle>
+                  <CardDescription>{text as string}</CardDescription>
+                </CardHeader>
+              </Card>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-8 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+          <Card className="glass-panel premium-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><PackageCheck className="text-primary" /> Install flow</CardTitle>
+              <CardDescription>Until the Chrome Web Store listing is ready, install the unpacked extension from the downloadable package.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ol className="grid gap-3 text-sm text-muted-foreground">
+                {[
+                  "Download the ScamGuard Chrome extension ZIP.",
+                  "Unzip the package on your computer.",
+                  "Open chrome://extensions and enable Developer mode.",
+                  "Click Load unpacked and select the unzipped extension folder.",
+                  "Open any Solana dApp page; the ScamGuard banner and toolbar popup will appear.",
+                ].map((step, index) => (
+                  <li key={step} className="flex gap-3 rounded-lg border border-border bg-background/45 p-3">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-primary/30 bg-primary/10 font-mono text-xs text-primary">
+                      {index + 1}
+                    </span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
+            </CardContent>
+          </Card>
+
+          <Card className="glass-panel premium-card animated-border">
+            <CardHeader>
+              <CardTitle>What the extension sends</CardTitle>
+              <CardDescription>Designed for pre-sign safety without touching secret material.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              {[
+                "Current page URL and visible page links for risk checks.",
+                "Transaction text or serialized transaction payloads that the dApp asks the wallet to sign.",
+                "Connected wallet public key when available as optional scan context.",
+                "Never seed phrases, private keys, wallet passwords, or wallet extension internal pages.",
+              ].map((item) => (
+                <div key={item} className="flex items-start gap-3 rounded-lg border border-border bg-background/45 p-3">
+                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" />
+                  <span>{item}</span>
+                </div>
+              ))}
             </CardContent>
           </Card>
         </div>

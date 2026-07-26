@@ -6,6 +6,8 @@ import {
   BookOpen,
   CheckCircle2,
   CircleDollarSign,
+  Code2,
+  Download,
   FileCheck2,
   FileDown,
   GitBranch,
@@ -14,6 +16,7 @@ import {
   LockKeyhole,
   Mail,
   Network,
+  Puzzle,
   Radar,
   ShieldAlert,
   ShieldCheck,
@@ -45,9 +48,9 @@ const navLinks = [
 ]
 
 const heroStats = [
-  ["100", "free wallet trial"],
-  ["Solana", "analysis + checkout"],
-  ["ScamGuard", "pre-sign security"],
+  ["Sybil", "campaign wallet analysis"],
+  ["ScamGuard", "pre-sign Solana security"],
+  ["Extension", "browser protection layer"],
 ]
 
 const consoleStats = [
@@ -90,6 +93,37 @@ const painPoints = [
     icon: ShieldAlert,
     title: "Users sign risky Solana transactions",
     text: "Airdrop, mint and claim links can hide delegate approvals, authority changes and drain-style asset movement.",
+  },
+]
+
+const productLayers = [
+  {
+    icon: Radar,
+    title: "Sybil Analysis",
+    text: "Upload campaign wallets, detect low-quality participants, review suspicious clusters, and export clean reward lists.",
+    href: "/audit",
+    action: "Run mini audit",
+  },
+  {
+    icon: ShieldAlert,
+    title: "ScamGuard Scanner",
+    text: "Scan Solana URLs, wallets, token mints, and transaction intent before users touch risky claim or mint flows.",
+    href: "/scamguard",
+    action: "Open scanner",
+  },
+  {
+    icon: Puzzle,
+    title: "Chrome Extension",
+    text: "Add page banners, link scanning, and pre-sign wallet warnings directly inside the browser session.",
+    href: "/downloads/scamguard-chrome-extension.zip",
+    action: "Download extension",
+  },
+  {
+    icon: Code2,
+    title: "B2B Security API",
+    text: "Embed authenticated ScamGuard and Tri-Proof decisions into wallets, launchpads, quests, and internal review tools.",
+    href: "/docs/api",
+    action: "Read API docs",
   },
 ]
 
@@ -174,19 +208,22 @@ export function LandingPage() {
           <div className="reveal-up flex flex-col gap-8">
             <div className="flex flex-col gap-5">
               <div className="flex flex-wrap items-center gap-3">
-                <span className="cyber-chip">Web3 Anti-Sybil MVP</span>
-                <Badge variant="secondary" className="border-primary/30 text-primary">100 wallets free</Badge>
+                <span className="cyber-chip">Solana security suite</span>
+                <Badge variant="secondary" className="border-primary/30 text-primary">Sybil + ScamGuard + Extension</Badge>
               </div>
               <h1 className="text-gradient animate-gradient-text max-w-4xl text-4xl font-semibold leading-tight text-balance sm:text-6xl lg:text-7xl">
-                Stop Sybil farms before reward distribution.
+                Protect Solana campaigns before rewards or signatures go out.
               </h1>
               <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-                Tri-Proof Guard helps Web3 teams analyze campaign wallet lists, enrich addresses with real on-chain evidence, flag suspicious clusters and export cleaner reward decisions before airdrops, testnets and community payouts.
+                Tri-Proof Guard combines campaign Sybil analysis, ScamGuard pre-sign scanning, a Chrome protection layer, and API-ready risk decisions for Solana teams that need cleaner airdrops and safer user flows.
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Link href="/audit" className={`${buttonVariants({ size: "lg" })} glow-primary hover-lift`}>Get free mini audit <ArrowRight data-icon="inline-end" /></Link>
-              <Link href="/docs" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>Read docs <BookOpen data-icon="inline-end" /></Link>
+              <Link href="/scamguard" className={`${buttonVariants({ size: "lg" })} glow-primary hover-lift`}>Open ScamGuard <ArrowRight data-icon="inline-end" /></Link>
+              <a href="/downloads/scamguard-chrome-extension.zip" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`} download>
+                <Download data-icon="inline-start" /> Download extension
+              </a>
+              <Link href="/audit" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>Run mini audit</Link>
             </div>
             <div className="grid max-w-2xl gap-3 sm:grid-cols-3">
               {heroStats.map(([value, label], index) => (
@@ -237,6 +274,45 @@ export function LandingPage() {
               ))}
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
+        <div className="mb-8 max-w-3xl">
+          <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Product suite</Badge>
+          <h2 className="text-gradient text-3xl font-semibold sm:text-5xl">
+            One Solana security layer for campaigns, claims, and signing moments.
+          </h2>
+          <p className="mt-4 leading-7 text-muted-foreground">
+            The product is built around the points where Web3 teams lose value: fake campaign wallets, unsafe claim links, risky token mints, and wallet popups users do not fully understand.
+          </p>
+        </div>
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+          {productLayers.map((layer) => {
+            const Icon = layer.icon
+            return (
+              <Card key={layer.title} className="glass-panel premium-card hover-lift">
+                <CardHeader>
+                  <span className="glow-primary mb-2 flex size-11 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary">
+                    <Icon />
+                  </span>
+                  <CardTitle>{layer.title}</CardTitle>
+                  <CardDescription>{layer.text}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {layer.href.startsWith("/downloads/") ? (
+                    <a href={layer.href} className={`${buttonVariants({ variant: "outline" })} hover-lift w-full`} download>
+                      <Download data-icon="inline-start" /> {layer.action}
+                    </a>
+                  ) : (
+                    <Link href={layer.href} className={`${buttonVariants({ variant: "outline" })} hover-lift w-full`}>
+                      {layer.action} <ArrowRight data-icon="inline-end" />
+                    </Link>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
       </section>
 
