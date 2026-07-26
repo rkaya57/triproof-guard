@@ -67,6 +67,22 @@ export type ScamGuardScanResult = {
       source: string
       notes: string[]
     }
+    domainIntelligence?: {
+      host?: string
+      root?: string
+      tld?: string
+      sourceUrl?: string
+      features: string[]
+    }
+    contractIntelligence?: {
+      target?: string
+      checked: boolean
+      isContract?: boolean
+      verified?: boolean
+      proxy?: boolean
+      source: "rpc" | "etherscan" | "skipped"
+      notes: string[]
+    }
     feedback?: {
       enabled: boolean
       endpoint: string
@@ -176,6 +192,8 @@ const knownScamDomains = new Set([
 ])
 
 const suspiciousTlds = new Set(["zip", "mov", "cam", "click", "top", "xyz"])
+const sensitiveQueryKeys = new Set(["redirect", "return", "returnurl", "next", "target", "url", "continue"])
+const walletProtocolPattern = /(?:phantom|solflare|walletconnect|metamask|coinbase|backpack):\/\//i
 
 const knownBadWallets = new Set([
   "9xQeWvG816bUx9EPfFNtN5B2kWfdrain11111111111111111111".toLowerCase(),
@@ -244,6 +262,65 @@ async function solanaRpc<T>(method: string, params: unknown[]): Promise<T> {
   const payload = (await response.json()) as RpcResponse<T>
   if (!response.ok || payload.error) throw new Error(payload.error?.message ?? `${method} failed`)
   return payload.result as T
+}
+
+function getEvmRpcUrl() {
+  const explicit =
+    process.env.EVM_RPC_URL?.trim() ||
+    process.env.ETH_RPC_URL?.trim() ||
+    process.env.ETHEREUM_RPC_URL?.trim()
+  if (explicit) return explicit
+  const alchemy = process.env.ALCHEMY_API_KEY?.trim()
+  if (alchemy) return `https://eth-mainnet.g.alchemy.com/v2/${alchemy}`
+  return null
+}
+
+async function evmRpc<T>(method: string, params: unknown[]): Promise<T> {
+  const rpcUrl = getEvmRpcUrl()
+  if (!rpcUrl) throw new Error("EVM_RPC_URL, ETH_RPC_URL, ETHEREUM_RPC_URL, or ALCHEMY_API_KEY is not configured")
+
+  const response = await fetch(rpcUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: crypto.randomUUID(),
+      method,
+      params,
+    }),
+    cache: "no-store",
+  })
+  const payload = (await response.json()) as RpcResponse<T>
+  if (!response.ok || payload.error) throw new Error(payload.error?.message ?? `${method} failed`)
+  return payload.result as T
+}
+
+async function evmContractIntelligence(target?: string): Promise<NonNullable<ScamGuardScanResult["metadata"]["contractIntelligence"]>> {
+  const normalized = normalizeEvmAddress(target)
+  if (!normalized) {
+    return { checked: false, source: "skipped", notes: ["No EVM counterparty was available for contract intelligence."] }
+  }
+  if (!getEvmRpcUrl()) {
+    return { target: normalized, checked: false, source: "skipped", notes: ["EVM RPC is not configured, so live contract-code checks were skipped."] }
+  }
+  try {
+    const code = await evmRpc<string>("eth_getCode", [normalized, "latest"])
+    const isContract = Boolean(code && code !== "0x")
+    return {
+      target: normalized,
+      checked: true,
+      isContract,
+      source: "rpc",
+      notes: [isContract ? "EVM RPC returned bytecode for this counterparty." : "EVM RPC returned no bytecode; this counterparty appears to be an EOA."],
+    }
+  } catch (error) {
+    return {
+      target: normalized,
+      checked: false,
+      source: "rpc",
+      notes: [error instanceof Error ? error.message : "EVM contract-code check failed."],
+    }
+  }
 }
 
 function normalizeValue(value: string) {
@@ -454,6 +531,46 @@ function parsedUrl(value: string) {
   }
 }
 
+function rootDomain(domain?: string) {
+  if (!domain) return undefined
+  const parts = domain.split(".").filter(Boolean)
+  if (parts.length <= 2) return domain
+  return parts.slice(-2).join(".")
+}
+
+function hasSensitiveRedirect(url: URL | null) {
+  if (!url) return false
+  for (const [key, value] of url.searchParams.entries()) {
+    if (!sensitiveQueryKeys.has(key.toLowerCase())) continue
+    if (/^https?:\/\//i.test(value) || walletProtocolPattern.test(value)) return true
+  }
+  return false
+}
+
+function hasEncodedPayload(value: string) {
+  return /%[0-9a-f]{2}/i.test(value) || /(?:[A-Za-z0-9+/]{32,}={0,2})/.test(value)
+}
+
+function domainIntelligenceFor(value: string) {
+  const url = parsedUrl(value)
+  const host = hostFromUrl(value) ?? undefined
+  const features: string[] = []
+  if (url?.username || url?.password || /^https?:\/\/[^/\s]+@/i.test(value)) features.push("url_credentials")
+  if (host?.startsWith("xn--") || host?.includes(".xn--") || /(^|[./@])xn--/i.test(value)) features.push("punycode_domain")
+  if (host && host.split(".").length >= 4) features.push("deep_subdomain")
+  if (url && hasSensitiveRedirect(url)) features.push("sensitive_redirect")
+  if (!url && /[?&](?:redirect|return|returnurl|next|target|url|continue)=/i.test(value)) features.push("sensitive_redirect")
+  if (hasEncodedPayload(url?.pathname ?? value)) features.push("encoded_payload")
+  if (url && walletProtocolPattern.test(`${url.protocol}//${url.host}${url.pathname}${url.search}`)) features.push("wallet_deep_link")
+  return {
+    host,
+    root: rootDomain(host),
+    tld: host?.split(".").at(-1),
+    sourceUrl: value,
+    features,
+  }
+}
+
 function brandMentioned(text: string) {
   return ["phantom", "solflare", "jupiter", "magiceden", "tensor", "backpack"].find((brand) =>
     text.includes(brand)
@@ -464,6 +581,7 @@ function scanUrl(value: string, chain: ScamGuardChain) {
   const text = value.toLowerCase()
   const url = parsedUrl(value)
   const domain = hostFromUrl(value)
+  const domainIntel = domainIntelligenceFor(value)
   const path = url?.pathname.toLowerCase() ?? ""
   const tld = domain?.split(".").at(-1) ?? ""
   const reputation = domainReputation(domain ?? undefined)
@@ -482,6 +600,46 @@ function scanUrl(value: string, chain: ScamGuardChain) {
       severity: "medium",
       title: "URL is malformed",
       detail: "A malformed URL can hide the real destination or be copied from a suspicious prompt.",
+    })
+  }
+  if (domainIntel.features.includes("url_credentials")) {
+    signals.push({
+      code: "URL_CREDENTIALS_OBFUSCATION",
+      severity: "high",
+      title: "URL hides destination with credentials",
+      detail: "The URL contains username or password syntax before the host. Phishing links use this to make the visible text look like a trusted domain.",
+    })
+  }
+  if (domainIntel.features.includes("punycode_domain") && !isVerifiedProjectDomain) {
+    signals.push({
+      code: "PUNYCODE_DOMAIN",
+      severity: "high",
+      title: "Punycode domain detected",
+      detail: `${domain ?? "The URL"} uses punycode. This can be legitimate, but it is also common in homograph phishing.`,
+    })
+  }
+  if (domainIntel.features.includes("sensitive_redirect") && !isVerifiedProjectDomain) {
+    signals.push({
+      code: "SENSITIVE_REDIRECT_PARAMETER",
+      severity: "medium",
+      title: "Redirect parameter in Web3 link",
+      detail: "This URL carries a redirect-style parameter that can send users to another site or wallet deep link after the first click.",
+    })
+  }
+  if (domainIntel.features.includes("encoded_payload") && hasClaimLanguage && !isVerifiedProjectDomain) {
+    signals.push({
+      code: "ENCODED_CLAIM_PAYLOAD",
+      severity: "medium",
+      title: "Encoded payload in claim link",
+      detail: "The path contains encoded or base64-like data near claim/reward language. Scam kits often hide routing or signer state this way.",
+    })
+  }
+  if (domainIntel.features.includes("deep_subdomain") && hasClaimLanguage && !isVerifiedProjectDomain) {
+    signals.push({
+      code: "DEEP_SUBDOMAIN_REWARD_LINK",
+      severity: "low",
+      title: "Deep reward subdomain",
+      detail: `${domain} uses several subdomain levels with reward or claim language. Verify the exact host from official channels.`,
     })
   }
   if (domain && isKnownScamDomain) {
@@ -584,6 +742,7 @@ function scanUrl(value: string, chain: ScamGuardChain) {
     chain,
     rpcStatus: "not_applicable",
     domain: domain ?? undefined,
+    domainIntelligence: domainIntel,
     reputation,
   })
 }
@@ -735,10 +894,27 @@ async function scanToken(value: string, chain: ScamGuardChain) {
         detail: "Proxy, upgrade, pause, blacklist, mint, or freeze wording can indicate centralized token control risk.",
       })
     }
+    const contractIntelligence = await evmContractIntelligence(mint)
+    if (contractIntelligence.checked && contractIntelligence.isContract === false) {
+      signals.push({
+        code: "EVM_TOKEN_NOT_CONTRACT",
+        severity: "high",
+        title: "EVM token is not a contract",
+        detail: `${contractIntelligence.target} has no bytecode through EVM RPC. Token contract scans should point to deployed contracts, not EOAs.`,
+      })
+    } else if (contractIntelligence.checked && contractIntelligence.isContract) {
+      signals.push({
+        code: "EVM_CONTRACT_CODE_FOUND",
+        severity: "info",
+        title: "Contract bytecode found",
+        detail: "EVM RPC found deployed bytecode for this token or contract target.",
+      })
+    }
     return createResult("token", signals, {
       chain,
-      rpcStatus: "not_applicable",
+      rpcStatus: contractIntelligence.checked ? "checked" : getEvmRpcUrl() ? "failed" : "skipped",
       ownerProgram: evmAddressRegex.test(mint) ? "evm_contract" : null,
+      contractIntelligence,
       reputation: walletReputation(mint),
     })
   }
@@ -1001,14 +1177,20 @@ function decodeIntent(value: string, chain: ScamGuardChain): NonNullable<ScamGua
   return { method, category: "unknown", warnings }
 }
 
-async function scanTransaction(value: string, walletAddress: string | undefined, chain: ScamGuardChain) {
+async function scanTransaction(value: string, walletAddress: string | undefined, chain: ScamGuardChain, sourceUrl?: string) {
   const text = value.toLowerCase()
   const signals: ScamGuardSignal[] = []
   const decodedIntent = decodeIntent(value, chain)
   const counterpartyAddress = chain === "evm" ? normalizeEvmAddress(decodedIntent.spender ?? decodedIntent.recipient) : undefined
   const counterpartyReputation = chain === "evm" ? evmCounterpartyReputation(counterpartyAddress) : defaultReputation()
+  const contractIntelligence = chain === "evm" ? await evmContractIntelligence(counterpartyAddress) : undefined
+  const sourceDomain = sourceUrl ? (hostFromUrl(sourceUrl) ?? undefined) : undefined
+  const sourceDomainIntel = sourceUrl ? domainIntelligenceFor(sourceUrl) : undefined
+  const sourceReputation = sourceDomain ? domainReputation(sourceDomain) : defaultReputation()
   const unlimitedApproval = chain === "evm" && isUnlimitedEvmApproval(decodedIntent, text)
   const knownBadCounterparty = counterpartyReputation.verdict === "known_bad"
+  const sourceTrusted = sourceReputation.verdict === "trusted"
+  const sourceKnownBad = sourceReputation.verdict === "known_bad"
 
   if (decodedIntent.category === "approval" || /approve|delegate|approvechecked|setapprovalforall|permit/.test(text)) {
     signals.push({
@@ -1018,6 +1200,29 @@ async function scanTransaction(value: string, walletAddress: string | undefined,
       detail: chain === "evm"
         ? `Approval-style call detected${decodedIntent.spender ? ` for spender ${decodedIntent.spender}` : " without a decoded spender"}. Review amount and counterparty before signing.`
         : "Delegate approvals can allow another account to move tokens.",
+    })
+  }
+  if (sourceDomain && sourceTrusted) {
+    signals.push({
+      code: "VERIFIED_TRANSACTION_SOURCE",
+      severity: "info",
+      title: "Verified transaction source",
+      detail: `${sourceDomain} is a verified project domain. ScamGuard still prioritizes the wallet action over domain trust.`,
+    })
+  }
+  if (sourceDomain && sourceKnownBad) {
+    signals.push({
+      code: "KNOWN_BAD_TRANSACTION_SOURCE",
+      severity: "critical",
+      title: "Known bad signing source",
+      detail: `${sourceDomain} is in ScamGuard threat intelligence and produced or hosted this signing flow.`,
+    })
+  } else if (sourceDomainIntel?.features.includes("sensitive_redirect") && !sourceTrusted) {
+    signals.push({
+      code: "TRANSACTION_FROM_REDIRECT_FLOW",
+      severity: "medium",
+      title: "Signing flow came from redirect URL",
+      detail: "The source URL contains redirect-style parameters. Verify the final signing site and wallet prompt carefully.",
     })
   }
   if (chain === "evm" && decodedIntent.category === "approval" && !decodedIntent.spender) {
@@ -1034,6 +1239,21 @@ async function scanTransaction(value: string, walletAddress: string | undefined,
       severity: "high",
       title: "Incomplete approval calldata",
       detail: "The approval selector was detected, but ScamGuard could not decode the expected approval amount. Treat the wallet preview as the source of truth before signing.",
+    })
+  }
+  if (chain === "evm" && decodedIntent.category === "approval" && contractIntelligence?.checked && contractIntelligence.isContract === false) {
+    signals.push({
+      code: "APPROVAL_TO_EOA",
+      severity: "high",
+      title: "Approval spender appears to be an EOA",
+      detail: `${contractIntelligence.target} has no contract bytecode through EVM RPC. Token approvals to EOAs are unusual and risky.`,
+    })
+  } else if (chain === "evm" && contractIntelligence?.checked && contractIntelligence.isContract) {
+    signals.push({
+      code: "COUNTERPARTY_CONTRACT_CODE_FOUND",
+      severity: "info",
+      title: "Counterparty contract bytecode found",
+      detail: `${contractIntelligence.target} has deployed bytecode. Contract code presence reduces EOA uncertainty but does not guarantee safety.`,
     })
   }
   if (chain === "evm" && knownBadCounterparty && counterpartyAddress) {
@@ -1129,10 +1349,19 @@ async function scanTransaction(value: string, walletAddress: string | undefined,
 
   return createResult("transaction", signals, {
     chain,
-    rpcStatus: simulation.attempted ? (getSolanaRpcUrl() ? "checked" : "skipped") : "not_applicable",
+    rpcStatus: contractIntelligence?.checked
+      ? "checked"
+      : simulation.attempted
+        ? getSolanaRpcUrl()
+          ? "checked"
+          : "skipped"
+        : "not_applicable",
     walletAddress,
     simulation,
     decodedIntent,
+    domain: sourceDomain,
+    domainIntelligence: sourceDomainIntel,
+    contractIntelligence,
     reputation: chain === "evm" ? counterpartyReputation : walletAddress ? walletReputation(walletAddress) : defaultReputation(),
   })
 }
@@ -1147,7 +1376,7 @@ export async function scanScamGuard(input: ScamGuardScanInput): Promise<ScamGuar
   if (input.type === "url") return scanUrl(value, chain)
   if (input.type === "wallet") return scanWallet(value, chain)
   if (input.type === "token") return scanToken(value, chain)
-  return scanTransaction(value, input.walletAddress, chain)
+  return scanTransaction(value, input.walletAddress, chain, input.sourceUrl)
 }
 
 export function combinedSecurityScore({

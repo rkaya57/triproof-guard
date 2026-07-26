@@ -91,6 +91,22 @@ type ScanResult = {
       source: string
       notes: string[]
     }
+    domainIntelligence?: {
+      host?: string
+      root?: string
+      tld?: string
+      sourceUrl?: string
+      features: string[]
+    }
+    contractIntelligence?: {
+      target?: string
+      checked: boolean
+      isContract?: boolean
+      verified?: boolean
+      proxy?: boolean
+      source: "rpc" | "etherscan" | "skipped"
+      notes: string[]
+    }
   }
   scannedAt: string
 }
@@ -466,6 +482,9 @@ export function ScamGuardPage() {
                           {result.metadata.decodedIntent?.method && <><br />Method: {result.metadata.decodedIntent.method}</>}
                           {result.metadata.decodedIntent?.warnings?.map((warning) => <span key={warning}><br />Decode note: {warning}</span>)}
                           {result.metadata.reputation?.notes?.map((note) => <span key={note}><br />Reputation: {note}</span>)}
+                          {result.metadata.domainIntelligence?.features?.length ? <><br />Domain features: {result.metadata.domainIntelligence.features.join(", ")}</> : null}
+                          {result.metadata.contractIntelligence?.target && <><br />Contract target: {result.metadata.contractIntelligence.target}</>}
+                          {result.metadata.contractIntelligence?.notes?.map((note) => <span key={note}><br />Contract intel: {note}</span>)}
                         </div>
                       )}
                       {result && (

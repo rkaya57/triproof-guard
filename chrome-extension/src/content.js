@@ -202,6 +202,7 @@ async function handleSignRequest(payload) {
     value: payload.value,
     walletAddress: payload.walletAddress,
     chain: payload.chain,
+    sourceUrl: window.location.href,
   })
   if (!response?.ok) {
     window.postMessage({

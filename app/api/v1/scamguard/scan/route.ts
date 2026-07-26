@@ -16,6 +16,7 @@ export async function POST(request: Request) {
     value?: string
     walletAddress?: string
     chain?: ScamGuardChain
+    sourceUrl?: string
   } | null
 
   const type = body?.type
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
   }
   if (!value) return NextResponse.json({ error: "value is required" }, { status: 400 })
 
-  const result = await scanScamGuard({ type, value, walletAddress: body?.walletAddress, chain: body?.chain })
+  const result = await scanScamGuard({ type, value, walletAddress: body?.walletAddress, chain: body?.chain, sourceUrl: body?.sourceUrl })
   return NextResponse.json(
     {
       ...result,

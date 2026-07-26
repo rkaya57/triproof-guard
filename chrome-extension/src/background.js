@@ -114,8 +114,8 @@ async function scanUrl(value, { force = false } = {}) {
   return result
 }
 
-async function scanTransaction(value, walletAddress, chain) {
-  return requestJson("/api/scamguard/scan-transaction", { value, walletAddress, chain })
+async function scanTransaction(value, walletAddress, chain, sourceUrl) {
+  return requestJson("/api/scamguard/scan-transaction", { value, walletAddress, chain, sourceUrl })
 }
 
 async function scanLinks(links) {
@@ -164,7 +164,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return
       }
       if (message?.type === "SCAN_TRANSACTION") {
-        sendResponse({ ok: true, result: await scanTransaction(message.value, message.walletAddress, message.chain) })
+        sendResponse({ ok: true, result: await scanTransaction(message.value, message.walletAddress, message.chain, message.sourceUrl) })
         return
       }
       if (message?.type === "SCAN_LINKS") {

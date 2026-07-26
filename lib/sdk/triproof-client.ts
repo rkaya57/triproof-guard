@@ -64,6 +64,7 @@ export type ScamGuardScanInput = {
   value: string
   walletAddress?: string
   chain?: ScamGuardChain
+  sourceUrl?: string
 }
 
 export type ScamGuardScanResponse = {

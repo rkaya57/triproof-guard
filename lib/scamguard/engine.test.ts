@@ -62,6 +62,20 @@ test("ScamGuard does not penalize verified airdrop subdomains for campaign wordi
   assert.ok(!result.signals.some((signal) => signal.code === "UNVERIFIED_CLAIM_DOMAIN"))
 })
 
+test("ScamGuard detects obfuscated phishing URL techniques", async () => {
+  const result = await scanScamGuard({
+    type: "url",
+    value: "https://phantom.app@xn--phantom-claim-123.example.xyz/claim/%2Fwallet?redirect=phantom://sign",
+    chain: "evm",
+  })
+
+  assert.ok(["HIGH_RISK", "CRITICAL"].includes(result.riskLevel))
+  assert.ok(result.signals.some((signal) => signal.code === "URL_CREDENTIALS_OBFUSCATION"))
+  assert.ok(result.signals.some((signal) => signal.code === "PUNYCODE_DOMAIN"))
+  assert.ok(result.signals.some((signal) => signal.code === "SENSITIVE_REDIRECT_PARAMETER"))
+  assert.ok(result.metadata.domainIntelligence?.features.includes("url_credentials"))
+})
+
 test("ScamGuard decodes EVM approval style payloads", async () => {
   const result = await scanScamGuard({
     type: "transaction",
@@ -106,6 +120,51 @@ test("ScamGuard decodes limited EVM approvals without escalating to critical", a
   assert.ok(result.signals.some((signal) => signal.code === "EVM_APPROVAL" && signal.severity === "medium"))
   assert.ok(result.signals.some((signal) => signal.code === "UNKNOWN_EVM_COUNTERPARTY"))
   assert.ok(!result.signals.some((signal) => signal.code === "UNLIMITED_EVM_APPROVAL"))
+})
+
+test("ScamGuard includes verified source context without hiding approval risk", async () => {
+  const spender = "0x2222222222222222222222222222222222222222"
+  const result = await scanScamGuard({
+    type: "transaction",
+    chain: "evm",
+    sourceUrl: "https://airdrop.shiftrwa.xyz/loyalty",
+    value: JSON.stringify({
+      method: "eth_sendTransaction",
+      params: [
+        {
+          to: "0x3333333333333333333333333333333333333333",
+          data: `0x095ea7b3${evmAddressWord(spender)}${evmWord(1n)}`,
+        },
+      ],
+    }),
+  })
+
+  assert.equal(result.riskLevel, "CAUTION")
+  assert.equal(result.metadata.domain, "airdrop.shiftrwa.xyz")
+  assert.ok(result.signals.some((signal) => signal.code === "VERIFIED_TRANSACTION_SOURCE"))
+  assert.ok(result.signals.some((signal) => signal.code === "EVM_APPROVAL"))
+})
+
+test("ScamGuard escalates transaction source redirect flows", async () => {
+  const spender = "0x2222222222222222222222222222222222222222"
+  const result = await scanScamGuard({
+    type: "transaction",
+    chain: "evm",
+    sourceUrl: "https://claim-drop.example.xyz/start?redirect=https://wallet.example/sign",
+    value: JSON.stringify({
+      method: "eth_sendTransaction",
+      params: [
+        {
+          to: "0x3333333333333333333333333333333333333333",
+          data: `0x095ea7b3${evmAddressWord(spender)}${evmWord(1n)}`,
+        },
+      ],
+    }),
+  })
+
+  assert.equal(result.riskLevel, "CAUTION")
+  assert.ok(result.signals.some((signal) => signal.code === "TRANSACTION_FROM_REDIRECT_FLOW"))
+  assert.ok(result.metadata.domainIntelligence?.features.includes("sensitive_redirect"))
 })
 
 test("ScamGuard escalates unlimited EVM approvals", async () => {

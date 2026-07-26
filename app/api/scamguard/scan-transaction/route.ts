@@ -9,12 +9,13 @@ export async function POST(request: Request) {
     value?: string
     walletAddress?: string
     chain?: ScamGuardChain
+    sourceUrl?: string
   } | null
   const value = body?.value?.trim()
   if (!value) return NextResponse.json({ error: "value is required" }, { status: 400 })
 
   return NextResponse.json(
-    await scanScamGuard({ type: "transaction", value, walletAddress: body?.walletAddress, chain: body?.chain }),
+    await scanScamGuard({ type: "transaction", value, walletAddress: body?.walletAddress, chain: body?.chain, sourceUrl: body?.sourceUrl }),
     { headers: { "Cache-Control": "no-store" } }
   )
 }
