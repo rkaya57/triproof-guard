@@ -1,5 +1,8 @@
 import { ScamGuardPage } from "@/components/scamguard/scamguard-page"
 
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
 export const metadata = {
   title: "ScamGuard Solana | Tri-Proof Guard",
   description:

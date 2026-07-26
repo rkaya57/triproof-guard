@@ -25,11 +25,14 @@ export async function POST(request: Request) {
   if (!value) return NextResponse.json({ error: "value is required" }, { status: 400 })
 
   const result = await scanScamGuard({ type, value, walletAddress: body?.walletAddress })
-  return NextResponse.json({
-    ...result,
-    account: {
-      userId: auth.user.id,
-      email: auth.user.email,
+  return NextResponse.json(
+    {
+      ...result,
+      account: {
+        userId: auth.user.id,
+        email: auth.user.email,
+      },
     },
-  })
+    { headers: { "Cache-Control": "no-store" } }
+  )
 }

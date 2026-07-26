@@ -177,6 +177,7 @@ export function ScamGuardPage() {
     try {
       const response = await fetch(endpointByMode[nextMode], {
         method: "POST",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           value: nextInput,
