@@ -7,6 +7,7 @@
     "build": "node scripts/vercel-migrate-deploy.mjs && prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
+    "extension:validate": "node scripts/validate-chrome-extension.mjs",
     "test": "node --import tsx --test lib/risk-engine/index.test.ts",
     "test:ci": "node --import tsx --test --test-reporter=spec lib/risk-engine/index.test.ts",
     "postinstall": "prisma generate",

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ScamGuard for Solana</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <div class="brand">
+          <img src="../assets/icon48.png" alt="" width="32" height="32">
+          <div>
+            <h1>ScamGuard</h1>
+            <p>Solana pre-sign protection</p>
+          </div>
+        </div>
+        <span id="riskBadge" class="badge ready">Ready</span>
+      </header>
+
+      <section class="score-card">
+        <p class="eyebrow">Current tab</p>
+        <h2 id="domainLabel">Loading...</h2>
+        <p id="summaryLabel">Scanning the active page URL.</p>
+        <div class="score-row">
+          <div>
+            <span id="scoreLabel">--</span>
+            <small>security score</small>
+          </div>
+          <button id="rescanButton" type="button">Rescan</button>
+        </div>
+      </section>
+
+      <section class="actions">
+        <button id="scanLinksButton" type="button">Scan page links</button>
+        <button id="openReportButton" type="button">Open full report</button>
+      </section>
+
+      <section class="signals">
+        <h3>Signals</h3>
+        <div id="signalsList" class="list empty">No signals yet.</div>
+      </section>
+
+      <section class="settings">
+        <h3>Settings</h3>
+        <label>
+          API base URL
+          <input id="apiBaseUrl" type="url" placeholder="https://triproofprotocol.com">
+        </label>
+        <label class="check">
+          <input id="warnOnCaution" type="checkbox">
+          Warn before caution-level signing
+        </label>
+        <label class="check">
+          <input id="blockCriticalSites" type="checkbox">
+          Block critical pages with overlay
+        </label>
+        <label>
+          Trusted domains
+          <textarea id="trustedDomains" rows="3" placeholder="example.com, app.example.com"></textarea>
+        </label>
+        <button id="saveSettingsButton" type="button">Save settings</button>
+        <p id="settingsMessage" class="message"></p>
+      </section>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
