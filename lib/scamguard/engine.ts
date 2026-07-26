@@ -183,6 +183,14 @@ function riskLevel(score: number): ScamGuardRiskLevel {
   return "SAFE"
 }
 
+function minimumScoreForSignals(signals: ScamGuardSignal[]) {
+  if (signals.some((signal) => signal.severity === "critical")) return 86
+  if (signals.some((signal) => signal.severity === "high")) return 61
+  if (signals.some((signal) => signal.severity === "medium")) return 31
+  if (signals.some((signal) => signal.severity === "low")) return 18
+  return 0
+}
+
 function summaryFor(level: ScamGuardRiskLevel) {
   if (level === "CRITICAL") return "Critical drain or account-takeover indicators were found. Do not sign or interact."
   if (level === "HIGH_RISK") return "Multiple serious risk signals were found. Treat this as unsafe until independently verified."
@@ -195,7 +203,8 @@ function createResult(
   signals: ScamGuardSignal[],
   metadata: ScamGuardScanResult["metadata"]
 ): ScamGuardScanResult {
-  const score = Math.min(100, Math.max(0, 8 + signals.reduce((sum, signal) => sum + signalWeight(signal.severity), 0)))
+  const weightedScore = 8 + signals.reduce((sum, signal) => sum + signalWeight(signal.severity), 0)
+  const score = Math.min(100, Math.max(minimumScoreForSignals(signals), weightedScore))
   const level = riskLevel(score)
   return {
     id: crypto.randomUUID(),
@@ -263,6 +272,7 @@ function scanUrl(value: string) {
   const domain = hostFromUrl(value)
   const signals: ScamGuardSignal[] = []
   const brand = brandMentioned(text)
+  const hasClaimLanguage = highRiskWords.some((word) => text.includes(word))
 
   if (!domain) {
     signals.push({
@@ -288,12 +298,20 @@ function scanUrl(value: string) {
       detail: `${brand} is mentioned, but the domain is ${domain}.`,
     })
   }
-  if (highRiskWords.some((word) => text.includes(word))) {
+  if (hasClaimLanguage) {
     signals.push({
       code: "CLAIM_LANGUAGE",
       severity: "medium",
       title: "Claim or airdrop language",
       detail: "Scam campaigns often use urgent claim, mint, presale, whitelist, or reward language.",
+    })
+  }
+  if (domain && hasClaimLanguage && !officialDomains.has(domain)) {
+    signals.push({
+      code: "UNVERIFIED_CLAIM_DOMAIN",
+      severity: "medium",
+      title: "Unverified claim domain",
+      detail: `${domain} is not in the trusted Solana domain list. Verify it from the project's official channels before opening or signing.`,
     })
   }
   if (seedPhraseWords.some((word) => text.includes(word))) {
