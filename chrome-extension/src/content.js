@@ -4,6 +4,7 @@ const PAGE_SOURCE = "SCAMGUARD_PAGE"
 let latestUrlResult = null
 let settingsCache = null
 let overlayOpen = false
+let popupHeartbeatTimer = null
 
 function sendMessage(message) {
   return new Promise((resolve) => {
@@ -70,6 +71,18 @@ function updateBanner(result) {
   banner.dataset.risk = riskClass(level)
   banner.querySelector(".sgx-risk").textContent = `${riskLabel(level)}${result?.score !== undefined ? ` / safe ${securityScore(result)}` : ""}`
   banner.title = result?.summary ?? "ScamGuard is ready"
+}
+
+function setPopupOpen(isOpen) {
+  const banner = ensureBanner()
+  banner.dataset.popupOpen = isOpen ? "true" : "false"
+  if (popupHeartbeatTimer) window.clearTimeout(popupHeartbeatTimer)
+  if (isOpen) {
+    popupHeartbeatTimer = window.setTimeout(() => {
+      const currentBanner = ensureBanner()
+      currentBanner.dataset.popupOpen = "false"
+    }, 2200)
+  }
 }
 
 async function getSettings() {
@@ -249,6 +262,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === "CONTENT_SET_COMPACT") {
       const banner = ensureBanner()
       banner.dataset.compact = message.compact ? "true" : "false"
+      sendResponse({ ok: true })
+      return
+    }
+    if (message?.type === "CONTENT_POPUP_HEARTBEAT") {
+      setPopupOpen(true)
       sendResponse({ ok: true })
       return
     }

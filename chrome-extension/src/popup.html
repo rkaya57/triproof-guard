@@ -21,13 +21,12 @@
             <p>Pre-sign intelligence</p>
           </div>
         </div>
-        <span id="riskBadge" class="badge ready">Warming up</span>
+        <span id="riskBadge" class="badge ready">Checking</span>
       </header>
 
       <section class="score-card">
-        <div class="scan-line"></div>
         <div class="tab-copy">
-          <p class="eyebrow">Site signal</p>
+          <p class="eyebrow">Protected site</p>
           <h2 id="domainLabel">Loading...</h2>
           <p id="summaryLabel">Reading the page and checking the risk engine.</p>
         </div>
@@ -36,11 +35,12 @@
           <div id="scoreMeter" class="score-meter" style="--score-angle: 0deg">
             <div class="score-core">
               <span id="scoreLabel">--</span>
-              <small>shield score</small>
+              <small>score</small>
             </div>
           </div>
           <div class="score-copy">
             <p id="scoreWhisper">Hold tight. ScamGuard is looking around.</p>
+            <div class="score-track"><span id="scoreBar"></span></div>
             <button id="rescanButton" type="button" class="button ghost">Rescan</button>
           </div>
         </div>
@@ -53,8 +53,8 @@
 
       <section class="signals">
         <div class="section-head">
-          <h3>What I found</h3>
-          <span class="mini-pill">Live signal</span>
+          <h3>Signals</h3>
+          <span class="mini-pill">Live</span>
         </div>
         <div id="signalsList" class="list empty">No signals yet. Open a page or rescan to start the read.</div>
       </section>

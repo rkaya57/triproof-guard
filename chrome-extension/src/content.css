@@ -23,6 +23,7 @@
   line-height: 1.25;
   backdrop-filter: blur(18px) saturate(150%);
   animation: sgx-slide-up 0.52s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
 
 #scamguard-extension-banner::before {
@@ -147,6 +148,12 @@
 
 #scamguard-extension-banner[data-compact="true"] .sgx-actions {
   display: none;
+}
+
+#scamguard-extension-banner[data-popup-open="true"] {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px) scale(0.96);
 }
 
 #scamguard-extension-banner button,

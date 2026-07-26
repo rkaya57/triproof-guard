@@ -10,6 +10,7 @@ const elements = {
   summaryLabel: document.getElementById("summaryLabel"),
   scoreLabel: document.getElementById("scoreLabel"),
   scoreMeter: document.getElementById("scoreMeter"),
+  scoreBar: document.getElementById("scoreBar"),
   scoreWhisper: document.getElementById("scoreWhisper"),
   signalsList: document.getElementById("signalsList"),
   rescanButton: document.getElementById("rescanButton"),
@@ -79,11 +80,12 @@ function hostFromUrl(value) {
 
 function setBusy(message) {
   elements.riskBadge.className = "badge ready"
-  elements.riskBadge.textContent = "Scanning"
+  elements.riskBadge.textContent = "Checking"
   elements.summaryLabel.textContent = message
   elements.scoreWhisper.textContent = "Reading links, intent, reputation, and known risk patterns."
   elements.scoreMeter.className = "score-meter"
   elements.scoreMeter.style.setProperty("--score-angle", "0deg")
+  elements.scoreBar.style.width = "0%"
 }
 
 function renderResult(result) {
@@ -96,6 +98,7 @@ function renderResult(result) {
   elements.scoreWhisper.textContent = scoreWhisper(securityScore, result.riskLevel)
   elements.scoreMeter.className = `score-meter ${riskClass(result.riskLevel)}`
   elements.scoreMeter.style.setProperty("--score-angle", `${securityScore * 3.6}deg`)
+  elements.scoreBar.style.width = `${securityScore}%`
 
   const signals = result.signals ?? []
   if (!signals.length) {
@@ -181,6 +184,10 @@ function setPageBannerCompact(compact) {
   void messageActiveTab({ type: "CONTENT_SET_COMPACT", compact }).catch(() => undefined)
 }
 
+function sendPopupHeartbeat() {
+  void messageActiveTab({ type: "CONTENT_POPUP_HEARTBEAT" }).catch(() => undefined)
+}
+
 elements.rescanButton.addEventListener("click", () => {
   void scanActiveTab(true).catch((error) => {
     elements.summaryLabel.textContent = error.message
@@ -207,6 +214,8 @@ void (async () => {
   try {
     await Promise.all([loadSettings(), loadActiveTab()])
     setPageBannerCompact(true)
+    sendPopupHeartbeat()
+    window.setInterval(sendPopupHeartbeat, 900)
     window.addEventListener("pagehide", () => setPageBannerCompact(false))
     window.addEventListener("beforeunload", () => setPageBannerCompact(false))
     await scanActiveTab(false)
