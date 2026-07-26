@@ -136,6 +136,17 @@ const knownDrainerFragments = [
   "claim-bonus",
 ]
 
+const campaignSurfaceWords = [
+  "season",
+  "quest",
+  "points",
+  "campaign",
+  "allowlist",
+  "whitelist",
+  "leaderboard",
+  "rewards",
+]
+
 function getSolanaRpcUrl() {
   const explicit = process.env.SOLANA_RPC_URL?.trim()
   if (explicit) return explicit
@@ -261,6 +272,14 @@ function hostFromUrl(value: string) {
   }
 }
 
+function parsedUrl(value: string) {
+  try {
+    return new URL(value)
+  } catch {
+    return null
+  }
+}
+
 function brandMentioned(text: string) {
   return ["phantom", "solflare", "jupiter", "magiceden", "tensor", "backpack"].find((brand) =>
     text.includes(brand)
@@ -269,10 +288,14 @@ function brandMentioned(text: string) {
 
 function scanUrl(value: string) {
   const text = value.toLowerCase()
+  const url = parsedUrl(value)
   const domain = hostFromUrl(value)
+  const path = url?.pathname.toLowerCase() ?? ""
   const signals: ScamGuardSignal[] = []
   const brand = brandMentioned(text)
   const hasClaimLanguage = highRiskWords.some((word) => text.includes(word))
+  const hasCampaignSurface = campaignSurfaceWords.some((word) => path.includes(word))
+  const isAppSurface = Boolean(domain?.startsWith("app.") || domain?.startsWith("dapp."))
 
   if (!domain) {
     signals.push({
@@ -312,6 +335,14 @@ function scanUrl(value: string) {
       severity: "medium",
       title: "Unverified claim domain",
       detail: `${domain} is not in the trusted Solana domain list. Verify it from the project's official channels before opening or signing.`,
+    })
+  }
+  if (domain && !officialDomains.has(domain) && (hasCampaignSurface || isAppSurface)) {
+    signals.push({
+      code: "UNVERIFIED_WEB3_APP_SURFACE",
+      severity: "medium",
+      title: "Unverified Web3 app surface",
+      detail: `${domain}${path || "/"} looks like a campaign, season, quest, points, or app page. Treat it as unverified until the official project account links to it.`,
     })
   }
   if (seedPhraseWords.some((word) => text.includes(word))) {
