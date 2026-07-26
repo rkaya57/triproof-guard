@@ -6,71 +6,115 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  max-width: min(520px, calc(100vw - 32px));
-  padding: 10px 12px;
-  border: 1px solid rgba(56, 189, 248, 0.32);
-  border-radius: 12px;
-  background: rgba(2, 8, 23, 0.92);
-  color: #e0f2fe;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.32), 0 0 28px rgba(56, 189, 248, 0.18);
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 11px 12px;
+  border: 1px solid rgba(74, 222, 255, 0.34);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(7, 15, 32, 0.92), rgba(13, 21, 54, 0.88)),
+    rgba(2, 8, 23, 0.92);
+  color: #e0f8ff;
+  box-shadow:
+    0 22px 68px rgba(0, 0, 0, 0.42),
+    0 0 34px rgba(56, 217, 255, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 13px;
-  line-height: 1.3;
-  backdrop-filter: blur(16px);
+  line-height: 1.25;
+  backdrop-filter: blur(18px) saturate(150%);
+  animation: sgx-slide-up 0.52s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#scamguard-extension-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 18%, rgba(255, 255, 255, 0.12) 42%, transparent 70%);
+  transform: translateX(-120%);
+  animation: sgx-shimmer 3.8s ease-in-out infinite;
 }
 
 #scamguard-extension-banner[data-risk="safe"] {
-  border-color: rgba(74, 222, 128, 0.42);
+  border-color: rgba(74, 222, 128, 0.48);
 }
 
 #scamguard-extension-banner[data-risk="caution"] {
-  border-color: rgba(251, 191, 36, 0.6);
+  border-color: rgba(251, 191, 36, 0.68);
 }
 
 #scamguard-extension-banner[data-risk="high"],
 #scamguard-extension-banner[data-risk="critical"] {
-  border-color: rgba(248, 113, 113, 0.72);
+  border-color: rgba(248, 113, 113, 0.78);
+}
+
+#scamguard-extension-banner .sgx-orb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 13px;
+  background: radial-gradient(circle, rgba(56, 217, 255, 0.34), rgba(56, 217, 255, 0.08));
+  box-shadow: 0 0 24px rgba(56, 217, 255, 0.36);
+}
+
+#scamguard-extension-banner .sgx-orb::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border: 1px solid rgba(56, 217, 255, 0.28);
+  border-radius: inherit;
+  animation: sgx-pulse-ring 2.4s ease-in-out infinite;
+}
+
+#scamguard-extension-banner .sgx-orb span {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: #38d9ff;
+  box-shadow: 0 0 18px rgba(56, 217, 255, 0.9);
+}
+
+#scamguard-extension-banner[data-risk="safe"] .sgx-orb span {
+  background: #31e981;
+  box-shadow: 0 0 18px rgba(49, 233, 129, 0.9);
+}
+
+#scamguard-extension-banner[data-risk="caution"] .sgx-orb span {
+  background: #ffcf4a;
+  box-shadow: 0 0 18px rgba(255, 207, 74, 0.9);
+}
+
+#scamguard-extension-banner[data-risk="high"] .sgx-orb span,
+#scamguard-extension-banner[data-risk="critical"] .sgx-orb span {
+  background: #ff5d6c;
+  box-shadow: 0 0 18px rgba(255, 93, 108, 0.9);
 }
 
 #scamguard-extension-banner .sgx-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: grid;
+  gap: 2px;
   min-width: 0;
 }
 
-#scamguard-extension-banner .sgx-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: #22d3ee;
-  box-shadow: 0 0 18px rgba(34, 211, 238, 0.8);
-}
-
-#scamguard-extension-banner[data-risk="safe"] .sgx-dot {
-  background: #22c55e;
-}
-
-#scamguard-extension-banner[data-risk="caution"] .sgx-dot {
-  background: #f59e0b;
-}
-
-#scamguard-extension-banner[data-risk="high"] .sgx-dot,
-#scamguard-extension-banner[data-risk="critical"] .sgx-dot {
-  background: #ef4444;
-}
-
 #scamguard-extension-banner .sgx-title {
-  font-weight: 700;
-  color: #f8fafc;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 900;
 }
 
 #scamguard-extension-banner .sgx-risk {
-  color: #bae6fd;
+  color: #b8eaff;
+  font-size: 12px;
   white-space: nowrap;
 }
 
 #scamguard-extension-banner .sgx-actions {
+  position: relative;
+  z-index: 1;
   display: flex;
   gap: 8px;
   margin-left: auto;
@@ -79,20 +123,27 @@
 #scamguard-extension-banner button,
 #scamguard-extension-overlay button {
   appearance: none;
-  border: 1px solid rgba(56, 189, 248, 0.36);
-  border-radius: 10px;
+  border: 1px solid rgba(74, 222, 255, 0.34);
+  border-radius: 12px;
   background: rgba(14, 165, 233, 0.14);
-  color: #e0f2fe;
+  color: #e0f8ff;
   cursor: pointer;
   font: inherit;
-  font-weight: 700;
-  padding: 7px 10px;
+  font-weight: 850;
+  padding: 8px 10px;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 #scamguard-extension-banner button:hover,
 #scamguard-extension-overlay button:hover {
-  border-color: rgba(125, 211, 252, 0.72);
-  background: rgba(14, 165, 233, 0.24);
+  transform: translateY(-1px);
+  border-color: rgba(165, 243, 252, 0.78);
+  background: rgba(14, 165, 233, 0.25);
+  box-shadow: 0 10px 24px rgba(56, 217, 255, 0.16);
 }
 
 #scamguard-extension-overlay {
@@ -102,55 +153,65 @@
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(2, 6, 23, 0.72);
+  background:
+    radial-gradient(circle at 50% 20%, rgba(56, 217, 255, 0.16), transparent 34%),
+    rgba(2, 6, 23, 0.76);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #e5f4ff;
-  backdrop-filter: blur(10px);
+  color: #e5f9ff;
+  backdrop-filter: blur(12px);
+  animation: sgx-fade-in 0.22s ease;
 }
 
 #scamguard-extension-overlay .sgx-modal {
   width: min(760px, 100%);
-  border: 1px solid rgba(56, 189, 248, 0.36);
-  border-radius: 18px;
-  background: linear-gradient(135deg, rgba(8, 22, 43, 0.98), rgba(15, 23, 42, 0.98));
-  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.48), 0 0 45px rgba(56, 189, 248, 0.14);
-  padding: 22px;
+  border: 1px solid rgba(74, 222, 255, 0.38);
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, rgba(8, 22, 43, 0.98), rgba(15, 23, 42, 0.98)),
+    #08162b;
+  box-shadow:
+    0 30px 96px rgba(0, 0, 0, 0.52),
+    0 0 52px rgba(56, 217, 255, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  padding: 24px;
+  animation: sgx-modal-in 0.36s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 #scamguard-extension-overlay .sgx-pill {
   display: inline-flex;
   width: fit-content;
-  margin-bottom: 12px;
-  padding: 5px 10px;
-  border: 1px solid rgba(56, 189, 248, 0.32);
+  margin-bottom: 13px;
+  padding: 6px 11px;
+  border: 1px solid rgba(74, 222, 255, 0.34);
   border-radius: 999px;
-  color: #bae6fd;
+  background: rgba(56, 217, 255, 0.08);
+  color: #b8eaff;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 900;
   text-transform: uppercase;
 }
 
 #scamguard-extension-overlay .sgx-pill.caution {
-  border-color: rgba(251, 191, 36, 0.6);
-  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.68);
+  color: #ffe28a;
 }
 
 #scamguard-extension-overlay .sgx-pill.high,
 #scamguard-extension-overlay .sgx-pill.critical {
-  border-color: rgba(248, 113, 113, 0.72);
-  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.78);
+  color: #ffc0c6;
 }
 
 #scamguard-extension-overlay h2 {
   margin: 0;
   color: #ffffff;
-  font-size: 24px;
-  line-height: 1.2;
+  font-size: 25px;
+  line-height: 1.18;
 }
 
 #scamguard-extension-overlay p {
-  margin: 8px 0 0;
-  color: #cbd5e1;
+  margin: 9px 0 0;
+  color: #c7d7e8;
   font-size: 14px;
   line-height: 1.6;
 }
@@ -159,19 +220,19 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
-  margin-top: 18px;
+  margin-top: 20px;
 }
 
 #scamguard-extension-overlay section {
   border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 14px;
-  background: rgba(15, 23, 42, 0.58);
-  padding: 14px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.62);
+  padding: 15px;
 }
 
 #scamguard-extension-overlay h3 {
-  margin: 0 0 10px;
-  color: #38bdf8;
+  margin: 0 0 11px;
+  color: #5ee7ff;
   font-size: 13px;
 }
 
@@ -195,35 +256,100 @@
 }
 
 #scamguard-extension-overlay li span {
-  margin-top: 3px;
-  color: #b6c6d8;
+  margin-top: 4px;
+  color: #b8c8da;
 }
 
 #scamguard-extension-overlay .sgx-modal-actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 18px;
+  margin-top: 20px;
 }
 
 #scamguard-extension-overlay [data-decision="cancel"] {
-  border-color: rgba(248, 113, 113, 0.5);
+  border-color: rgba(248, 113, 113, 0.56);
   background: rgba(127, 29, 29, 0.34);
-  color: #fecaca;
+  color: #ffc0c6;
+}
+
+@keyframes sgx-slide-up {
+  from {
+    transform: translateY(18px) scale(0.96);
+    opacity: 0;
+  }
+}
+
+@keyframes sgx-shimmer {
+  45%,
+  100% {
+    transform: translateX(130%);
+  }
+}
+
+@keyframes sgx-pulse-ring {
+  0%,
+  100% {
+    transform: scale(0.94);
+    opacity: 0.46;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+@keyframes sgx-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sgx-modal-in {
+  from {
+    transform: translateY(18px) scale(0.96);
+    opacity: 0;
+  }
 }
 
 @media (max-width: 640px) {
   #scamguard-extension-banner {
     right: 10px;
     bottom: 10px;
-    flex-direction: column;
-    align-items: stretch;
+    flex-wrap: wrap;
   }
 
-  #scamguard-extension-banner .sgx-actions,
+  #scamguard-extension-banner .sgx-status {
+    flex: 1 1 auto;
+  }
+
+  #scamguard-extension-banner .sgx-actions {
+    width: 100%;
+  }
+
+  #scamguard-extension-banner .sgx-actions button,
+  #scamguard-extension-overlay .sgx-modal-actions button {
+    flex: 1;
+  }
+
   #scamguard-extension-overlay .sgx-modal-grid,
   #scamguard-extension-overlay .sgx-modal-actions {
     grid-template-columns: 1fr;
     flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #scamguard-extension-banner,
+  #scamguard-extension-banner::before,
+  #scamguard-extension-banner .sgx-orb::before,
+  #scamguard-extension-overlay,
+  #scamguard-extension-overlay .sgx-modal {
+    animation: none;
+  }
+
+  #scamguard-extension-banner button:hover,
+  #scamguard-extension-overlay button:hover {
+    transform: none;
   }
 }

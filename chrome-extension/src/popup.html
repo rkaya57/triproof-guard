@@ -8,61 +8,83 @@
   </head>
   <body>
     <main class="shell">
-      <header>
+      <div class="ambient ambient-one"></div>
+      <div class="ambient ambient-two"></div>
+
+      <header class="topbar">
         <div class="brand">
-          <img src="../assets/icon48.png" alt="" width="32" height="32">
+          <span class="logo-wrap">
+            <img src="../assets/icon48.png" alt="" width="34" height="34">
+          </span>
           <div>
             <h1>ScamGuard</h1>
-            <p>Solana pre-sign protection</p>
+            <p>Solana wallet co-pilot</p>
           </div>
         </div>
-        <span id="riskBadge" class="badge ready">Ready</span>
+        <span id="riskBadge" class="badge ready">Warming up</span>
       </header>
 
       <section class="score-card">
-        <p class="eyebrow">Current tab</p>
-        <h2 id="domainLabel">Loading...</h2>
-        <p id="summaryLabel">Scanning the active page URL.</p>
+        <div class="scan-line"></div>
+        <div class="tab-copy">
+          <p class="eyebrow">Current site</p>
+          <h2 id="domainLabel">Loading...</h2>
+          <p id="summaryLabel">Reading the page and checking the risk engine.</p>
+        </div>
+
         <div class="score-row">
-          <div>
-            <span id="scoreLabel">--</span>
-            <small>security score</small>
+          <div id="scoreMeter" class="score-meter" style="--score-angle: 0deg">
+            <div class="score-core">
+              <span id="scoreLabel">--</span>
+              <small>safe score</small>
+            </div>
           </div>
-          <button id="rescanButton" type="button">Rescan</button>
+          <div class="score-copy">
+            <p id="scoreWhisper">Hold tight. ScamGuard is looking around.</p>
+            <button id="rescanButton" type="button" class="button ghost">Rescan</button>
+          </div>
         </div>
       </section>
 
-      <section class="actions">
-        <button id="scanLinksButton" type="button">Scan page links</button>
-        <button id="openReportButton" type="button">Open full report</button>
+      <section class="actions" aria-label="ScamGuard actions">
+        <button id="scanLinksButton" type="button" class="button primary">Scan page links</button>
+        <button id="openReportButton" type="button" class="button ghost">Open full report</button>
       </section>
 
       <section class="signals">
-        <h3>Signals</h3>
-        <div id="signalsList" class="list empty">No signals yet.</div>
+        <div class="section-head">
+          <h3>What I found</h3>
+          <span class="mini-pill">Live read</span>
+        </div>
+        <div id="signalsList" class="list empty">No signals yet. Open a page or rescan to wake the guard.</div>
       </section>
 
-      <section class="settings">
-        <h3>Settings</h3>
-        <label>
-          API base URL
-          <input id="apiBaseUrl" type="url" placeholder="https://triproofprotocol.com">
-        </label>
-        <label class="check">
-          <input id="warnOnCaution" type="checkbox">
-          Warn before caution-level signing
-        </label>
-        <label class="check">
-          <input id="blockCriticalSites" type="checkbox">
-          Block critical pages with overlay
-        </label>
-        <label>
-          Trusted domains
-          <textarea id="trustedDomains" rows="3" placeholder="example.com, app.example.com"></textarea>
-        </label>
-        <button id="saveSettingsButton" type="button">Save settings</button>
-        <p id="settingsMessage" class="message"></p>
-      </section>
+      <details class="settings">
+        <summary>
+          <span>Advanced controls</span>
+          <small>API, warnings, trusted domains</small>
+        </summary>
+        <div class="settings-grid">
+          <label>
+            API base URL
+            <input id="apiBaseUrl" type="url" placeholder="https://triproofprotocol.com">
+          </label>
+          <label class="check">
+            <input id="warnOnCaution" type="checkbox">
+            <span>Warn before caution-level signing</span>
+          </label>
+          <label class="check">
+            <input id="blockCriticalSites" type="checkbox">
+            <span>Block critical pages with overlay</span>
+          </label>
+          <label>
+            Trusted domains
+            <textarea id="trustedDomains" rows="3" placeholder="example.com, app.example.com"></textarea>
+          </label>
+          <button id="saveSettingsButton" type="button" class="button primary">Save controls</button>
+          <p id="settingsMessage" class="message"></p>
+        </div>
+      </details>
     </main>
     <script src="popup.js"></script>
   </body>

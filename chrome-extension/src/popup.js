@@ -9,6 +9,8 @@ const elements = {
   domainLabel: document.getElementById("domainLabel"),
   summaryLabel: document.getElementById("summaryLabel"),
   scoreLabel: document.getElementById("scoreLabel"),
+  scoreMeter: document.getElementById("scoreMeter"),
+  scoreWhisper: document.getElementById("scoreWhisper"),
   signalsList: document.getElementById("signalsList"),
   rescanButton: document.getElementById("rescanButton"),
   scanLinksButton: document.getElementById("scanLinksButton"),
@@ -50,6 +52,23 @@ function riskLabel(level) {
     .join(" ")
 }
 
+function friendlySummary(result) {
+  if (!result) return "ScamGuard is warming up the scanner."
+  if (result.riskLevel === "CRITICAL") return "Stop here. This page has serious drain-style signals."
+  if (result.riskLevel === "HIGH_RISK") return "Careful. ScamGuard found strong reasons to slow down."
+  if (result.riskLevel === "CAUTION") return "Worth a closer look. Verify the source before you click or sign."
+  return "Looks calm from here. Still compare the wallet popup with what you expected."
+}
+
+function scoreWhisper(score, level) {
+  if (level === "CRITICAL") return "Hard stop energy. Do not sign until this is verified elsewhere."
+  if (level === "HIGH_RISK") return "The guard is leaning forward. Treat this like a risky interaction."
+  if (level === "CAUTION") return "Not a panic button, but definitely a double-check moment."
+  if (score >= 90) return "Clean first pass. Nice, but keep the wallet popup honest."
+  if (score >= 75) return "Mostly steady. One more look before signing is still smart."
+  return "Mixed signals. Slow the flow and verify the source."
+}
+
 function hostFromUrl(value) {
   try {
     return new URL(value).hostname.replace(/^www\./, "")
@@ -62,6 +81,9 @@ function setBusy(message) {
   elements.riskBadge.className = "badge ready"
   elements.riskBadge.textContent = "Scanning"
   elements.summaryLabel.textContent = message
+  elements.scoreWhisper.textContent = "Scanning links, intent, and known risk patterns."
+  elements.scoreMeter.className = "score-meter"
+  elements.scoreMeter.style.setProperty("--score-angle", "0deg")
 }
 
 function renderResult(result) {
@@ -70,12 +92,15 @@ function renderResult(result) {
   elements.riskBadge.className = `badge ${riskClass(result.riskLevel)}`
   elements.riskBadge.textContent = riskLabel(result.riskLevel)
   elements.scoreLabel.textContent = String(securityScore)
-  elements.summaryLabel.textContent = result.summary ?? "No summary returned."
+  elements.summaryLabel.textContent = friendlySummary(result)
+  elements.scoreWhisper.textContent = scoreWhisper(securityScore, result.riskLevel)
+  elements.scoreMeter.className = `score-meter ${riskClass(result.riskLevel)}`
+  elements.scoreMeter.style.setProperty("--score-angle", `${securityScore * 3.6}deg`)
 
   const signals = result.signals ?? []
   if (!signals.length) {
     elements.signalsList.className = "list empty"
-    elements.signalsList.textContent = "No signals returned."
+    elements.signalsList.textContent = "No obvious red flags returned. Keep checking wallet prompts before signing."
     return
   }
 
@@ -116,7 +141,7 @@ async function loadActiveTab() {
 
 async function scanActiveTab(force = false) {
   if (!state.tab?.url) await loadActiveTab()
-  setBusy("Scanning the active page URL.")
+  setBusy("Scanning this site with the ScamGuard engine.")
   const response = await sendMessage({ type: "SCAN_URL", value: state.tab.url, force })
   if (!response?.ok) throw new Error(response?.error ?? "Could not scan current tab")
   renderResult(response.result)
@@ -129,7 +154,7 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
-  elements.settingsMessage.textContent = "Saving..."
+  elements.settingsMessage.textContent = "Saving controls..."
   const response = await sendMessage({
     type: "SAVE_SETTINGS",
     settings: {
@@ -140,11 +165,11 @@ async function saveSettings() {
     },
   })
   if (!response?.ok) {
-    elements.settingsMessage.textContent = response?.error ?? "Could not save settings."
+    elements.settingsMessage.textContent = response?.error ?? "Could not save controls."
     return
   }
   renderSettings(response.settings)
-  elements.settingsMessage.textContent = "Settings saved."
+  elements.settingsMessage.textContent = "Saved. Guard brain updated."
 }
 
 async function messageActiveTab(message) {
@@ -160,7 +185,7 @@ elements.rescanButton.addEventListener("click", () => {
 
 elements.scanLinksButton.addEventListener("click", () => {
   void messageActiveTab({ type: "CONTENT_SCAN_LINKS" }).catch(() => {
-    elements.summaryLabel.textContent = "Reload the page, then try scanning links again."
+    elements.summaryLabel.textContent = "Reload this page, then try the link scan again."
   })
 })
 
@@ -181,6 +206,6 @@ void (async () => {
   } catch (error) {
     elements.riskBadge.className = "badge caution"
     elements.riskBadge.textContent = "Caution"
-    elements.summaryLabel.textContent = error instanceof Error ? error.message : "ScamGuard popup failed."
+    elements.summaryLabel.textContent = error instanceof Error ? error.message : "ScamGuard could not finish this scan."
   }
 })()

@@ -43,10 +43,10 @@ function ensureBanner() {
   banner = document.createElement("div")
   banner.id = "scamguard-extension-banner"
   banner.innerHTML = `
+    <div class="sgx-orb"><span></span></div>
     <div class="sgx-status">
-      <span class="sgx-dot"></span>
       <span class="sgx-title">ScamGuard</span>
-      <span class="sgx-risk">Scanning</span>
+      <span class="sgx-risk">Scanning this site</span>
     </div>
     <div class="sgx-actions">
       <button type="button" data-action="scan-links">Scan links</button>
@@ -68,7 +68,7 @@ function updateBanner(result) {
   const banner = ensureBanner()
   const level = result?.riskLevel ?? "SAFE"
   banner.dataset.risk = riskClass(level)
-  banner.querySelector(".sgx-risk").textContent = `${riskLabel(level)}${result?.score !== undefined ? ` / ${securityScore(result)}` : ""}`
+  banner.querySelector(".sgx-risk").textContent = `${riskLabel(level)}${result?.score !== undefined ? ` / safe ${securityScore(result)}` : ""}`
   banner.title = result?.summary ?? "ScamGuard is ready"
 }
 
@@ -135,21 +135,21 @@ function overlayMarkup(result, options) {
       <div class="sgx-modal-header">
         <span class="sgx-pill ${riskClass(result.riskLevel)}">${riskLabel(result.riskLevel)} / ${securityScore(result)}</span>
         <h2>${escapeHtml(options.title ?? "ScamGuard warning")}</h2>
-        <p>${escapeHtml(result.summary ?? "Review this before continuing.")}</p>
+        <p>${escapeHtml(result.summary ?? "Pause for a second and review this before continuing.")}</p>
       </div>
       <div class="sgx-modal-grid">
         <section>
-          <h3>Signals</h3>
-          <ul>${signals || "<li><strong>No signal details</strong><span>ScamGuard returned no additional evidence.</span></li>"}</ul>
+          <h3>What triggered it</h3>
+          <ul>${signals || "<li><strong>No signal details</strong><span>ScamGuard returned no additional evidence, but this action still deserves attention.</span></li>"}</ul>
         </section>
         <section>
-          <h3>Recommended actions</h3>
+          <h3>Smart next move</h3>
           <ul>${actions || "<li>Cancel and verify from the official project account.</li>"}</ul>
         </section>
       </div>
       <div class="sgx-modal-actions">
-        <button type="button" data-decision="cancel">Cancel</button>
-        ${canContinue ? '<button type="button" data-decision="continue">Continue anyway</button>' : ""}
+        <button type="button" data-decision="cancel">Cancel safely</button>
+        ${canContinue ? '<button type="button" data-decision="continue">I understand, continue</button>' : ""}
       </div>
     </div>
   `
