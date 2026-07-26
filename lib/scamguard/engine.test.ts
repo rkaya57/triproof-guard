@@ -44,6 +44,21 @@ test("ScamGuard treats verified reward subdomains as safe context", async () => 
   assert.ok(!result.signals.some((signal) => signal.code === "UNVERIFIED_WEB3_APP_SURFACE"))
 })
 
+test("ScamGuard does not penalize verified airdrop subdomains for campaign wording", async () => {
+  const result = await scanScamGuard({
+    type: "url",
+    value: "https://airdrop.shiftrwa.xyz/loyalty",
+    chain: "evm",
+  })
+
+  assert.equal(result.riskLevel, "SAFE")
+  assert.equal(result.metadata.reputation?.verdict, "trusted")
+  assert.ok(result.signals.some((signal) => signal.code === "VERIFIED_PROJECT_DOMAIN"))
+  assert.ok(result.signals.some((signal) => signal.code === "VERIFIED_REWARD_SURFACE"))
+  assert.ok(!result.signals.some((signal) => signal.code === "SUSPICIOUS_TLD_CLAIM"))
+  assert.ok(!result.signals.some((signal) => signal.code === "UNVERIFIED_CLAIM_DOMAIN"))
+})
+
 test("ScamGuard decodes EVM approval style payloads", async () => {
   const result = await scanScamGuard({
     type: "transaction",

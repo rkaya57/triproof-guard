@@ -125,6 +125,7 @@ const officialDomains = new Set([
   "zerg.app",
   "nestusd.com",
   "allox.ai",
+  "shiftrwa.xyz",
 ])
 
 const verifiedProjectDomains = new Set([
