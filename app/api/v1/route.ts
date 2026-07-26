@@ -31,8 +31,18 @@ export async function GET() {
         path: "/api/v1/scamguard/scan",
         body: {
           type: "transaction",
+          chain: "solana | evm",
           value: "approve delegate, set authority, close account",
           walletAddress: "optionalConnectedWallet"
+        }
+      },
+      scamGuardFeedback: {
+        method: "POST",
+        path: "/api/scamguard/feedback",
+        body: {
+          scanId: "optionalScanId",
+          verdict: "reported_scam | reported_safe | false_positive | false_negative",
+          reason: "optional analyst or user note"
         }
       }
     },

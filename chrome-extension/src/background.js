@@ -88,6 +88,8 @@ async function scanUrl(value, { force = false } = {}) {
       score: 1,
       riskLevel: "SAFE",
       summary: "This domain is trusted locally in ScamGuard extension settings.",
+      confidence: "MEDIUM",
+      explanation: "Local extension trust list marked this domain as trusted. Transaction prompts still need review.",
       signals: [
         {
           code: "LOCAL_TRUSTED_DOMAIN",
@@ -97,7 +99,7 @@ async function scanUrl(value, { force = false } = {}) {
         },
       ],
       actions: ["Still verify transaction details before signing."],
-      metadata: { rpcStatus: "not_applicable", domain },
+      metadata: { chain: "unknown", rpcStatus: "not_applicable", domain },
       scannedAt: new Date().toISOString(),
     }
   }
@@ -112,8 +114,8 @@ async function scanUrl(value, { force = false } = {}) {
   return result
 }
 
-async function scanTransaction(value, walletAddress) {
-  return requestJson("/api/scamguard/scan-transaction", { value, walletAddress })
+async function scanTransaction(value, walletAddress, chain) {
+  return requestJson("/api/scamguard/scan-transaction", { value, walletAddress, chain })
 }
 
 async function scanLinks(links) {
@@ -129,9 +131,11 @@ async function scanLinks(links) {
         riskLevel: "CAUTION",
         score: 31,
         summary: error instanceof Error ? error.message : "Scan failed",
+        confidence: "LOW",
+        explanation: "The extension could not complete this link scan.",
         signals: [],
         actions: ["Retry from the popup or open the full ScamGuard page."],
-        metadata: { rpcStatus: "failed" },
+        metadata: { chain: "unknown", rpcStatus: "failed" },
         scannedAt: new Date().toISOString(),
       })
     }
@@ -160,7 +164,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return
       }
       if (message?.type === "SCAN_TRANSACTION") {
-        sendResponse({ ok: true, result: await scanTransaction(message.value, message.walletAddress) })
+        sendResponse({ ok: true, result: await scanTransaction(message.value, message.walletAddress, message.chain) })
         return
       }
       if (message?.type === "SCAN_LINKS") {

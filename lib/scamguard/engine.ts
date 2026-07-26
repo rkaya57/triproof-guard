@@ -1,5 +1,7 @@
 export type ScamGuardScanType = "url" | "wallet" | "token" | "transaction"
 
+export type ScamGuardChain = "solana" | "evm" | "unknown"
+
 export type ScamGuardRiskLevel = "SAFE" | "CAUTION" | "HIGH_RISK" | "CRITICAL"
 
 export type ScamGuardSignalSeverity = "info" | "low" | "medium" | "high" | "critical"
@@ -15,6 +17,8 @@ export type ScamGuardScanInput = {
   type: ScamGuardScanType
   value: string
   walletAddress?: string
+  chain?: ScamGuardChain
+  sourceUrl?: string
 }
 
 export type ScamGuardScanResult = {
@@ -23,9 +27,12 @@ export type ScamGuardScanResult = {
   score: number
   riskLevel: ScamGuardRiskLevel
   summary: string
+  confidence: "LOW" | "MEDIUM" | "HIGH"
+  explanation: string
   signals: ScamGuardSignal[]
   actions: string[]
   metadata: {
+    chain: ScamGuardChain
     rpcStatus: "checked" | "skipped" | "failed" | "not_applicable"
     rpcError?: string
     domain?: string
@@ -45,6 +52,24 @@ export type ScamGuardScanResult = {
       ok: boolean
       error?: string
       logs?: string[]
+    }
+    decodedIntent?: {
+      method?: string
+      category?: "transfer" | "approval" | "signature" | "authority" | "mint" | "account_close" | "unknown"
+      assetChange?: string
+      spender?: string
+      recipient?: string
+      amount?: string
+      warnings: string[]
+    }
+    reputation?: {
+      verdict: "trusted" | "unknown" | "suspicious" | "known_bad"
+      source: string
+      notes: string[]
+    }
+    feedback?: {
+      enabled: boolean
+      endpoint: string
     }
   }
   scannedAt: string
@@ -97,6 +122,14 @@ const officialDomains = new Set([
   "magiceden.io",
   "tensor.trade",
   "backpack.app",
+  "zerg.app",
+  "nestusd.com",
+  "app.nestusd.com",
+])
+
+const verifiedProjectDomains = new Set([
+  ...officialDomains,
+  "triproofprotocol.com",
 ])
 
 const shortenerDomains = new Set([
@@ -135,6 +168,33 @@ const knownDrainerFragments = [
   "free-solana",
   "claim-bonus",
 ]
+
+const knownScamDomains = new Set([
+  "phantom-airdrop-claim.example",
+  "airdrop.orbition.network",
+])
+
+const suspiciousTlds = new Set(["zip", "mov", "cam", "click", "top", "xyz"])
+
+const knownBadWallets = new Set([
+  "9xQeWvG816bUx9EPfFNtN5B2kWfdrain11111111111111111111".toLowerCase(),
+])
+
+const trustedPrograms = new Map([
+  [systemProgramId, "Solana System Program"],
+  [tokenProgramId, "SPL Token Program"],
+  [token2022ProgramId, "SPL Token-2022 Program"],
+])
+
+const evmAddressRegex = /^0x[a-fA-F0-9]{40}$/
+
+const evmFunctionSelectors = new Map([
+  ["0xa9059cbb", { method: "transfer(address,uint256)", category: "transfer" as const }],
+  ["0x23b872dd", { method: "transferFrom(address,address,uint256)", category: "transfer" as const }],
+  ["0x095ea7b3", { method: "approve(address,uint256)", category: "approval" as const }],
+  ["0xa22cb465", { method: "setApprovalForAll(address,bool)", category: "approval" as const }],
+  ["0xd505accf", { method: "permit(...)", category: "approval" as const }],
+])
 
 const campaignSurfaceWords = [
   "season",
@@ -179,6 +239,78 @@ function normalizeValue(value: string) {
   return value.trim()
 }
 
+function normalizeChain(chain?: ScamGuardChain): ScamGuardChain {
+  if (chain === "solana" || chain === "evm") return chain
+  return "unknown"
+}
+
+function inferChain(value: string, chain?: ScamGuardChain): ScamGuardChain {
+  const explicit = normalizeChain(chain)
+  if (explicit !== "unknown") return explicit
+  const trimmed = value.trim()
+  if (evmAddressRegex.test(trimmed) || /^0x[a-fA-F0-9]{8,}/.test(trimmed)) return "evm"
+  if (solanaAddressRegex.test(trimmed)) return "solana"
+  if (/eth_sendtransaction|personal_sign|eth_signtypeddata|wallet_switchethereumchain|eip-712/i.test(trimmed)) return "evm"
+  return "solana"
+}
+
+function confidenceFor(signals: ScamGuardSignal[], metadata: ScamGuardScanResult["metadata"]) {
+  if (signals.some((signal) => signal.severity === "critical" || signal.code.startsWith("KNOWN_"))) return "HIGH"
+  if (metadata.rpcStatus === "checked" || metadata.decodedIntent?.category !== "unknown") return "MEDIUM"
+  if (signals.some((signal) => ["high", "medium"].includes(signal.severity))) return "MEDIUM"
+  return "LOW"
+}
+
+function explanationFor(level: ScamGuardRiskLevel, signals: ScamGuardSignal[], metadata: ScamGuardScanResult["metadata"]) {
+  const topSignals = signals.filter((signal) => signal.severity !== "info").slice(0, 2)
+  const signalText = topSignals.length
+    ? topSignals.map((signal) => signal.title.toLowerCase()).join(" and ")
+    : "no high-confidence rule"
+  const chainText = metadata.chain === "evm" ? "EVM" : metadata.chain === "solana" ? "Solana" : "multichain"
+  const rpcText =
+    metadata.rpcStatus === "checked"
+      ? "with live RPC evidence"
+      : metadata.rpcStatus === "failed"
+        ? "with RPC unavailable"
+        : "from local rules"
+  if (level === "CRITICAL") return `${chainText} scan found ${signalText}; treat this as a stop signal ${rpcText}.`
+  if (level === "HIGH_RISK") return `${chainText} scan found ${signalText}; verify independently before continuing ${rpcText}.`
+  if (level === "CAUTION") return `${chainText} scan found ${signalText}; slow down and confirm the source ${rpcText}.`
+  return `${chainText} scan found ${signalText}; this lowers risk but does not guarantee safety.`
+}
+
+function defaultReputation(): NonNullable<ScamGuardScanResult["metadata"]["reputation"]> {
+  return { verdict: "unknown", source: "seed_intelligence", notes: [] }
+}
+
+function domainReputation(domain?: string): NonNullable<ScamGuardScanResult["metadata"]["reputation"]> {
+  if (!domain) return defaultReputation()
+  if (knownScamDomains.has(domain)) {
+    return { verdict: "known_bad", source: "seed_intelligence", notes: [`${domain} is in the known suspicious domain seed list.`] }
+  }
+  if (verifiedProjectDomains.has(domain)) {
+    return { verdict: "trusted", source: "verified_project_registry", notes: [`${domain} is in the local verified project registry.`] }
+  }
+  return defaultReputation()
+}
+
+function walletReputation(value: string): NonNullable<ScamGuardScanResult["metadata"]["reputation"]> {
+  const normalized = value.toLowerCase()
+  if (knownBadWallets.has(normalized) || knownDrainerFragments.some((fragment) => normalized.includes(fragment))) {
+    return { verdict: "known_bad", source: "seed_intelligence", notes: ["Wallet matches a known bad or drainer-like seed pattern."] }
+  }
+  return defaultReputation()
+}
+
+function metadataWithDefaults(metadata: ScamGuardScanResult["metadata"]): ScamGuardScanResult["metadata"] {
+  return {
+    ...metadata,
+    chain: metadata.chain ?? "unknown",
+    reputation: metadata.reputation ?? defaultReputation(),
+    feedback: metadata.feedback ?? { enabled: true, endpoint: "/api/scamguard/feedback" },
+  }
+}
+
 function signalWeight(severity: ScamGuardSignalSeverity) {
   if (severity === "critical") return 44
   if (severity === "high") return 28
@@ -214,27 +346,34 @@ function createResult(
   signals: ScamGuardSignal[],
   metadata: ScamGuardScanResult["metadata"]
 ): ScamGuardScanResult {
+  const safeMetadata = metadataWithDefaults(metadata)
   const weightedScore = 8 + signals.reduce((sum, signal) => sum + signalWeight(signal.severity), 0)
-  const score = Math.min(100, Math.max(minimumScoreForSignals(signals), weightedScore))
+  const reputationFloor =
+    safeMetadata.reputation?.verdict === "known_bad" ? 86 : safeMetadata.reputation?.verdict === "suspicious" ? 61 : 0
+  const trustedAdjustment = safeMetadata.reputation?.verdict === "trusted" ? -8 : 0
+  const score = Math.min(100, Math.max(minimumScoreForSignals(signals), reputationFloor, weightedScore + trustedAdjustment))
   const level = riskLevel(score)
+  const renderedSignals = signals.length
+    ? signals
+    : [
+        {
+          code: "NO_HIGH_CONFIDENCE_MATCH",
+          severity: "info" as const,
+          title: "No high-confidence rule matched",
+          detail: "Still verify the official source and expected wallet changes before signing.",
+        },
+      ]
   return {
     id: crypto.randomUUID(),
     type,
     score,
     riskLevel: level,
     summary: summaryFor(level),
-    signals: signals.length
-      ? signals
-      : [
-          {
-            code: "NO_HIGH_CONFIDENCE_MATCH",
-            severity: "info",
-            title: "No high-confidence rule matched",
-            detail: "Still verify the official source and expected wallet changes before signing.",
-          },
-        ],
+    confidence: confidenceFor(renderedSignals, safeMetadata),
+    explanation: explanationFor(level, renderedSignals, safeMetadata),
+    signals: renderedSignals,
     actions: actionsFor(level),
-    metadata,
+    metadata: safeMetadata,
     scannedAt: new Date().toISOString(),
   }
 }
@@ -286,11 +425,13 @@ function brandMentioned(text: string) {
   )
 }
 
-function scanUrl(value: string) {
+function scanUrl(value: string, chain: ScamGuardChain) {
   const text = value.toLowerCase()
   const url = parsedUrl(value)
   const domain = hostFromUrl(value)
   const path = url?.pathname.toLowerCase() ?? ""
+  const tld = domain?.split(".").at(-1) ?? ""
+  const reputation = domainReputation(domain ?? undefined)
   const signals: ScamGuardSignal[] = []
   const brand = brandMentioned(text)
   const hasClaimLanguage = highRiskWords.some((word) => text.includes(word))
@@ -303,6 +444,22 @@ function scanUrl(value: string) {
       severity: "medium",
       title: "URL is malformed",
       detail: "A malformed URL can hide the real destination or be copied from a suspicious prompt.",
+    })
+  }
+  if (domain && knownScamDomains.has(domain)) {
+    signals.push({
+      code: "KNOWN_SCAM_DOMAIN",
+      severity: "critical",
+      title: "Known suspicious domain",
+      detail: `${domain} is in ScamGuard's seed threat intelligence list.`,
+    })
+  }
+  if (domain && verifiedProjectDomains.has(domain)) {
+    signals.push({
+      code: "VERIFIED_PROJECT_DOMAIN",
+      severity: "info",
+      title: "Verified project domain",
+      detail: `${domain} is in the verified project registry. This helps reduce false positives but does not guarantee every wallet action is safe.`,
     })
   }
   if (domain && shortenerDomains.has(domain)) {
@@ -319,6 +476,22 @@ function scanUrl(value: string) {
       severity: "high",
       title: "Known Solana brand appears on an untrusted domain",
       detail: `${brand} is mentioned, but the domain is ${domain}.`,
+    })
+  }
+  if (domain && suspiciousTlds.has(tld) && hasClaimLanguage) {
+    signals.push({
+      code: "SUSPICIOUS_TLD_CLAIM",
+      severity: "medium",
+      title: "Risky claim link domain pattern",
+      detail: `The .${tld} domain appears with claim or reward language. This combination is common in throwaway scam campaigns.`,
+    })
+  }
+  if (domain && /phant[o0]m|s[o0]lflare|jup[i1]ter|mag[i1]ceden/.test(domain) && !officialDomains.has(domain)) {
+    signals.push({
+      code: "TYPOSQUATTING_PATTERN",
+      severity: "high",
+      title: "Possible typosquatting domain",
+      detail: `${domain} resembles a known Solana brand but is not an official domain.`,
     })
   }
   if (hasClaimLanguage) {
@@ -362,7 +535,12 @@ function scanUrl(value: string) {
     })
   }
 
-  return createResult("url", signals, { rpcStatus: "not_applicable", domain: domain ?? undefined })
+  return createResult("url", signals, {
+    chain,
+    rpcStatus: "not_applicable",
+    domain: domain ?? undefined,
+    reputation,
+  })
 }
 
 function parsedInfo(accountInfo: ParsedAccountInfo) {
@@ -371,9 +549,43 @@ function parsedInfo(accountInfo: ParsedAccountInfo) {
   return {}
 }
 
-async function scanWallet(value: string) {
+async function scanWallet(value: string, chain: ScamGuardChain) {
   const address = normalizeValue(value)
   const signals: ScamGuardSignal[] = []
+  const reputation = walletReputation(address)
+
+  if (chain === "evm") {
+    if (!evmAddressRegex.test(address)) {
+      signals.push({
+        code: "INVALID_EVM_ADDRESS",
+        severity: "high",
+        title: "Invalid EVM address shape",
+        detail: "The value does not match the expected 0x-prefixed 20-byte EVM address format.",
+      })
+    }
+    if (/^0x0{40}$/i.test(address)) {
+      signals.push({
+        code: "ZERO_ADDRESS",
+        severity: "medium",
+        title: "Zero address",
+        detail: "The zero address is not a normal user wallet and can indicate burns, placeholders, or malformed flows.",
+      })
+    }
+    if (reputation.verdict === "known_bad") {
+      signals.push({
+        code: "KNOWN_BAD_WALLET",
+        severity: "critical",
+        title: "Known bad wallet pattern",
+        detail: "This wallet matches ScamGuard seed intelligence for suspicious infrastructure.",
+      })
+    }
+    return createResult("wallet", signals, {
+      chain,
+      rpcStatus: "not_applicable",
+      walletAddress: address,
+      reputation,
+    })
+  }
 
   if (!solanaAddressRegex.test(address)) {
     signals.push({
@@ -382,15 +594,15 @@ async function scanWallet(value: string) {
       title: "Invalid Solana address shape",
       detail: "The value does not match the expected base58 Solana address length and alphabet.",
     })
-    return createResult("wallet", signals, { rpcStatus: "skipped", walletAddress: address })
+    return createResult("wallet", signals, { chain, rpcStatus: "skipped", walletAddress: address, reputation })
   }
 
-  if (knownDrainerFragments.some((fragment) => address.toLowerCase().includes(fragment)) || address.includes("111111")) {
+  if (reputation.verdict === "known_bad" || address.includes("111111")) {
     signals.push({
-      code: "SUSPICIOUS_ADDRESS_PATTERN",
-      severity: "medium",
-      title: "Suspicious address pattern",
-      detail: "The address or supplied label resembles known drainer/test patterns.",
+      code: reputation.verdict === "known_bad" ? "KNOWN_BAD_WALLET" : "SUSPICIOUS_ADDRESS_PATTERN",
+      severity: reputation.verdict === "known_bad" ? "critical" : "medium",
+      title: reputation.verdict === "known_bad" ? "Known bad wallet pattern" : "Suspicious address pattern",
+      detail: reputation.verdict === "known_bad" ? "This wallet matches ScamGuard seed intelligence for suspicious infrastructure." : "The address or supplied label resembles known drainer/test patterns.",
     })
   }
 
@@ -435,25 +647,56 @@ async function scanWallet(value: string) {
     }
 
     return createResult("wallet", signals, {
+      chain,
       rpcStatus: "checked",
       walletAddress: address,
       ownerProgram: owner,
       lamports: balance.value ?? 0,
       signatureCount: signatures.length,
+      reputation: owner && trustedPrograms.has(owner)
+        ? { verdict: "trusted", source: "program_registry", notes: [`Owned by ${trustedPrograms.get(owner)}.`] }
+        : reputation,
     })
   } catch (error) {
     return createResult("wallet", signals, {
+      chain,
       rpcStatus: getSolanaRpcUrl() ? "failed" : "skipped",
       rpcError: error instanceof Error ? error.message : "Solana RPC failed",
       walletAddress: address,
+      reputation,
     })
   }
 }
 
-async function scanToken(value: string) {
+async function scanToken(value: string, chain: ScamGuardChain) {
   const mint = normalizeValue(value)
   const signals: ScamGuardSignal[] = []
   const text = mint.toLowerCase()
+
+  if (chain === "evm") {
+    if (!evmAddressRegex.test(mint)) {
+      signals.push({
+        code: "INVALID_EVM_CONTRACT",
+        severity: "high",
+        title: "Invalid EVM contract address",
+        detail: "An EVM token or contract should be a 0x-prefixed 20-byte address.",
+      })
+    }
+    if (/proxy|upgradeable|admin|mint|blacklist|pause|freeze/.test(text)) {
+      signals.push({
+        code: "EVM_ADMIN_SURFACE_LANGUAGE",
+        severity: "medium",
+        title: "Admin-control language detected",
+        detail: "Proxy, upgrade, pause, blacklist, mint, or freeze wording can indicate centralized token control risk.",
+      })
+    }
+    return createResult("token", signals, {
+      chain,
+      rpcStatus: "not_applicable",
+      ownerProgram: evmAddressRegex.test(mint) ? "evm_contract" : null,
+      reputation: walletReputation(mint),
+    })
+  }
 
   if (/fake|usdc|airdrop|claim|reward/.test(text)) {
     signals.push({
@@ -470,7 +713,7 @@ async function scanToken(value: string) {
       title: "Invalid token mint address",
       detail: "A valid SPL token mint should be a base58 Solana address.",
     })
-    return createResult("token", signals, { rpcStatus: "skipped" })
+    return createResult("token", signals, { chain, rpcStatus: "skipped" })
   }
 
   try {
@@ -500,6 +743,14 @@ async function scanToken(value: string) {
         detail: "The account is not owned by the SPL Token or Token-2022 program.",
       })
     }
+    if (owner && trustedPrograms.has(owner)) {
+      signals.push({
+        code: "KNOWN_TOKEN_PROGRAM",
+        severity: "info",
+        title: "Known token program",
+        detail: `The mint is owned by ${trustedPrograms.get(owner)}.`,
+      })
+    }
     if (mintAuthority) {
       signals.push({
         code: "ACTIVE_MINT_AUTHORITY",
@@ -518,8 +769,12 @@ async function scanToken(value: string) {
     }
 
     return createResult("token", signals, {
+      chain,
       rpcStatus: "checked",
       ownerProgram: owner,
+      reputation: owner && trustedPrograms.has(owner)
+        ? { verdict: "trusted", source: "program_registry", notes: [`Owned by ${trustedPrograms.get(owner)}.`] }
+        : defaultReputation(),
       tokenMint: {
         decimals,
         supply,
@@ -530,6 +785,7 @@ async function scanToken(value: string) {
     })
   } catch (error) {
     return createResult("token", signals, {
+      chain,
       rpcStatus: getSolanaRpcUrl() ? "failed" : "skipped",
       rpcError: error instanceof Error ? error.message : "Solana RPC failed",
     })
@@ -563,19 +819,90 @@ async function maybeSimulateTransaction(value: string): Promise<SimulationMetada
   }
 }
 
-async function scanTransaction(value: string, walletAddress?: string) {
+function safeJson(value: string): unknown {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+function findStringField(value: unknown, keys: string[]): string | undefined {
+  if (!value || typeof value !== "object") return undefined
+  const record = value as Record<string, unknown>
+  for (const key of keys) {
+    const item = record[key]
+    if (typeof item === "string") return item
+  }
+  for (const item of Object.values(record)) {
+    if (item && typeof item === "object") {
+      const nested = findStringField(item, keys)
+      if (nested) return nested
+    }
+  }
+  return undefined
+}
+
+function decodeIntent(value: string, chain: ScamGuardChain): NonNullable<ScamGuardScanResult["metadata"]["decodedIntent"]> {
   const text = value.toLowerCase()
-  const signals: ScamGuardSignal[] = []
+  const parsed = safeJson(value)
+  const method = findStringField(parsed, ["method", "functionName", "name"]) ?? (/^[a-z_]+/i.exec(value.trim())?.[0])
+  const data = findStringField(parsed, ["data", "input"]) ?? (/0x[a-fA-F0-9]{8,}/.exec(value)?.[0])
+  const warnings: string[] = []
+
+  if (chain === "evm") {
+    const selector = data?.slice(0, 10).toLowerCase()
+    const selectorMatch = selector ? evmFunctionSelectors.get(selector) : undefined
+    const methodText = method ?? selectorMatch?.method
+    const isSignMethod = /personal_sign|eth_sign|eth_signtypeddata|sign/i.test(methodText ?? "")
+    if (selectorMatch?.category === "approval" || /approve|setapprovalforall|permit/.test(text)) {
+      warnings.push("Approval-style EVM call can allow another address or contract to move assets.")
+      return { method: methodText ?? selectorMatch?.method, category: "approval", spender: findStringField(parsed, ["spender", "operator", "to"]), warnings }
+    }
+    if (selectorMatch?.category === "transfer" || /transferfrom|transfer\(/.test(text)) {
+      warnings.push("Transfer-style EVM call may move tokens or native assets.")
+      return { method: methodText ?? selectorMatch?.method, category: "transfer", recipient: findStringField(parsed, ["to", "recipient"]), amount: findStringField(parsed, ["value", "amount"]), warnings }
+    }
+    if (isSignMethod) {
+      warnings.push("Message signatures can authorize off-chain approvals, login challenges, orders, or permit flows.")
+      return { method: methodText, category: "signature", warnings }
+    }
+    return { method: methodText, category: "unknown", warnings }
+  }
 
   if (/approve|delegate|approvechecked/.test(text)) {
-    signals.push({
-      code: "DELEGATE_APPROVAL",
-      severity: "high",
-      title: "Delegate approval detected",
-      detail: "Delegate approvals can allow another account to move tokens.",
-    })
+    warnings.push("Delegate approval can let another account move tokens.")
+    return { method, category: "approval", warnings }
   }
   if (/set authority|setauthority|authority/.test(text)) {
+    warnings.push("Authority changes can transfer control of token accounts or mints.")
+    return { method, category: "authority", warnings }
+  }
+  if (/close.*account|closeaccount|close token/.test(text)) {
+    warnings.push("Account close instructions can hide sweeping behavior.")
+    return { method, category: "account_close", warnings }
+  }
+  if (/transfer all|all sol|drain|sweep|empty wallet|transfer/.test(text)) {
+    warnings.push("Transfer language suggests asset movement.")
+    return { method, category: "transfer", warnings }
+  }
+  return { method, category: "unknown", warnings }
+}
+
+async function scanTransaction(value: string, walletAddress: string | undefined, chain: ScamGuardChain) {
+  const text = value.toLowerCase()
+  const signals: ScamGuardSignal[] = []
+  const decodedIntent = decodeIntent(value, chain)
+
+  if (decodedIntent.category === "approval" || /approve|delegate|approvechecked|setapprovalforall|permit/.test(text)) {
+    signals.push({
+      code: chain === "evm" ? "EVM_APPROVAL" : "DELEGATE_APPROVAL",
+      severity: "high",
+      title: chain === "evm" ? "EVM approval detected" : "Delegate approval detected",
+      detail: chain === "evm" ? "Approvals and permit flows can allow another address or contract to move assets." : "Delegate approvals can allow another account to move tokens.",
+    })
+  }
+  if (decodedIntent.category === "authority" || /set authority|setauthority|authority/.test(text)) {
     signals.push({
       code: "AUTHORITY_CHANGE",
       severity: "high",
@@ -583,7 +910,7 @@ async function scanTransaction(value: string, walletAddress?: string) {
       detail: "Authority changes can transfer control of token accounts or mints.",
     })
   }
-  if (/close.*account|closeaccount|close token/.test(text)) {
+  if (decodedIntent.category === "account_close" || /close.*account|closeaccount|close token/.test(text)) {
     signals.push({
       code: "CLOSE_ACCOUNT",
       severity: "medium",
@@ -597,6 +924,30 @@ async function scanTransaction(value: string, walletAddress?: string) {
       severity: "critical",
       title: "Sweep or transfer-all intent",
       detail: "The transaction text suggests moving all SOL or assets.",
+    })
+  }
+  if (chain === "evm" && /0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|unlimited|maxuint/.test(text)) {
+    signals.push({
+      code: "UNLIMITED_EVM_APPROVAL",
+      severity: "critical",
+      title: "Unlimited approval pattern",
+      detail: "The transaction resembles an unlimited approval, a common path for token drains.",
+    })
+  }
+  if (chain === "evm" && /wallet_switchethereumchain|switch chain|chainid/.test(text)) {
+    signals.push({
+      code: "CHAIN_SWITCH_REQUEST",
+      severity: "low",
+      title: "Chain switch request",
+      detail: "Scam flows sometimes ask users to switch networks before a second signing step.",
+    })
+  }
+  if (chain === "evm" && decodedIntent.category === "signature") {
+    signals.push({
+      code: "EVM_MESSAGE_SIGNATURE",
+      severity: /permit|seaport|order|approval/.test(text) ? "high" : "low",
+      title: "EVM message signature",
+      detail: "Message signatures can be safe login prompts, but they can also authorize orders, permits, or off-chain approvals.",
     })
   }
   if (seedPhraseWords.some((word) => text.includes(word))) {
@@ -619,22 +970,26 @@ async function scanTransaction(value: string, walletAddress?: string) {
   }
 
   return createResult("transaction", signals, {
+    chain,
     rpcStatus: simulation.attempted ? (getSolanaRpcUrl() ? "checked" : "skipped") : "not_applicable",
     walletAddress,
     simulation,
+    decodedIntent,
+    reputation: walletAddress ? walletReputation(walletAddress) : defaultReputation(),
   })
 }
 
 export async function scanScamGuard(input: ScamGuardScanInput): Promise<ScamGuardScanResult> {
   const value = normalizeValue(input.value)
+  const chain = inferChain(value, input.chain)
   if (!value) {
-    return createResult(input.type, [], { rpcStatus: "not_applicable" })
+    return createResult(input.type, [], { chain, rpcStatus: "not_applicable" })
   }
 
-  if (input.type === "url") return scanUrl(value)
-  if (input.type === "wallet") return scanWallet(value)
-  if (input.type === "token") return scanToken(value)
-  return scanTransaction(value, input.walletAddress)
+  if (input.type === "url") return scanUrl(value, chain)
+  if (input.type === "wallet") return scanWallet(value, chain)
+  if (input.type === "token") return scanToken(value, chain)
+  return scanTransaction(value, input.walletAddress, chain)
 }
 
 export function combinedSecurityScore({

@@ -2,7 +2,9 @@
   const PAGE_SOURCE = "SCAMGUARD_PAGE"
   const EXTENSION_SOURCE = "SCAMGUARD_EXTENSION"
   const pending = new Map()
-  let installed = false
+  let solanaInstalled = false
+  let evmInstalled = false
+  let installAttempts = 0
 
   function bytesToBase64(bytes) {
     let binary = ""
@@ -50,15 +52,19 @@
     }
   }
 
-  function publicKey(provider) {
+  function publicKey(provider, chain) {
     try {
+      if (chain === "evm") {
+        const selected = provider?.selectedAddress
+        return typeof selected === "string" ? selected : null
+      }
       return provider?.publicKey?.toString?.() ?? null
     } catch {
       return null
     }
   }
 
-  function askScamGuard({ method, transaction, provider }) {
+  function askScamGuard({ method, transaction, provider, chain }) {
     const requestId = crypto.randomUUID()
     const value = serializeTransactionLike(transaction)
     window.postMessage({
@@ -66,8 +72,9 @@
       type: "SCAMGUARD_SIGN_REQUEST",
       requestId,
       method,
+      chain,
       value,
-      walletAddress: publicKey(provider),
+      walletAddress: publicKey(provider, chain),
     }, "*")
 
     return new Promise((resolve) => {
@@ -99,7 +106,7 @@
       if (typeof original !== "function") continue
       provider[method] = async function wrappedScamGuardSign(...args) {
         const transaction = method === "signAllTransactions" && Array.isArray(args[0]) ? args[0] : args[0]
-        const decision = await askScamGuard({ method, transaction, provider })
+        const decision = await askScamGuard({ method, transaction, provider, chain: "solana" })
         if (!decision.allow) {
           throw new Error(decision.error || "ScamGuard blocked or cancelled this signing request.")
         }
@@ -116,6 +123,7 @@
             method,
             transaction: args?.params ?? args,
             provider,
+            chain: "solana",
           })
           if (!decision.allow) {
             throw new Error(decision.error || "ScamGuard blocked or cancelled this signing request.")
@@ -132,17 +140,56 @@
     })
   }
 
+  function wrapEvmProvider(provider) {
+    if (!provider || provider.__scamguardEvmWrapped || typeof provider.request !== "function") return
+    const originalRequest = provider.request
+    provider.request = async function wrappedScamGuardEvmRequest(args) {
+      const method = args?.method
+      const shouldScan = typeof method === "string" && (
+        method === "eth_sendTransaction" ||
+        method === "personal_sign" ||
+        method === "eth_sign" ||
+        method === "eth_signTypedData" ||
+        method === "eth_signTypedData_v3" ||
+        method === "eth_signTypedData_v4" ||
+        method === "wallet_switchEthereumChain"
+      )
+      if (shouldScan) {
+        const decision = await askScamGuard({
+          method,
+          transaction: { method, params: args?.params ?? [] },
+          provider,
+          chain: "evm",
+        })
+        if (!decision.allow) {
+          throw new Error(decision.error || "ScamGuard blocked or cancelled this EVM request.")
+        }
+      }
+      return originalRequest.apply(this, arguments)
+    }
+    Object.defineProperty(provider, "__scamguardEvmWrapped", {
+      value: true,
+      enumerable: false,
+      configurable: false,
+    })
+  }
+
   function install() {
-    if (installed) return
     const provider = window.solana || window.backpack?.solana
-    if (!provider) return
-    wrapProvider(provider)
-    installed = true
+    if (provider && !solanaInstalled) {
+      wrapProvider(provider)
+      solanaInstalled = true
+    }
+    if (window.ethereum && !evmInstalled) {
+      wrapEvmProvider(window.ethereum)
+      evmInstalled = true
+    }
   }
 
   install()
   const timer = window.setInterval(() => {
+    installAttempts += 1
     install()
-    if (installed) window.clearInterval(timer)
+    if ((solanaInstalled && evmInstalled) || installAttempts > 80) window.clearInterval(timer)
   }, 300)
 })()

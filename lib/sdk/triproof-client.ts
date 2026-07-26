@@ -57,11 +57,13 @@ export type AnalysisStatusResponse = {
 }
 
 export type ScamGuardScanType = "url" | "wallet" | "token" | "transaction"
+export type ScamGuardChain = "solana" | "evm" | "unknown"
 
 export type ScamGuardScanInput = {
   type: ScamGuardScanType
   value: string
   walletAddress?: string
+  chain?: ScamGuardChain
 }
 
 export type ScamGuardScanResponse = {
@@ -70,6 +72,8 @@ export type ScamGuardScanResponse = {
   score: number
   riskLevel: "SAFE" | "CAUTION" | "HIGH_RISK" | "CRITICAL"
   summary: string
+  confidence: "LOW" | "MEDIUM" | "HIGH"
+  explanation: string
   signals: Array<{
     code: string
     severity: "info" | "low" | "medium" | "high" | "critical"
@@ -79,6 +83,15 @@ export type ScamGuardScanResponse = {
   actions: string[]
   metadata: Record<string, unknown>
   scannedAt: string
+}
+
+export type ScamGuardFeedbackInput = {
+  scanId?: string
+  verdict: "reported_scam" | "reported_safe" | "false_positive" | "false_negative"
+  value?: string
+  chain?: ScamGuardChain
+  reason?: string
+  source?: string
 }
 
 export class TriProofClient {
@@ -124,6 +137,13 @@ export class TriProofClient {
 
   scanScamGuard(input: ScamGuardScanInput) {
     return this.request<ScamGuardScanResponse>("/api/v1/scamguard/scan", {
+      method: "POST",
+      body: JSON.stringify(input),
+    })
+  }
+
+  submitScamGuardFeedback(input: ScamGuardFeedbackInput) {
+    return this.request<{ ok: boolean; feedback: Record<string, unknown> }>("/api/scamguard/feedback", {
       method: "POST",
       body: JSON.stringify(input),
     })

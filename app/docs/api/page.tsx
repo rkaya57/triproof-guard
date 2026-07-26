@@ -34,8 +34,17 @@ const scamGuardExample = `curl -X POST https://triproofprotocol.com/api/v1/scamg
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -d '{
     "type": "transaction",
-    "value": "approve delegate, set authority, close token account",
-    "walletAddress": "OPTIONAL_CONNECTED_WALLET"
+    "chain": "evm",
+    "value": "{\\"method\\":\\"eth_sendTransaction\\",\\"data\\":\\"0x095ea7b3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\\"}",
+    "walletAddress": "0x0000000000000000000000000000000000000000"
+  }'`
+
+const feedbackExample = `curl -X POST https://triproofprotocol.com/api/scamguard/feedback \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "scanId": "SCAN_ID",
+    "verdict": "false_positive",
+    "reason": "Official project domain confirmed by team."
   }'`
 
 export const metadata = {
@@ -53,7 +62,7 @@ export default function ApiDocsPage() {
             Create wallet risk analyses from your own workflow.
           </h1>
           <p className="mt-5 max-w-2xl leading-7 text-muted-foreground">
-            The V1 API lets campaign teams submit wallet lists, queue real on-chain enrichment, run ScamGuard Solana scans, and retrieve decision summaries programmatically.
+            The V1 API lets campaign teams submit wallet lists, queue real on-chain enrichment, run multichain ScamGuard scans, and retrieve decision summaries programmatically.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link href="/api/v1" className={`${buttonVariants()} glow-primary`}>Open API index <ArrowRight data-icon="inline-end" /></Link>
@@ -94,6 +103,10 @@ export default function ApiDocsPage() {
           <Card className="glass-panel premium-card">
             <CardHeader><CardTitle>ScamGuard example</CardTitle><CardDescription>Scan before a wallet or dApp asks the user to sign.</CardDescription></CardHeader>
             <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{scamGuardExample}</code></pre></CardContent>
+          </Card>
+          <Card className="glass-panel premium-card">
+            <CardHeader><CardTitle>Feedback example</CardTitle><CardDescription>Feed false positives and scam reports back into ScamGuard review.</CardDescription></CardHeader>
+            <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{feedbackExample}</code></pre></CardContent>
           </Card>
         </div>
       </section>

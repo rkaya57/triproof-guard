@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { getV1ApiUser } from "@/lib/api/v1-auth"
-import { scanScamGuard, type ScamGuardScanType } from "@/lib/scamguard/engine"
+import { scanScamGuard, type ScamGuardChain, type ScamGuardScanType } from "@/lib/scamguard/engine"
 
 export const runtime = "nodejs"
 
@@ -15,6 +15,7 @@ export async function POST(request: Request) {
     type?: ScamGuardScanType
     value?: string
     walletAddress?: string
+    chain?: ScamGuardChain
   } | null
 
   const type = body?.type
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
   }
   if (!value) return NextResponse.json({ error: "value is required" }, { status: 400 })
 
-  const result = await scanScamGuard({ type, value, walletAddress: body?.walletAddress })
+  const result = await scanScamGuard({ type, value, walletAddress: body?.walletAddress, chain: body?.chain })
   return NextResponse.json(
     {
       ...result,

@@ -37,6 +37,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
 type ScanMode = "url" | "wallet" | "token" | "transaction"
+type ScanChain = "solana" | "evm"
 type RiskLevel = "SAFE" | "CAUTION" | "HIGH_RISK" | "CRITICAL"
 
 type ScanResult = {
@@ -45,6 +46,8 @@ type ScanResult = {
   score: number
   riskLevel: RiskLevel
   summary: string
+  confidence: "LOW" | "MEDIUM" | "HIGH"
+  explanation: string
   signals: Array<{
     code: string
     severity: "info" | "low" | "medium" | "high" | "critical"
@@ -53,6 +56,7 @@ type ScanResult = {
   }>
   actions: string[]
   metadata: {
+    chain: "solana" | "evm" | "unknown"
     rpcStatus: string
     rpcError?: string
     domain?: string
@@ -73,6 +77,20 @@ type ScanResult = {
       error?: string
       logs?: string[]
     }
+    decodedIntent?: {
+      method?: string
+      category?: string
+      assetChange?: string
+      spender?: string
+      recipient?: string
+      amount?: string
+      warnings: string[]
+    }
+    reputation?: {
+      verdict: "trusted" | "unknown" | "suspicious" | "known_bad"
+      source: string
+      notes: string[]
+    }
   }
   scannedAt: string
 }
@@ -92,6 +110,14 @@ const examples: Record<ScanMode, string> = {
     "Program request: approve delegate, set authority, close token account, transfer all SOL after airdrop claim",
 }
 
+const evmExamples: Record<ScanMode, string> = {
+  url: "https://metamask-airdrop-claim.xyz/bonus",
+  wallet: "0x0000000000000000000000000000000000000000",
+  token: "0x0000000000000000000000000000000000000000",
+  transaction:
+    "{\"method\":\"eth_sendTransaction\",\"params\":[{\"to\":\"0x1111111111111111111111111111111111111111\",\"data\":\"0x095ea7b3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"}]}",
+}
+
 const endpointByMode: Record<ScanMode, string> = {
   url: "/api/scamguard/scan-url",
   wallet: "/api/scamguard/scan-wallet",
@@ -108,17 +134,17 @@ const modeConfig = {
   wallet: {
     label: "Wallet",
     icon: WalletCards,
-    helper: "Paste a Solana wallet or program address.",
+    helper: "Paste a Solana wallet/program address or an EVM 0x wallet.",
   },
   token: {
     label: "Token Mint",
     icon: Fingerprint,
-    helper: "Paste a token mint address. RPC will inspect mint and freeze authority when configured.",
+    helper: "Paste a Solana token mint or EVM token contract.",
   },
   transaction: {
     label: "Transaction",
     icon: ClipboardCheck,
-    helper: "Paste transaction instructions or a base64 serialized Solana transaction before signing.",
+    helper: "Paste Solana instructions, base64 transaction, or EVM wallet request JSON before signing.",
   },
 } satisfies Record<ScanMode, { label: string; icon: typeof Link2; helper: string }>
 
@@ -156,10 +182,12 @@ function findSolanaProvider() {
 
 export function ScamGuardPage() {
   const [mode, setMode] = useState<ScanMode>("url")
+  const [chain, setChain] = useState<ScanChain>("solana")
   const [input, setInput] = useState(examples.url)
   const [result, setResult] = useState<ScanResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
   const [connectedWallet, setConnectedWallet] = useState<string | null>(null)
   const [walletMessage, setWalletMessage] = useState<string | null>(null)
 
@@ -186,6 +214,7 @@ export function ScamGuardPage() {
         body: JSON.stringify({
           value: nextInput,
           walletAddress: connectedWallet,
+          chain,
         }),
       })
       const body = await response.json().catch(() => ({}))
@@ -200,9 +229,35 @@ export function ScamGuardPage() {
 
   function selectMode(nextMode: ScanMode) {
     setMode(nextMode)
-    setInput(examples[nextMode])
+    setInput((chain === "evm" ? evmExamples : examples)[nextMode])
     setResult(null)
     setError(null)
+  }
+
+  function selectChain(nextChain: ScanChain) {
+    setChain(nextChain)
+    setInput((nextChain === "evm" ? evmExamples : examples)[mode])
+    setResult(null)
+    setError(null)
+    setFeedbackMessage(null)
+  }
+
+  async function submitFeedback(verdict: "reported_scam" | "reported_safe" | "false_positive" | "false_negative") {
+    if (!result) return
+    setFeedbackMessage("Sending feedback...")
+    const response = await fetch("/api/scamguard/feedback", {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scanId: result.id,
+        verdict,
+        value: input,
+        chain,
+        source: "scamguard_page",
+      }),
+    })
+    setFeedbackMessage(response.ok ? "Feedback saved. ScamGuard will learn from this review." : "Could not save feedback.")
   }
 
   async function connectWallet() {
@@ -236,7 +291,7 @@ export function ScamGuardPage() {
             </span>
             <div className="flex flex-col">
               <span className="text-sm font-semibold">Tri-Proof Guard</span>
-              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-primary/80">ScamGuard Solana</span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-primary/80">ScamGuard Multichain</span>
             </div>
           </Link>
           <div className="flex items-center gap-3">
@@ -251,14 +306,14 @@ export function ScamGuardPage() {
         <div className="relative z-10 mx-auto grid max-w-7xl gap-10 px-5 pb-16 pt-10 sm:px-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:pb-24 lg:pt-16">
           <div className="reveal-up flex flex-col gap-7">
             <div className="flex flex-wrap items-center gap-3">
-              <span className="cyber-chip">Solana pre-sign security</span>
-              <Badge variant="secondary" className="border-primary/30 text-primary">RPC + API + wallet context</Badge>
+              <span className="cyber-chip">Multichain pre-sign security</span>
+              <Badge variant="secondary" className="border-primary/30 text-primary">Solana + EVM + feedback loop</Badge>
             </div>
             <h1 className="text-gradient animate-gradient-text max-w-4xl text-4xl font-semibold leading-tight text-balance sm:text-6xl">
               Stop wallet drains before users sign.
             </h1>
             <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-              ScamGuard Solana scans suspicious links, token mints, wallets, and transaction intent through a server-side risk engine. When Solana RPC is configured, it also checks token authorities, program ownership, balances, signatures, and serialized transaction simulation.
+              ScamGuard scans suspicious links, token mints, EVM contracts, wallets, and transaction intent through a server-side risk engine. Solana stays first-class, and EVM wallet calls now get approval, signature, and transfer intent checks.
             </p>
             <div className="grid max-w-2xl gap-3 sm:grid-cols-3">
               {[
@@ -280,7 +335,7 @@ export function ScamGuardPage() {
                 <div>
                   <CardTitle className="text-2xl">Live pre-sign scanner</CardTitle>
                   <CardDescription>
-                    Connect a wallet for context, paste a Solana item, then run the server-side ScamGuard engine.
+                    Choose a chain, paste a Web3 item, then run the server-side ScamGuard engine.
                   </CardDescription>
                 </div>
                 <Badge variant="outline" className={cn("gap-2", result ? statusTone(result.riskLevel) : "border-primary/30 text-primary")}>
@@ -303,6 +358,27 @@ export function ScamGuardPage() {
               </div>
               {walletMessage && <p className="text-sm text-muted-foreground">{walletMessage}</p>}
 
+              <div className="grid gap-2 rounded-2xl border border-border bg-background/35 p-2 sm:grid-cols-2">
+                {[
+                  ["solana", "Solana", "Phantom, Backpack, SPL mints"] as const,
+                  ["evm", "EVM", "MetaMask, Rabby, Base, Ethereum"] as const,
+                ].map(([item, label, detail]) => (
+                  <Button
+                    key={item}
+                    type="button"
+                    variant={chain === item ? "secondary" : "outline"}
+                    className={cn("h-auto justify-start gap-3 py-3 text-left", chain === item && "border-primary/30 bg-primary/10 text-primary")}
+                    onClick={() => selectChain(item)}
+                  >
+                    <ShieldCheck className="size-4" />
+                    <span className="grid gap-0.5">
+                      <span>{label}</span>
+                      <span className="text-xs font-normal text-muted-foreground">{detail}</span>
+                    </span>
+                  </Button>
+                ))}
+              </div>
+
               <div className="grid gap-2 sm:grid-cols-4">
                 {(Object.keys(modeConfig) as ScanMode[]).map((item) => {
                   const Icon = modeConfig[item].icon
@@ -323,7 +399,7 @@ export function ScamGuardPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <span className="text-muted-foreground">{modeConfig[mode].helper}</span>
-                  <button type="button" className="text-primary hover:underline" onClick={() => setInput(examples[mode])}>
+                  <button type="button" className="text-primary hover:underline" onClick={() => setInput((chain === "evm" ? evmExamples : examples)[mode])}>
                     Load example
                   </button>
                 </div>
@@ -350,6 +426,18 @@ export function ScamGuardPage() {
                 </div>
                 <div className="premium-card rounded-2xl border border-border bg-background/55 p-5">
                   <p className="font-medium">{result?.summary ?? "Run a scan to see ScamGuard risk signals, recommended actions, and RPC metadata."}</p>
+                  {result && (
+                    <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+                      <span className="rounded-lg border border-border bg-background/45 px-3 py-2">Chain: {result.metadata.chain}</span>
+                      <span className="rounded-lg border border-border bg-background/45 px-3 py-2">Confidence: {result.confidence}</span>
+                      <span className="rounded-lg border border-border bg-background/45 px-3 py-2">Reputation: {result.metadata.reputation?.verdict ?? "unknown"}</span>
+                    </div>
+                  )}
+                  {result?.explanation && (
+                    <p className="mt-3 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm leading-6 text-cyan-100">
+                      {result.explanation}
+                    </p>
+                  )}
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
                     <div>
                       <p className="mb-2 flex items-center gap-2 text-sm font-medium text-primary"><FileSearch className="size-4" /> Signals</p>
@@ -374,6 +462,22 @@ export function ScamGuardPage() {
                           {result.metadata.signatureCount !== undefined && <><br />Signatures sampled: {result.metadata.signatureCount}</>}
                           {result.metadata.ownerProgram && <><br />Owner: {result.metadata.ownerProgram}</>}
                           {result.metadata.rpcError && <><br />RPC note: {result.metadata.rpcError}</>}
+                          {result.metadata.decodedIntent?.category && <><br />Intent: {result.metadata.decodedIntent.category}</>}
+                          {result.metadata.decodedIntent?.method && <><br />Method: {result.metadata.decodedIntent.method}</>}
+                          {result.metadata.decodedIntent?.warnings?.map((warning) => <span key={warning}><br />Decode note: {warning}</span>)}
+                          {result.metadata.reputation?.notes?.map((note) => <span key={note}><br />Reputation: {note}</span>)}
+                        </div>
+                      )}
+                      {result && (
+                        <div className="mt-4 rounded-lg border border-border bg-background/45 p-3">
+                          <p className="text-xs font-medium uppercase tracking-[0.16em] text-primary">Feedback loop</p>
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            <Button type="button" variant="outline" size="sm" onClick={() => void submitFeedback("reported_safe")}>Looks safe</Button>
+                            <Button type="button" variant="outline" size="sm" onClick={() => void submitFeedback("reported_scam")}>Report scam</Button>
+                            <Button type="button" variant="outline" size="sm" onClick={() => void submitFeedback("false_positive")}>False positive</Button>
+                            <Button type="button" variant="outline" size="sm" onClick={() => void submitFeedback("false_negative")}>Missed risk</Button>
+                          </div>
+                          {feedbackMessage && <p className="mt-3 text-xs text-muted-foreground">{feedbackMessage}</p>}
                         </div>
                       )}
                     </div>
@@ -395,7 +499,7 @@ export function ScamGuardPage() {
               ScamGuard now follows the user into the browser.
             </h2>
             <p className="mt-4 leading-7 text-muted-foreground">
-              The extension connects the web app risk engine to real browsing sessions: it scans the current page, checks links on demand, and places a warning overlay before Solana signing calls continue.
+              The extension connects the web app risk engine to real browsing sessions: it scans the current page, checks links on demand, and places a warning overlay before Solana or EVM signing calls continue.
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <a href="/downloads/scamguard-chrome-extension.zip" className={`${buttonVariants()} glow-primary hover-lift`} download>
@@ -409,7 +513,7 @@ export function ScamGuardPage() {
 
           <div className="grid gap-5 md:grid-cols-2">
             {[
-              [Puzzle, "Popup scanner", "Open ScamGuard from the Chrome toolbar and scan the active Solana page URL with the same server-side engine."],
+              [Puzzle, "Popup scanner", "Open ScamGuard from the Chrome toolbar and scan the active Web3 page URL with the same server-side engine."],
               [FileSearch, "Page link scan", "Scan visible claim, mint, presale, or airdrop links on the page before users click into them."],
               [ShieldAlert, "Pre-sign overlay", "Intercept Solana signing methods and require a review decision before suspicious transactions continue."],
               [Settings2, "Local controls", "Configure API base URL, caution warnings, critical page blocking, and locally trusted domains."],
@@ -438,7 +542,7 @@ export function ScamGuardPage() {
                   "Unzip the package on your computer.",
                   "Open chrome://extensions and enable Developer mode.",
                   "Click Load unpacked and select the unzipped extension folder.",
-                  "Open any Solana dApp page; the ScamGuard banner and toolbar popup will appear.",
+                  "Open any Solana or EVM dApp page; the ScamGuard banner and toolbar popup will appear.",
                 ].map((step, index) => (
                   <li key={step} className="flex gap-3 rounded-lg border border-border bg-background/45 p-3">
                     <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-primary/30 bg-primary/10 font-mono text-xs text-primary">
@@ -459,7 +563,7 @@ export function ScamGuardPage() {
             <CardContent className="space-y-3 text-sm text-muted-foreground">
               {[
                 "Current page URL and visible page links for risk checks.",
-                "Transaction text or serialized transaction payloads that the dApp asks the wallet to sign.",
+                "Transaction text, serialized Solana payloads, or EVM wallet request JSON that the dApp asks the wallet to sign.",
                 "Connected wallet public key when available as optional scan context.",
                 "Never seed phrases, private keys, wallet passwords, or wallet extension internal pages.",
               ].map((item) => (
@@ -478,7 +582,7 @@ export function ScamGuardPage() {
           <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Integrated with Guard</Badge>
           <h2 className="text-gradient text-3xl font-semibold sm:text-5xl">Sybil analysis stays. ScamGuard becomes the real-time security layer.</h2>
           <p className="mt-4 text-muted-foreground">
-            Tri-Proof keeps campaign wallet clustering and Sybil review, then adds a second product surface for scam prevention around suspicious dApps, token mints, and transactions.
+            Tri-Proof keeps campaign wallet clustering and Sybil review, then adds a second product surface for scam prevention around suspicious dApps, token mints, EVM contracts, and transactions.
           </p>
         </div>
         <div className="grid gap-5 md:grid-cols-3">
@@ -502,7 +606,7 @@ export function ScamGuardPage() {
         <div className="mx-auto grid max-w-7xl gap-6 px-5 py-16 sm:px-8 lg:grid-cols-[0.8fr_1.2fr]">
           <div>
             <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">B2B API</Badge>
-            <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Embed ScamGuard inside wallets, launchpads, and Solana dApps.</h2>
+            <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Embed ScamGuard inside wallets, launchpads, and Web3 dApps.</h2>
             <p className="mt-4 leading-7 text-muted-foreground">
               Partners can call one authenticated endpoint for every scan type, or use the public scanner endpoints for lightweight UI flows.
             </p>
@@ -510,7 +614,7 @@ export function ScamGuardPage() {
           <div className="grid gap-4 md:grid-cols-2">
             {[
               [Code2, "POST /api/v1/scamguard/scan", "Authenticated B2B endpoint using the existing TRIPROOF_API_KEY bearer flow."],
-              [ClipboardCheck, "Pre-sign payloads", "Send instruction text or base64 serialized transactions for simulation-aware scoring."],
+              [ClipboardCheck, "Pre-sign payloads", "Send instruction text, base64 serialized Solana transactions, or EVM wallet request JSON."],
               [Fingerprint, "Mint authority checks", "When RPC is configured, mint and freeze authorities are inspected server-side."],
               [ExternalLink, "Public scan endpoints", "/api/scamguard/scan-url, scan-wallet, scan-token, and scan-transaction power the product UI."],
             ].map(([Icon, title, text]) => (

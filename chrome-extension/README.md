@@ -1,6 +1,6 @@
-# ScamGuard for Solana Chrome Extension
+# ScamGuard Web3 Shield Chrome Extension
 
-Pre-sign protection for Solana dApps, airdrops, token claims, and suspicious wallet actions.
+Pre-sign protection for Solana and EVM dApps, airdrops, token claims, and suspicious wallet actions.
 
 ## MVP features
 
@@ -13,6 +13,12 @@ Pre-sign protection for Solana dApps, airdrops, token claims, and suspicious wal
   - `signAllTransactions`
   - generic signing `provider.request(...)` calls
 - Warning overlay for caution, high-risk, and critical signing flows.
+- Injected EVM provider pre-sign observer for MetaMask/Rabby/Coinbase style:
+  - `eth_sendTransaction`
+  - `personal_sign`
+  - `eth_sign`
+  - `eth_signTypedData_v4`
+  - `wallet_switchEthereumChain`
 - Local settings:
   - API base URL
   - warn on caution-level signing

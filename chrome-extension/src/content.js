@@ -188,6 +188,7 @@ async function handleSignRequest(payload) {
     type: "SCAN_TRANSACTION",
     value: payload.value,
     walletAddress: payload.walletAddress,
+    chain: payload.chain,
   })
   if (!response?.ok) {
     window.postMessage({

@@ -1,15 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "ScamGuard for Solana",
+  "name": "ScamGuard Web3 Shield",
   "version": "0.1.0",
-  "description": "Pre-sign protection for Solana dApps, airdrops, token claims, and suspicious wallet actions.",
+  "description": "Pre-sign protection for Solana and EVM dApps, airdrops, token claims, and suspicious wallet actions.",
   "icons": {
     "16": "assets/icon16.png",
     "48": "assets/icon48.png",
     "128": "assets/icon128.png"
   },
   "action": {
-    "default_title": "ScamGuard for Solana",
+    "default_title": "ScamGuard Web3 Shield",
     "default_popup": "src/popup.html",
     "default_icon": {
       "16": "assets/icon16.png",
