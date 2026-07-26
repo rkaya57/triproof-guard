@@ -15,10 +15,6 @@ export const requiredProductionSecretGroups: Record<string, SecretGroup> = {
     name: "ACCESS_PASS_SIGNING_SECRET",
     purpose: "access pass cookie signing",
   },
-  humanityNullifier: {
-    name: "HUMANITY_NULLIFIER_SECRET",
-    purpose: "Humanity Gate nullifier hashing",
-  },
   worker: {
     name: "WORKER_SECRET",
     aliases: ["ANALYSIS_WORKER_SECRET", "CRON_SECRET"],
@@ -99,12 +95,6 @@ export function getSessionSigningSecret() {
 export function getAccessPassSigningSecret() {
   return requireSecret(requiredProductionSecretGroups.accessPass, {
     devFallback: "development-access-pass-secret-change-me",
-  })
-}
-
-export function getHumanityNullifierSecret() {
-  return requireSecret(requiredProductionSecretGroups.humanityNullifier, {
-    devFallback: "triproof-humanity-dev",
   })
 }
 

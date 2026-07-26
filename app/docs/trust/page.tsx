@@ -3,12 +3,11 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
-  Fingerprint,
   GitBranch,
   LockKeyhole,
   Network,
+  ShieldAlert,
   ShieldCheck,
-  UserCheck,
 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -18,13 +17,13 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 export const metadata = {
   title: "Trust & Methodology | Tri-Proof Guard",
   description:
-    "How Tri-Proof Guard explains wallet risk, privacy boundaries, Humanity Gate, reason codes and false-positive handling.",
+    "How Tri-Proof Guard explains wallet risk, ScamGuard boundaries, reason codes and false-positive handling.",
 }
 
 const methodCards = [
   [Network, "On-chain evidence first", "Wallet age, transaction history, funding source, contract diversity and campaign actions are treated as evidence, not identity claims."],
   [GitBranch, "Cluster review", "Shared funding and similar behavior create review groups so teams can inspect linked wallets together."],
-  [Fingerprint, "Optional humanity signal", "Humanity Gate can add liveness or proof-of-human evidence at registration, but it does not replace wallet risk scoring."],
+  [ShieldAlert, "ScamGuard signal", "ScamGuard adds suspicious URL, token mint and transaction intent checks, but it does not replace wallet risk scoring."],
   [LockKeyhole, "Privacy boundary", "Reports avoid raw personal data. Proof packages are campaign-scoped and explainable without becoming a global identity record."],
 ] as const
 
@@ -114,10 +113,10 @@ export default function TrustDocsPage() {
         </Card>
         <Card className="glass-panel premium-card border-green-400/25 bg-green-400/5">
           <CardHeader>
-            <UserCheck className="text-green-300" />
-            <CardTitle>Humanity Gate boundary</CardTitle>
+            <ShieldAlert className="text-green-300" />
+            <CardTitle>ScamGuard boundary</CardTitle>
             <CardDescription>
-              Humanity Gate is an optional liveness and registration friction layer. It is not KYC, does not replace risk scoring, and should be used as one signal among several.
+              ScamGuard is a pre-sign risk screen for Solana links, token mints and transaction intent. It is not a guarantee, does not replace Sybil scoring, and should be used as one signal among several.
             </CardDescription>
           </CardHeader>
         </Card>

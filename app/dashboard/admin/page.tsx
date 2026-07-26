@@ -11,7 +11,7 @@ import {
   FileText,
   Gift,
   Layers3,
-  ScanFace,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
   Wrench,
@@ -125,7 +125,7 @@ export default async function Page() {
             <Badge variant="secondary" className="mb-4 w-fit border-primary/40 bg-primary/10 text-cyan-100">Admin Command Center</Badge>
             <h2 className="text-gradient text-3xl font-semibold sm:text-5xl">Tri-Proof operasyon merkezi</h2>
             <p className="mt-3 max-w-3xl text-slate-300">
-              Admin: {admin.email}. Sistem sağlığı, analiz kuyruğu, ödeme akışı, provider limitleri, Humanity Gate lab, blog ve issue takibi buradan yönetilir.
+              Admin: {admin.email}. Sistem sağlığı, analiz kuyruğu, ödeme akışı, provider limitleri, ScamGuard, blog ve issue takibi buradan yönetilir.
             </p>
           </div>
           <div className={`rounded-2xl border p-5 text-right ${toneBorder(health?.tone ?? "neutral")}`}>
@@ -261,7 +261,7 @@ export default async function Page() {
       <section className="grid gap-4 lg:grid-cols-3">
         {[
           [ShieldCheck, "System Health", "Database, API keys, treasury wallets and worker queue.", "/dashboard/admin/diagnostics"],
-          [ScanFace, "Humanity Gate Lab", "Admin-only test hub for live human verification before campaign registration.", "/dashboard/admin/humanity"],
+          [ShieldAlert, "ScamGuard Solana", "Public pre-sign scanner for suspicious Solana links, tokens and transaction intent.", "/scamguard"],
           [Gift, "Airdrop Review", "Approve contribution proofs and credit Season 0 task points.", "/dashboard/admin/airdrop"],
           [Bug, "Issue Tracker", "Track bugs, broken flows, visual issues and Codex tasks.", "/dashboard/admin/bugs"],
           [Activity, "Analysis Ops", "Review recent wallet analyses and failed jobs.", "/dashboard/admin/analyses"],

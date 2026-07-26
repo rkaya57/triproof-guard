@@ -12,8 +12,8 @@ import {
   HeartPulse,
   Home,
   LogOut,
-  ScanFace,
   Settings,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
   Tags,
@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils"
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: Home },
   { href: "/dashboard/new-analysis", label: "New Analysis", icon: FilePlus2 },
+  { href: "/scamguard", label: "ScamGuard", icon: ShieldAlert },
   { href: "/dashboard/demo", label: "Demo Report", icon: BarChart3 },
   { href: "/dashboard/airdrop", label: "Airdrop Tasks", icon: Gift },
   { href: "/dashboard/reports", label: "Reports", icon: FileText },
@@ -34,16 +35,12 @@ const navItems = [
 
 const adminNavItems = [
   { href: "/dashboard/admin", label: "Admin Center", icon: ShieldCheck },
-  { href: "/dashboard/admin/humanity", label: "Humanity Gate", icon: ScanFace },
   { href: "/dashboard/admin/airdrop", label: "Airdrop Review", icon: Gift },
   { href: "/dashboard/admin/diagnostics", label: "Diagnostics", icon: HeartPulse },
 ]
 
 const routeTitles = [
   { href: "/dashboard/admin/airdrop", title: "Airdrop Review", eyebrow: "Season 0 task moderation" },
-  { href: "/dashboard/admin/humanity/verifications", title: "Humanity Verifications", eyebrow: "Humanity Gate evidence" },
-  { href: "/dashboard/admin/humanity/demo", title: "Humanity Gate Demo", eyebrow: "Controlled liveness sandbox" },
-  { href: "/dashboard/admin/humanity", title: "Humanity Gate", eyebrow: "Human verification console" },
   { href: "/dashboard/admin/diagnostics", title: "Diagnostics", eyebrow: "Production hardening checks" },
   { href: "/dashboard/admin/analyses", title: "Analysis Admin", eyebrow: "Campaign operations" },
   { href: "/dashboard/admin/blog", title: "Blog Admin", eyebrow: "Content operations" },

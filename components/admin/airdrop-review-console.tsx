@@ -301,7 +301,7 @@ export function AirdropReviewConsole() {
             </Badge>
             <h1 className="text-gradient text-3xl font-semibold sm:text-5xl">Airdrop task review</h1>
             <p className="mt-3 max-w-3xl text-slate-300">
-              Review X screenshots, quote URLs and Humanity Gate feedback. Approved submissions immediately credit points to the user profile.
+              Review X screenshots, quote URLs and ScamGuard feedback. Approved submissions immediately credit points to the user profile.
             </p>
           </div>
           <Button
@@ -361,7 +361,7 @@ export function AirdropReviewConsole() {
                 >
                   <option value="X_FOLLOW">X follow</option>
                   <option value="X_QUOTE">X quote</option>
-                  <option value="HUMANITY_GATE_FEEDBACK">Humanity feedback</option>
+                  <option value="HUMANITY_GATE_FEEDBACK">ScamGuard feedback</option>
                 </select>
               </label>
               <label className="grid gap-2 text-sm text-slate-300">
@@ -615,14 +615,14 @@ function ReviewPanel({
     "Proof looks valid. Approved and points credited.",
     "Duplicate or low-quality proof. Rejected for this task.",
     "Screenshot does not clearly show account ownership or task completion.",
-    "Humanity Gate feedback reviewed and accepted.",
+    "ScamGuard feedback reviewed and accepted.",
   ]
 
   return (
     <div className="space-y-3">
       {submission.feedbackText && (
         <div className="rounded-xl border border-purple-400/20 bg-purple-400/10 p-4 text-sm text-slate-200">
-          <p className="mb-2 font-medium text-purple-100">Humanity feedback</p>
+          <p className="mb-2 font-medium text-purple-100">ScamGuard feedback</p>
           <p className="leading-6">{submission.feedbackText}</p>
         </div>
       )}

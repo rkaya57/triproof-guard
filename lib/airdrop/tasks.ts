@@ -35,10 +35,10 @@ export const AIRDROP_TASK_DEFINITIONS: AirdropTaskDefinition[] = [
     sortOrder: 20,
   },
   {
-    slug: "humanity-gate-feedback",
-    title: "Test Humanity Gate and leave feedback",
+    slug: "scamguard-feedback",
+    title: "Test ScamGuard and leave feedback",
     description:
-      "Run the one-time Humanity Gate readiness test, then submit feedback and optional screenshot evidence for admin review.",
+      "Run the one-time ScamGuard Solana readiness test, then submit feedback and optional screenshot evidence for admin review.",
     type: "HUMANITY_GATE_FEEDBACK",
     points: 250,
     proofRequired: false,
@@ -56,6 +56,8 @@ type AirdropTaskClient = Pick<PrismaClient, "airdropTask">
 type AirdropTaskTransaction = Prisma.TransactionClient
 
 export async function ensureAirdropTasks(dbClient: AirdropTaskClient | AirdropTaskTransaction) {
+  const activeSlugs = AIRDROP_TASK_DEFINITIONS.map((task) => task.slug)
+
   await Promise.all(
     AIRDROP_TASK_DEFINITIONS.map((task) =>
       dbClient.airdropTask.upsert({
@@ -82,6 +84,14 @@ export async function ensureAirdropTasks(dbClient: AirdropTaskClient | AirdropTa
       })
     )
   )
+
+  await dbClient.airdropTask.updateMany({
+    where: {
+      active: true,
+      slug: { notIn: activeSlugs },
+    },
+    data: { active: false },
+  })
 }
 
 export function normalizeXHandle(value: string) {

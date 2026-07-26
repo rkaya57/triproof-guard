@@ -19,29 +19,29 @@ export async function POST() {
 
   const [profile, task] = await Promise.all([
     db.airdropProfile.findUnique({ where: { userId: user.id } }),
-    db.airdropTask.findUnique({ where: { slug: "humanity-gate-feedback" } }),
+    db.airdropTask.findUnique({ where: { slug: "scamguard-feedback" } }),
   ])
 
   if (!profile) {
-    return NextResponse.json({ error: "Register for the airdrop season before testing Humanity Gate." }, { status: 400 })
+    return NextResponse.json({ error: "Register for the airdrop season before testing ScamGuard." }, { status: 400 })
   }
 
-  if (!task) return NextResponse.json({ error: "Humanity Gate task is not configured." }, { status: 500 })
+  if (!task) return NextResponse.json({ error: "ScamGuard feedback task is not configured." }, { status: 500 })
 
   const existing = await db.airdropSubmission.findUnique({
     where: { userId_taskId: { userId: user.id, taskId: task.id } },
   })
 
   if (existing?.humanityTestResult) {
-    return NextResponse.json({ error: "Humanity Gate can only be tested once for this season." }, { status: 409 })
+    return NextResponse.json({ error: "ScamGuard can only be tested once for this season." }, { status: 409 })
   }
 
   const score = scoreFromUserId(user.id)
   const result = {
     completedAt: new Date().toISOString(),
-    decision: score >= 88 ? "APPROVED" : "MANUAL_REVIEW",
-    humanSessionScore: score,
-    reasonCodes: ["AIRDROP_ONE_TIME_TEST", "NO_RAW_VIDEO_STORED", "FEEDBACK_REQUIRED"],
+    decision: score >= 88 ? "READY" : "NEEDS_REVIEW",
+    scamGuardReadinessScore: score,
+    reasonCodes: ["SCAMGUARD_ONE_TIME_TEST", "NO_PRIVATE_KEY_REQUIRED", "FEEDBACK_REQUIRED"],
   }
 
   const submission = await db.airdropSubmission.upsert({

@@ -59,10 +59,10 @@ export async function POST(request: Request) {
       where: { userId_taskId: { userId: user.id, taskId: task.id } },
     })
     if (!existing?.humanityTestResult) {
-      return NextResponse.json({ error: "Run the one-time Humanity Gate test before sending feedback." }, { status: 400 })
+      return NextResponse.json({ error: "Run the one-time ScamGuard test before sending feedback." }, { status: 400 })
     }
     if (!feedbackText || feedbackText.length < 20) {
-      return NextResponse.json({ error: "Write at least 20 characters of Humanity Gate feedback." }, { status: 400 })
+      return NextResponse.json({ error: "Write at least 20 characters of ScamGuard feedback." }, { status: 400 })
     }
   }
 
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
   }
 
   if (task.type === "HUMANITY_GATE_FEEDBACK" && current?.feedbackText) {
-    return NextResponse.json({ error: "Humanity Gate feedback can only be submitted once." }, { status: 409 })
+    return NextResponse.json({ error: "ScamGuard feedback can only be submitted once." }, { status: 409 })
   }
 
   const submission = await db.airdropSubmission.upsert({

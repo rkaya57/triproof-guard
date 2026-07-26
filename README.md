@@ -10,6 +10,7 @@ Tri-Proof Guard is a Web3 campaign wallet risk analysis and Sybil detection dash
 - Simple email/password auth with bcrypt and signed HTTP-only JWT cookies
 - PapaParse CSV parsing, Recharts charts, Zod validation
 - CSV exports and PDF reports with pdf-lib
+- ScamGuard Solana public scanner module for suspicious URLs, wallets, token mints, and transaction intent
 
 ## Setup
 
@@ -30,7 +31,6 @@ copy .env.example .env
 ```env
 NEXTAUTH_SECRET="long-random-session-secret"
 ACCESS_PASS_SIGNING_SECRET="long-random-access-pass-secret"
-HUMANITY_NULLIFIER_SECRET="long-random-humanity-secret"
 WORKER_SECRET="long-random-worker-secret"
 ```
 
@@ -190,14 +190,37 @@ See `sample-data/`:
 - `enriched-wallets.csv`
 - `suspicious-cluster-demo.csv`
 
+## ScamGuard Solana
+
+ScamGuard Solana is integrated as a public pre-sign security module at
+`/scamguard`. It does not replace the Sybil analysis product; it adds a second
+security surface for suspicious Solana links, wallets, token mints, and
+transaction intent.
+
+Current MVP checks:
+
+- Suspicious airdrop, mint, claim, presale, and brand-impersonation URL patterns
+- Seed phrase and private key lure language
+- Suspicious wallet/program patterns
+- Fake branded token mint patterns and authority-risk language
+- Transaction intent signals such as approve delegate, set authority, close token account, and transfer-all
+
+Production path:
+
+- Server-side Solana RPC `simulateTransaction`
+- Helius or equivalent Solana enrichment
+- Token mint authority/freeze authority checks
+- Known drainer domain and wallet intelligence feed
+- B2B API and SDK for wallets, launchpads, and Solana dApps
+
 ## Roadmap
 
 - USDC payment integration for pricing plans
 - API beta access for Pro accounts
 - Background queue + live progress polling for very large on-chain enrichment jobs
 - Solana on-chain enrichment support
-- Tri-Proof Human: adaptive human challenge and wallet-bound human signal, after Guard MVP
+- ScamGuard Solana production risk engine and B2B API
 
 ## Disclaimer
 
-Tri-Proof Guard provides risk analysis and decision support. It does not guarantee that a wallet is definitively a bot or a human. Final reward decisions should be made by the project team.
+Tri-Proof Guard provides risk analysis and decision support. It does not guarantee that a wallet, URL, token, or transaction is definitively malicious or legitimate. Final reward, security, and operational decisions should be made by the project team.

@@ -6,7 +6,6 @@ import {
   AlertCircle,
   ArrowRight,
   BadgeCheck,
-  Camera,
   CheckCircle2,
   ClipboardCheck,
   ExternalLink,
@@ -15,6 +14,7 @@ import {
   LockKeyhole,
   MessageSquareText,
   Send,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
   Trophy,
@@ -39,10 +39,10 @@ import { Textarea } from "@/components/ui/textarea"
 type SubmissionStatus = "PENDING" | "APPROVED" | "REJECTED"
 type TaskType = "X_FOLLOW" | "X_QUOTE" | "HUMANITY_GATE_FEEDBACK"
 
-type HumanityResult = {
+type ScamGuardResult = {
   completedAt: string
   decision: string
-  humanSessionScore: number
+  scamGuardReadinessScore: number
   reasonCodes: string[]
 }
 
@@ -59,7 +59,7 @@ type AirdropTask = {
     status: SubmissionStatus
     evidenceUrl: string | null
     feedbackText: string | null
-    humanityTestResult: HumanityResult | null
+    humanityTestResult: ScamGuardResult | null
     pointsAwarded: number
     adminNotes: string | null
     reviewedAt: string | null
@@ -143,7 +143,7 @@ export function AirdropTasksClient() {
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busyTask, setBusyTask] = useState<string | null>(null)
-  const [humanityResult, setHumanityResult] = useState<HumanityResult | null>(null)
+  const [scamGuardResult, setScamGuardResult] = useState<ScamGuardResult | null>(null)
 
   async function refresh() {
     setLoading(true)
@@ -166,7 +166,7 @@ export function AirdropTasksClient() {
       }
 
       setData(body)
-      setHumanityResult(
+      setScamGuardResult(
         body.tasks.find((task) => task.type === "HUMANITY_GATE_FEEDBACK")?.submission
           ?.humanityTestResult ?? null
       )
@@ -244,19 +244,19 @@ export function AirdropTasksClient() {
     }
   }
 
-  async function runHumanityTest() {
-    setBusyTask("humanity-test")
+  async function runScamGuardTest() {
+    setBusyTask("scamguard-test")
     setError(null)
     setMessage(null)
     try {
-      const response = await fetch("/api/airdrop/humanity-test", { method: "POST" })
+      const response = await fetch("/api/airdrop/scamguard-test", { method: "POST" })
       if (!response.ok) throw new Error(await readError(response))
-      const body = (await response.json()) as { result: HumanityResult }
-      setHumanityResult(body.result)
-      setMessage("Humanity Gate test completed once. Add your feedback to submit it for review.")
+      const body = (await response.json()) as { result: ScamGuardResult }
+      setScamGuardResult(body.result)
+      setMessage("ScamGuard test completed once. Add your feedback to submit it for review.")
       await refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Humanity Gate test failed")
+      setError(err instanceof Error ? err.message : "ScamGuard test failed")
     } finally {
       setBusyTask(null)
     }
@@ -341,7 +341,7 @@ export function AirdropTasksClient() {
               Airdrop Tasks
             </h1>
             <p className="mt-5 max-w-3xl leading-7 text-slate-300">
-              Register once, complete the official X and Humanity Gate tasks, submit proof, then wait for admin approval before points are credited to your profile.
+              Register once, complete the official X and ScamGuard tasks, submit proof, then wait for admin approval before points are credited to your profile.
             </p>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
               <a href={triproofXUrl} target="_blank" rel="noreferrer" className={`${buttonVariants()} glow-primary hover-lift`}>
@@ -443,8 +443,8 @@ export function AirdropTasksClient() {
           const submission = task.submission
           const locked = !profile
           const approved = submission?.status === "APPROVED"
-          const humanityTask = task.type === "HUMANITY_GATE_FEEDBACK"
-          const testResult = humanityResult ?? submission?.humanityTestResult ?? null
+          const scamGuardTask = task.type === "HUMANITY_GATE_FEEDBACK"
+          const testResult = scamGuardResult ?? submission?.humanityTestResult ?? null
 
           return (
             <Card key={task.slug} className="glass-panel premium-card hover-lift animated-border">
@@ -478,24 +478,24 @@ export function AirdropTasksClient() {
                   </a>
                 )}
 
-                {humanityTask && (
+                {scamGuardTask && (
                   <div className="rounded-xl border border-purple-400/20 bg-purple-400/10 p-3 text-sm text-slate-200">
                     {testResult ? (
                       <div className="space-y-2">
                         <p className="flex items-center gap-2 font-medium text-purple-100">
-                          <BadgeCheck className="size-4" /> Humanity test completed
+                          <BadgeCheck className="size-4" /> ScamGuard test completed
                         </p>
-                        <p className="font-mono text-xs">Score {testResult.humanSessionScore} / {testResult.decision}</p>
+                        <p className="font-mono text-xs">Score {testResult.scamGuardReadinessScore} / {testResult.decision}</p>
                       </div>
                     ) : (
                       <Button
                         type="button"
-                        onClick={runHumanityTest}
-                        disabled={locked || busyTask === "humanity-test"}
+                        onClick={runScamGuardTest}
+                        disabled={locked || busyTask === "scamguard-test"}
                         className="w-full"
                       >
-                        {busyTask === "humanity-test" ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Camera data-icon="inline-start" />}
-                        Run one-time Humanity test
+                        {busyTask === "scamguard-test" ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <ShieldAlert data-icon="inline-start" />}
+                        Run one-time ScamGuard test
                       </Button>
                     )}
                   </div>
@@ -510,12 +510,12 @@ export function AirdropTasksClient() {
                       </label>
                     )}
 
-                    {humanityTask && testResult && (
+                    {scamGuardTask && testResult && (
                       <label className="grid gap-2 text-sm text-slate-300">
                         Feedback after testing
                         <Textarea
                           name="feedbackText"
-                          placeholder="What felt clear, confusing, slow, or trustworthy in the Humanity Gate test?"
+                          placeholder="What felt clear, confusing, slow, or trustworthy in the ScamGuard test?"
                           disabled={locked || Boolean(submission?.feedbackText)}
                           required
                           minLength={20}
@@ -523,9 +523,9 @@ export function AirdropTasksClient() {
                       </label>
                     )}
 
-                    {(task.proofRequired || humanityTask) && (
+                    {(task.proofRequired || scamGuardTask) && (
                       <label className="grid gap-2 text-sm text-slate-300">
-                        Screenshot proof {humanityTask && "(optional)"}
+                        Screenshot proof {scamGuardTask && "(optional)"}
                         <Input
                           name="proof"
                           type="file"
@@ -541,7 +541,7 @@ export function AirdropTasksClient() {
                       disabled={
                         locked ||
                         busyTask === task.slug ||
-                        (humanityTask && (!testResult || Boolean(submission?.feedbackText)))
+                        (scamGuardTask && (!testResult || Boolean(submission?.feedbackText)))
                       }
                       className="w-full"
                     >
@@ -630,7 +630,7 @@ export function AirdropTasksClient() {
             {[
               ["X follow", "Screenshot confirms @TriProof_ follow state."],
               ["Quote post", "X quote URL and screenshot prove the post is public."],
-              ["Humanity feedback", "One-time test result plus useful feedback is checked."],
+              ["ScamGuard feedback", "One-time scanner result plus useful feedback is checked."],
             ].map(([title, text]) => (
               <div key={title} className="rounded-xl border border-primary/20 bg-primary/5 p-4">
                 <p className="font-medium text-white">{title}</p>

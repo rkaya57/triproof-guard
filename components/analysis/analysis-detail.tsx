@@ -747,10 +747,10 @@ function TrustMethodologyPanel() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <LockKeyhole className="text-primary" />
-          Methodology, Privacy and Humanity Signals
+          Methodology, Privacy and ScamGuard Signals
         </CardTitle>
         <CardDescription>
-          Tri-Proof is risk decision support, not KYC. Optional proof-of-human signals can strengthen campaign registration without exposing raw personal data.
+          Tri-Proof is risk decision support, not KYC. ScamGuard signals can strengthen campaign safety without exposing raw personal data.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 md:grid-cols-3">
@@ -759,8 +759,8 @@ function TrustMethodologyPanel() {
           <p className="mt-2 text-sm leading-6 text-muted-foreground">Risk labels are campaign-scoped and evidence-based. They do not claim a wallet owner is definitively malicious.</p>
         </div>
         <div className="rounded-lg border border-border bg-background/45 p-4">
-          <p className="font-medium">Humanity Gate optional</p>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">Use liveness or external proof systems as extra signals at registration, while keeping wallet risk scoring separate.</p>
+          <p className="font-medium">ScamGuard optional</p>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">Use pre-sign URL, token and transaction intent checks as extra security signals while keeping wallet risk scoring separate.</p>
         </div>
         <Link href="/docs/trust" className="rounded-lg border border-primary/25 bg-primary/10 p-4 transition-colors hover:border-primary/60">
           <p className="font-medium text-primary">Open trust page</p>
@@ -1034,8 +1034,8 @@ function ReviewDrawer({
 
           <DetailRow label="External proof signals">
             <div className="grid gap-2 text-sm text-muted-foreground">
-              <p>Humanity Gate: optional campaign registration signal, not a replacement for wallet risk scoring.</p>
-              <p>External proof systems: ready for Human Passport, World ID or partner attestations as hashed/derived signals.</p>
+              <p>ScamGuard: optional Solana pre-sign risk signal, not a replacement for wallet risk scoring.</p>
+              <p>External security systems: ready for wallet, token, domain or partner attestations as hashed/derived signals.</p>
             </div>
           </DetailRow>
 
