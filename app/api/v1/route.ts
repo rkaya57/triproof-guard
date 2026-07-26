@@ -25,6 +25,15 @@ export async function GET() {
       getAnalysis: {
         method: "GET",
         path: "/api/v1/analysis/ANALYSIS_ID"
+      },
+      scamGuardScan: {
+        method: "POST",
+        path: "/api/v1/scamguard/scan",
+        body: {
+          type: "transaction",
+          value: "approve delegate, set authority, close account",
+          walletAddress: "optionalConnectedWallet"
+        }
       }
     },
     riskPolicies: ["conservative", "balanced", "strict"],

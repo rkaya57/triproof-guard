@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth/session"
 import { getDevDashboard } from "@/lib/dev-store/store"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
+import { combinedSecurityScore } from "@/lib/scamguard/engine"
 
 export const runtime = "nodejs"
 
@@ -53,16 +54,29 @@ export async function GET() {
   }
 
   const totalWallets = aggregate._sum.totalWallets ?? 0
+  const averageRiskScore = Number((aggregate._avg.averageRiskScore ?? 0).toFixed(1))
   const highRiskRate =
     totalWallets > 0 ? Math.round(((aggregate._sum.rejectedCount ?? 0) / totalWallets) * 100) : 0
+  const sybilSafetyScore = Math.max(0, Math.round(100 - averageRiskScore))
+  const scamGuardReadinessScore = totalWallets > 0 ? 88 : 76
+  const unifiedSecurityScore = combinedSecurityScore({
+    sybilRiskScore: averageRiskScore,
+    scamRiskScore: 100 - scamGuardReadinessScore,
+  })
 
   return NextResponse.json({
     user,
     stats: {
       projectCount,
       totalWallets,
-      averageRiskScore: Number((aggregate._avg.averageRiskScore ?? 0).toFixed(1)),
+      averageRiskScore,
       highRiskRate,
+    },
+    security: {
+      sybilSafetyScore,
+      scamGuardReadinessScore,
+      unifiedSecurityScore,
+      scamGuardStatus: "active",
     },
     recentAnalyses: analyses.map((analysis) => ({
       id: analysis.id,

@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowRight, Code2, KeyRound, ServerCog } from "lucide-react"
+import { ArrowRight, Code2, KeyRound, ServerCog, ShieldAlert } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
@@ -29,9 +29,18 @@ const createExample = `curl -X POST https://triproofprotocol.com/api/v1/analyze 
 const statusExample = `curl https://triproofprotocol.com/api/v1/analysis/ANALYSIS_ID \\
   -H "Authorization: Bearer YOUR_API_KEY"`
 
+const scamGuardExample = `curl -X POST https://triproofprotocol.com/api/v1/scamguard/scan \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -d '{
+    "type": "transaction",
+    "value": "approve delegate, set authority, close token account",
+    "walletAddress": "OPTIONAL_CONNECTED_WALLET"
+  }'`
+
 export const metadata = {
   title: "Tri-Proof Guard API Docs",
-  description: "V1.9 API documentation for creating wallet risk analyses and reading analysis status.",
+  description: "V1.9 API documentation for wallet risk analyses, ScamGuard scans and analysis status.",
 }
 
 export default function ApiDocsPage() {
@@ -44,7 +53,7 @@ export default function ApiDocsPage() {
             Create wallet risk analyses from your own workflow.
           </h1>
           <p className="mt-5 max-w-2xl leading-7 text-muted-foreground">
-            The V1 API lets campaign teams submit wallet lists, queue real on-chain enrichment, and retrieve decision summaries programmatically.
+            The V1 API lets campaign teams submit wallet lists, queue real on-chain enrichment, run ScamGuard Solana scans, and retrieve decision summaries programmatically.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link href="/api/v1" className={`${buttonVariants()} glow-primary`}>Open API index <ArrowRight data-icon="inline-end" /></Link>
@@ -53,7 +62,7 @@ export default function ApiDocsPage() {
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-5 px-5 py-14 sm:px-8 lg:grid-cols-3">
+      <section className="mx-auto grid max-w-7xl gap-5 px-5 py-14 sm:px-8 lg:grid-cols-4">
         <Card className="glass-panel premium-card">
           <CardHeader><KeyRound className="text-primary" /><CardTitle>Authentication</CardTitle><CardDescription>Use a dashboard session or an API key header.</CardDescription></CardHeader>
           <CardContent className="text-sm text-muted-foreground">Set TRIPROOF_API_KEY and TRIPROOF_API_USER_EMAIL in Vercel for server-to-server use.</CardContent>
@@ -66,10 +75,14 @@ export default function ApiDocsPage() {
           <CardHeader><Code2 className="text-primary" /><CardTitle>Read status</CardTitle><CardDescription>GET /api/v1/analysis/ANALYSIS_ID</CardDescription></CardHeader>
           <CardContent className="text-sm text-muted-foreground">Returns summary counts, top wallet decisions, clusters and export URLs.</CardContent>
         </Card>
+        <Card className="glass-panel premium-card">
+          <CardHeader><ShieldAlert className="text-primary" /><CardTitle>ScamGuard scan</CardTitle><CardDescription>POST /api/v1/scamguard/scan</CardDescription></CardHeader>
+          <CardContent className="text-sm text-muted-foreground">Scans URLs, wallets, token mints and pre-sign transaction intent through one endpoint.</CardContent>
+        </Card>
       </section>
 
       <section className="mx-auto max-w-7xl px-5 pb-16 sm:px-8">
-        <div className="grid gap-5 lg:grid-cols-2">
+        <div className="grid gap-5 lg:grid-cols-3">
           <Card className="glass-panel premium-card">
             <CardHeader><CardTitle>Create analysis example</CardTitle><CardDescription>Submit wallets and choose a risk policy.</CardDescription></CardHeader>
             <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{createExample}</code></pre></CardContent>
@@ -77,6 +90,10 @@ export default function ApiDocsPage() {
           <Card className="glass-panel premium-card">
             <CardHeader><CardTitle>Status example</CardTitle><CardDescription>Poll until the analysis status is completed.</CardDescription></CardHeader>
             <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{statusExample}</code></pre></CardContent>
+          </Card>
+          <Card className="glass-panel premium-card">
+            <CardHeader><CardTitle>ScamGuard example</CardTitle><CardDescription>Scan before a wallet or dApp asks the user to sign.</CardDescription></CardHeader>
+            <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{scamGuardExample}</code></pre></CardContent>
           </Card>
         </div>
       </section>

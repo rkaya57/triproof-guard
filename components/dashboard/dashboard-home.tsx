@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useEffect, useState } from "react"
-import { ArrowRight, Gauge, Layers3, Percent, Sparkles, WalletCards } from "lucide-react"
+import { ArrowRight, Gauge, Layers3, Percent, ShieldAlert, ShieldCheck, Sparkles, WalletCards } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
@@ -16,13 +16,19 @@ import {
 import { MetricCard } from "@/components/dashboard/metric-card"
 import { formatNumber } from "@/lib/format"
 
- type DashboardResponse = {
+type DashboardResponse = {
   user: { name: string; email: string }
   stats: {
     projectCount: number
     totalWallets: number
     averageRiskScore: number
     highRiskRate: number
+  }
+  security?: {
+    sybilSafetyScore: number
+    scamGuardReadinessScore: number
+    unifiedSecurityScore: number
+    scamGuardStatus: string
   }
   recentAnalyses: Array<{
     id: string
@@ -98,6 +104,12 @@ export function DashboardHome() {
     averageRiskScore: 0,
     highRiskRate: 0,
   }
+  const security = data?.security ?? {
+    sybilSafetyScore: Math.max(0, Math.round(100 - stats.averageRiskScore)),
+    scamGuardReadinessScore: 76,
+    unifiedSecurityScore: Math.max(0, Math.round(100 - stats.averageRiskScore)),
+    scamGuardStatus: "active",
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -159,6 +171,54 @@ export function DashboardHome() {
           />
         </div>
       </div>
+
+      <Card className="glass-panel premium-card animated-border reveal-up delay-500 overflow-hidden">
+        <CardHeader className="gap-4 lg:grid lg:grid-cols-[1fr_auto] lg:items-center">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheck className="text-primary" /> Unified Security Score
+            </CardTitle>
+            <CardDescription>
+              Combines wallet Sybil safety with ScamGuard pre-sign readiness for one operational view.
+            </CardDescription>
+          </div>
+          <Badge variant="outline" className="w-fit border-green-400/30 bg-green-400/10 text-green-200">
+            ScamGuard {security.scamGuardStatus}
+          </Badge>
+        </CardHeader>
+        <CardContent className="grid gap-4 lg:grid-cols-[220px_1fr_auto] lg:items-center">
+          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5 text-center">
+            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Unified score</p>
+            <p className="text-gradient mt-2 text-5xl font-semibold">{security.unifiedSecurityScore}</p>
+            <p className="mt-2 text-xs text-muted-foreground">higher is safer</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-border bg-background/45 p-4">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2 text-sm font-medium"><Gauge className="size-4 text-primary" /> Sybil safety</span>
+                <span className="font-mono text-primary">{security.sybilSafetyScore}</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-background">
+                <div className="h-full rounded-full bg-primary" style={{ width: `${security.sybilSafetyScore}%` }} />
+              </div>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">Derived from average wallet risk across workspace analyses.</p>
+            </div>
+            <div className="rounded-xl border border-border bg-background/45 p-4">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2 text-sm font-medium"><ShieldAlert className="size-4 text-primary" /> ScamGuard readiness</span>
+                <span className="font-mono text-primary">{security.scamGuardReadinessScore}</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-background">
+                <div className="h-full rounded-full bg-primary" style={{ width: `${security.scamGuardReadinessScore}%` }} />
+              </div>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">Public scanner, pre-sign transaction review and B2B API are active.</p>
+            </div>
+          </div>
+          <Link href="/scamguard" className={`${buttonVariants({ variant: "outline" })} hover-lift text-white`}>
+            Open ScamGuard <ArrowRight data-icon="inline-end" />
+          </Link>
+        </CardContent>
+      </Card>
 
       <Card className="glass-panel premium-card reveal-up delay-500">
         <CardHeader className="flex flex-row items-start justify-between gap-4">

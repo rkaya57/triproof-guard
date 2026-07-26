@@ -56,6 +56,31 @@ export type AnalysisStatusResponse = {
   }>
 }
 
+export type ScamGuardScanType = "url" | "wallet" | "token" | "transaction"
+
+export type ScamGuardScanInput = {
+  type: ScamGuardScanType
+  value: string
+  walletAddress?: string
+}
+
+export type ScamGuardScanResponse = {
+  id: string
+  type: ScamGuardScanType
+  score: number
+  riskLevel: "SAFE" | "CAUTION" | "HIGH_RISK" | "CRITICAL"
+  summary: string
+  signals: Array<{
+    code: string
+    severity: "info" | "low" | "medium" | "high" | "critical"
+    title: string
+    detail: string
+  }>
+  actions: string[]
+  metadata: Record<string, unknown>
+  scannedAt: string
+}
+
 export class TriProofClient {
   private baseUrl: string
   private apiKey: string
@@ -95,5 +120,12 @@ export class TriProofClient {
 
   getMetrics(analysisId: string) {
     return this.request(`/api/analysis/${analysisId}/metrics`)
+  }
+
+  scanScamGuard(input: ScamGuardScanInput) {
+    return this.request<ScamGuardScanResponse>("/api/v1/scamguard/scan", {
+      method: "POST",
+      body: JSON.stringify(input),
+    })
   }
 }

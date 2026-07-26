@@ -1,15 +1,18 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import {
   ArrowRight,
   CheckCircle2,
   ClipboardCheck,
+  Code2,
   ExternalLink,
   FileSearch,
   Fingerprint,
   Link2,
+  Loader2,
+  PlugZap,
   Radar,
   ShieldAlert,
   ShieldCheck,
@@ -30,13 +33,51 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
 type ScanMode = "url" | "wallet" | "token" | "transaction"
+type RiskLevel = "SAFE" | "CAUTION" | "HIGH_RISK" | "CRITICAL"
 
 type ScanResult = {
+  id: string
+  type: ScanMode
   score: number
-  status: "Safe" | "Caution" | "High Risk" | "Critical"
+  riskLevel: RiskLevel
   summary: string
-  reasons: string[]
+  signals: Array<{
+    code: string
+    severity: "info" | "low" | "medium" | "high" | "critical"
+    title: string
+    detail: string
+  }>
   actions: string[]
+  metadata: {
+    rpcStatus: string
+    rpcError?: string
+    domain?: string
+    walletAddress?: string
+    ownerProgram?: string | null
+    lamports?: number
+    signatureCount?: number
+    tokenMint?: {
+      decimals?: number
+      supply?: string
+      mintAuthority: string | null
+      freezeAuthority: string | null
+      initialized?: boolean
+    }
+    simulation?: {
+      attempted: boolean
+      ok: boolean
+      error?: string
+      logs?: string[]
+    }
+  }
+  scannedAt: string
+}
+
+type SolanaProvider = {
+  isPhantom?: boolean
+  isBackpack?: boolean
+  publicKey?: { toString(): string }
+  connect(options?: { onlyIfTrusted?: boolean }): Promise<{ publicKey: { toString(): string } }>
 }
 
 const examples: Record<ScanMode, string> = {
@@ -45,6 +86,13 @@ const examples: Record<ScanMode, string> = {
   token: "FakeUSDCmintAuthorityStillEnabled111111111111111111",
   transaction:
     "Program request: approve delegate, set authority, close token account, transfer all SOL after airdrop claim",
+}
+
+const endpointByMode: Record<ScanMode, string> = {
+  url: "/api/scamguard/scan-url",
+  wallet: "/api/scamguard/scan-wallet",
+  token: "/api/scamguard/scan-token",
+  transaction: "/api/scamguard/scan-transaction",
 }
 
 const modeConfig = {
@@ -61,120 +109,111 @@ const modeConfig = {
   token: {
     label: "Token Mint",
     icon: Fingerprint,
-    helper: "Paste a token mint address or token page text.",
+    helper: "Paste a token mint address. RPC will inspect mint and freeze authority when configured.",
   },
   transaction: {
     label: "Transaction",
     icon: ClipboardCheck,
-    helper: "Paste transaction instructions, signature, or serialized tx notes.",
+    helper: "Paste transaction instructions or a base64 serialized Solana transaction before signing.",
   },
 } satisfies Record<ScanMode, { label: string; icon: typeof Link2; helper: string }>
 
-function analyzeInput(mode: ScanMode, input: string): ScanResult {
-  const text = input.trim().toLowerCase()
-  const reasons: string[] = []
-  const actions: string[] = []
-  let score = 12
-
-  if (!text) {
-    return {
-      score: 0,
-      status: "Safe",
-      summary: "Paste an item to scan. ScamGuard will explain the likely risk before a user signs or visits.",
-      reasons: ["No input scanned yet."],
-      actions: ["Choose a scan type and paste a URL, wallet, token mint, or transaction details."],
-    }
-  }
-
-  const add = (points: number, reason: string, action: string) => {
-    score += points
-    reasons.push(reason)
-    actions.push(action)
-  }
-
-  if (mode === "url") {
-    if (/airdrop|claim|bonus|free|presale|mint/.test(text)) {
-      add(18, "The link uses high-risk campaign words such as claim, airdrop, mint, or presale.", "Verify the campaign from the official project account before opening.")
-    }
-    if (/phantom|solflare|jupiter|magiceden|tensor/.test(text) && !/\.com|\.app|\.io/.test(text)) {
-      add(18, "The link appears to imitate a known Solana brand without a trusted domain pattern.", "Open the brand manually from bookmarks instead of this link.")
-    }
-    if (/seed|recovery phrase|private key|mnemonic/.test(text)) {
-      add(48, "The page text asks for seed phrase or private key material.", "Never enter seed phrases. Treat this as a wallet-drain attempt.")
-    }
-    if (/bit\.ly|tinyurl|t\.co|redirect|short/.test(text)) {
-      add(12, "Shortened or redirected links hide the final destination.", "Expand and inspect the final URL before interacting.")
-    }
-  }
-
-  if (mode === "wallet") {
-    if (/drain|scam|fake|111111/.test(text)) {
-      add(42, "The address or label matches a suspicious wallet/program pattern in the demo threat rules.", "Do not approve transactions involving this account without deeper review.")
-    }
-    if (text.length < 32 || text.length > 60) {
-      add(18, "The value does not look like a normal Solana address length.", "Confirm the address was copied correctly.")
-    }
-  }
-
-  if (mode === "token") {
-    if (/fake|usdc|airdrop|mint/.test(text)) {
-      add(20, "The token input resembles a branded or airdrop token claim.", "Compare mint address with the official token registry or project docs.")
-    }
-    if (/authority|freeze|enabled|delegate/.test(text)) {
-      add(28, "Mint/freeze/delegate authority risk is present in the input.", "Avoid thin-liquidity tokens with active dangerous authorities.")
-    }
-  }
-
-  if (mode === "transaction") {
-    if (/approve|delegate/.test(text)) {
-      add(22, "The transaction may approve a delegate to move assets.", "Only approve delegates you fully trust and understand.")
-    }
-    if (/set authority|authority/.test(text)) {
-      add(24, "The transaction may change account authority.", "Reject authority changes unless they are expected.")
-    }
-    if (/close.*account|close token/.test(text)) {
-      add(20, "The transaction may close token accounts and reclaim balances.", "Review every account closure before signing.")
-    }
-    if (/transfer all|all sol|drain|sweep/.test(text)) {
-      add(42, "The transaction may move all SOL or sweep assets.", "Do not sign. Use a burner wallet if testing is unavoidable.")
-    }
-  }
-
-  if (!reasons.length) {
-    reasons.push("No high-confidence rule matched in the demo engine.")
-    actions.push("Still verify the source, wallet popup, and expected asset changes before signing.")
-  }
-
-  score = Math.min(100, score)
-  const status =
-    score >= 86 ? "Critical" : score >= 61 ? "High Risk" : score >= 31 ? "Caution" : "Safe"
-  const summary =
-    status === "Critical"
-      ? "This looks like a likely wallet-drain or high-impact scam. Do not sign."
-      : status === "High Risk"
-        ? "Multiple risk signals are present. Treat this as unsafe until manually verified."
-        : status === "Caution"
-          ? "Some warning signs are present. Verify source and intent before interacting."
-          : "No major demo rule fired, but this is not a guarantee of safety."
-
-  return { score, status, summary, reasons, actions }
+function statusTone(status: RiskLevel) {
+  if (status === "CRITICAL") return "border-red-400/40 bg-red-400/10 text-red-200"
+  if (status === "HIGH_RISK") return "border-orange-400/40 bg-orange-400/10 text-orange-200"
+  if (status === "CAUTION") return "border-amber-400/40 bg-amber-400/10 text-amber-200"
+  return "border-green-400/40 bg-green-400/10 text-green-200"
 }
 
-function statusTone(status: ScanResult["status"]) {
-  if (status === "Critical") return "border-red-400/40 bg-red-400/10 text-red-200"
-  if (status === "High Risk") return "border-orange-400/40 bg-orange-400/10 text-orange-200"
-  if (status === "Caution") return "border-amber-400/40 bg-amber-400/10 text-amber-200"
-  return "border-green-400/40 bg-green-400/10 text-green-200"
+function statusLabel(status: RiskLevel) {
+  if (status === "HIGH_RISK") return "High Risk"
+  return status
+    .toLowerCase()
+    .split("_")
+    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .join(" ")
+}
+
+function severityTone(severity: string) {
+  if (severity === "critical") return "border-red-400/30 bg-red-400/10 text-red-100"
+  if (severity === "high") return "border-orange-400/30 bg-orange-400/10 text-orange-100"
+  if (severity === "medium") return "border-amber-400/30 bg-amber-400/10 text-amber-100"
+  if (severity === "low") return "border-cyan-400/30 bg-cyan-400/10 text-cyan-100"
+  return "border-slate-400/30 bg-slate-400/10 text-slate-200"
+}
+
+function findSolanaProvider() {
+  const browser = window as Window & {
+    solana?: SolanaProvider
+    backpack?: { solana?: SolanaProvider }
+  }
+  return browser.solana ?? browser.backpack?.solana ?? null
 }
 
 export function ScamGuardPage() {
   const [mode, setMode] = useState<ScanMode>("url")
   const [input, setInput] = useState(examples.url)
-  const result = useMemo(() => analyzeInput(mode, input), [input, mode])
+  const [result, setResult] = useState<ScanResult | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [connectedWallet, setConnectedWallet] = useState<string | null>(null)
+  const [walletMessage, setWalletMessage] = useState<string | null>(null)
+
+  const securityScore = useMemo(() => {
+    if (!result) return 100
+    return Math.max(0, 100 - result.score)
+  }, [result])
+
+  useEffect(() => {
+    const provider = findSolanaProvider()
+    void provider?.connect({ onlyIfTrusted: true }).then((connection) => {
+      setConnectedWallet(connection.publicKey.toString())
+    }).catch(() => undefined)
+  }, [])
+
+  async function runScan(nextMode = mode, nextInput = input) {
+    setLoading(true)
+    setError(null)
+    try {
+      const response = await fetch(endpointByMode[nextMode], {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          value: nextInput,
+          walletAddress: connectedWallet,
+        }),
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error ?? "ScamGuard scan failed")
+      setResult(body as ScanResult)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ScamGuard scan failed")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   function selectMode(nextMode: ScanMode) {
     setMode(nextMode)
     setInput(examples[nextMode])
+    setResult(null)
+    setError(null)
+  }
+
+  async function connectWallet() {
+    const provider = findSolanaProvider()
+    if (!provider) {
+      setWalletMessage("No Solana wallet provider found. Install Phantom or Backpack to connect.")
+      return
+    }
+
+    try {
+      const connection = await provider.connect()
+      setConnectedWallet(connection.publicKey.toString())
+      setWalletMessage("Wallet connected. ScamGuard will include it as scan context.")
+    } catch (err) {
+      setWalletMessage(err instanceof Error ? err.message : "Wallet connection failed.")
+    }
   }
 
   return (
@@ -196,28 +235,28 @@ export function ScamGuardPage() {
             </div>
           </Link>
           <div className="flex items-center gap-3">
-            <Link href="/docs" className={`${buttonVariants({ variant: "outline" })} hover-lift hidden sm:inline-flex`}>Docs</Link>
+            <Link href="/docs/api" className={`${buttonVariants({ variant: "outline" })} hover-lift hidden sm:inline-flex`}>API</Link>
             <Link href="/dashboard/new-analysis" className={`${buttonVariants()} glow-primary hover-lift`}>Sybil Analysis</Link>
           </div>
         </header>
 
-        <div className="relative z-10 mx-auto grid max-w-7xl gap-10 px-5 pb-16 pt-10 sm:px-8 lg:grid-cols-[0.92fr_1.08fr] lg:items-center lg:pb-24 lg:pt-16">
+        <div className="relative z-10 mx-auto grid max-w-7xl gap-10 px-5 pb-16 pt-10 sm:px-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:pb-24 lg:pt-16">
           <div className="reveal-up flex flex-col gap-7">
             <div className="flex flex-wrap items-center gap-3">
               <span className="cyber-chip">Solana pre-sign security</span>
-              <Badge variant="secondary" className="border-primary/30 text-primary">URL + wallet + token + tx scanner</Badge>
+              <Badge variant="secondary" className="border-primary/30 text-primary">RPC + API + wallet context</Badge>
             </div>
             <h1 className="text-gradient animate-gradient-text max-w-4xl text-4xl font-semibold leading-tight text-balance sm:text-6xl">
               Stop wallet drains before users sign.
             </h1>
             <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-              ScamGuard Solana adds a pre-sign security layer to Tri-Proof: scan suspicious links, token mints, wallets, and transaction intent before retail users or campaign teams interact with a risky dApp.
+              ScamGuard Solana scans suspicious links, token mints, wallets, and transaction intent through a server-side risk engine. When Solana RPC is configured, it also checks token authorities, program ownership, balances, signatures, and serialized transaction simulation.
             </p>
             <div className="grid max-w-2xl gap-3 sm:grid-cols-3">
               {[
                 ["Pre-sign", "transaction intent"],
-                ["Solana", "drainer patterns"],
-                ["B2B", "API-ready module"],
+                ["Solana RPC", "mint + wallet checks"],
+                ["B2B API", "SDK-ready module"],
               ].map(([value, label]) => (
                 <div key={label} className="rounded-xl border border-primary/20 bg-background/45 px-4 py-3 backdrop-blur">
                   <p className="text-gradient text-2xl font-semibold">{value}</p>
@@ -231,17 +270,31 @@ export function ScamGuardPage() {
             <CardHeader>
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <CardTitle className="text-2xl">Live demo scanner</CardTitle>
+                  <CardTitle className="text-2xl">Live pre-sign scanner</CardTitle>
                   <CardDescription>
-                    Demo rules today. Next step: Helius/Solana RPC simulation, token authority checks, and threat intelligence feeds.
+                    Connect a wallet for context, paste a Solana item, then run the server-side ScamGuard engine.
                   </CardDescription>
                 </div>
-                <Badge variant="outline" className={cn("gap-2", statusTone(result.status))}>
-                  <span className="pulse-dot" /> {result.status}
+                <Badge variant="outline" className={cn("gap-2", result ? statusTone(result.riskLevel) : "border-primary/30 text-primary")}>
+                  <span className="pulse-dot" /> {result ? statusLabel(result.riskLevel) : "Ready"}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-5">
+              <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
+                <div className="rounded-xl border border-border bg-background/45 p-3 text-sm text-slate-300">
+                  {connectedWallet ? (
+                    <span className="break-all font-mono text-primary">{connectedWallet}</span>
+                  ) : (
+                    <span>No wallet connected. Scans still work without wallet context.</span>
+                  )}
+                </div>
+                <Button type="button" variant="outline" className="text-white" onClick={connectWallet}>
+                  <PlugZap data-icon="inline-start" /> Connect Wallet
+                </Button>
+              </div>
+              {walletMessage && <p className="text-sm text-muted-foreground">{walletMessage}</p>}
+
               <div className="grid gap-2 sm:grid-cols-4">
                 {(Object.keys(modeConfig) as ScanMode[]).map((item) => {
                   const Icon = modeConfig[item].icon
@@ -273,27 +326,48 @@ export function ScamGuardPage() {
                   placeholder="Paste a suspicious Solana item..."
                 />
               </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <Button type="button" className="glow-primary" onClick={() => void runScan()} disabled={loading}>
+                  {loading ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Radar data-icon="inline-start" />}
+                  Run ScamGuard scan
+                </Button>
+                {error && <span className="text-sm text-red-200">{error}</span>}
+              </div>
 
               <div className="grid gap-4 lg:grid-cols-[180px_1fr]">
                 <div className="premium-card rounded-2xl border border-border bg-background/55 p-5 text-center">
-                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Risk score</p>
-                  <p className="text-gradient mt-2 text-5xl font-semibold">{result.score}</p>
-                  <p className="mt-2 text-sm text-muted-foreground">/ 100</p>
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Security score</p>
+                  <p className="text-gradient mt-2 text-5xl font-semibold">{securityScore}</p>
+                  <p className="mt-2 text-sm text-muted-foreground">higher is safer</p>
                 </div>
                 <div className="premium-card rounded-2xl border border-border bg-background/55 p-5">
-                  <p className="font-medium">{result.summary}</p>
+                  <p className="font-medium">{result?.summary ?? "Run a scan to see ScamGuard risk signals, recommended actions, and RPC metadata."}</p>
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
                     <div>
-                      <p className="mb-2 flex items-center gap-2 text-sm font-medium text-primary"><Radar className="size-4" /> Signals</p>
-                      <ul className="space-y-2 text-sm text-muted-foreground">
-                        {result.reasons.map((reason) => <li key={reason}>- {reason}</li>)}
-                      </ul>
+                      <p className="mb-2 flex items-center gap-2 text-sm font-medium text-primary"><FileSearch className="size-4" /> Signals</p>
+                      <div className="space-y-2 text-sm text-muted-foreground">
+                        {(result?.signals ?? []).map((signal) => (
+                          <div key={signal.code} className={cn("rounded-lg border p-3", severityTone(signal.severity))}>
+                            <p className="font-medium text-white">{signal.title}</p>
+                            <p className="mt-1 leading-5">{signal.detail}</p>
+                          </div>
+                        ))}
+                        {!result && <p>No scan yet.</p>}
+                      </div>
                     </div>
                     <div>
-                      <p className="mb-2 flex items-center gap-2 text-sm font-medium text-primary"><FileSearch className="size-4" /> Actions</p>
+                      <p className="mb-2 flex items-center gap-2 text-sm font-medium text-primary"><CheckCircle2 className="size-4" /> Actions</p>
                       <ul className="space-y-2 text-sm text-muted-foreground">
-                        {result.actions.map((action) => <li key={action}>- {action}</li>)}
+                        {(result?.actions ?? ["Paste an item and run the scanner before interacting."]).map((action) => <li key={action}>- {action}</li>)}
                       </ul>
+                      {result && (
+                        <div className="mt-4 rounded-lg border border-border bg-background/45 p-3 text-xs text-muted-foreground">
+                          RPC: {result.metadata.rpcStatus}
+                          {result.metadata.signatureCount !== undefined && <><br />Signatures sampled: {result.metadata.signatureCount}</>}
+                          {result.metadata.ownerProgram && <><br />Owner: {result.metadata.ownerProgram}</>}
+                          {result.metadata.rpcError && <><br />RPC note: {result.metadata.rpcError}</>}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -306,9 +380,9 @@ export function ScamGuardPage() {
       <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
         <div className="mb-8 max-w-3xl">
           <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Integrated with Guard</Badge>
-          <h2 className="text-gradient text-3xl font-semibold sm:text-5xl">Sybil analysis stays. ScamGuard Solana becomes the new security layer.</h2>
+          <h2 className="text-gradient text-3xl font-semibold sm:text-5xl">Sybil analysis stays. ScamGuard becomes the real-time security layer.</h2>
           <p className="mt-4 text-muted-foreground">
-            Tri-Proof keeps campaign wallet clustering and Sybil review, then adds a second product surface for real-time scam prevention around suspicious dApps, tokens, and transactions.
+            Tri-Proof keeps campaign wallet clustering and Sybil review, then adds a second product surface for scam prevention around suspicious dApps, token mints, and transactions.
           </p>
         </div>
         <div className="grid gap-5 md:grid-cols-3">
@@ -329,29 +403,38 @@ export function ScamGuardPage() {
       </section>
 
       <section className="border-y border-border bg-primary/[0.03]">
-        <div className="mx-auto grid max-w-7xl gap-6 px-5 py-16 sm:px-8 lg:grid-cols-4">
-          {[
-            [CheckCircle2, "URL reputation", "Domain, redirect, brand impersonation and seed-phrase lure checks."],
-            [ClipboardCheck, "Transaction intent", "Approve delegate, set authority, close account and transfer-all detection."],
-            [Fingerprint, "Token mint risk", "Mint/freeze authority, fake brand names and risky claim-token patterns."],
-            [ExternalLink, "B2B API path", "SDK, REST API and dApp security badge for wallet and launchpad partners."],
-          ].map(([Icon, title, text]) => (
-            <div key={title as string} className="premium-card hover-lift rounded-2xl border border-border bg-card/70 p-5">
-              <Icon className="mb-4 text-primary" />
-              <p className="font-semibold">{title as string}</p>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{text as string}</p>
-            </div>
-          ))}
+        <div className="mx-auto grid max-w-7xl gap-6 px-5 py-16 sm:px-8 lg:grid-cols-[0.8fr_1.2fr]">
+          <div>
+            <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">B2B API</Badge>
+            <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Embed ScamGuard inside wallets, launchpads, and Solana dApps.</h2>
+            <p className="mt-4 leading-7 text-muted-foreground">
+              Partners can call one authenticated endpoint for every scan type, or use the public scanner endpoints for lightweight UI flows.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {[
+              [Code2, "POST /api/v1/scamguard/scan", "Authenticated B2B endpoint using the existing TRIPROOF_API_KEY bearer flow."],
+              [ClipboardCheck, "Pre-sign payloads", "Send instruction text or base64 serialized transactions for simulation-aware scoring."],
+              [Fingerprint, "Mint authority checks", "When RPC is configured, mint and freeze authorities are inspected server-side."],
+              [ExternalLink, "Public scan endpoints", "/api/scamguard/scan-url, scan-wallet, scan-token, and scan-transaction power the product UI."],
+            ].map(([Icon, title, text]) => (
+              <div key={title as string} className="premium-card hover-lift rounded-2xl border border-border bg-card/70 p-5">
+                <Icon className="mb-4 text-primary" />
+                <p className="font-semibold">{title as string}</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{text as string}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
         <div className="glass-panel premium-card animated-border flex flex-col items-start justify-between gap-6 rounded-2xl p-8 md:flex-row md:items-center">
           <div>
-            <p className="font-mono text-xs uppercase tracking-[0.2em] text-primary">Next production step</p>
-            <h2 className="text-gradient mt-3 text-2xl font-semibold sm:text-3xl">Connect live Solana RPC simulation and threat feeds.</h2>
+            <p className="font-mono text-xs uppercase tracking-[0.2em] text-primary">Unified product layer</p>
+            <h2 className="text-gradient mt-3 text-2xl font-semibold sm:text-3xl">Wallet risk plus ScamGuard risk gives teams one security story.</h2>
             <p className="mt-2 max-w-2xl text-muted-foreground">
-              The UI is integrated now. The next engineering layer is a server-side risk service using Solana RPC simulation, Helius enrichment, and a report database.
+              Use Sybil scoring for campaign eligibility, ScamGuard scoring for pre-sign safety, and the combined dashboard score for fast operational decisions.
             </p>
           </div>
           <Link href="/dashboard/new-analysis" className={`${buttonVariants()} glow-primary hover-lift`}>

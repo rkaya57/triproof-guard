@@ -32,6 +32,10 @@ copy .env.example .env
 NEXTAUTH_SECRET="long-random-session-secret"
 ACCESS_PASS_SIGNING_SECRET="long-random-access-pass-secret"
 WORKER_SECRET="long-random-worker-secret"
+TRIPROOF_API_KEY="server-to-server-api-key"
+TRIPROOF_API_USER_EMAIL="api-user@example.com"
+SOLANA_RPC_URL="https://your-solana-rpc"
+# or HELIUS_API_KEY="helius-key"
 ```
 
 For local development only, you can opt into insecure fallback secrets with
@@ -201,17 +205,30 @@ Current MVP checks:
 
 - Suspicious airdrop, mint, claim, presale, and brand-impersonation URL patterns
 - Seed phrase and private key lure language
-- Suspicious wallet/program patterns
-- Fake branded token mint patterns and authority-risk language
+- Suspicious wallet/program patterns with optional Solana RPC account checks
+- Token mint authority and freeze authority checks when Solana RPC is configured
 - Transaction intent signals such as approve delegate, set authority, close token account, and transfer-all
+- Optional Solana `simulateTransaction` for base64 serialized transactions
+
+Public scanner endpoints:
+
+- `POST /api/scamguard/scan-url`
+- `POST /api/scamguard/scan-wallet`
+- `POST /api/scamguard/scan-token`
+- `POST /api/scamguard/scan-transaction`
+
+B2B endpoint and SDK:
+
+- `POST /api/v1/scamguard/scan` accepts `{ type, value, walletAddress? }`
+- Uses the same `Authorization: Bearer <TRIPROOF_API_KEY>` flow as the existing v1 API
+- `TriProofClient.scanScamGuard()` is available in `lib/sdk/triproof-client.ts`
+- Dashboard shows a unified security score combining Sybil safety and ScamGuard readiness
 
 Production path:
 
-- Server-side Solana RPC `simulateTransaction`
-- Helius or equivalent Solana enrichment
-- Token mint authority/freeze authority checks
-- Known drainer domain and wallet intelligence feed
-- B2B API and SDK for wallets, launchpads, and Solana dApps
+- Persist ScamGuard scan history per workspace
+- Add known drainer domain and wallet intelligence feeds
+- Add wallet adapter packages for richer transaction decoding before sign
 
 ## Roadmap
 
