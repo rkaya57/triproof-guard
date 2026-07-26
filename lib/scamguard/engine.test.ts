@@ -3,6 +3,9 @@ import assert from "node:assert/strict"
 
 import { scanScamGuard } from "./engine"
 
+const evmWord = (value: bigint) => value.toString(16).padStart(64, "0")
+const evmAddressWord = (address: string) => address.toLowerCase().replace(/^0x/, "").padStart(64, "0")
+
 test("ScamGuard flags known scam domains as critical", async () => {
   const result = await scanScamGuard({
     type: "url",
@@ -79,4 +82,71 @@ test("ScamGuard decodes EVM approval style payloads", async () => {
   assert.equal(result.metadata.decodedIntent?.category, "approval")
   assert.ok(["HIGH_RISK", "CRITICAL"].includes(result.riskLevel))
   assert.ok(result.signals.some((signal) => signal.code === "EVM_APPROVAL"))
+})
+
+test("ScamGuard decodes limited EVM approvals without escalating to critical", async () => {
+  const spender = "0x2222222222222222222222222222222222222222"
+  const result = await scanScamGuard({
+    type: "transaction",
+    chain: "evm",
+    value: JSON.stringify({
+      method: "eth_sendTransaction",
+      params: [
+        {
+          to: "0x3333333333333333333333333333333333333333",
+          data: `0x095ea7b3${evmAddressWord(spender)}${evmWord(1n)}`,
+        },
+      ],
+    }),
+  })
+
+  assert.equal(result.riskLevel, "CAUTION")
+  assert.equal(result.metadata.decodedIntent?.spender, spender)
+  assert.equal(result.metadata.decodedIntent?.amount, "1")
+  assert.ok(result.signals.some((signal) => signal.code === "EVM_APPROVAL" && signal.severity === "medium"))
+  assert.ok(result.signals.some((signal) => signal.code === "UNKNOWN_EVM_COUNTERPARTY"))
+  assert.ok(!result.signals.some((signal) => signal.code === "UNLIMITED_EVM_APPROVAL"))
+})
+
+test("ScamGuard escalates unlimited EVM approvals", async () => {
+  const spender = "0x2222222222222222222222222222222222222222"
+  const result = await scanScamGuard({
+    type: "transaction",
+    chain: "evm",
+    value: JSON.stringify({
+      method: "eth_sendTransaction",
+      params: [
+        {
+          to: "0x3333333333333333333333333333333333333333",
+          data: `0x095ea7b3${evmAddressWord(spender)}${evmWord((1n << 256n) - 1n)}`,
+        },
+      ],
+    }),
+  })
+
+  assert.equal(result.riskLevel, "CRITICAL")
+  assert.equal(result.metadata.decodedIntent?.spender, spender)
+  assert.equal(result.metadata.decodedIntent?.amount, "115792089237316195423570985008687907853269984665640564039457584007913129639935")
+  assert.ok(result.signals.some((signal) => signal.code === "UNLIMITED_EVM_APPROVAL"))
+})
+
+test("ScamGuard escalates approvals to known bad EVM counterparties", async () => {
+  const spender = "0x000000000000000000000000000000000000bad1"
+  const result = await scanScamGuard({
+    type: "transaction",
+    chain: "evm",
+    value: JSON.stringify({
+      method: "eth_sendTransaction",
+      params: [
+        {
+          to: "0x3333333333333333333333333333333333333333",
+          data: `0x095ea7b3${evmAddressWord(spender)}${evmWord(10n)}`,
+        },
+      ],
+    }),
+  })
+
+  assert.equal(result.riskLevel, "CRITICAL")
+  assert.equal(result.metadata.reputation?.verdict, "known_bad")
+  assert.ok(result.signals.some((signal) => signal.code === "KNOWN_BAD_COUNTERPARTY"))
 })

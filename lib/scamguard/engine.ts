@@ -188,6 +188,8 @@ const trustedPrograms = new Map([
 ])
 
 const evmAddressRegex = /^0x[a-fA-F0-9]{40}$/
+const evmWordRegex = /^[a-fA-F0-9]{64}$/
+const maxUint256 = "115792089237316195423570985008687907853269984665640564039457584007913129639935"
 
 const evmFunctionSelectors = new Map([
   ["0xa9059cbb", { method: "transfer(address,uint256)", category: "transfer" as const }],
@@ -195,6 +197,14 @@ const evmFunctionSelectors = new Map([
   ["0x095ea7b3", { method: "approve(address,uint256)", category: "approval" as const }],
   ["0xa22cb465", { method: "setApprovalForAll(address,bool)", category: "approval" as const }],
   ["0xd505accf", { method: "permit(...)", category: "approval" as const }],
+])
+
+const knownBadEvmCounterparties = new Set([
+  "0x000000000000000000000000000000000000bad1",
+])
+
+const trustedEvmCounterparties = new Map([
+  ["0x000000000022d473030f116ddee9f6b43ac78ba3", "Uniswap Permit2"],
 ])
 
 const campaignSurfaceWords = [
@@ -238,6 +248,12 @@ async function solanaRpc<T>(method: string, params: unknown[]): Promise<T> {
 
 function normalizeValue(value: string) {
   return value.trim()
+}
+
+function normalizeEvmAddress(value?: string) {
+  const trimmed = value?.trim()
+  if (!trimmed || !evmAddressRegex.test(trimmed)) return undefined
+  return trimmed.toLowerCase()
 }
 
 function normalizeChain(chain?: ScamGuardChain): ScamGuardChain {
@@ -306,6 +322,19 @@ function walletReputation(value: string): NonNullable<ScamGuardScanResult["metad
     return { verdict: "known_bad", source: "seed_intelligence", notes: ["Wallet matches a known bad or drainer-like seed pattern."] }
   }
   return defaultReputation()
+}
+
+function evmCounterpartyReputation(address?: string): NonNullable<ScamGuardScanResult["metadata"]["reputation"]> {
+  const normalized = normalizeEvmAddress(address)
+  if (!normalized) return defaultReputation()
+  if (knownBadEvmCounterparties.has(normalized)) {
+    return { verdict: "known_bad", source: "counterparty_intelligence", notes: [`${normalized} matches a known bad EVM spender seed.`] }
+  }
+  const trustedName = trustedEvmCounterparties.get(normalized)
+  if (trustedName) {
+    return { verdict: "trusted", source: "counterparty_registry", notes: [`${normalized} is recognized as ${trustedName}. Review approval amount before signing.`] }
+  }
+  return { verdict: "unknown", source: "counterparty_intelligence", notes: [`${normalized} has no local EVM counterparty reputation.`] }
 }
 
 function metadataWithDefaults(metadata: ScamGuardScanResult["metadata"]): ScamGuardScanResult["metadata"] {
@@ -859,6 +888,60 @@ function findStringField(value: unknown, keys: string[]): string | undefined {
   return undefined
 }
 
+function evmWordAt(data: string | undefined, index: number) {
+  if (!data?.startsWith("0x")) return undefined
+  const body = data.slice(10)
+  const word = body.slice(index * 64, index * 64 + 64)
+  return evmWordRegex.test(word) ? word : undefined
+}
+
+function addressFromEvmWord(word?: string) {
+  if (!word) return undefined
+  return normalizeEvmAddress(`0x${word.slice(24)}`)
+}
+
+function uintFromEvmWord(word?: string) {
+  if (!word) return undefined
+  try {
+    return BigInt(`0x${word}`).toString()
+  } catch {
+    return undefined
+  }
+}
+
+function decodeEvmCalldata(data?: string) {
+  const selector = data?.slice(0, 10).toLowerCase()
+  if (!selector) return null
+  const first = evmWordAt(data, 0)
+  const second = evmWordAt(data, 1)
+  const third = evmWordAt(data, 2)
+
+  if (selector === "0x095ea7b3") {
+    return { spender: addressFromEvmWord(first), amount: uintFromEvmWord(second) }
+  }
+  if (selector === "0xa22cb465") {
+    return { spender: addressFromEvmWord(first), amount: uintFromEvmWord(second) }
+  }
+  if (selector === "0xd505accf") {
+    return { spender: addressFromEvmWord(first), amount: uintFromEvmWord(second) }
+  }
+  if (selector === "0xa9059cbb") {
+    return { recipient: addressFromEvmWord(first), amount: uintFromEvmWord(second) }
+  }
+  if (selector === "0x23b872dd") {
+    return { recipient: addressFromEvmWord(second), amount: uintFromEvmWord(third) }
+  }
+  return null
+}
+
+function isUnlimitedEvmApproval(decodedIntent: NonNullable<ScamGuardScanResult["metadata"]["decodedIntent"]>, text: string) {
+  return (
+    decodedIntent.category === "approval" &&
+    (decodedIntent.amount === maxUint256 ||
+      /0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|unlimited|maxuint/i.test(text))
+  )
+}
+
 function decodeIntent(value: string, chain: ScamGuardChain): NonNullable<ScamGuardScanResult["metadata"]["decodedIntent"]> {
   const text = value.toLowerCase()
   const parsed = safeJson(value)
@@ -869,15 +952,28 @@ function decodeIntent(value: string, chain: ScamGuardChain): NonNullable<ScamGua
   if (chain === "evm") {
     const selector = data?.slice(0, 10).toLowerCase()
     const selectorMatch = selector ? evmFunctionSelectors.get(selector) : undefined
+    const decodedCalldata = decodeEvmCalldata(data)
     const methodText = method ?? selectorMatch?.method
     const isSignMethod = /personal_sign|eth_sign|eth_signtypeddata|sign/i.test(methodText ?? "")
     if (selectorMatch?.category === "approval" || /approve|setapprovalforall|permit/.test(text)) {
       warnings.push("Approval-style EVM call can allow another address or contract to move assets.")
-      return { method: methodText ?? selectorMatch?.method, category: "approval", spender: findStringField(parsed, ["spender", "operator", "to"]), warnings }
+      return {
+        method: methodText ?? selectorMatch?.method,
+        category: "approval",
+        spender: decodedCalldata?.spender ?? findStringField(parsed, ["spender", "operator"]),
+        amount: decodedCalldata?.amount ?? findStringField(parsed, ["value", "amount"]),
+        warnings,
+      }
     }
     if (selectorMatch?.category === "transfer" || /transferfrom|transfer\(/.test(text)) {
       warnings.push("Transfer-style EVM call may move tokens or native assets.")
-      return { method: methodText ?? selectorMatch?.method, category: "transfer", recipient: findStringField(parsed, ["to", "recipient"]), amount: findStringField(parsed, ["value", "amount"]), warnings }
+      return {
+        method: methodText ?? selectorMatch?.method,
+        category: "transfer",
+        recipient: decodedCalldata?.recipient ?? findStringField(parsed, ["to", "recipient"]),
+        amount: decodedCalldata?.amount ?? findStringField(parsed, ["value", "amount"]),
+        warnings,
+      }
     }
     if (isSignMethod) {
       warnings.push("Message signatures can authorize off-chain approvals, login challenges, orders, or permit flows.")
@@ -909,13 +1005,57 @@ async function scanTransaction(value: string, walletAddress: string | undefined,
   const text = value.toLowerCase()
   const signals: ScamGuardSignal[] = []
   const decodedIntent = decodeIntent(value, chain)
+  const counterpartyAddress = chain === "evm" ? normalizeEvmAddress(decodedIntent.spender ?? decodedIntent.recipient) : undefined
+  const counterpartyReputation = chain === "evm" ? evmCounterpartyReputation(counterpartyAddress) : defaultReputation()
+  const unlimitedApproval = chain === "evm" && isUnlimitedEvmApproval(decodedIntent, text)
+  const knownBadCounterparty = counterpartyReputation.verdict === "known_bad"
 
   if (decodedIntent.category === "approval" || /approve|delegate|approvechecked|setapprovalforall|permit/.test(text)) {
     signals.push({
       code: chain === "evm" ? "EVM_APPROVAL" : "DELEGATE_APPROVAL",
-      severity: "high",
+      severity: chain === "evm" && decodedIntent.spender && !unlimitedApproval && !knownBadCounterparty ? "medium" : "high",
       title: chain === "evm" ? "EVM approval detected" : "Delegate approval detected",
-      detail: chain === "evm" ? "Approvals and permit flows can allow another address or contract to move assets." : "Delegate approvals can allow another account to move tokens.",
+      detail: chain === "evm"
+        ? `Approval-style call detected${decodedIntent.spender ? ` for spender ${decodedIntent.spender}` : " without a decoded spender"}. Review amount and counterparty before signing.`
+        : "Delegate approvals can allow another account to move tokens.",
+    })
+  }
+  if (chain === "evm" && decodedIntent.category === "approval" && !decodedIntent.spender) {
+    signals.push({
+      code: "UNKNOWN_APPROVAL_SPENDER",
+      severity: "high",
+      title: "Approval spender was not decoded",
+      detail: "ScamGuard could not identify who would receive approval rights. Treat this as unsafe until the wallet shows the counterparty clearly.",
+    })
+  }
+  if (chain === "evm" && decodedIntent.category === "approval" && !decodedIntent.amount && /0x(095ea7b3|a22cb465|d505accf)/i.test(text)) {
+    signals.push({
+      code: "INCOMPLETE_EVM_APPROVAL_CALLDATA",
+      severity: "high",
+      title: "Incomplete approval calldata",
+      detail: "The approval selector was detected, but ScamGuard could not decode the expected approval amount. Treat the wallet preview as the source of truth before signing.",
+    })
+  }
+  if (chain === "evm" && knownBadCounterparty && counterpartyAddress) {
+    signals.push({
+      code: "KNOWN_BAD_COUNTERPARTY",
+      severity: "critical",
+      title: "Known bad spender or recipient",
+      detail: `${counterpartyAddress} matches ScamGuard counterparty intelligence for suspicious EVM infrastructure.`,
+    })
+  } else if (chain === "evm" && counterpartyReputation.verdict === "trusted" && counterpartyAddress) {
+    signals.push({
+      code: "TRUSTED_COUNTERPARTY",
+      severity: "info",
+      title: "Recognized EVM counterparty",
+      detail: `${counterpartyAddress} is recognized locally. This reduces counterparty uncertainty but does not make the approval amount safe by itself.`,
+    })
+  } else if (chain === "evm" && decodedIntent.category === "approval" && counterpartyAddress) {
+    signals.push({
+      code: "UNKNOWN_EVM_COUNTERPARTY",
+      severity: "low",
+      title: "Unknown EVM approval spender",
+      detail: `${counterpartyAddress} has no local reputation. Verify it against the project's official contract addresses before signing.`,
     })
   }
   if (decodedIntent.category === "authority" || /set authority|setauthority|authority/.test(text)) {
@@ -942,12 +1082,14 @@ async function scanTransaction(value: string, walletAddress: string | undefined,
       detail: "The transaction text suggests moving all SOL or assets.",
     })
   }
-  if (chain === "evm" && /0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|unlimited|maxuint/.test(text)) {
+  if (unlimitedApproval) {
     signals.push({
       code: "UNLIMITED_EVM_APPROVAL",
       severity: "critical",
       title: "Unlimited approval pattern",
-      detail: "The transaction resembles an unlimited approval, a common path for token drains.",
+      detail: decodedIntent.spender
+        ? `This approval appears unlimited for spender ${decodedIntent.spender}. Unlimited approvals are a common path for token drains.`
+        : "The transaction resembles an unlimited approval, a common path for token drains.",
     })
   }
   if (chain === "evm" && /wallet_switchethereumchain|switch chain|chainid/.test(text)) {
@@ -991,7 +1133,7 @@ async function scanTransaction(value: string, walletAddress: string | undefined,
     walletAddress,
     simulation,
     decodedIntent,
-    reputation: walletAddress ? walletReputation(walletAddress) : defaultReputation(),
+    reputation: chain === "evm" ? counterpartyReputation : walletAddress ? walletReputation(walletAddress) : defaultReputation(),
   })
 }
 
