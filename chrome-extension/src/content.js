@@ -246,6 +246,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       sendResponse({ ok: true })
       return
     }
+    if (message?.type === "CONTENT_SET_COMPACT") {
+      const banner = ensureBanner()
+      banner.dataset.compact = message.compact ? "true" : "false"
+      sendResponse({ ok: true })
+      return
+    }
     sendResponse({ ok: false, error: "Unknown content message" })
   })()
   return true

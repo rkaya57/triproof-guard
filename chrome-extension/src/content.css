@@ -120,6 +120,35 @@
   margin-left: auto;
 }
 
+#scamguard-extension-banner[data-compact="true"] {
+  max-width: min(300px, calc(100vw - 32px));
+  padding: 8px 9px;
+}
+
+#scamguard-extension-banner[data-compact="true"] .sgx-orb {
+  width: 28px;
+  height: 28px;
+  flex-basis: 28px;
+  border-radius: 11px;
+}
+
+#scamguard-extension-banner[data-compact="true"] .sgx-orb span {
+  width: 8px;
+  height: 8px;
+}
+
+#scamguard-extension-banner[data-compact="true"] .sgx-title {
+  font-size: 12px;
+}
+
+#scamguard-extension-banner[data-compact="true"] .sgx-risk {
+  font-size: 11px;
+}
+
+#scamguard-extension-banner[data-compact="true"] .sgx-actions {
+  display: none;
+}
+
 #scamguard-extension-banner button,
 #scamguard-extension-overlay button {
   appearance: none;

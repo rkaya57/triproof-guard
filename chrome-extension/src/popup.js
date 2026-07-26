@@ -177,6 +177,10 @@ async function messageActiveTab(message) {
   return chrome.tabs.sendMessage(state.tab.id, message)
 }
 
+function setPageBannerCompact(compact) {
+  void messageActiveTab({ type: "CONTENT_SET_COMPACT", compact }).catch(() => undefined)
+}
+
 elements.rescanButton.addEventListener("click", () => {
   void scanActiveTab(true).catch((error) => {
     elements.summaryLabel.textContent = error.message
@@ -202,6 +206,9 @@ elements.saveSettingsButton.addEventListener("click", () => {
 void (async () => {
   try {
     await Promise.all([loadSettings(), loadActiveTab()])
+    setPageBannerCompact(true)
+    window.addEventListener("pagehide", () => setPageBannerCompact(false))
+    window.addEventListener("beforeunload", () => setPageBannerCompact(false))
     await scanActiveTab(false)
   } catch (error) {
     elements.riskBadge.className = "badge caution"
