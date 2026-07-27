@@ -656,10 +656,15 @@ function minimumScoreForSignals(signals: ScamGuardSignal[]) {
   return 0
 }
 
-function summaryFor(level: ScamGuardRiskLevel) {
+function summaryFor(level: ScamGuardRiskLevel, signals: ScamGuardSignal[]) {
   if (level === "CRITICAL") return "Critical drain or account-takeover indicators were found. Do not sign or interact."
-  if (level === "HIGH_RISK") return "Multiple serious risk signals were found. Treat this as unsafe until independently verified."
-  if (level === "CAUTION") return "Some warning signs were found. Verify the source, wallet popup, and expected asset changes."
+  if (level === "HIGH_RISK") {
+    const hasSevereSignal = signals.some((signal) => signal.severity === "critical" || signal.severity === "high")
+    return hasSevereSignal
+      ? "Strong risk signals were found. Treat this as unsafe until independently verified."
+      : "Several unverified campaign signals stacked together. Verify the official source before continuing."
+  }
+  if (level === "CAUTION") return "This surface needs source verification before you click or sign."
   return "No major ScamGuard rule fired. This reduces risk, but it is not a safety guarantee."
 }
 
@@ -674,6 +679,7 @@ function decisionFor(
   const primary = rankedSignals[0]
   const trusted = metadata.reputation?.verdict === "trusted"
   const knownBad = metadata.reputation?.verdict === "known_bad"
+  const hasSevereSignal = rankedSignals.some((signal) => signal.severity === "critical" || signal.severity === "high")
   const source = metadata.domain ? `Source: ${metadata.domain}. ` : ""
   const trustContext = knownBad
     ? "Known-bad intelligence overrides normal trust signals."
@@ -684,7 +690,9 @@ function decisionFor(
     level === "CRITICAL"
       ? `${source}Do not sign. ScamGuard found a stop-level risk signal.`
       : level === "HIGH_RISK"
-        ? `${source}Do not continue until the project and wallet action are independently verified.`
+        ? hasSevereSignal
+          ? `${source}Do not continue until the project and wallet action are independently verified.`
+          : `${source}Several unverified campaign signals are stacked together. Continue only after official source verification.`
         : level === "CAUTION"
           ? `${source}Pause and compare the wallet prompt against the action you expected.`
           : `${source}No stop-level risk surfaced. Still check the wallet prompt before signing.`
@@ -724,7 +732,7 @@ function createResult(
     type,
     score,
     riskLevel: level,
-    summary: summaryFor(level),
+    summary: summaryFor(level, renderedSignals),
     confidence: confidenceFor(renderedSignals, safeMetadata),
     explanation: explanationFor(level, renderedSignals, safeMetadata),
     signals: renderedSignals,
@@ -938,7 +946,7 @@ async function scanUrl(value: string, chain: ScamGuardChain) {
       code: "SUSPICIOUS_TLD_CLAIM",
       severity: "medium",
       title: "Risky claim link domain pattern",
-      detail: `The .${tld} domain appears with claim or reward language. This combination is common in throwaway scam campaigns.`,
+      detail: `The .${tld} domain appears with claim or reward language. This is not proof of a scam, but it is common in throwaway campaign and phishing infrastructure.`,
     })
   }
   if (domain && /phant[o0]m|s[o0]lflare|jup[i1]ter|mag[i1]ceden/.test(domain) && !isOfficialDomain) {
@@ -969,7 +977,7 @@ async function scanUrl(value: string, chain: ScamGuardChain) {
       code: "UNVERIFIED_CLAIM_DOMAIN",
       severity: "medium",
       title: "Unverified claim domain",
-      detail: `${domain} is not in the trusted Solana domain list. Verify it from the project's official channels before opening or signing.`,
+      detail: `${domain} is not in the verified project registry for this scan. Confirm it from the project's official website, X account, Discord, or documentation before opening or signing.`,
     })
   }
   if (domain && !isOfficialDomain && !isVerifiedProjectDomain && (hasCampaignSurface || isAppSurface)) {

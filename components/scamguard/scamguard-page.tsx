@@ -299,6 +299,57 @@ function primaryReason(result: ScanResult | null) {
   return result?.metadata.decision?.primaryReason ?? result?.signals[0]?.detail ?? "Run a scan to see the strongest reason behind the decision."
 }
 
+function decisionTone(result: ScanResult | null) {
+  if (!result) return "Ready"
+  if (result.riskLevel === "CRITICAL") return "Stop"
+  if (result.riskLevel === "HIGH_RISK") return "Review required"
+  if (result.riskLevel === "CAUTION") return "Verify source"
+  return "Clean first pass"
+}
+
+function saferSteps(result: ScanResult | null) {
+  if (!result) {
+    return [
+      "Run a scan before opening reward, mint, or claim links.",
+      "Connect a wallet only when wallet context helps the review.",
+      "Compare the final wallet popup with the action you expected.",
+    ]
+  }
+
+  const steps = [
+    ...result.actions,
+    "Confirm the URL from the project's official website, X account, Discord, or docs.",
+    "Compare token mints, spender addresses, and program IDs with official documentation.",
+    "Use a burner wallet for unavoidable testing until the source is verified.",
+  ]
+
+  if (result.metadata.reputation?.verdict === "trusted") {
+    steps.unshift("Trusted source context reduces false positives, but still review the wallet action.")
+  }
+  if (result.metadata.decodedIntent?.spender) {
+    steps.unshift(`Verify spender ${shortValue(result.metadata.decodedIntent.spender)} before approving any allowance.`)
+  }
+  if (result.metadata.contractIntelligence?.verified === false) {
+    steps.unshift("Prefer contracts with verified source and published official addresses.")
+  }
+  if (result.metadata.rpcStatus === "skipped" || result.metadata.rpcStatus === "failed") {
+    steps.push("Enable the relevant RPC/API provider to improve on-chain confidence.")
+  }
+
+  return Array.from(new Set(steps)).slice(0, 4)
+}
+
+function resultMetricRows(result: ScanResult | null) {
+  return [
+    ["Decision", decisionTone(result)],
+    ["Confidence", result?.confidence ?? "Waiting"],
+    ["Reputation", verdictLabel(result?.metadata.reputation?.verdict)],
+    ["Intent", intentLabel(result)],
+    ["Contract", contractLabel(result)],
+    ["Sources", dataSourceLabel(result)],
+  ]
+}
+
 function findSolanaProvider() {
   const browser = window as Window & {
     solana?: SolanaProvider
@@ -575,102 +626,101 @@ export function ScamGuardPage() {
                 {error && <span className="text-sm text-red-200">{error}</span>}
               </div>
 
-              <div className="grid gap-4 lg:grid-cols-[190px_1fr]">
-                <div className="rounded-lg border border-border bg-background/55 p-5 text-center">
-                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Shield score</p>
-                  <p className="mt-2 text-5xl font-semibold text-white">{securityScore}</p>
-                  <p className="mt-2 text-sm text-muted-foreground">higher is safer</p>
-                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-800">
-                    <div
-                      className={cn(
-                        "h-full rounded-full transition-all",
-                        result?.riskLevel === "CRITICAL" || result?.riskLevel === "HIGH_RISK" ? "bg-red-400" : result?.riskLevel === "CAUTION" ? "bg-amber-300" : "bg-emerald-400",
-                      )}
-                      style={{ width: `${securityScore}%` }}
-                    />
+              <div className="rounded-lg border border-border bg-background/55 p-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-xs uppercase tracking-[0.16em] text-primary">Risk decision</p>
+                      <Badge variant="outline" className={cn(result ? statusTone(result.riskLevel) : "border-primary/30 text-primary")}>
+                        {result ? statusLabel(result.riskLevel) : "Ready"}
+                      </Badge>
+                    </div>
+                    <p className="mt-2 text-base font-semibold leading-6 text-white">
+                      {result?.metadata.decision?.userMessage ?? result?.summary ?? "Run a scan to see ScamGuard risk signals, recommended actions, and RPC metadata."}
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      {result ? primaryReason(result) : "ScamGuard will show the strongest driver, confidence, and next step here."}
+                    </p>
+                  </div>
+                  <div className="w-full rounded-lg border border-border bg-slate-950/45 p-4 lg:w-40">
+                    <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Shield</p>
+                    <div className="mt-2 flex items-end gap-2">
+                      <span className="text-4xl font-semibold text-white">{result ? securityScore : "--"}</span>
+                      <span className="pb-1 text-xs text-muted-foreground">/100</span>
+                    </div>
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all",
+                          result?.riskLevel === "CRITICAL" || result?.riskLevel === "HIGH_RISK" ? "bg-red-400" : result?.riskLevel === "CAUTION" ? "bg-amber-300" : "bg-emerald-400",
+                        )}
+                        style={{ width: `${result ? securityScore : 0}%` }}
+                      />
+                    </div>
                   </div>
                 </div>
-                <div className="rounded-lg border border-border bg-background/55 p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.16em] text-primary">Risk decision</p>
-                      <p className="mt-2 font-medium text-white">
-                        {result?.metadata.decision?.userMessage ?? result?.summary ?? "Run a scan to see ScamGuard risk signals, recommended actions, and RPC metadata."}
-                      </p>
+
+                <div className="mt-4 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-3">
+                  {resultMetricRows(result).map(([label, value]) => (
+                    <span key={label} className="rounded-lg border border-border bg-background/45 px-3 py-2">
+                      <strong className="block text-[10px] uppercase tracking-[0.14em] text-slate-500">{label}</strong>
+                      <span className="mt-1 block break-words text-slate-300">{value}</span>
+                    </span>
+                  ))}
+                </div>
+
+                <div className="mt-4 grid gap-3 lg:grid-cols-[1.05fr_0.95fr]">
+                  <section className="rounded-lg border border-border bg-background/45 p-3">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <p className="flex items-center gap-2 text-sm font-medium text-primary"><FileSearch className="size-4" /> Signals</p>
+                      <span className="text-xs text-muted-foreground">{result ? `${result.signals.length} found` : "Waiting"}</span>
                     </div>
-                    <Badge variant="outline" className={cn(result ? statusTone(result.riskLevel) : "border-primary/30 text-primary")}>
-                      {result ? statusLabel(result.riskLevel) : "Ready"}
-                    </Badge>
-                  </div>
-                  {result && (
-                    <div className="mt-4 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-3">
-                      {[
-                        ["Chain", result.metadata.chain],
-                        ["Confidence", result.confidence],
-                        ["Reputation", verdictLabel(result.metadata.reputation?.verdict)],
-                        ["Intent", intentLabel(result)],
-                        ["Contract", contractLabel(result)],
-                        ["Sources", dataSourceLabel(result)],
-                      ].map(([label, value]) => (
-                        <span key={label} className="rounded-lg border border-border bg-background/45 px-3 py-2">
-                          <strong className="block text-[10px] uppercase tracking-[0.14em] text-slate-500">{label}</strong>
-                          <span className="mt-1 block break-words text-slate-300">{value}</span>
-                        </span>
+                    <div className="max-h-72 space-y-2 overflow-y-auto pr-1 text-sm text-muted-foreground">
+                      {(result?.signals ?? []).map((signal) => (
+                        <div key={signal.code} className={cn("rounded-lg border p-3", severityTone(signal.severity))}>
+                          <p className="font-medium text-white">{signal.title}</p>
+                          <p className="mt-1 leading-5">{signal.detail}</p>
+                        </div>
                       ))}
+                      {!result && <p>No scan yet.</p>}
                     </div>
-                  )}
-                  <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm leading-6 text-cyan-100">
-                    <p className="font-medium text-white">Why this result?</p>
-                    <p className="mt-1">{primaryReason(result)}</p>
-                    {result?.metadata.decision?.trustContext && <p className="mt-2 text-muted-foreground">{result.metadata.decision.trustContext}</p>}
-                  </div>
-                  <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    <div>
-                      <p className="mb-2 flex items-center gap-2 text-sm font-medium text-primary"><FileSearch className="size-4" /> Signals</p>
-                      <div className="space-y-2 text-sm text-muted-foreground">
-                        {(result?.signals ?? []).map((signal) => (
-                          <div key={signal.code} className={cn("rounded-lg border p-3", severityTone(signal.severity))}>
-                            <p className="font-medium text-white">{signal.title}</p>
-                            <p className="mt-1 leading-5">{signal.detail}</p>
-                          </div>
-                        ))}
-                        {!result && <p>No scan yet.</p>}
+                  </section>
+
+                  <section className="grid gap-3">
+                    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+                      <p className="mb-2 flex items-center gap-2 text-sm font-medium text-primary"><CheckCircle2 className="size-4" /> What would make this safer?</p>
+                      <ul className="space-y-2 text-sm leading-5 text-muted-foreground">
+                        {saferSteps(result).map((step) => <li key={step}>- {step}</li>)}
+                      </ul>
+                    </div>
+                    <div className="rounded-lg border border-border bg-background/45 p-3 text-xs text-muted-foreground">
+                      <p className="mb-2 font-medium text-white">Evidence layer</p>
+                      <div className="grid gap-2">
+                        <span>RPC: {result?.metadata.rpcStatus ?? "not_scanned"}</span>
+                        <span>Sources: {dataSourceLabel(result)}</span>
+                        {result?.metadata.signatureCount !== undefined && <span>Signatures sampled: {result.metadata.signatureCount}</span>}
+                        {result?.metadata.ownerProgram && <span>Owner: {shortValue(result.metadata.ownerProgram)}</span>}
+                        {result?.metadata.rpcError && <span>RPC note: {result.metadata.rpcError}</span>}
+                        {result?.metadata.domainIntelligence?.features?.length ? <span>Domain features: {result.metadata.domainIntelligence.features.join(", ")}</span> : null}
+                        {result?.metadata.contractIntelligence?.target && <span>Contract target: {shortValue(result.metadata.contractIntelligence.target)}</span>}
+                        {result?.metadata.decodedIntent?.warnings?.map((warning) => <span key={warning}>Decode note: {warning}</span>)}
+                        {result?.metadata.reputation?.notes?.map((note) => <span key={note}>Reputation: {note}</span>)}
+                        {result?.metadata.contractIntelligence?.notes?.map((note) => <span key={note}>Contract intel: {note}</span>)}
                       </div>
                     </div>
-                    <div>
-                      <p className="mb-2 flex items-center gap-2 text-sm font-medium text-primary"><CheckCircle2 className="size-4" /> Actions</p>
-                      <ul className="space-y-2 text-sm text-muted-foreground">
-                        {(result?.actions ?? ["Paste an item and run the scanner before interacting."]).map((action) => <li key={action}>- {action}</li>)}
-                      </ul>
-                      {result && (
-                        <div className="mt-4 rounded-lg border border-border bg-background/45 p-3 text-xs text-muted-foreground">
-                          <div className="grid gap-2">
-                            <span>RPC: {result.metadata.rpcStatus}</span>
-                            {result.metadata.signatureCount !== undefined && <span>Signatures sampled: {result.metadata.signatureCount}</span>}
-                            {result.metadata.ownerProgram && <span>Owner: {shortValue(result.metadata.ownerProgram)}</span>}
-                            {result.metadata.rpcError && <span>RPC note: {result.metadata.rpcError}</span>}
-                            {result.metadata.domainIntelligence?.features?.length ? <span>Domain features: {result.metadata.domainIntelligence.features.join(", ")}</span> : null}
-                            {result.metadata.contractIntelligence?.target && <span>Contract target: {shortValue(result.metadata.contractIntelligence.target)}</span>}
-                            {result.metadata.decodedIntent?.warnings?.map((warning) => <span key={warning}>Decode note: {warning}</span>)}
-                            {result.metadata.reputation?.notes?.map((note) => <span key={note}>Reputation: {note}</span>)}
-                            {result.metadata.contractIntelligence?.notes?.map((note) => <span key={note}>Contract intel: {note}</span>)}
-                          </div>
+                    {result && (
+                      <div className="rounded-lg border border-border bg-background/45 p-3">
+                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-primary">Feedback loop</p>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-4 lg:grid-cols-2">
+                          <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => void submitFeedback("reported_safe")}>Looks safe</Button>
+                          <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => void submitFeedback("reported_scam")}>Report scam</Button>
+                          <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => void submitFeedback("false_positive")}>False positive</Button>
+                          <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => void submitFeedback("false_negative")}>Missed risk</Button>
                         </div>
-                      )}
-                      {result && (
-                        <div className="mt-4 rounded-lg border border-border bg-background/45 p-3">
-                          <p className="text-xs font-medium uppercase tracking-[0.16em] text-primary">Feedback loop</p>
-                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                            <Button type="button" variant="outline" size="sm" onClick={() => void submitFeedback("reported_safe")}>Looks safe</Button>
-                            <Button type="button" variant="outline" size="sm" onClick={() => void submitFeedback("reported_scam")}>Report scam</Button>
-                            <Button type="button" variant="outline" size="sm" onClick={() => void submitFeedback("false_positive")}>False positive</Button>
-                            <Button type="button" variant="outline" size="sm" onClick={() => void submitFeedback("false_negative")}>Missed risk</Button>
-                          </div>
-                          {feedbackMessage && <p className="mt-3 text-xs text-muted-foreground">{feedbackMessage}</p>}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                        {feedbackMessage && <p className="mt-3 text-xs text-muted-foreground">{feedbackMessage}</p>}
+                      </div>
+                    )}
+                  </section>
                 </div>
               </div>
             </CardContent>
