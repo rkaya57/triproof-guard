@@ -139,7 +139,7 @@ export default function DocsPage() {
               </Link>
             ))}
           </nav>
-          <Link href="/audit" className={`${buttonVariants()} glow-primary hover-lift`}>Start Free</Link>
+          <Link href="/scamguard" className={`${buttonVariants()} glow-primary hover-lift`}>Open Demo</Link>
         </header>
 
         <div className="relative z-10 mx-auto grid max-w-7xl gap-10 px-5 pb-16 pt-10 sm:px-8 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:pb-24 lg:pt-20">
@@ -156,8 +156,8 @@ export default function DocsPage() {
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Link href="/audit" className={`${buttonVariants({ size: "lg" })} glow-primary hover-lift`}>Run a mini audit <ArrowRight data-icon="inline-end" /></Link>
-            <Link href="/dashboard/demo" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>View demo report</Link>
-            <Link href="/docs/trust" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>Trust methodology</Link>
+              <Link href="/demo/report" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>Open demo report</Link>
+              <Link href="/docs/trust" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>Trust methodology</Link>
             </div>
           </div>
 

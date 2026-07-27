@@ -141,8 +141,8 @@ export default function SampleReportPage() {
           ))}
         </div>
         <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-          <Link href="/dashboard/new-analysis" className={`${buttonVariants()} glow-primary`}>
-            Run your own analysis <ArrowRight data-icon="inline-end" />
+          <Link href="/audit" className={`${buttonVariants()} glow-primary`}>
+            Run mini audit <ArrowRight data-icon="inline-end" />
           </Link>
           <Link href="/pricing" className={buttonVariants({ variant: "outline" })}>
             See pricing

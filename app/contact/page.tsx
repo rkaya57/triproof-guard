@@ -92,7 +92,7 @@ export default function ContactPage() {
               </Link>
             ))}
           </nav>
-          <Link href="/audit" className={`${buttonVariants()} glow-primary hover-lift`}>Start Free</Link>
+          <Link href="/scamguard" className={`${buttonVariants()} glow-primary hover-lift`}>Open Demo</Link>
         </header>
 
         <div className="relative z-10 mx-auto grid max-w-7xl gap-10 px-5 pb-16 pt-10 sm:px-8 lg:grid-cols-[1fr_0.95fr] lg:items-center lg:pb-24 lg:pt-20">
@@ -102,7 +102,7 @@ export default function ContactPage() {
               <Badge variant="secondary" className="border-primary/40 bg-primary/10 text-cyan-100">Support & partnerships</Badge>
             </div>
             <h1 className="max-w-4xl text-4xl font-semibold leading-tight text-balance text-white drop-shadow-[0_0_24px_rgba(56,189,248,0.18)] sm:text-6xl lg:text-7xl">
-              Questions, feedback or partnership ideas? Let’s talk.
+              Questions, feedback or partnership ideas? Let&apos;s talk.
             </h1>
             <p className="max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
               Reach the Tri-Proof team for product questions, wallet analysis support, business partnerships, integrations and campaign risk review conversations.
@@ -203,7 +203,7 @@ export default function ContactPage() {
         <div className="glass-panel premium-card animated-border rounded-3xl p-8 text-center reveal-up">
           <ShieldCheck className="mx-auto mb-4 text-primary" />
           <h2 className="text-gradient text-3xl font-semibold">Running a Web3 campaign?</h2>
-          <p className="mx-auto mt-4 max-w-2xl text-slate-300">Let’s discuss how Tri-Proof Guard can help your team review wallet lists before rewards are sent.</p>
+          <p className="mx-auto mt-4 max-w-2xl text-slate-300">Let&apos;s discuss how Tri-Proof Guard can help your team review wallet lists before rewards are sent.</p>
           <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
             <a href="mailto:sdemirbozan@triproofprotocol.com?subject=Tri-Proof%20Partnership%20Inquiry" className={`${buttonVariants({ size: "lg" })} glow-primary hover-lift`}><Handshake data-icon="inline-start" /> Partnership inquiry</a>
             <a href="mailto:info@triproofprotocol.com?subject=Tri-Proof%20Support" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift text-white`}><Headphones data-icon="inline-start" /> Product support</a>

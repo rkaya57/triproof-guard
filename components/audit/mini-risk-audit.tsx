@@ -334,7 +334,7 @@ export function MiniRiskAudit() {
               <div key={wallet.walletAddress} className="grid gap-3 rounded-lg border border-border bg-background/45 p-3 sm:grid-cols-[1fr_auto] sm:items-center">
                 <div>
                   <p className="font-mono text-xs text-muted-foreground">{shortAddress(wallet.walletAddress)}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Risk {wallet.riskScore}/100 · {wallet.riskLevel}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Risk {wallet.riskScore}/100 / {wallet.riskLevel}</p>
                   <div className="mt-2 flex flex-wrap gap-1">
                     {wallet.reasons.slice(0, 3).map((reason) => (
                       <Badge key={reason} variant="outline" className="border-primary/25 bg-primary/5 text-[10px] text-primary">

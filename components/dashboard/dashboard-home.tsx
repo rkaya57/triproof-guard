@@ -83,7 +83,7 @@ export function DashboardHome() {
         <CardHeader>
           <CardTitle>Sign in to start analysis</CardTitle>
           <CardDescription>
-            Create an account or open the demo report to review the MVP workflow.
+            Create an account or open the demo report to review the live product workflow.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex gap-3">
@@ -91,7 +91,7 @@ export function DashboardHome() {
             Login
           </Link>
           <Link href="/dashboard/demo" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>
-            View Demo Report
+            Open Demo Report
           </Link>
         </CardContent>
       </Card>
@@ -117,7 +117,7 @@ export function DashboardHome() {
         <div className="relative z-10 flex flex-col justify-between gap-6 md:flex-row md:items-center">
           <div>
             <Badge variant="secondary" className="mb-4 gap-2 border-primary/30 text-primary">
-              <span className="pulse-dot" /> Guard MVP Active
+              <span className="pulse-dot" /> Guard Product Active
             </Badge>
             <h2 className="text-gradient animate-gradient-text text-3xl font-semibold sm:text-4xl">
               Welcome, {data?.user.name ?? "analyst"}
@@ -247,7 +247,7 @@ export function DashboardHome() {
                   New Analysis
                 </Link>
                 <Link href="/dashboard/demo" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>
-                  View Demo Report
+                  Open Demo Report
                 </Link>
               </div>
             </div>

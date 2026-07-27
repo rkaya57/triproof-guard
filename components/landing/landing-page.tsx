@@ -49,7 +49,7 @@ const navLinks = [
 ]
 
 const heroStats = [
-  ["Live MVP", "scanner, API, extension"],
+  ["Live product", "scanner, API, extension"],
   ["Solana-first", "campaign + pre-sign safety"],
   ["23 tests", "risk engine coverage"],
 ]
@@ -248,7 +248,7 @@ export function LandingPage() {
                 Protect Solana campaigns before rewards or wallet signatures go out.
               </h1>
               <p className="max-w-2xl text-base leading-7 text-muted-foreground">
-                Tri-Proof Guard gives Solana teams one safety layer for airdrop wallet review, fake claim links, risky token mints, and pre-sign transaction warnings. The live MVP includes ScamGuard, a Chrome extension, API docs, and Sybil analysis.
+                Tri-Proof Guard gives Solana teams one safety layer for airdrop wallet review, fake claim links, risky token mints, and pre-sign transaction warnings. The live product includes ScamGuard, a Chrome extension, API docs, and Sybil analysis.
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
@@ -280,7 +280,7 @@ export function LandingPage() {
           <div className="glass-panel premium-card animated-border data-scan relative min-h-[430px] overflow-hidden rounded-3xl p-5 reveal-up delay-200">
             <div className="mb-5 flex items-center justify-between gap-4">
               <div><p className="text-sm font-medium">Jury Demo Console</p><p className="text-xs text-muted-foreground">Solana security product preview</p></div>
-              <Badge variant="secondary" className="gap-2 border-primary/30 text-primary"><span className="pulse-dot" /> Live MVP</Badge>
+              <Badge variant="secondary" className="gap-2 border-primary/30 text-primary"><span className="pulse-dot" /> Live product</Badge>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               {consoleStats.map(([value, label, detail], index) => (
@@ -582,14 +582,14 @@ export function LandingPage() {
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
           <div className="mb-8 flex flex-col gap-3"><Badge variant="secondary" className="w-fit gap-2 border-primary/30 text-primary"><GitBranch className="size-3.5" />Roadmap</Badge><h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Built in layers, without forcing a native token.</h2></div>
           <div className="grid gap-4 md:grid-cols-3">
-            {[["Guard MVP", "On-chain wallet enrichment, risk score, cluster review and PDF/CSV exports."], ["ScamGuard Solana", "Suspicious URL, token mint, wallet and transaction intent scanner for pre-sign protection."], ["Guard Pro", "Saved decisions, team review workflow, API access and repeat campaign monitoring."]].map(([phase, detail], index) => (<div key={phase} className="glass-panel premium-card hover-lift rounded-lg p-5"><span className="cyber-chip mb-3">Phase {index + 1}</span><p className="mt-1 font-semibold">{phase}</p><p className="mt-3 text-sm leading-6 text-muted-foreground">{detail}</p></div>))}
+            {[["Guard Product", "On-chain wallet enrichment, risk score, cluster review and PDF/CSV exports."], ["ScamGuard Solana", "Suspicious URL, token mint, wallet and transaction intent scanner for pre-sign protection."], ["Guard Pro", "Saved decisions, team review workflow, API access and repeat campaign monitoring."]].map(([phase, detail], index) => (<div key={phase} className="glass-panel premium-card hover-lift rounded-lg p-5"><span className="cyber-chip mb-3">Phase {index + 1}</span><p className="mt-1 font-semibold">{phase}</p><p className="mt-3 text-sm leading-6 text-muted-foreground">{detail}</p></div>))}
           </div>
         </div>
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
         <div className="glass-panel scan-accent premium-card animated-border relative flex flex-col items-start justify-between gap-6 overflow-hidden rounded-2xl p-8 sm:p-10 md:flex-row md:items-center">
-          <div className="relative z-10"><div className="mb-3 flex items-center gap-2 text-primary"><Sparkles className="size-5" /><span className="font-mono text-xs uppercase tracking-[0.2em]">Live MVP</span></div><h2 className="text-gradient text-2xl font-semibold sm:text-3xl">Test the first 100 wallets free today.</h2><p className="mt-2 max-w-xl text-muted-foreground">Upload a CSV, review risk signals and see whether Tri-Proof Guard fits your Web3 campaign workflow.</p></div>
+          <div className="relative z-10"><div className="mb-3 flex items-center gap-2 text-primary"><Sparkles className="size-5" /><span className="font-mono text-xs uppercase tracking-[0.2em]">Live product</span></div><h2 className="text-gradient text-2xl font-semibold sm:text-3xl">Test the first 100 wallets free today.</h2><p className="mt-2 max-w-xl text-muted-foreground">Upload a CSV, review risk signals and see whether Tri-Proof Guard fits your Web3 campaign workflow.</p></div>
           <div className="relative z-10 flex flex-col gap-3 sm:flex-row"><Link href="/audit" className={`${buttonVariants()} glow-primary hover-lift`}>Start mini audit</Link><Link href="/scamguard" className={`${buttonVariants({ variant: "outline" })} hover-lift`}><Globe2 data-icon="inline-start" /> Open ScamGuard</Link><Link href="/contact" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>Contact</Link></div>
         </div>
       </section>
@@ -597,7 +597,7 @@ export function LandingPage() {
       <footer className="border-t border-border bg-muted/20">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-8 text-sm text-muted-foreground sm:px-8 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-2"><ShieldCheck className="text-primary" /><span>Tri-Proof Guard - Web3 wallet risk analysis for campaign teams.</span></div>
-          <div className="flex flex-wrap gap-4"><Link href="/docs" className="hover:text-primary">Docs</Link><Link href="/blog" className="hover:text-primary">Blog</Link><Link href="/contact" className="hover:text-primary">Contact</Link><Link href="/pricing" className="hover:text-primary">Pricing</Link><Link href="/dashboard/demo" className="hover:text-primary">Demo</Link><Link href="/login" className="hover:text-primary">Login</Link></div>
+          <div className="flex flex-wrap gap-4"><Link href="/docs" className="hover:text-primary">Docs</Link><Link href="/blog" className="hover:text-primary">Blog</Link><Link href="/contact" className="hover:text-primary">Contact</Link><Link href="/pricing" className="hover:text-primary">Pricing</Link><Link href="/demo/report" className="hover:text-primary">Demo</Link><Link href="/login" className="hover:text-primary">Login</Link></div>
         </div>
       </footer>
     </main>

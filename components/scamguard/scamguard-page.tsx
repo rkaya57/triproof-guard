@@ -486,7 +486,7 @@ export function ScamGuardPage() {
             <a href="/downloads/scamguard-chrome-extension.zip" className={`${buttonVariants({ variant: "outline" })} hover-lift hidden md:inline-flex`} download>
               <Download data-icon="inline-start" /> Extension
             </a>
-            <Link href="/dashboard/new-analysis" className={`${buttonVariants()} glow-primary hover-lift`}>Sybil Analysis</Link>
+            <Link href="/audit" className={`${buttonVariants()} glow-primary hover-lift`}>Sybil Analysis</Link>
           </div>
         </header>
 
@@ -956,7 +956,7 @@ Authorization: Bearer <TRIPROOF_API_KEY>
               Use Sybil scoring for campaign eligibility, ScamGuard scoring for pre-sign safety, and the combined dashboard score for fast operational decisions.
             </p>
           </div>
-          <Link href="/dashboard/new-analysis" className={`${buttonVariants()} glow-primary hover-lift`}>
+          <Link href="/audit" className={`${buttonVariants()} glow-primary hover-lift`}>
             Open Sybil Analysis <ArrowRight data-icon="inline-end" />
           </Link>
         </div>

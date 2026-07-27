@@ -37,7 +37,7 @@ export default async function Page() {
         </Link>
         <div className="flex items-center gap-3">
           <Link href="/pricing" className={buttonVariants({ variant: "outline" })}>Pricing</Link>
-          <Link href="/dashboard/new-analysis" className={buttonVariants()}>Start Free</Link>
+          <Link href="/scamguard" className={buttonVariants()}>Open Demo</Link>
         </div>
       </header>
 
@@ -92,11 +92,14 @@ export default async function Page() {
         ) : (
           <Card className="glass-panel premium-card">
             <CardHeader>
-              <CardTitle>No published articles yet</CardTitle>
-              <CardDescription>Publish your first article from the admin blog studio. Demo posts have been removed.</CardDescription>
+              <CardTitle>Research notes are being prepared</CardTitle>
+              <CardDescription>
+                Public articles will focus on Solana campaign security, pre-sign safety, and wallet-list review methodology.
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <Link href="/dashboard/admin/blog" className={buttonVariants()}>Open Blog Studio</Link>
+            <CardContent className="flex flex-col gap-3 sm:flex-row">
+              <Link href="/scamguard" className={buttonVariants()}>Open ScamGuard</Link>
+              <Link href="/docs" className={buttonVariants({ variant: "outline" })}>Read docs</Link>
             </CardContent>
           </Card>
         )}
@@ -141,7 +144,7 @@ export default async function Page() {
           <div className="mb-3 flex items-center gap-2 text-primary"><BookOpen className="size-5" /><span className="font-medium">For campaign teams</span></div>
           <h2 className="text-2xl font-semibold">Ready to check your own wallet list?</h2>
           <p className="mt-2 text-muted-foreground">Start with 100 wallets free, then upgrade with USDC when your campaign list grows.</p>
-          <Link href="/dashboard/new-analysis" className={`${buttonVariants()} mt-5`}>Start free analysis</Link>
+          <Link href="/audit" className={`${buttonVariants()} mt-5`}>Start mini audit</Link>
         </div>
       </section>
     </main>

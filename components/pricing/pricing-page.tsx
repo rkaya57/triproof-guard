@@ -86,7 +86,7 @@ export function PricingPage() {
           <span className="text-sm font-semibold">Tri-Proof Guard</span>
         </Link>
         <div className="flex items-center gap-3">
-          <Link href="/dashboard/demo" className={buttonVariants({ variant: "outline" })}>
+          <Link href="/demo/report" className={buttonVariants({ variant: "outline" })}>
             View Demo
           </Link>
           <Link href="/audit" className={`${buttonVariants()} glow-primary`}>

@@ -129,7 +129,7 @@ export function DashboardShell({
           <div className="glass-panel premium-card hidden rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground lg:block">
             <div className="mb-2 flex items-center gap-2 text-foreground">
               <Sparkles className="text-primary" />
-              Guard MVP
+              Guard Product
             </div>
             <p>Wallet risk analysis, clustering, Gray Zone review and exports.</p>
             <div className="mt-4 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-primary/80">

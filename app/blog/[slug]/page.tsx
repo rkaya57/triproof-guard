@@ -104,8 +104,8 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
 
         <div className="mt-12 rounded-2xl border border-primary/25 bg-primary/5 p-6">
           <h2 className="text-2xl font-semibold">Need to review a wallet list?</h2>
-          <p className="mt-2 text-muted-foreground">Run the first 100 wallets free and see clean, review and rejected wallet outputs.</p>
-          <Link href="/dashboard/new-analysis" className={`${buttonVariants()} mt-5`}>Start free analysis</Link>
+          <p className="mt-2 text-muted-foreground">Run a public engine preview and see clean, review and rejected wallet outputs.</p>
+          <Link href="/audit" className={`${buttonVariants()} mt-5`}>Start mini audit</Link>
         </div>
       </article>
     </main>
