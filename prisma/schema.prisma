@@ -116,6 +116,21 @@ enum AirdropSubmissionStatus {
   REJECTED
 }
 
+enum ScamGuardIntelKind {
+  DOMAIN
+  WALLET
+  EVM_ADDRESS
+  SOLANA_ADDRESS
+  TOKEN
+  CONTRACT
+}
+
+enum ScamGuardIntelVerdict {
+  TRUSTED
+  SUSPICIOUS
+  KNOWN_BAD
+}
+
 model User {
   id                         String               @id @default(cuid())
   name                       String
@@ -130,6 +145,7 @@ model User {
   airdropProfile             AirdropProfile?
   airdropSubmissions         AirdropSubmission[]  @relation("AirdropSubmissionUser")
   reviewedAirdropSubmissions AirdropSubmission[]  @relation("AirdropSubmissionReviewer")
+  scamGuardIntelEntries      ScamGuardIntelEntry[]
   createdAt                  DateTime             @default(now())
   updatedAt                  DateTime             @updatedAt
 }
@@ -529,4 +545,26 @@ model AirdropSubmission {
   @@index([status, createdAt])
   @@index([profileId])
   @@index([reviewedById])
+}
+
+model ScamGuardIntelEntry {
+  id          String                 @id @default(cuid())
+  kind        ScamGuardIntelKind
+  value       String
+  normalized  String
+  chain       String                 @default("")
+  verdict     ScamGuardIntelVerdict
+  label       String
+  source      String                 @default("admin")
+  notes       String?                @db.Text
+  active      Boolean                @default(true)
+  createdById String?
+  createdBy   User?                  @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  @@unique([kind, normalized, chain])
+  @@index([kind, normalized])
+  @@index([verdict, active])
+  @@index([createdById])
 }

@@ -107,6 +107,12 @@ type ScanResult = {
       source: "rpc" | "etherscan" | "skipped"
       notes: string[]
     }
+    decision?: {
+      primaryReason: string
+      trustContext: string
+      riskDrivers: string[]
+      userMessage: string
+    }
   }
   scannedAt: string
 }
@@ -480,6 +486,9 @@ export function ScamGuardPage() {
                           {result.metadata.rpcError && <><br />RPC note: {result.metadata.rpcError}</>}
                           {result.metadata.decodedIntent?.category && <><br />Intent: {result.metadata.decodedIntent.category}</>}
                           {result.metadata.decodedIntent?.method && <><br />Method: {result.metadata.decodedIntent.method}</>}
+                          {result.metadata.decision?.userMessage && <><br />Decision: {result.metadata.decision.userMessage}</>}
+                          {result.metadata.decision?.primaryReason && <><br />Primary reason: {result.metadata.decision.primaryReason}</>}
+                          {result.metadata.decision?.trustContext && <><br />Trust context: {result.metadata.decision.trustContext}</>}
                           {result.metadata.decodedIntent?.warnings?.map((warning) => <span key={warning}><br />Decode note: {warning}</span>)}
                           {result.metadata.reputation?.notes?.map((note) => <span key={note}><br />Reputation: {note}</span>)}
                           {result.metadata.domainIntelligence?.features?.length ? <><br />Domain features: {result.metadata.domainIntelligence.features.join(", ")}</> : null}

@@ -1,3 +1,5 @@
+import { findScamGuardIntelEntry } from "@/lib/scamguard/intelligence"
+
 export type ScamGuardScanType = "url" | "wallet" | "token" | "transaction"
 
 export type ScamGuardChain = "solana" | "evm" | "unknown"
@@ -80,8 +82,16 @@ export type ScamGuardScanResult = {
       isContract?: boolean
       verified?: boolean
       proxy?: boolean
+      deployer?: string
+      implementation?: string
       source: "rpc" | "etherscan" | "skipped"
       notes: string[]
+    }
+    decision?: {
+      primaryReason: string
+      trustContext: string
+      riskDrivers: string[]
+      userMessage: string
     }
     feedback?: {
       enabled: boolean
@@ -191,6 +201,19 @@ const knownScamDomains = new Set([
   "airdrop.orbition.network",
 ])
 
+const defaultThreatFeedUrls = [
+  "https://raw.githubusercontent.com/MetaMask/eth-phishing-detect/master/src/config.json",
+]
+
+type ThreatFeedCache = {
+  loadedAt: number
+  domains: Set<string>
+  evmAddresses: Set<string>
+}
+
+let threatFeedCache: ThreatFeedCache | null = null
+const threatFeedTtlMs = 60 * 60 * 1000
+
 const suspiciousTlds = new Set(["zip", "mov", "cam", "click", "top", "xyz"])
 const sensitiveQueryKeys = new Set(["redirect", "return", "returnurl", "next", "target", "url", "continue"])
 const walletProtocolPattern = /(?:phantom|solflare|walletconnect|metamask|coinbase|backpack):\/\//i
@@ -295,23 +318,83 @@ async function evmRpc<T>(method: string, params: unknown[]): Promise<T> {
   return payload.result as T
 }
 
+function getEtherscanApiKey() {
+  return process.env.ETHERSCAN_API_KEY?.trim() || null
+}
+
+async function etherscanRequest(params: Record<string, string>) {
+  const apiKey = getEtherscanApiKey()
+  if (!apiKey) return null
+  const search = new URLSearchParams({
+    chainid: "1",
+    apikey: apiKey,
+    ...params,
+  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 3000)
+  try {
+    const response = await fetch(`https://api.etherscan.io/v2/api?${search.toString()}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+    if (!response.ok) return null
+    return (await response.json()) as { status?: string; message?: string; result?: unknown }
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function etherscanContractMetadata(address: string) {
+  const [source, creation] = await Promise.all([
+    etherscanRequest({ module: "contract", action: "getsourcecode", address }),
+    etherscanRequest({ module: "contract", action: "getcontractcreation", contractaddresses: address }),
+  ])
+  const sourceRow = Array.isArray(source?.result) ? (source.result[0] as Record<string, unknown> | undefined) : undefined
+  const creationRow = Array.isArray(creation?.result) ? (creation.result[0] as Record<string, unknown> | undefined) : undefined
+  const sourceCode = typeof sourceRow?.SourceCode === "string" ? sourceRow.SourceCode : ""
+  const abi = typeof sourceRow?.ABI === "string" ? sourceRow.ABI : ""
+  const proxy = sourceRow?.Proxy === "1"
+  const implementation = typeof sourceRow?.Implementation === "string" ? normalizeEvmAddress(sourceRow.Implementation) : undefined
+  const deployer = typeof creationRow?.contractCreator === "string" ? normalizeEvmAddress(creationRow.contractCreator) : undefined
+  const verified = Boolean(sourceCode.trim()) || (Boolean(abi) && abi !== "Contract source code not verified")
+  if (!sourceRow && !creationRow) return null
+  return { verified, proxy, implementation, deployer }
+}
+
 async function evmContractIntelligence(target?: string): Promise<NonNullable<ScamGuardScanResult["metadata"]["contractIntelligence"]>> {
   const normalized = normalizeEvmAddress(target)
   if (!normalized) {
     return { checked: false, source: "skipped", notes: ["No EVM counterparty was available for contract intelligence."] }
   }
-  if (!getEvmRpcUrl()) {
-    return { target: normalized, checked: false, source: "skipped", notes: ["EVM RPC is not configured, so live contract-code checks were skipped."] }
+  if (!getEvmRpcUrl() && !getEtherscanApiKey()) {
+    return { target: normalized, checked: false, source: "skipped", notes: ["EVM RPC or Etherscan API is not configured, so live contract checks were skipped."] }
   }
   try {
-    const code = await evmRpc<string>("eth_getCode", [normalized, "latest"])
-    const isContract = Boolean(code && code !== "0x")
+    const [codeResult, etherscan] = await Promise.all([
+      getEvmRpcUrl() ? evmRpc<string>("eth_getCode", [normalized, "latest"]).catch(() => null) : Promise.resolve(null),
+      etherscanContractMetadata(normalized),
+    ])
+    const isContract = codeResult ? codeResult !== "0x" : undefined
+    const notes = codeResult
+      ? [isContract ? "EVM RPC returned bytecode for this counterparty." : "EVM RPC returned no bytecode; this counterparty appears to be an EOA."]
+      : ["EVM RPC code check was unavailable; using available explorer evidence."]
+    if (etherscan) {
+      notes.push(etherscan.verified ? "Etherscan reports verified contract source or ABI." : "Etherscan does not report verified source for this contract.")
+      if (etherscan.proxy) notes.push("Etherscan marks this contract as a proxy.")
+      if (etherscan.deployer) notes.push(`Contract deployer: ${etherscan.deployer}.`)
+    }
     return {
       target: normalized,
       checked: true,
       isContract,
-      source: "rpc",
-      notes: [isContract ? "EVM RPC returned bytecode for this counterparty." : "EVM RPC returned no bytecode; this counterparty appears to be an EOA."],
+      verified: etherscan?.verified,
+      proxy: etherscan?.proxy,
+      implementation: etherscan?.implementation,
+      deployer: etherscan?.deployer,
+      source: etherscan ? "etherscan" : "rpc",
+      notes,
     }
   } catch (error) {
     return {
@@ -341,6 +424,133 @@ function normalizeChain(chain?: ScamGuardChain): ScamGuardChain {
 function domainMatchesSet(domain: string | undefined, domains: Set<string>) {
   if (!domain) return false
   return [...domains].some((knownDomain) => domain === knownDomain || domain.endsWith(`.${knownDomain}`))
+}
+
+function shouldLoadExternalThreatFeeds() {
+  if (process.env.SCAMGUARD_DISABLE_THREAT_FEEDS === "1") return false
+  if (process.env.NODE_ENV === "test" || process.env.npm_lifecycle_event?.startsWith("test")) return false
+  return true
+}
+
+function threatFeedUrls() {
+  const configured = (process.env.SCAMGUARD_THREAT_FEED_URLS ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+  return configured.length ? configured : defaultThreatFeedUrls
+}
+
+function collectThreatStrings(value: unknown, out: string[] = []) {
+  if (typeof value === "string") {
+    out.push(value)
+    return out
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectThreatStrings(item, out)
+    return out
+  }
+  if (value && typeof value === "object") {
+    for (const item of Object.values(value)) collectThreatStrings(item, out)
+  }
+  return out
+}
+
+function addThreatCandidate(raw: string, domains: Set<string>, evmAddresses: Set<string>) {
+  const cleaned = raw.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "")
+  if (!cleaned || cleaned.length > 180) return
+  if (evmAddressRegex.test(cleaned)) {
+    evmAddresses.add(cleaned)
+    return
+  }
+  if (/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(cleaned) && !cleaned.includes(" ")) domains.add(cleaned)
+}
+
+async function fetchThreatFeed(url: string, domains: Set<string>, evmAddresses: Set<string>) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 2500)
+  try {
+    const response = await fetch(url, { cache: "no-store", signal: controller.signal })
+    if (!response.ok) return
+    const text = await response.text()
+    try {
+      const json = JSON.parse(text) as unknown
+      for (const item of collectThreatStrings(json)) addThreatCandidate(item, domains, evmAddresses)
+    } catch {
+      for (const line of text.split(/\r?\n/)) addThreatCandidate(line, domains, evmAddresses)
+    }
+  } catch {
+    return
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function loadThreatFeeds() {
+  if (!shouldLoadExternalThreatFeeds()) return { domains: new Set<string>(), evmAddresses: new Set<string>() }
+  if (threatFeedCache && Date.now() - threatFeedCache.loadedAt < threatFeedTtlMs) return threatFeedCache
+
+  const domains = new Set<string>()
+  const evmAddresses = new Set<string>()
+  await Promise.all(threatFeedUrls().map((url) => fetchThreatFeed(url, domains, evmAddresses)))
+  threatFeedCache = { loadedAt: Date.now(), domains, evmAddresses }
+  return threatFeedCache
+}
+
+async function externalDomainReputation(domain?: string): Promise<NonNullable<ScamGuardScanResult["metadata"]["reputation"]>> {
+  if (!domain) return defaultReputation()
+  const dbEntry = await findScamGuardIntelEntry("DOMAIN", domain)
+  if (dbEntry) {
+    return {
+      verdict: dbEntry.verdict === "TRUSTED" ? "trusted" : dbEntry.verdict === "KNOWN_BAD" ? "known_bad" : "suspicious",
+      source: dbEntry.source,
+      notes: [`${domain} matched admin intelligence: ${dbEntry.label}${dbEntry.notes ? ` - ${dbEntry.notes}` : ""}`],
+    }
+  }
+  const feeds = await loadThreatFeeds()
+  if (domainMatchesSet(domain, feeds.domains)) {
+    return { verdict: "known_bad", source: "external_threat_feed", notes: [`${domain} matched an external phishing domain feed.`] }
+  }
+  return defaultReputation()
+}
+
+async function externalEvmReputation(address?: string): Promise<NonNullable<ScamGuardScanResult["metadata"]["reputation"]>> {
+  const normalized = normalizeEvmAddress(address)
+  if (!normalized) return defaultReputation()
+  const dbEntry =
+    (await findScamGuardIntelEntry("EVM_ADDRESS", normalized, "evm")) ??
+    (await findScamGuardIntelEntry("CONTRACT", normalized, "evm"))
+  if (dbEntry) {
+    return {
+      verdict: dbEntry.verdict === "TRUSTED" ? "trusted" : dbEntry.verdict === "KNOWN_BAD" ? "known_bad" : "suspicious",
+      source: dbEntry.source,
+      notes: [`${normalized} matched admin intelligence: ${dbEntry.label}${dbEntry.notes ? ` - ${dbEntry.notes}` : ""}`],
+    }
+  }
+  const feeds = await loadThreatFeeds()
+  if (feeds.evmAddresses.has(normalized)) {
+    return { verdict: "known_bad", source: "external_threat_feed", notes: [`${normalized} matched an external EVM address feed.`] }
+  }
+  return defaultReputation()
+}
+
+async function adminSolanaReputation(address: string): Promise<NonNullable<ScamGuardScanResult["metadata"]["reputation"]>> {
+  const dbEntry =
+    (await findScamGuardIntelEntry("SOLANA_ADDRESS", address, "solana")) ??
+    (await findScamGuardIntelEntry("WALLET", address, "solana")) ??
+    (await findScamGuardIntelEntry("TOKEN", address, "solana"))
+  if (!dbEntry) return defaultReputation()
+  return {
+    verdict: dbEntry.verdict === "TRUSTED" ? "trusted" : dbEntry.verdict === "KNOWN_BAD" ? "known_bad" : "suspicious",
+    source: dbEntry.source,
+    notes: [`${address} matched admin intelligence: ${dbEntry.label}${dbEntry.notes ? ` - ${dbEntry.notes}` : ""}`],
+  }
+}
+
+function strongestReputation(
+  ...items: Array<NonNullable<ScamGuardScanResult["metadata"]["reputation"]>>
+): NonNullable<ScamGuardScanResult["metadata"]["reputation"]> {
+  const rank = { known_bad: 4, suspicious: 3, trusted: 2, unknown: 1 }
+  return items.reduce((best, item) => (rank[item.verdict] > rank[best.verdict] ? item : best), defaultReputation())
 }
 
 function inferChain(value: string, chain?: ScamGuardChain): ScamGuardChain {
@@ -453,6 +663,39 @@ function summaryFor(level: ScamGuardRiskLevel) {
   return "No major ScamGuard rule fired. This reduces risk, but it is not a safety guarantee."
 }
 
+function decisionFor(
+  level: ScamGuardRiskLevel,
+  signals: ScamGuardSignal[],
+  metadata: ScamGuardScanResult["metadata"]
+): NonNullable<ScamGuardScanResult["metadata"]["decision"]> {
+  const rankedSignals = signals
+    .filter((signal) => signal.severity !== "info")
+    .sort((a, b) => signalWeight(b.severity) - signalWeight(a.severity))
+  const primary = rankedSignals[0]
+  const trusted = metadata.reputation?.verdict === "trusted"
+  const knownBad = metadata.reputation?.verdict === "known_bad"
+  const source = metadata.domain ? `Source: ${metadata.domain}. ` : ""
+  const trustContext = knownBad
+    ? "Known-bad intelligence overrides normal trust signals."
+    : trusted
+      ? "The source or counterparty is recognized, but wallet intent still controls the final decision."
+      : "The source or counterparty is not verified by local intelligence."
+  const userMessage =
+    level === "CRITICAL"
+      ? `${source}Do not sign. ScamGuard found a stop-level risk signal.`
+      : level === "HIGH_RISK"
+        ? `${source}Do not continue until the project and wallet action are independently verified.`
+        : level === "CAUTION"
+          ? `${source}Pause and compare the wallet prompt against the action you expected.`
+          : `${source}No stop-level risk surfaced. Still check the wallet prompt before signing.`
+  return {
+    primaryReason: primary?.title ?? "No high-confidence risk driver",
+    trustContext,
+    riskDrivers: rankedSignals.slice(0, 4).map((signal) => `${signal.title}: ${signal.detail}`),
+    userMessage,
+  }
+}
+
 function createResult(
   type: ScamGuardScanType,
   signals: ScamGuardSignal[],
@@ -475,6 +718,7 @@ function createResult(
           detail: "Still verify the official source and expected wallet changes before signing.",
         },
       ]
+  safeMetadata.decision = decisionFor(level, renderedSignals, safeMetadata)
   return {
     id: crypto.randomUUID(),
     type,
@@ -577,14 +821,14 @@ function brandMentioned(text: string) {
   )
 }
 
-function scanUrl(value: string, chain: ScamGuardChain) {
+async function scanUrl(value: string, chain: ScamGuardChain) {
   const text = value.toLowerCase()
   const url = parsedUrl(value)
   const domain = hostFromUrl(value)
   const domainIntel = domainIntelligenceFor(value)
   const path = url?.pathname.toLowerCase() ?? ""
   const tld = domain?.split(".").at(-1) ?? ""
-  const reputation = domainReputation(domain ?? undefined)
+  const reputation = strongestReputation(domainReputation(domain ?? undefined), await externalDomainReputation(domain ?? undefined))
   const signals: ScamGuardSignal[] = []
   const brand = brandMentioned(text)
   const hasClaimLanguage = highRiskWords.some((word) => text.includes(word))
@@ -648,6 +892,21 @@ function scanUrl(value: string, chain: ScamGuardChain) {
       severity: "critical",
       title: "Known suspicious domain",
       detail: `${domain} is in ScamGuard's seed threat intelligence list.`,
+    })
+  }
+  if (domain && reputation.verdict === "known_bad" && !isKnownScamDomain) {
+    signals.push({
+      code: "EXTERNAL_THREAT_FEED_DOMAIN",
+      severity: "critical",
+      title: "Domain matched threat intelligence",
+      detail: `${domain} matched ScamGuard admin intelligence or an external phishing feed.`,
+    })
+  } else if (domain && reputation.verdict === "suspicious") {
+    signals.push({
+      code: "ADMIN_SUSPICIOUS_DOMAIN",
+      severity: "high",
+      title: "Domain marked suspicious",
+      detail: `${domain} is marked suspicious in ScamGuard intelligence. Verify from official project channels before signing.`,
     })
   }
   if (domain && isVerifiedProjectDomain) {
@@ -756,7 +1015,9 @@ function parsedInfo(accountInfo: ParsedAccountInfo) {
 async function scanWallet(value: string, chain: ScamGuardChain) {
   const address = normalizeValue(value)
   const signals: ScamGuardSignal[] = []
-  const reputation = walletReputation(address)
+  const reputation = chain === "solana"
+    ? strongestReputation(walletReputation(address), await adminSolanaReputation(address))
+    : strongestReputation(walletReputation(address), evmCounterpartyReputation(address), await externalEvmReputation(address))
 
   if (chain === "evm") {
     if (!evmAddressRegex.test(address)) {
@@ -878,6 +1139,7 @@ async function scanToken(value: string, chain: ScamGuardChain) {
   const text = mint.toLowerCase()
 
   if (chain === "evm") {
+    const evmReputation = strongestReputation(walletReputation(mint), evmCounterpartyReputation(mint), await externalEvmReputation(mint))
     if (!evmAddressRegex.test(mint)) {
       signals.push({
         code: "INVALID_EVM_CONTRACT",
@@ -895,6 +1157,7 @@ async function scanToken(value: string, chain: ScamGuardChain) {
       })
     }
     const contractIntelligence = await evmContractIntelligence(mint)
+    const deployerReputation = contractIntelligence.deployer ? await externalEvmReputation(contractIntelligence.deployer) : defaultReputation()
     if (contractIntelligence.checked && contractIntelligence.isContract === false) {
       signals.push({
         code: "EVM_TOKEN_NOT_CONTRACT",
@@ -910,12 +1173,51 @@ async function scanToken(value: string, chain: ScamGuardChain) {
         detail: "EVM RPC found deployed bytecode for this token or contract target.",
       })
     }
+    if (contractIntelligence.isContract && contractIntelligence.verified === false) {
+      signals.push({
+        code: "UNVERIFIED_EVM_CONTRACT",
+        severity: "medium",
+        title: "EVM contract source is not verified",
+        detail: `${contractIntelligence.target} has bytecode but no verified source evidence from Etherscan.`,
+      })
+    }
+    if (contractIntelligence.proxy) {
+      signals.push({
+        code: "EVM_PROXY_CONTRACT",
+        severity: "low",
+        title: "Proxy contract detected",
+        detail: "Proxy contracts can change implementation behavior through upgrade controls.",
+      })
+    }
+    if (deployerReputation.verdict === "known_bad" && contractIntelligence.deployer) {
+      signals.push({
+        code: "KNOWN_BAD_DEPLOYER",
+        severity: "critical",
+        title: "Known bad deployer",
+        detail: `${contractIntelligence.deployer} is marked as known bad in ScamGuard deployer intelligence.`,
+      })
+    }
+    if (evmReputation.verdict === "known_bad") {
+      signals.push({
+        code: "KNOWN_BAD_EVM_CONTRACT",
+        severity: "critical",
+        title: "Known bad EVM contract or token",
+        detail: "This address matched ScamGuard counterparty intelligence or an external threat feed.",
+      })
+    } else if (evmReputation.verdict === "suspicious") {
+      signals.push({
+        code: "SUSPICIOUS_EVM_CONTRACT",
+        severity: "high",
+        title: "Suspicious EVM contract or token",
+        detail: "This address is marked suspicious in ScamGuard intelligence.",
+      })
+    }
     return createResult("token", signals, {
       chain,
       rpcStatus: contractIntelligence.checked ? "checked" : getEvmRpcUrl() ? "failed" : "skipped",
       ownerProgram: evmAddressRegex.test(mint) ? "evm_contract" : null,
       contractIntelligence,
-      reputation: walletReputation(mint),
+      reputation: evmReputation,
     })
   }
 
@@ -936,6 +1238,7 @@ async function scanToken(value: string, chain: ScamGuardChain) {
     })
     return createResult("token", signals, { chain, rpcStatus: "skipped" })
   }
+  const adminReputation = strongestReputation(walletReputation(mint), await adminSolanaReputation(mint))
 
   try {
     const accountInfo = await solanaRpc<ParsedAccountInfo>("getAccountInfo", [
@@ -994,8 +1297,8 @@ async function scanToken(value: string, chain: ScamGuardChain) {
       rpcStatus: "checked",
       ownerProgram: owner,
       reputation: owner && trustedPrograms.has(owner)
-        ? { verdict: "trusted", source: "program_registry", notes: [`Owned by ${trustedPrograms.get(owner)}.`] }
-        : defaultReputation(),
+        ? strongestReputation(adminReputation, { verdict: "trusted", source: "program_registry", notes: [`Owned by ${trustedPrograms.get(owner)}.`] })
+        : adminReputation,
       tokenMint: {
         decimals,
         supply,
@@ -1009,6 +1312,7 @@ async function scanToken(value: string, chain: ScamGuardChain) {
       chain,
       rpcStatus: getSolanaRpcUrl() ? "failed" : "skipped",
       rpcError: error instanceof Error ? error.message : "Solana RPC failed",
+      reputation: adminReputation,
     })
   }
 }
@@ -1110,6 +1414,60 @@ function decodeEvmCalldata(data?: string) {
   return null
 }
 
+function collectInstructionLikeObjects(value: unknown, out: Array<Record<string, unknown>> = []) {
+  if (!value || typeof value !== "object") return out
+  if (Array.isArray(value)) {
+    for (const item of value) collectInstructionLikeObjects(item, out)
+    return out
+  }
+  const record = value as Record<string, unknown>
+  const hasInstructionShape =
+    typeof record.programId === "string" ||
+    typeof record.program === "string" ||
+    typeof record.type === "string" ||
+    typeof record.instruction === "string"
+  if (hasInstructionShape) out.push(record)
+  for (const item of Object.values(record)) collectInstructionLikeObjects(item, out)
+  return out
+}
+
+function decodeSolanaStructuredIntent(parsed: unknown, fallbackText: string) {
+  const instructions = collectInstructionLikeObjects(parsed)
+  const instructionText = [
+    fallbackText,
+    ...instructions.flatMap((instruction) =>
+      Object.entries(instruction).map(([key, value]) => `${key}:${typeof value === "string" ? value : JSON.stringify(value)}`)
+    ),
+  ].join(" ").toLowerCase()
+  const method =
+    instructions
+      .map((instruction) => instruction.type ?? instruction.instruction ?? instruction.program)
+      .find((value) => typeof value === "string") as string | undefined
+  const warnings: string[] = []
+
+  if (/approvechecked|approve|delegate/.test(instructionText)) {
+    warnings.push("Structured Solana instructions include delegate approval.")
+    return { method, category: "approval" as const, warnings }
+  }
+  if (/setauthority|set authority|authoritytype/.test(instructionText)) {
+    warnings.push("Structured Solana instructions include an authority change.")
+    return { method, category: "authority" as const, warnings }
+  }
+  if (/closeaccount|close account/.test(instructionText)) {
+    warnings.push("Structured Solana instructions include account close behavior.")
+    return { method, category: "account_close" as const, warnings }
+  }
+  if (/mintto|mint to/.test(instructionText)) {
+    warnings.push("Structured Solana instructions include mint behavior.")
+    return { method, category: "mint" as const, warnings }
+  }
+  if (/transferchecked|transfer/.test(instructionText)) {
+    warnings.push("Structured Solana instructions include asset transfer behavior.")
+    return { method, category: "transfer" as const, warnings }
+  }
+  return null
+}
+
 function isUnlimitedEvmApproval(decodedIntent: NonNullable<ScamGuardScanResult["metadata"]["decodedIntent"]>, text: string) {
   return (
     decodedIntent.category === "approval" &&
@@ -1158,6 +1516,9 @@ function decodeIntent(value: string, chain: ScamGuardChain): NonNullable<ScamGua
     return { method: methodText, category: "unknown", warnings }
   }
 
+  const structuredSolanaIntent = decodeSolanaStructuredIntent(parsed, text)
+  if (structuredSolanaIntent) return structuredSolanaIntent
+
   if (/approve|delegate|approvechecked/.test(text)) {
     warnings.push("Delegate approval can let another account move tokens.")
     return { method, category: "approval", warnings }
@@ -1182,8 +1543,11 @@ async function scanTransaction(value: string, walletAddress: string | undefined,
   const signals: ScamGuardSignal[] = []
   const decodedIntent = decodeIntent(value, chain)
   const counterpartyAddress = chain === "evm" ? normalizeEvmAddress(decodedIntent.spender ?? decodedIntent.recipient) : undefined
-  const counterpartyReputation = chain === "evm" ? evmCounterpartyReputation(counterpartyAddress) : defaultReputation()
+  const counterpartyReputation = chain === "evm"
+    ? strongestReputation(evmCounterpartyReputation(counterpartyAddress), await externalEvmReputation(counterpartyAddress))
+    : defaultReputation()
   const contractIntelligence = chain === "evm" ? await evmContractIntelligence(counterpartyAddress) : undefined
+  const deployerReputation = contractIntelligence?.deployer ? await externalEvmReputation(contractIntelligence.deployer) : defaultReputation()
   const sourceDomain = sourceUrl ? (hostFromUrl(sourceUrl) ?? undefined) : undefined
   const sourceDomainIntel = sourceUrl ? domainIntelligenceFor(sourceUrl) : undefined
   const sourceReputation = sourceDomain ? domainReputation(sourceDomain) : defaultReputation()
@@ -1254,6 +1618,37 @@ async function scanTransaction(value: string, walletAddress: string | undefined,
       severity: "info",
       title: "Counterparty contract bytecode found",
       detail: `${contractIntelligence.target} has deployed bytecode. Contract code presence reduces EOA uncertainty but does not guarantee safety.`,
+    })
+  }
+  if (chain === "evm" && contractIntelligence?.isContract && contractIntelligence.verified === false) {
+    signals.push({
+      code: "UNVERIFIED_EVM_CONTRACT",
+      severity: decodedIntent.category === "approval" ? "medium" : "low",
+      title: "EVM contract source is not verified",
+      detail: `${contractIntelligence.target} has bytecode but no verified source evidence from Etherscan.`,
+    })
+  }
+  if (chain === "evm" && contractIntelligence?.proxy) {
+    signals.push({
+      code: "EVM_PROXY_CONTRACT",
+      severity: "low",
+      title: "Proxy contract detected",
+      detail: "Proxy contracts can change implementation behavior through upgrade controls. Verify the implementation and admin path.",
+    })
+  }
+  if (chain === "evm" && deployerReputation.verdict === "known_bad" && contractIntelligence?.deployer) {
+    signals.push({
+      code: "KNOWN_BAD_DEPLOYER",
+      severity: "critical",
+      title: "Known bad deployer",
+      detail: `${contractIntelligence.deployer} is marked as known bad in ScamGuard deployer intelligence.`,
+    })
+  } else if (chain === "evm" && deployerReputation.verdict === "suspicious" && contractIntelligence?.deployer) {
+    signals.push({
+      code: "SUSPICIOUS_DEPLOYER",
+      severity: "high",
+      title: "Suspicious deployer",
+      detail: `${contractIntelligence.deployer} is marked suspicious in ScamGuard deployer intelligence.`,
     })
   }
   if (chain === "evm" && knownBadCounterparty && counterpartyAddress) {

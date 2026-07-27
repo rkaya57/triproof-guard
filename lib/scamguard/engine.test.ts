@@ -167,6 +167,34 @@ test("ScamGuard escalates transaction source redirect flows", async () => {
   assert.ok(result.metadata.domainIntelligence?.features.includes("sensitive_redirect"))
 })
 
+test("ScamGuard decodes structured Solana token instructions", async () => {
+  const result = await scanScamGuard({
+    type: "transaction",
+    chain: "solana",
+    value: JSON.stringify({
+      transaction: {
+        instructions: [
+          {
+            program: "spl-token",
+            programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+            parsed: {
+              type: "approveChecked",
+              info: {
+                delegate: "Delegate111111111111111111111111111111111",
+                amount: "100",
+              },
+            },
+          },
+        ],
+      },
+    }),
+  })
+
+  assert.equal(result.metadata.decodedIntent?.category, "approval")
+  assert.ok(result.signals.some((signal) => signal.code === "DELEGATE_APPROVAL"))
+  assert.ok(result.metadata.decision?.primaryReason)
+})
+
 test("ScamGuard escalates unlimited EVM approvals", async () => {
   const spender = "0x2222222222222222222222222222222222222222"
   const result = await scanScamGuard({

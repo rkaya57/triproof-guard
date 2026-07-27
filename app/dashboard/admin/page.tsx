@@ -261,7 +261,7 @@ export default async function Page() {
       <section className="grid gap-4 lg:grid-cols-3">
         {[
           [ShieldCheck, "System Health", "Database, API keys, treasury wallets and worker queue.", "/dashboard/admin/diagnostics"],
-          [ShieldAlert, "ScamGuard Solana", "Public pre-sign scanner for suspicious Solana links, tokens and transaction intent.", "/scamguard"],
+          [ShieldAlert, "ScamGuard Intelligence", "Manage trusted, suspicious and known-bad domains, spenders and contracts.", "/dashboard/admin/scamguard"],
           [Gift, "Airdrop Review", "Approve contribution proofs and credit Season 0 task points.", "/dashboard/admin/airdrop"],
           [Bug, "Issue Tracker", "Track bugs, broken flows, visual issues and Codex tasks.", "/dashboard/admin/bugs"],
           [Activity, "Analysis Ops", "Review recent wallet analyses and failed jobs.", "/dashboard/admin/analyses"],
