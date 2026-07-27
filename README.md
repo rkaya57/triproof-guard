@@ -1,18 +1,121 @@
 # Tri-Proof Guard
 
-Tri-Proof Guard is a Web3 campaign wallet risk analysis and Sybil detection dashboard. It lets projects upload wallet CSVs, run heuristic risk scoring, review suspicious clusters, and export clean reward lists before airdrops, testnets, whitelists, quests, or reward campaigns.
+Tri-Proof Guard is a Solana-first Web3 security product for campaign teams, wallets, launchpads, and dApps. It combines wallet-list Sybil analysis with ScamGuard pre-sign protection so projects can reduce fake campaign participation and users can avoid unsafe claim, mint, reward, and wallet-signing flows.
+
+The current MVP includes a public landing page, ScamGuard scanner, Chrome extension beta, authenticated API, admin intelligence console, Sybil analysis dashboard, CSV/PDF exports, and production-oriented tests.
+
+## Grant Reviewer Summary
+
+**Problem:** Solana campaigns attract Sybil wallets, fake reward pages, risky token mints, and wallet drain attempts. Teams need a practical security layer before rewards are distributed or signatures are requested.
+
+**Solution:** Tri-Proof Guard provides two connected protection layers:
+
+- **Sybil Analysis:** upload campaign wallet CSVs, enrich wallet context, detect suspicious clusters, review gray-zone wallets, and export reward decisions.
+- **ScamGuard:** scan URLs, wallets, token mints, contracts, and transaction intent before a user clicks or signs.
+
+**Why this fits Solana Foundation Turkey Grants:** the product protects high-frequency Solana onboarding surfaces: airdrops, quests, mints, rewards, token launches, and community campaigns. It is designed as reusable infrastructure for Turkish Solana builders, not a one-off dashboard.
+
+## Live Product Surfaces
+
+- Landing page: `/`
+- ScamGuard scanner: `/scamguard`
+- Sybil mini audit: `/audit`
+- Demo report: `/dashboard/demo`
+- API docs: `/docs/api`
+- Admin intelligence console: `/dashboard/admin/scamguard`
+- Chrome extension package: `/downloads/scamguard-chrome-extension.zip`
+
+## Core Features
+
+### ScamGuard Pre-Sign Intelligence
+
+- URL, wallet, token mint, and transaction intent scans
+- Solana and EVM scan routing
+- Suspicious claim, airdrop, mint, presale, reward, and wallet-drain pattern detection
+- Punycode, redirect, URL credential, encoded payload, shortener, and typosquat checks
+- Verified project registry to reduce false positives for real projects
+- Known-bad and suspicious domain/counterparty intelligence
+- External phishing feed support
+- Solana wallet/account and token mint checks when RPC is configured
+- EVM contract bytecode, verified source, proxy, and deployer checks when provider keys are configured
+- EVM approval and unlimited allowance detection
+- Solana parsed instruction handling for delegate approvals, authority changes, transfers, and account-close style risk
+- Explainable result layer with score, confidence, decision reason, evidence, and user action
+
+### Chrome Extension Beta
+
+- Current-tab protection status
+- Page link scanner
+- Inline banner for browsing sessions
+- Solana provider pre-sign observer:
+  - `signTransaction`
+  - `signAndSendTransaction`
+  - `signAllTransactions`
+  - generic provider request calls
+- EVM provider pre-sign observer:
+  - `eth_sendTransaction`
+  - `personal_sign`
+  - `eth_sign`
+  - `eth_signTypedData_v4`
+  - `wallet_switchEthereumChain`
+- Balanced, Strict, and Paranoid protection profiles
+- Trusted domain controls
+- Configurable ScamGuard API base URL
+
+### Sybil Campaign Analysis
+
+- CSV wallet uploads
+- Basic and enriched CSV support
+- Wallet age, transaction count, funding source, activity, balance, and contract-interaction context
+- Shared funding cluster detection
+- Known entity handling for exchange, service, contract, and protocol accounts
+- Approved, Gray Zone, and rejected/not-eligible outputs
+- CSV and PDF exports
+- Dashboard review flow
+- Public demo mode
+
+### Admin Intelligence
+
+- Trusted, suspicious, and known-bad domain management
+- EVM spender/counterparty intelligence
+- Solana wallet/token/program intelligence
+- False positive and missed-risk feedback loop
+- Seed intelligence plus database-backed overrides
 
 ## Tech Stack
 
-- Next.js App Router, TypeScript, Tailwind CSS
-- shadcn/ui with Lucide React icons
+- Next.js App Router
+- TypeScript
+- Tailwind CSS
+- shadcn/ui
+- Lucide React icons
 - PostgreSQL with Prisma ORM
-- Simple email/password auth with bcrypt and signed HTTP-only JWT cookies
-- PapaParse CSV parsing, Recharts charts, Zod validation
-- CSV exports and PDF reports with pdf-lib
-- ScamGuard Solana public scanner module for suspicious URLs, wallets, token mints, and transaction intent
+- bcrypt password auth and signed HTTP-only JWT cookies
+- PapaParse CSV parsing
+- Recharts
+- Zod validation
+- pdf-lib report exports
+- Chrome extension, Manifest V3
 
-## Setup
+## Repository Structure
+
+```text
+app/                         Next.js routes and API endpoints
+components/                  UI components and product pages
+components/scamguard/        ScamGuard public scanner page
+components/admin/            Admin intelligence console
+lib/scamguard/               ScamGuard risk engine and tests
+lib/risk-engine/             Campaign wallet risk engine and tests
+lib/onchain/                 Provider routing and enrichment adapters
+lib/sdk/                     Tri-Proof API client
+chrome-extension/            ScamGuard Chrome extension beta
+sample-data/                 Example wallet CSV files
+scripts/                     Build, validation, and maintenance scripts
+prisma/                      Prisma schema and migrations
+public/downloads/            Downloadable extension package
+```
+
+## Quick Start
 
 1. Install dependencies:
 
@@ -26,20 +129,24 @@ npm install
 copy .env.example .env
 ```
 
-3. Set `DATABASE_URL` to a PostgreSQL database and configure required secrets:
+3. Configure the required local secrets:
 
 ```env
+DATABASE_URL="postgresql://..."
 NEXTAUTH_SECRET="long-random-session-secret"
 ACCESS_PASS_SIGNING_SECRET="long-random-access-pass-secret"
 WORKER_SECRET="long-random-worker-secret"
 TRIPROOF_API_KEY="server-to-server-api-key"
 TRIPROOF_API_USER_EMAIL="api-user@example.com"
-SOLANA_RPC_URL="https://your-solana-rpc"
-# or HELIUS_API_KEY="helius-key"
 ```
 
-For local development only, you can opt into insecure fallback secrets with
-`DEV_ALLOW_INSECURE_SECRETS=true`. Never enable that in production.
+For local development only, you can opt into insecure fallback secrets:
+
+```env
+DEV_ALLOW_INSECURE_SECRETS="true"
+```
+
+Never enable insecure fallback secrets in production.
 
 4. Generate Prisma Client and migrate:
 
@@ -55,6 +162,63 @@ npm run dev
 ```
 
 Open `http://localhost:3000`.
+
+## Provider Configuration
+
+### Solana
+
+Use either a direct Solana RPC URL or a Helius API key:
+
+```env
+SOLANA_RPC_URL="https://your-solana-rpc"
+HELIUS_API_KEY="helius-key"
+```
+
+### EVM
+
+Use Etherscan V2, Alchemy, or Blockscout-compatible providers:
+
+```env
+ETHERSCAN_API_KEY=""
+ALCHEMY_API_KEY=""
+BLOCKSCOUT_API_URL=""
+
+BASESCAN_API_KEY=""
+ARBISCAN_API_KEY=""
+OPTIMISTIC_ETHERSCAN_API_KEY=""
+POLYGONSCAN_API_KEY=""
+BSCSCAN_API_KEY=""
+```
+
+Recommended provider order:
+
+```env
+ONCHAIN_PROVIDER_PRIORITY="helius,etherscan,alchemy,blockscout,mock"
+```
+
+Local/demo runs can fall back to the deterministic mock provider when no real provider is configured.
+
+## On-Chain Enrichment
+
+The On-Chain Enrichment Engine lets a campaign team upload a CSV containing wallet addresses and fetch additional activity data before running the risk engine.
+
+Supported modes:
+
+- **CSV Only:** use fields provided in the uploaded CSV.
+- **On-Chain Enrichment:** fetch wallet activity, age, funding source, balances, and interaction data from providers.
+- **Hybrid:** use uploaded CSV fields first and enrich missing values.
+
+Runtime controls:
+
+```env
+ONCHAIN_ENRICHMENT_ENABLED="true"
+ONCHAIN_MAX_WALLETS_PER_ANALYSIS="100"
+ONCHAIN_BATCH_SIZE="10"
+ONCHAIN_REQUEST_DELAY_MS="500"
+ONCHAIN_CACHE_TTL_HOURS="24"
+```
+
+Provider calls run server-side only. API keys never reach the browser, and raw provider responses are not exposed in the UI.
 
 ## CSV Formats
 
@@ -73,171 +237,156 @@ wallet_address,chain,tx_count,wallet_age_days,funding_source,first_seen,last_see
 0x123...,Base,12,45,0xabc...,2026-01-10,2026-02-12,102.5,5,8
 ```
 
-Basic CSVs are supported with deterministic demo heuristics and show a limited analysis mode note.
-
-## On-Chain Enrichment
-
-The **On-Chain Enrichment Engine** lets you upload a CSV containing only
-`wallet_address` and have Tri-Proof Guard fetch real on-chain data
-(transaction count, wallet age, funding source, balances, contract interactions
-and more) from blockchain APIs before running the risk engine.
-
-### Analysis modes
-
-Pick a mode on the **New Analysis** page:
-
-- **CSV Only** — use only the fields provided in the uploaded CSV (default; the
-  original behaviour, no API calls).
-- **On-Chain Enrichment** — fetch wallet activity, age, funding source and
-  interaction data from blockchain APIs. API data is authoritative; CSV values
-  only fill gaps the API could not resolve.
-- **Hybrid** — use uploaded CSV fields first and enrich only the missing data
-  from blockchain APIs.
-
-### How it works
-
-1. The CSV is parsed and validated as usual.
-2. For On-Chain / Hybrid modes, wallets are enriched in batches
-   (`ONCHAIN_BATCH_SIZE`, default 25) with a delay between batches
-   (`ONCHAIN_REQUEST_DELAY_MS`, default 250ms) to stay within API rate limits.
-3. Transient failures retry with exponential backoff (up to 3 times). A wallet
-   that still fails falls back to mock data or is marked `failed` — **a single
-   failed wallet never fails the whole analysis**.
-4. Results are merged into the wallet records and fed to the existing risk
-   engine, cluster detection and known-entity detection.
-5. The funding source for each wallet is derived from its **first incoming
-   native transfer**, which powers shared-funding cluster detection.
-
-### Supported chains
-
-EVM chains share provider adapters: **Ethereum, Base, Arbitrum, Optimism,
-Polygon, BNB Chain**. Solana is shown in the UI but on-chain enrichment is
-*coming soon* (Solana still works in CSV Only mode).
-
-### Providers
-
-Providers are selected per chain following `ONCHAIN_PROVIDER_PRIORITY`.
-Recommended MVP order:
-
-```env
-ONCHAIN_PROVIDER_PRIORITY="etherscan,alchemy,blockscout,mock"
-```
-
-1. **Etherscan V2** — recommended primary provider. One `ETHERSCAN_API_KEY`
-   works across supported EVM chains through `chainid` routing.
-2. **Alchemy** — JSON-RPC + `alchemy_getAssetTransfers`. Add
-   `ALCHEMY_API_KEY` as an optional second provider/fallback.
-3. **Blockscout-compatible** — optional fallback for a specific public/self-hosted
-   explorer through `BLOCKSCOUT_API_URL`.
-4. **Mock provider** — deterministic, realistic fallback used when no real key is
-   configured, in local/demo runs and in tests. It can generate shared funding
-   groups, known entities, contract wallets, brand-new wallets and dormant
-   high-activity wallets, so the full pipeline works **without any API key**.
-
-If no provider is configured for a chain the engine automatically falls back to
-the mock provider and surfaces the warning *“API key not configured. Mock
-enrichment data was used for this analysis.”*
-
-### Environment variables
-
-```env
-ETHERSCAN_API_KEY=""
-ALCHEMY_API_KEY=""
-BLOCKSCOUT_API_URL=""
-
-# Backward-compatible per-chain explorer keys. Usually not needed if ETHERSCAN_API_KEY is set.
-BASESCAN_API_KEY=""
-ARBISCAN_API_KEY=""
-OPTIMISTIC_ETHERSCAN_API_KEY=""
-POLYGONSCAN_API_KEY=""
-BSCSCAN_API_KEY=""
-
-ONCHAIN_ENRICHMENT_ENABLED="true"
-ONCHAIN_PROVIDER_PRIORITY="etherscan,alchemy,blockscout,mock"
-ONCHAIN_MAX_WALLETS_PER_ANALYSIS="100"
-ONCHAIN_BATCH_SIZE="10"
-ONCHAIN_REQUEST_DELAY_MS="500"
-ONCHAIN_CACHE_TTL_HOURS="24"
-```
-
-For the first production tests, keep `ONCHAIN_MAX_WALLETS_PER_ANALYSIS` around
-`100`, `ONCHAIN_BATCH_SIZE` around `10`, and `ONCHAIN_REQUEST_DELAY_MS` around
-`500` to reduce rate-limit risk.
-
-### Caching, limits and security
-
-- Enriched wallets are cached for `ONCHAIN_CACHE_TTL_HOURS` (default 24h) per
-  chain+address to avoid repeat API calls.
-- On-chain enrichment is capped at `ONCHAIN_MAX_WALLETS_PER_ANALYSIS`
-  (default 1000) per analysis. Larger files should use CSV Only mode.
-- All provider calls run **server-side only**. API keys never reach the browser,
-  raw API responses are never shown in the UI (only processed data), and keys
-  are never written to logs.
-
-### Campaign actions
-
-Campaign action counts require the campaign's contract addresses. On the New
-Analysis page (On-Chain / Hybrid modes) you can paste campaign contract
-addresses (one per line); wallet interactions with those contracts are counted
-as `campaign_actions_count`. Without them, campaign-only behaviour signals are
-only applied when the value is present in the CSV.
-
-## Demo Mode
-
-Use `/dashboard/demo` or the landing page “View Demo Report” button. Demo mode includes 500 wallets, 320 approved, 110 Gray Zone, 70 rejected, 8 suspicious clusters, and exportable CSV/PDF reports.
-
-## Sample Data
-
-See `sample-data/`:
+Sample files are available in `sample-data/`:
 
 - `basic-wallets.csv`
 - `enriched-wallets.csv`
 - `suspicious-cluster-demo.csv`
 
-## ScamGuard Solana
-
-ScamGuard Solana is integrated as a public pre-sign security module at
-`/scamguard`. It does not replace the Sybil analysis product; it adds a second
-security surface for suspicious Solana links, wallets, token mints, and
-transaction intent.
-
-Current MVP checks:
-
-- Suspicious airdrop, mint, claim, presale, and brand-impersonation URL patterns
-- Seed phrase and private key lure language
-- Suspicious wallet/program patterns with optional Solana RPC account checks
-- Token mint authority and freeze authority checks when Solana RPC is configured
-- Transaction intent signals such as approve delegate, set authority, close token account, and transfer-all
-- Optional Solana `simulateTransaction` for base64 serialized transactions
+## ScamGuard API
 
 Public scanner endpoints:
 
-- `POST /api/scamguard/scan-url`
-- `POST /api/scamguard/scan-wallet`
-- `POST /api/scamguard/scan-token`
-- `POST /api/scamguard/scan-transaction`
+```text
+POST /api/scamguard/scan-url
+POST /api/scamguard/scan-wallet
+POST /api/scamguard/scan-token
+POST /api/scamguard/scan-transaction
+POST /api/scamguard/feedback
+```
 
-B2B endpoint and SDK:
+Authenticated B2B endpoint:
 
-- `POST /api/v1/scamguard/scan` accepts `{ type, value, walletAddress? }`
-- Uses the same `Authorization: Bearer <TRIPROOF_API_KEY>` flow as the existing v1 API
-- `TriProofClient.scanScamGuard()` is available in `lib/sdk/triproof-client.ts`
-- Dashboard shows a unified security score combining Sybil safety and ScamGuard readiness
+```text
+POST /api/v1/scamguard/scan
+Authorization: Bearer <TRIPROOF_API_KEY>
+```
 
-Production path:
+Example:
 
-- Persist ScamGuard scan history per workspace
-- Add known drainer domain and wallet intelligence feeds
-- Add wallet adapter packages for richer transaction decoding before sign
+```bash
+curl -X POST https://triproofprotocol.com/api/v1/scamguard/scan \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "type": "transaction",
+    "chain": "evm",
+    "value": "{\"method\":\"eth_sendTransaction\",\"params\":[{\"to\":\"0x1111111111111111111111111111111111111111\",\"data\":\"0x095ea7b3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"}]}",
+    "sourceUrl": "https://app.project.xyz/claim"
+  }'
+```
+
+SDK helper:
+
+```ts
+import { TriProofClient } from "@/lib/sdk/triproof-client"
+
+const client = new TriProofClient({
+  baseUrl: "https://triproofprotocol.com",
+  apiKey: process.env.TRIPROOF_API_KEY!,
+})
+
+const result = await client.scanScamGuard({
+  type: "url",
+  chain: "solana",
+  value: "https://app.project.io/rewards",
+})
+```
+
+## Chrome Extension
+
+Local install:
+
+1. Open Chrome.
+2. Go to `chrome://extensions`.
+3. Enable Developer mode.
+4. Click Load unpacked.
+5. Select the `chrome-extension` folder.
+
+Validation:
+
+```bash
+npm run extension:validate
+```
+
+The extension default API base URL is:
+
+```text
+https://triproofprotocol.com
+```
+
+## Testing and Validation
+
+Run the risk-engine test suite:
+
+```bash
+npm test
+```
+
+Run lint:
+
+```bash
+npm run lint
+```
+
+Validate the Chrome extension:
+
+```bash
+npm run extension:validate
+```
+
+Build production output:
+
+```bash
+npm run build
+```
+
+Current core coverage includes:
+
+- clean wallet approval behavior
+- new/low-activity wallet rejection
+- shared funding clusters
+- campaign-only farming behavior
+- known public entity detection
+- policy overrides
+- known scam domains
+- verified project false-positive reduction
+- clean unknown rewards surfaces
+- risky claim domains on suspicious TLDs
+- EVM approval payloads
+- unlimited approvals
+- known bad EVM counterparties
+- Solana parsed token instructions
+
+## Grant Milestones
+
+Proposed Solana Foundation Turkey Grants scope:
+
+1. **Solana transaction decoding:** expand SPL Token, Token-2022, account close, delegate, authority, transfer, and serialized transaction review.
+2. **Project intelligence registry:** improve admin-managed trusted, suspicious, and known-bad domain/spender intelligence and reduce false positives.
+3. **Extension public beta:** polish onboarding, warning overlays, protection profiles, and real browsing-session UX.
+4. **Partner API package:** document B2B endpoint examples, SDK usage, response schema, and integration patterns for Solana teams.
+
+## Security and Privacy Boundary
+
+- Tri-Proof Guard never asks for seed phrases, private keys, wallet passwords, or custody permissions.
+- ScamGuard scans URLs, public addresses, token mints, transaction payloads, and optional wallet public key context.
+- Provider keys are server-side only.
+- Risk results are decision support, not absolute truth.
+- Verified domain context reduces false positives but does not override dangerous transaction intent.
+- Feedback can report false positives and missed risks for review.
 
 ## Roadmap
 
-- USDC payment integration for pricing plans
-- API beta access for Pro accounts
-- Background queue + live progress polling for very large on-chain enrichment jobs
-- Solana on-chain enrichment support
-- ScamGuard Solana production risk engine and B2B API
+- Stronger Solana serialized transaction decoding
+- Wider SPL Token and Token-2022 instruction coverage
+- Public verified project registry workflow
+- External threat feed expansion
+- Chrome Web Store listing
+- Workspace-level scan history
+- Partner SDK examples
+- More production-grade Sybil enrichment for Solana campaigns
 
 ## Disclaimer
 
-Tri-Proof Guard provides risk analysis and decision support. It does not guarantee that a wallet, URL, token, or transaction is definitively malicious or legitimate. Final reward, security, and operational decisions should be made by the project team.
+Tri-Proof Guard provides risk analysis and decision support. It does not guarantee that a wallet, URL, token, contract, or transaction is definitively malicious or legitimate. Final reward, security, and operational decisions should be made by the project team and the user should always verify the wallet prompt before signing.
