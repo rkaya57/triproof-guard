@@ -63,6 +63,35 @@ test("ScamGuard treats Grass rewards as a verified project surface", async () =>
   assert.ok(!result.signals.some((signal) => signal.code === "UNVERIFIED_WEB3_APP_SURFACE"))
 })
 
+test("ScamGuard does not over-penalize clean unknown rewards surfaces", async () => {
+  const result = await scanScamGuard({
+    type: "url",
+    value: "https://app.exampleproject.io/dashboard/rewards",
+    chain: "solana",
+  })
+
+  assert.equal(result.riskLevel, "SAFE")
+  assert.equal(result.metadata.reputation?.verdict, "unknown")
+  assert.ok(result.score <= 30)
+  assert.ok(result.signals.some((signal) => signal.code === "CLAIM_LANGUAGE" && signal.severity === "low"))
+  assert.ok(result.signals.some((signal) => signal.code === "UNVERIFIED_PROJECT_CONTEXT" && signal.severity === "low"))
+  assert.ok(!result.signals.some((signal) => signal.code === "UNVERIFIED_CLAIM_DOMAIN"))
+  assert.ok(!result.signals.some((signal) => signal.severity === "medium" || signal.severity === "high" || signal.severity === "critical"))
+})
+
+test("ScamGuard still escalates risky claim domains on suspicious TLDs", async () => {
+  const result = await scanScamGuard({
+    type: "url",
+    value: "https://app.airdrop-bonus.xyz/rewards",
+    chain: "evm",
+  })
+
+  assert.ok(["HIGH_RISK", "CAUTION"].includes(result.riskLevel))
+  assert.ok(result.signals.some((signal) => signal.code === "SUSPICIOUS_TLD_CLAIM"))
+  assert.ok(result.signals.some((signal) => signal.code === "UNVERIFIED_CLAIM_DOMAIN" && signal.severity === "medium"))
+  assert.ok(result.signals.some((signal) => signal.code === "DRAINER_PATTERN" || signal.severity === "medium"))
+})
+
 test("ScamGuard does not penalize verified airdrop subdomains for campaign wording", async () => {
   const result = await scanScamGuard({
     type: "url",

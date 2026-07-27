@@ -826,6 +826,12 @@ function domainIntelligenceFor(value: string) {
   }
 }
 
+const hardUrlRiskFeatures = new Set(["url_credentials", "punycode_domain", "sensitive_redirect", "encoded_payload"])
+
+function hasHardUrlRiskFeature(features: string[]) {
+  return features.some((feature) => hardUrlRiskFeatures.has(feature))
+}
+
 function brandMentioned(text: string) {
   return ["phantom", "solflare", "jupiter", "magiceden", "tensor", "backpack"].find((brand) =>
     text.includes(brand)
@@ -848,6 +854,21 @@ async function scanUrl(value: string, chain: ScamGuardChain) {
   const isKnownScamDomain = domainMatchesSet(domain ?? undefined, knownScamDomains)
   const isOfficialDomain = domainMatchesSet(domain ?? undefined, officialDomains)
   const isVerifiedProjectDomain = domainMatchesSet(domain ?? undefined, verifiedProjectDomains)
+  const hasKnownBadWording = knownDrainerFragments.some((fragment) => text.includes(fragment))
+  const hasRiskyClaimTld = Boolean(domain && suspiciousTlds.has(tld) && hasClaimLanguage)
+  const hasHardUrlRisk = hasHardUrlRiskFeature(domainIntel.features)
+    || Boolean(domain && shortenerDomains.has(domain))
+    || Boolean(brand && !isOfficialDomain)
+    || hasRiskyClaimTld
+    || hasKnownBadWording
+  const isCleanUnknownProjectSurface = Boolean(
+    domain
+      && !isOfficialDomain
+      && !isVerifiedProjectDomain
+      && reputation.verdict === "unknown"
+      && !hasHardUrlRisk
+      && (hasClaimLanguage || hasCampaignSurface || isAppSurface)
+  )
 
   if (!domain) {
     signals.push({
@@ -970,25 +991,31 @@ async function scanUrl(value: string, chain: ScamGuardChain) {
   } else if (hasClaimLanguage) {
     signals.push({
       code: "CLAIM_LANGUAGE",
-      severity: "medium",
-      title: "Claim or airdrop language",
-      detail: "Scam campaigns often use urgent claim, mint, presale, whitelist, or reward language.",
+      severity: isCleanUnknownProjectSurface ? "low" : "medium",
+      title: isCleanUnknownProjectSurface ? "Campaign or rewards wording" : "Claim or airdrop language",
+      detail: isCleanUnknownProjectSurface
+        ? "Reward, points, campaign, or claim wording is common in real Web3 apps. ScamGuard treats it as context unless paired with stronger risk signals."
+        : "Scam campaigns often use urgent claim, mint, presale, whitelist, or reward language.",
     })
   }
   if (domain && hasClaimLanguage && !isOfficialDomain && !isVerifiedProjectDomain) {
     signals.push({
-      code: "UNVERIFIED_CLAIM_DOMAIN",
-      severity: "medium",
-      title: "Unverified claim domain",
-      detail: `${domain} is not in the verified project registry for this scan. Confirm it from the project's official website, X account, Discord, or documentation before opening or signing.`,
+      code: isCleanUnknownProjectSurface ? "UNVERIFIED_PROJECT_CONTEXT" : "UNVERIFIED_CLAIM_DOMAIN",
+      severity: isCleanUnknownProjectSurface ? "low" : "medium",
+      title: isCleanUnknownProjectSurface ? "Project source not yet verified" : "Unverified claim domain",
+      detail: isCleanUnknownProjectSurface
+        ? `${domain} is not in the verified project registry yet. This is a source-confidence gap, not a scam verdict. Confirm the official account or docs before signing.`
+        : `${domain} is not in the verified project registry for this scan. Confirm it from the project's official website, X account, Discord, or documentation before opening or signing.`,
     })
   }
-  if (domain && !isOfficialDomain && !isVerifiedProjectDomain && (hasCampaignSurface || isAppSurface)) {
+  if (domain && !isOfficialDomain && !isVerifiedProjectDomain && (hasCampaignSurface || isAppSurface) && !(isCleanUnknownProjectSurface && hasClaimLanguage)) {
     signals.push({
       code: "UNVERIFIED_WEB3_APP_SURFACE",
-      severity: "medium",
+      severity: isCleanUnknownProjectSurface ? "low" : "medium",
       title: "Unverified Web3 app surface",
-      detail: `${domain}${path || "/"} looks like a campaign, season, quest, points, or app page. Treat it as unverified until the official project account links to it.`,
+      detail: isCleanUnknownProjectSurface
+        ? `${domain}${path || "/"} looks like a normal app, quest, points, or rewards surface. Verify the source if a wallet prompt asks for permissions.`
+        : `${domain}${path || "/"} looks like a campaign, season, quest, points, or app page. Treat it as unverified until the official project account links to it.`,
     })
   }
   if (seedPhraseWords.some((word) => text.includes(word))) {
@@ -999,7 +1026,7 @@ async function scanUrl(value: string, chain: ScamGuardChain) {
       detail: "Any request for recovery phrase, seed phrase, mnemonic, or private key is a critical compromise signal.",
     })
   }
-  if (knownDrainerFragments.some((fragment) => text.includes(fragment))) {
+  if (hasKnownBadWording) {
     signals.push({
       code: "DRAINER_PATTERN",
       severity: "high",
