@@ -152,6 +152,9 @@ const officialDomains = new Set([
   "nestusd.com",
   "allox.ai",
   "shiftrwa.xyz",
+  "grass.io",
+  "grassfoundation.io",
+  "grass-foundation.gitbook.io",
 ])
 
 const verifiedProjectDomains = new Set([
