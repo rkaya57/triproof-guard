@@ -7,20 +7,26 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Code2,
+  DatabaseZap,
   Download,
   ExternalLink,
   FileSearch,
   Fingerprint,
+  Gauge,
+  GitBranch,
   Link2,
   Loader2,
+  LockKeyhole,
+  Network,
   PackageCheck,
   PlugZap,
   Puzzle,
   Radar,
+  SearchCheck,
+  ServerCog,
   Settings2,
   ShieldAlert,
   ShieldCheck,
-  Siren,
   WalletCards,
 } from "lucide-react"
 
@@ -140,6 +146,60 @@ const evmExamples: Record<ScanMode, string> = {
     "{\"method\":\"eth_sendTransaction\",\"params\":[{\"to\":\"0x1111111111111111111111111111111111111111\",\"data\":\"0x095ea7b3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"}]}",
 }
 
+const scanPresets = [
+  {
+    label: "Safe verified dApp",
+    chain: "solana",
+    mode: "url",
+    value: "https://app.nestusd.com/season",
+    detail: "Trusted-style project domain with campaign language.",
+  },
+  {
+    label: "Suspicious airdrop",
+    chain: "evm",
+    mode: "url",
+    value: "https://metamask-airdrop-claim.xyz/bonus",
+    detail: "Claim wording plus risky disposable domain pattern.",
+  },
+  {
+    label: "Unlimited approval",
+    chain: "evm",
+    mode: "transaction",
+    value:
+      "{\"method\":\"eth_sendTransaction\",\"params\":[{\"to\":\"0x1111111111111111111111111111111111111111\",\"data\":\"0x095ea7b3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"}]}",
+    detail: "EVM approval payload with very high allowance.",
+  },
+  {
+    label: "Unknown token mint",
+    chain: "solana",
+    mode: "token",
+    value: "FakeUSDCmintAuthorityStillEnabled111111111111111111",
+    detail: "Token scan with mint and authority heuristics.",
+  },
+] satisfies Array<{ label: string; chain: ScanChain; mode: ScanMode; value: string; detail: string }>
+
+const scannerSources = [
+  [DatabaseZap, "Threat feeds", "External phishing feeds plus custom ScamGuard intelligence."],
+  [ServerCog, "RPC checks", "Solana mint/wallet state and EVM contract bytecode when providers are configured."],
+  [Fingerprint, "Intent decode", "Approval, transfer, signature, authority, and close-account patterns."],
+  [GitBranch, "Admin registry", "Trusted, suspicious, and known-bad domains or counterparties managed by the team."],
+] as const
+
+const intelligenceNetwork = [
+  ["Known bad domains", "Blocks or escalates domains seen in phishing and drainer campaigns."],
+  ["Suspicious spenders", "Flags unknown or dangerous approval targets before a user signs."],
+  ["Verified project domains", "Reduces false positives for real projects without hiding transaction risk."],
+  ["Contract/deployer history", "Checks EVM bytecode, verification, proxy status, and deployer reputation."],
+  ["Community feedback", "Accepts false-positive, false-negative, safe, and scam reports for review."],
+] as const
+
+const methodologySteps = [
+  [SearchCheck, "Classify the surface", "URL, wallet, token, contract, or transaction payload is routed to the right scanner."],
+  [Network, "Enrich context", "Domain, chain, RPC, contract, reputation, and source URL context are collected where available."],
+  [Gauge, "Score the risk", "Signals are weighted into SAFE, CAUTION, HIGH_RISK, or CRITICAL with confidence attached."],
+  [LockKeyhole, "Explain the action", "The result returns user-facing reasons and next steps instead of a black-box verdict."],
+] as const
+
 const endpointByMode: Record<ScanMode, string> = {
   url: "/api/scamguard/scan-url",
   wallet: "/api/scamguard/scan-wallet",
@@ -192,6 +252,51 @@ function severityTone(severity: string) {
   if (severity === "medium") return "border-amber-400/30 bg-amber-400/10 text-amber-100"
   if (severity === "low") return "border-cyan-400/30 bg-cyan-400/10 text-cyan-100"
   return "border-slate-400/30 bg-slate-400/10 text-slate-200"
+}
+
+function shortValue(value?: string | null) {
+  if (!value) return "Not available"
+  return value.length > 34 ? `${value.slice(0, 14)}...${value.slice(-10)}` : value
+}
+
+function verdictLabel(verdict?: string) {
+  if (!verdict) return "Unknown"
+  return verdict
+    .split("_")
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ")
+}
+
+function intentLabel(result: ScanResult | null) {
+  const intent = result?.metadata.decodedIntent
+  if (!intent) return result ? "No transaction intent decoded" : "Waiting for scan"
+  const category = intent.category ? intent.category.replaceAll("_", " ") : "unknown intent"
+  return intent.method ? `${category} / ${intent.method}` : category
+}
+
+function contractLabel(result: ScanResult | null) {
+  const contract = result?.metadata.contractIntelligence
+  if (!result) return "Waiting for scan"
+  if (!contract) return result.metadata.chain === "evm" ? "No contract target" : "Not required for this scan"
+  if (!contract.checked) return "Skipped"
+  if (!contract.isContract) return "EOA target"
+  if (contract.proxy) return contract.verified ? "Verified proxy" : "Unverified proxy"
+  return contract.verified ? "Verified contract" : "Unverified contract"
+}
+
+function dataSourceLabel(result: ScanResult | null) {
+  if (!result) return "No scan run"
+  const items = [
+    result.metadata.reputation?.source,
+    result.metadata.rpcStatus !== "not_applicable" ? `RPC ${result.metadata.rpcStatus}` : null,
+    result.metadata.contractIntelligence?.source,
+    result.metadata.domainIntelligence?.features?.length ? "domain intelligence" : null,
+  ].filter(Boolean)
+  return items.length ? items.join(" + ") : "local rule engine"
+}
+
+function primaryReason(result: ScanResult | null) {
+  return result?.metadata.decision?.primaryReason ?? result?.signals[0]?.detail ?? "Run a scan to see the strongest reason behind the decision."
 }
 
 function findSolanaProvider() {
@@ -264,6 +369,15 @@ export function ScamGuardPage() {
     setFeedbackMessage(null)
   }
 
+  function loadPreset(preset: (typeof scanPresets)[number]) {
+    setChain(preset.chain)
+    setMode(preset.mode)
+    setInput(preset.value)
+    setResult(null)
+    setError(null)
+    setFeedbackMessage(null)
+  }
+
   async function submitFeedback(verdict: "reported_scam" | "reported_safe" | "false_positive" | "false_negative") {
     if (!result) return
     setFeedbackMessage("Sending feedback...")
@@ -325,39 +439,46 @@ export function ScamGuardPage() {
           </div>
         </header>
 
-        <div className="relative z-10 mx-auto grid max-w-7xl gap-10 px-5 pb-16 pt-10 sm:px-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:pb-24 lg:pt-16">
+        <div className="relative z-10 mx-auto grid max-w-7xl gap-10 px-5 pb-16 pt-10 sm:px-8 lg:grid-cols-[0.92fr_1.08fr] lg:items-start lg:pb-24 lg:pt-16">
           <div className="reveal-up flex flex-col gap-7">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="cyber-chip">Multichain pre-sign security</span>
-              <Badge variant="secondary" className="border-primary/30 text-primary">Solana + EVM + feedback loop</Badge>
-            </div>
-            <h1 className="text-gradient animate-gradient-text max-w-4xl text-4xl font-semibold leading-tight text-balance sm:text-6xl">
-              Stop wallet drains before users sign.
+            <h1 className="max-w-4xl text-4xl font-semibold leading-tight text-balance text-white sm:text-6xl">
+              Pre-sign threat intelligence for Solana and EVM apps.
             </h1>
             <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-              ScamGuard scans suspicious links, token mints, EVM contracts, wallets, and transaction intent through a server-side risk engine. Solana stays first-class, and EVM wallet calls now get approval, signature, and transfer intent checks.
+              ScamGuard checks suspicious links, wallets, token mints, contracts, and transaction intent before a user clicks or signs. It combines rule scoring, RPC context, external threat feeds, and admin intelligence into one explainable decision.
             </p>
             <div className="grid max-w-2xl gap-3 sm:grid-cols-3">
               {[
-                ["Pre-sign", "transaction intent"],
-                ["Solana RPC", "mint + wallet checks"],
-                ["B2B API", "SDK-ready module"],
+                ["Pre-sign", "wallet prompt guard"],
+                ["Threat intel", "feeds + registry"],
+                ["B2B API", "wallets + launchpads"],
               ].map(([value, label]) => (
-                <div key={label} className="rounded-xl border border-primary/20 bg-background/45 px-4 py-3 backdrop-blur">
-                  <p className="text-gradient text-2xl font-semibold">{value}</p>
+                <div key={label} className="rounded-lg border border-primary/20 bg-background/45 px-4 py-3 backdrop-blur">
+                  <p className="text-xl font-semibold text-white">{value}</p>
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+                </div>
+              ))}
+            </div>
+            <div className="grid max-w-2xl gap-3">
+              {scannerSources.map(([Icon, title, text]) => (
+                <div key={title} className="flex items-start gap-3 rounded-lg border border-border bg-background/40 p-4">
+                  <Icon className="mt-0.5 size-4 shrink-0 text-primary" />
+                  <div>
+                    <p className="font-medium text-white">{title}</p>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">{text}</p>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
 
-          <Card className="glass-panel premium-card animated-border data-scan reveal-up delay-200">
+          <Card className="glass-panel premium-card data-scan reveal-up delay-200 rounded-lg">
             <CardHeader>
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <CardTitle className="text-2xl">Live pre-sign scanner</CardTitle>
+                  <CardTitle className="text-2xl">Live risk console</CardTitle>
                   <CardDescription>
-                    Choose a chain, paste a Web3 item, then run the server-side ScamGuard engine.
+                    Choose a chain, paste a Web3 object, and get a scored decision with evidence.
                   </CardDescription>
                 </div>
                 <Badge variant="outline" className={cn("gap-2", result ? statusTone(result.riskLevel) : "border-primary/30 text-primary")}>
@@ -367,7 +488,7 @@ export function ScamGuardPage() {
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
-                <div className="rounded-xl border border-border bg-background/45 p-3 text-sm text-slate-300">
+                <div className="rounded-lg border border-border bg-background/45 p-3 text-sm text-slate-300">
                   {connectedWallet ? (
                     <span className="break-all font-mono text-primary">{connectedWallet}</span>
                   ) : (
@@ -380,7 +501,7 @@ export function ScamGuardPage() {
               </div>
               {walletMessage && <p className="text-sm text-muted-foreground">{walletMessage}</p>}
 
-              <div className="grid gap-2 rounded-2xl border border-border bg-background/35 p-2 sm:grid-cols-2">
+              <div className="grid gap-2 rounded-lg border border-border bg-background/35 p-2 sm:grid-cols-2">
                 {[
                   ["solana", "Solana", "Phantom, Backpack, SPL mints"] as const,
                   ["evm", "EVM", "MetaMask, Rabby, Base, Ethereum"] as const,
@@ -398,6 +519,20 @@ export function ScamGuardPage() {
                       <span className="text-xs font-normal text-muted-foreground">{detail}</span>
                     </span>
                   </Button>
+                ))}
+              </div>
+
+              <div className="grid gap-2 rounded-lg border border-border bg-background/30 p-2 md:grid-cols-2">
+                {scanPresets.map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    className="rounded-md border border-border bg-background/45 p-3 text-left transition hover:border-primary/40 hover:bg-primary/5"
+                    onClick={() => loadPreset(preset)}
+                  >
+                    <span className="block text-sm font-medium text-white">{preset.label}</span>
+                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">{preset.detail}</span>
+                  </button>
                 ))}
               </div>
 
@@ -440,26 +575,55 @@ export function ScamGuardPage() {
                 {error && <span className="text-sm text-red-200">{error}</span>}
               </div>
 
-              <div className="grid gap-4 lg:grid-cols-[180px_1fr]">
-                <div className="premium-card rounded-2xl border border-border bg-background/55 p-5 text-center">
-                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Security score</p>
-                  <p className="text-gradient mt-2 text-5xl font-semibold">{securityScore}</p>
+              <div className="grid gap-4 lg:grid-cols-[190px_1fr]">
+                <div className="rounded-lg border border-border bg-background/55 p-5 text-center">
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Shield score</p>
+                  <p className="mt-2 text-5xl font-semibold text-white">{securityScore}</p>
                   <p className="mt-2 text-sm text-muted-foreground">higher is safer</p>
+                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-800">
+                    <div
+                      className={cn(
+                        "h-full rounded-full transition-all",
+                        result?.riskLevel === "CRITICAL" || result?.riskLevel === "HIGH_RISK" ? "bg-red-400" : result?.riskLevel === "CAUTION" ? "bg-amber-300" : "bg-emerald-400",
+                      )}
+                      style={{ width: `${securityScore}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="premium-card rounded-2xl border border-border bg-background/55 p-5">
-                  <p className="font-medium">{result?.summary ?? "Run a scan to see ScamGuard risk signals, recommended actions, and RPC metadata."}</p>
+                <div className="rounded-lg border border-border bg-background/55 p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.16em] text-primary">Risk decision</p>
+                      <p className="mt-2 font-medium text-white">
+                        {result?.metadata.decision?.userMessage ?? result?.summary ?? "Run a scan to see ScamGuard risk signals, recommended actions, and RPC metadata."}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className={cn(result ? statusTone(result.riskLevel) : "border-primary/30 text-primary")}>
+                      {result ? statusLabel(result.riskLevel) : "Ready"}
+                    </Badge>
+                  </div>
                   {result && (
-                    <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
-                      <span className="rounded-lg border border-border bg-background/45 px-3 py-2">Chain: {result.metadata.chain}</span>
-                      <span className="rounded-lg border border-border bg-background/45 px-3 py-2">Confidence: {result.confidence}</span>
-                      <span className="rounded-lg border border-border bg-background/45 px-3 py-2">Reputation: {result.metadata.reputation?.verdict ?? "unknown"}</span>
+                    <div className="mt-4 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-3">
+                      {[
+                        ["Chain", result.metadata.chain],
+                        ["Confidence", result.confidence],
+                        ["Reputation", verdictLabel(result.metadata.reputation?.verdict)],
+                        ["Intent", intentLabel(result)],
+                        ["Contract", contractLabel(result)],
+                        ["Sources", dataSourceLabel(result)],
+                      ].map(([label, value]) => (
+                        <span key={label} className="rounded-lg border border-border bg-background/45 px-3 py-2">
+                          <strong className="block text-[10px] uppercase tracking-[0.14em] text-slate-500">{label}</strong>
+                          <span className="mt-1 block break-words text-slate-300">{value}</span>
+                        </span>
+                      ))}
                     </div>
                   )}
-                  {result?.explanation && (
-                    <p className="mt-3 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm leading-6 text-cyan-100">
-                      {result.explanation}
-                    </p>
-                  )}
+                  <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm leading-6 text-cyan-100">
+                    <p className="font-medium text-white">Why this result?</p>
+                    <p className="mt-1">{primaryReason(result)}</p>
+                    {result?.metadata.decision?.trustContext && <p className="mt-2 text-muted-foreground">{result.metadata.decision.trustContext}</p>}
+                  </div>
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
                     <div>
                       <p className="mb-2 flex items-center gap-2 text-sm font-medium text-primary"><FileSearch className="size-4" /> Signals</p>
@@ -480,20 +644,17 @@ export function ScamGuardPage() {
                       </ul>
                       {result && (
                         <div className="mt-4 rounded-lg border border-border bg-background/45 p-3 text-xs text-muted-foreground">
-                          RPC: {result.metadata.rpcStatus}
-                          {result.metadata.signatureCount !== undefined && <><br />Signatures sampled: {result.metadata.signatureCount}</>}
-                          {result.metadata.ownerProgram && <><br />Owner: {result.metadata.ownerProgram}</>}
-                          {result.metadata.rpcError && <><br />RPC note: {result.metadata.rpcError}</>}
-                          {result.metadata.decodedIntent?.category && <><br />Intent: {result.metadata.decodedIntent.category}</>}
-                          {result.metadata.decodedIntent?.method && <><br />Method: {result.metadata.decodedIntent.method}</>}
-                          {result.metadata.decision?.userMessage && <><br />Decision: {result.metadata.decision.userMessage}</>}
-                          {result.metadata.decision?.primaryReason && <><br />Primary reason: {result.metadata.decision.primaryReason}</>}
-                          {result.metadata.decision?.trustContext && <><br />Trust context: {result.metadata.decision.trustContext}</>}
-                          {result.metadata.decodedIntent?.warnings?.map((warning) => <span key={warning}><br />Decode note: {warning}</span>)}
-                          {result.metadata.reputation?.notes?.map((note) => <span key={note}><br />Reputation: {note}</span>)}
-                          {result.metadata.domainIntelligence?.features?.length ? <><br />Domain features: {result.metadata.domainIntelligence.features.join(", ")}</> : null}
-                          {result.metadata.contractIntelligence?.target && <><br />Contract target: {result.metadata.contractIntelligence.target}</>}
-                          {result.metadata.contractIntelligence?.notes?.map((note) => <span key={note}><br />Contract intel: {note}</span>)}
+                          <div className="grid gap-2">
+                            <span>RPC: {result.metadata.rpcStatus}</span>
+                            {result.metadata.signatureCount !== undefined && <span>Signatures sampled: {result.metadata.signatureCount}</span>}
+                            {result.metadata.ownerProgram && <span>Owner: {shortValue(result.metadata.ownerProgram)}</span>}
+                            {result.metadata.rpcError && <span>RPC note: {result.metadata.rpcError}</span>}
+                            {result.metadata.domainIntelligence?.features?.length ? <span>Domain features: {result.metadata.domainIntelligence.features.join(", ")}</span> : null}
+                            {result.metadata.contractIntelligence?.target && <span>Contract target: {shortValue(result.metadata.contractIntelligence.target)}</span>}
+                            {result.metadata.decodedIntent?.warnings?.map((warning) => <span key={warning}>Decode note: {warning}</span>)}
+                            {result.metadata.reputation?.notes?.map((note) => <span key={note}>Reputation: {note}</span>)}
+                            {result.metadata.contractIntelligence?.notes?.map((note) => <span key={note}>Contract intel: {note}</span>)}
+                          </div>
                         </div>
                       )}
                       {result && (
@@ -518,16 +679,13 @@ export function ScamGuardPage() {
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
-        <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+        <div className="grid gap-8 lg:grid-cols-[0.86fr_1.14fr] lg:items-start">
           <div>
-            <Badge variant="secondary" className="mb-4 w-fit gap-2 border-primary/30 text-primary">
-              <Puzzle className="size-3.5" /> Chrome extension
-            </Badge>
-            <h2 className="text-gradient text-3xl font-semibold sm:text-5xl">
-              ScamGuard now follows the user into the browser.
+            <h2 className="text-3xl font-semibold text-white sm:text-5xl">
+              Browser protection that appears at the exact moment of risk.
             </h2>
             <p className="mt-4 leading-7 text-muted-foreground">
-              The extension connects the web app risk engine to real browsing sessions: it scans the current page, checks links on demand, and places a warning overlay before Solana or EVM signing calls continue.
+              The Chrome extension carries the same server-side engine into live browsing sessions. It checks the current site, marks suspicious links on the page, and pauses risky wallet requests before the user signs.
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <a href="/downloads/scamguard-chrome-extension.zip" className={`${buttonVariants()} glow-primary hover-lift`} download>
@@ -537,23 +695,59 @@ export function ScamGuardPage() {
                 API docs <ArrowRight data-icon="inline-end" />
               </Link>
             </div>
+            <div className="mt-6 rounded-lg border border-border bg-background/45 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-primary">Protection levels</p>
+              <div className="mt-3 grid gap-2 text-sm text-muted-foreground">
+                {["Balanced warns on high-risk flows.", "Strict escalates caution-level signing.", "Paranoid reviews every signing request."].map((item) => (
+                  <div key={item} className="flex items-center gap-2">
+                    <CheckCircle2 className="size-4 text-primary" />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
-          <div className="grid gap-5 md:grid-cols-2">
-            {[
-              [Puzzle, "Popup scanner", "Open ScamGuard from the Chrome toolbar and scan the active Web3 page URL with the same server-side engine."],
-              [FileSearch, "Page link scan", "Scan visible claim, mint, presale, or airdrop links on the page before users click into them."],
-              [ShieldAlert, "Pre-sign overlay", "Intercept Solana signing methods and require a review decision before suspicious transactions continue."],
-              [Settings2, "Local controls", "Configure API base URL, caution warnings, critical page blocking, and locally trusted domains."],
-            ].map(([Icon, title, text]) => (
-              <Card key={title as string} className="glass-panel premium-card hover-lift">
-                <CardHeader>
-                  <Icon className="text-primary" />
-                  <CardTitle>{title as string}</CardTitle>
-                  <CardDescription>{text as string}</CardDescription>
-                </CardHeader>
-              </Card>
-            ))}
+          <div className="grid gap-5">
+            <div className="rounded-lg border border-primary/20 bg-slate-950/70 p-5 shadow-2xl shadow-cyan-950/20">
+              <div className="flex items-center justify-between border-b border-border pb-4">
+                <div className="flex items-center gap-3">
+                  <span className="flex size-10 items-center justify-center rounded-lg border border-primary/30 bg-primary/10">
+                    <Puzzle className="size-5 text-primary" />
+                  </span>
+                  <div>
+                    <p className="font-semibold text-white">ScamGuard Extension</p>
+                    <p className="text-xs text-muted-foreground">Pre-sign intelligence</p>
+                  </div>
+                </div>
+                <Badge variant="outline" className="border-emerald-400/40 text-emerald-200">Safe</Badge>
+              </div>
+              <div className="mt-5 grid gap-3 md:grid-cols-[0.88fr_1.12fr]">
+                <div className="rounded-lg border border-border bg-background/55 p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-primary">Current site</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">zerg.app</p>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">No major threat pattern surfaced. Keep matching the wallet prompt to your intent.</p>
+                  <div className="mt-4 h-2 rounded-full bg-slate-800">
+                    <div className="h-full w-[92%] rounded-full bg-emerald-400" />
+                  </div>
+                </div>
+                <div className="grid gap-3">
+                  {[
+                    [FileSearch, "Scan page links", "Inline badges mark caution and high-risk links."],
+                    [ShieldAlert, "Pre-sign overlay", "Critical requests block before the wallet continues."],
+                    [Settings2, "Local controls", "Balanced, Strict, and Paranoid profiles."],
+                  ].map(([Icon, title, text]) => (
+                    <div key={title as string} className="flex items-start gap-3 rounded-lg border border-border bg-background/45 p-3">
+                      <Icon className="mt-0.5 size-4 shrink-0 text-primary" />
+                      <div>
+                        <p className="font-medium text-white">{title as string}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{text as string}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -606,35 +800,58 @@ export function ScamGuardPage() {
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
-        <div className="mb-8 max-w-3xl">
-          <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Integrated with Guard</Badge>
-          <h2 className="text-gradient text-3xl font-semibold sm:text-5xl">Sybil analysis stays. ScamGuard becomes the real-time security layer.</h2>
-          <p className="mt-4 text-muted-foreground">
-            Tri-Proof keeps campaign wallet clustering and Sybil review, then adds a second product surface for scam prevention around suspicious dApps, token mints, EVM contracts, and transactions.
-          </p>
-        </div>
-        <div className="grid gap-5 md:grid-cols-3">
-          {[
-            [ShieldAlert, "Retail protection", "Warn users before they interact with suspicious airdrops, mint links, or drain-style transactions."],
-            [WalletCards, "Campaign security", "Review token mints, wallet addresses, and suspicious reward-claim links before sending users there."],
-            [Siren, "Threat intelligence", "Turn community reports, known drainer domains, and transaction simulation into an API-ready security feed."],
-          ].map(([Icon, title, text]) => (
-            <Card key={title as string} className="glass-panel premium-card hover-lift">
-              <CardHeader>
-                <Icon className="text-primary" />
-                <CardTitle>{title as string}</CardTitle>
-                <CardDescription>{text as string}</CardDescription>
-              </CardHeader>
-            </Card>
-          ))}
+        <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
+          <div>
+            <h2 className="text-3xl font-semibold text-white sm:text-5xl">ScamGuard Intelligence Network</h2>
+            <p className="mt-4 leading-7 text-muted-foreground">
+              Strong detection comes from layered context, not one community report button. ScamGuard separates trusted project context from risky wallet intent so legitimate apps are not punished for using campaign or claim language.
+            </p>
+          </div>
+          <div className="grid gap-3">
+            {intelligenceNetwork.map(([title, text], index) => (
+              <div key={title} className="grid gap-3 rounded-lg border border-border bg-background/45 p-4 sm:grid-cols-[42px_1fr]">
+                <span className="flex size-10 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 font-mono text-xs text-primary">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <div>
+                  <p className="font-semibold text-white">{title}</p>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">{text}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
       <section className="border-y border-border bg-primary/[0.03]">
-        <div className="mx-auto grid max-w-7xl gap-6 px-5 py-16 sm:px-8 lg:grid-cols-[0.8fr_1.2fr]">
+        <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
+          <div className="mb-8 grid gap-5 lg:grid-cols-[0.9fr_1.1fr] lg:items-end">
+            <div>
+              <h2 className="text-3xl font-semibold text-white sm:text-5xl">Explainable risk methodology</h2>
+              <p className="mt-4 leading-7 text-muted-foreground">
+                Every result is framed as a risk decision with confidence, primary reason, data sources, and next action. The user sees why ScamGuard warned instead of only seeing a scary number.
+              </p>
+            </div>
+            <div className="rounded-lg border border-border bg-background/45 p-4 text-sm leading-6 text-muted-foreground">
+              ScamGuard is a pre-sign protection layer. It does not claim certainty; it gives the user and partner apps a defensible, evidence-backed pause before risky interactions.
+            </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-4">
+            {methodologySteps.map(([Icon, title, text]) => (
+              <div key={title} className="rounded-lg border border-border bg-card/70 p-5">
+                <Icon className="mb-4 size-5 text-primary" />
+                <p className="font-semibold text-white">{title}</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div className="mx-auto grid max-w-7xl gap-6 px-5 py-16 sm:px-8 lg:grid-cols-[0.78fr_1.22fr]">
           <div>
-            <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">B2B API</Badge>
-            <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Embed ScamGuard inside wallets, launchpads, and Web3 dApps.</h2>
+            <h2 className="text-3xl font-semibold text-white sm:text-4xl">Embed ScamGuard inside wallets, launchpads, and Web3 dApps.</h2>
             <p className="mt-4 leading-7 text-muted-foreground">
               Partners can call one authenticated endpoint for every scan type, or use the public scanner endpoints for lightweight UI flows.
             </p>
@@ -646,18 +863,42 @@ export function ScamGuardPage() {
               [Fingerprint, "Mint authority checks", "When RPC is configured, mint and freeze authorities are inspected server-side."],
               [ExternalLink, "Public scan endpoints", "/api/scamguard/scan-url, scan-wallet, scan-token, and scan-transaction power the product UI."],
             ].map(([Icon, title, text]) => (
-              <div key={title as string} className="premium-card hover-lift rounded-2xl border border-border bg-card/70 p-5">
+              <div key={title as string} className="hover-lift rounded-lg border border-border bg-card/70 p-5">
                 <Icon className="mb-4 text-primary" />
                 <p className="font-semibold">{title as string}</p>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">{text as string}</p>
               </div>
             ))}
           </div>
+          <div className="lg:col-start-2">
+            <pre className="overflow-x-auto rounded-lg border border-border bg-slate-950/80 p-5 text-xs leading-6 text-slate-300">
+{`POST /api/v1/scamguard/scan
+Authorization: Bearer <TRIPROOF_API_KEY>
+
+{
+  "type": "transaction",
+  "chain": "evm",
+  "value": "{ wallet request JSON }",
+  "sourceUrl": "https://app.project.xyz/claim"
+}
+
+{
+  "riskLevel": "HIGH_RISK",
+  "confidence": "HIGH",
+  "metadata": {
+    "decision": {
+      "primaryReason": "Unlimited approval to an unknown spender",
+      "userMessage": "Review this request before signing."
+    }
+  }
+}`}
+            </pre>
+          </div>
         </div>
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
-        <div className="glass-panel premium-card animated-border flex flex-col items-start justify-between gap-6 rounded-2xl p-8 md:flex-row md:items-center">
+        <div className="glass-panel premium-card flex flex-col items-start justify-between gap-6 rounded-lg p-8 md:flex-row md:items-center">
           <div>
             <p className="font-mono text-xs uppercase tracking-[0.2em] text-primary">Unified product layer</p>
             <h2 className="text-gradient mt-3 text-2xl font-semibold sm:text-3xl">Wallet risk plus ScamGuard risk gives teams one security story.</h2>
