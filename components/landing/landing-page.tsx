@@ -3,6 +3,7 @@ import Link from "next/link"
 import {
   Activity,
   ArrowRight,
+  Award,
   BookOpen,
   CheckCircle2,
   CircleDollarSign,
@@ -16,11 +17,14 @@ import {
   LockKeyhole,
   Mail,
   Network,
+  PackageCheck,
   Puzzle,
   Radar,
+  Rocket,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
+  Target,
   Upload,
   WalletCards,
 } from "lucide-react"
@@ -36,41 +40,31 @@ import {
 } from "@/components/ui/card"
 
 const navLinks = [
-  ["Workflow", "#workflow"],
-  ["Features", "#features"],
-  ["Mini Audit", "/audit"],
+  ["Product", "#product"],
+  ["Grant Fit", "#grant-fit"],
+  ["Demo", "#demo-proof"],
   ["ScamGuard", "/scamguard"],
   ["Docs", "/docs"],
-  ["Blog", "/blog"],
-  ["Pricing", "/pricing"],
-  ["Contact", "/contact"],
-  ["Demo", "/dashboard/demo"],
+  ["Pricing", "#pricing"],
 ]
 
 const heroStats = [
-  ["Sybil", "campaign wallet analysis"],
-  ["ScamGuard", "pre-sign Solana security"],
-  ["Extension", "browser protection layer"],
+  ["Live MVP", "scanner, API, extension"],
+  ["Solana-first", "campaign + pre-sign safety"],
+  ["23 tests", "risk engine coverage"],
 ]
 
 const consoleStats = [
-  ["500", "Wallets", "Uploaded list"],
-  ["8", "Clusters", "Suspicious groups"],
-  ["42.8", "Avg risk", "Risk snapshot"],
+  ["4", "Scan types", "URL, wallet, token, tx"],
+  ["0", "Key access", "No custody design"],
+  ["API", "Ready", "B2B integration"],
 ]
 
 const trustSignals = [
-  [LockKeyhole, "No custody", "No seed phrase, no wallet approval, no token transfer."],
-  [Activity, "Evidence-based", "Scores come from on-chain history, clusters and campaign context."],
-  [FileCheck2, "Decision support", "Your team keeps final control over Gray Zone wallets."],
-  [ShieldCheck, "Export-ready", "Clean, Gray Zone and rejected lists stay explainable."],
-]
-
-const riskRows = [
-  ["7xC...fxG", "96", "Critical", "Reject"],
-  ["DNf...jwM", "72", "High", "Reject"],
-  ["GxD...XSq", "44", "Medium", "Review"],
-  ["8pY...F4w", "18", "Low", "Approve"],
+  [LockKeyhole, "Privacy by design", "No seed phrase, private key, wallet password, or custody path."],
+  [Activity, "Evidence-based", "Scores use domain, RPC, intent, registry, and campaign context."],
+  [FileCheck2, "Explainable decisions", "Users see why a warning fired and what to verify next."],
+  [ShieldCheck, "Builder-ready", "Public scanner, Chrome extension, API docs, and admin intelligence."],
 ]
 
 const painPoints = [
@@ -125,6 +119,45 @@ const productLayers = [
     href: "/docs/api",
     action: "Read API docs",
   },
+]
+
+const grantHighlights = [
+  {
+    icon: Target,
+    title: "Problem",
+    text: "Solana campaigns attract Sybil wallets, fake reward pages, and unsafe signing prompts. Teams need protection before funds or signatures move.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Solution",
+    text: "Tri-Proof Guard combines wallet eligibility review with ScamGuard pre-sign intelligence for Solana users, projects, wallets, and launchpads.",
+  },
+  {
+    icon: Rocket,
+    title: "Grant output",
+    text: "A public beta with stronger Solana transaction decoding, verified project registry, extension onboarding, and partner-ready API examples.",
+  },
+]
+
+const demoProof = [
+  [ShieldAlert, "ScamGuard live scanner", "Run URL, wallet, token mint, and transaction intent scans from the public product page.", "/scamguard", "Open scanner"],
+  [Puzzle, "Chrome extension beta", "Test live browsing protection with page link scanning, site status, and pre-sign warning profiles.", "/downloads/scamguard-chrome-extension.zip", "Download"],
+  [Radar, "Sybil mini audit", "Upload campaign wallets and review risk scoring, gray-zone decisions, and export-ready outputs.", "/audit", "Run audit"],
+  [Code2, "API documentation", "Review authenticated B2B scan endpoints for wallets, launchpads, dashboards, and dApps.", "/docs/api", "Read docs"],
+] as const
+
+const grantMilestones = [
+  ["M1", "Solana transaction decoding", "Expand SPL Token, Token-2022, account close, delegate, authority, and serialized transaction review."],
+  ["M2", "Project intelligence registry", "Ship admin-managed trusted, suspicious, and known-bad domain/spender intelligence with safer false-positive handling."],
+  ["M3", "Extension public beta", "Polish onboarding, settings, warning overlays, and safe/caution/high-risk messaging for real browsing sessions."],
+  ["M4", "Partner API package", "Document B2B endpoint examples, SDK usage, response schema, and integration patterns for Solana teams."],
+]
+
+const privacyPrinciples = [
+  ["No private keys", "The product never asks for seed phrases, private keys, or wallet passwords."],
+  ["Minimal inputs", "Scans use URLs, public addresses, transaction payloads, and optional wallet public key context."],
+  ["Explainable warnings", "Every result includes score, confidence, primary reason, evidence layer, and next action."],
+  ["Human override", "Admin intelligence and feedback help correct false positives without weakening real threat detection."],
 ]
 
 const workflow = [
@@ -200,22 +233,22 @@ export function LandingPage() {
           </nav>
           <div className="flex items-center gap-3">
             <Link href="/login" className={`${buttonVariants({ variant: "outline" })} hover-lift hidden sm:inline-flex`}>Login</Link>
-            <Link href="/audit" className={`${buttonVariants()} glow-primary hover-lift`}>Start Free</Link>
+            <Link href="/scamguard" className={`${buttonVariants()} glow-primary hover-lift`}>Open Demo</Link>
           </div>
         </header>
 
-        <div className="relative z-10 mx-auto grid max-w-[1500px] gap-10 px-5 pb-16 pt-10 sm:px-8 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:pb-24 lg:pt-20">
-          <div className="reveal-up flex flex-col gap-8">
-            <div className="flex flex-col gap-5">
+        <div className="relative z-10 mx-auto grid max-w-[1500px] gap-8 px-5 pb-14 pt-8 sm:px-8 lg:grid-cols-[0.98fr_1.02fr] lg:items-center lg:pb-18 lg:pt-14">
+          <div className="reveal-up flex flex-col gap-6">
+            <div className="flex flex-col gap-4">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="cyber-chip">Solana security suite</span>
                 <Badge variant="secondary" className="border-primary/30 text-primary">Sybil + ScamGuard + Extension</Badge>
               </div>
-              <h1 className="text-gradient animate-gradient-text max-w-4xl text-4xl font-semibold leading-tight text-balance sm:text-6xl lg:text-7xl">
-                Protect Solana campaigns before rewards or signatures go out.
+              <h1 className="text-gradient animate-gradient-text max-w-3xl text-4xl font-semibold leading-[1.04] text-balance sm:text-5xl lg:text-6xl">
+                Protect Solana campaigns before rewards or wallet signatures go out.
               </h1>
-              <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-                Tri-Proof Guard combines campaign Sybil analysis, ScamGuard pre-sign scanning, a Chrome protection layer, and API-ready risk decisions for Solana teams that need cleaner airdrops and safer user flows.
+              <p className="max-w-2xl text-base leading-7 text-muted-foreground">
+                Tri-Proof Guard gives Solana teams one safety layer for airdrop wallet review, fake claim links, risky token mints, and pre-sign transaction warnings. The live MVP includes ScamGuard, a Chrome extension, API docs, and Sybil analysis.
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
@@ -223,7 +256,7 @@ export function LandingPage() {
               <a href="/downloads/scamguard-chrome-extension.zip" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`} download>
                 <Download data-icon="inline-start" /> Download extension
               </a>
-              <Link href="/audit" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>Run mini audit</Link>
+              <Link href="#grant-fit" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>Grant fit</Link>
             </div>
             <div className="grid max-w-2xl gap-3 sm:grid-cols-3">
               {heroStats.map(([value, label], index) => (
@@ -244,10 +277,10 @@ export function LandingPage() {
             </div>
           </div>
 
-          <div className="glass-panel premium-card animated-border data-scan relative min-h-[460px] overflow-hidden rounded-3xl p-5 reveal-up delay-200">
+          <div className="glass-panel premium-card animated-border data-scan relative min-h-[430px] overflow-hidden rounded-3xl p-5 reveal-up delay-200">
             <div className="mb-5 flex items-center justify-between gap-4">
-              <div><p className="text-sm font-medium">Campaign Risk Console</p><p className="text-xs text-muted-foreground">Solana Airdrop Wallet Audit</p></div>
-              <Badge variant="secondary" className="gap-2 border-primary/30 text-primary"><span className="pulse-dot" /> Live workflow</Badge>
+              <div><p className="text-sm font-medium">Jury Demo Console</p><p className="text-xs text-muted-foreground">Solana security product preview</p></div>
+              <Badge variant="secondary" className="gap-2 border-primary/30 text-primary"><span className="pulse-dot" /> Live MVP</Badge>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               {consoleStats.map(([value, label, detail], index) => (
@@ -258,11 +291,16 @@ export function LandingPage() {
             </div>
             <div className="mt-5 overflow-hidden rounded-xl border border-border bg-background/50">
               <div className="grid grid-cols-[1fr_72px_86px_120px] border-b border-border bg-primary/5 px-4 py-3 text-[11px] uppercase tracking-wide text-muted-foreground">
-                <span>Wallet</span><span>Score</span><span>Risk</span><span>Decision</span>
+                <span>Surface</span><span>Score</span><span>Risk</span><span>Decision</span>
               </div>
-              {riskRows.map(([wallet, score, risk, action], index) => (
-                <div key={wallet} className="grid grid-cols-[1fr_72px_86px_120px] border-b border-border px-4 py-3 text-xs transition-colors last:border-b-0 hover:bg-primary/5" style={{ animationDelay: `${index * 0.08}s` }}>
-                  <span className="font-mono text-muted-foreground">{wallet}</span><span>{score}</span><span>{risk}</span><span className="text-primary">{action}</span>
+              {[
+                ["app.grass.io", "0", "Safe", "Verified"],
+                ["claim.xyz", "72", "High", "Warn"],
+                ["wallet list", "42", "Medium", "Review"],
+                ["SPL mint", "18", "Low", "Check"],
+              ].map(([surface, score, risk, action], index) => (
+                <div key={surface} className="grid grid-cols-[1fr_72px_86px_120px] border-b border-border px-4 py-3 text-xs transition-colors last:border-b-0 hover:bg-primary/5" style={{ animationDelay: `${index * 0.08}s` }}>
+                  <span className="font-mono text-muted-foreground">{surface}</span><span>{score}</span><span>{risk}</span><span className="text-primary">{action}</span>
                 </div>
               ))}
             </div>
@@ -277,7 +315,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
+      <section id="product" className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
         <div className="mb-8 max-w-3xl">
           <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Product suite</Badge>
           <h2 className="text-gradient text-3xl font-semibold sm:text-5xl">
@@ -316,6 +354,121 @@ export function LandingPage() {
         </div>
       </section>
 
+      <section id="grant-fit" className="border-y border-border bg-primary/[0.03]">
+        <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
+          <div className="mb-10 grid gap-6 lg:grid-cols-[0.78fr_1.22fr] lg:items-end">
+            <div>
+              <Badge variant="secondary" className="mb-4 w-fit gap-2 border-primary/30 text-primary">
+                <Award className="size-3.5" /> Grant-ready scope
+              </Badge>
+              <h2 className="text-gradient text-3xl font-semibold sm:text-5xl">
+                A focused Solana security grant, with a working prototype already live.
+              </h2>
+            </div>
+            <p className="leading-7 text-muted-foreground">
+              The grant story is simple: reduce user loss and campaign waste in the Solana ecosystem. The current product already demonstrates the scanner, extension, API, and wallet-list review flow; grant funding turns it into a stronger public beta.
+            </p>
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-3">
+            {grantHighlights.map((item) => {
+              const Icon = item.icon
+              return (
+                <Card key={item.title} className="glass-panel premium-card hover-lift">
+                  <CardHeader>
+                    <span className="mb-3 flex size-11 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary">
+                      <Icon />
+                    </span>
+                    <CardTitle>{item.title}</CardTitle>
+                    <CardDescription>{item.text}</CardDescription>
+                  </CardHeader>
+                </Card>
+              )
+            })}
+          </div>
+
+          <div className="mt-6 grid gap-5 lg:grid-cols-[0.88fr_1.12fr]">
+            <Card className="glass-panel premium-card">
+              <CardHeader>
+                <CardTitle>Why Solana Foundation Turkey Grants fits</CardTitle>
+                <CardDescription>
+                  ScamGuard protects the exact consumer flows that bring new users into Solana: airdrops, quests, mints, token claims, and campaign reward pages.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3 text-sm text-muted-foreground">
+                {[
+                  "Solana-first UX: Phantom/Backpack context, SPL token heuristics, and Solana transaction review.",
+                  "Public-good angle: fewer fake claim links, fewer unsafe signatures, cleaner campaign incentives.",
+                  "Builder utility: API and extension can be reused by wallets, launchpads, quests, and Turkish Solana teams.",
+                  "Measurable output: public beta, documented endpoints, verified project registry, and testable demo flows.",
+                ].map((item) => (
+                  <div key={item} className="flex items-start gap-3 rounded-lg border border-border bg-background/45 p-3">
+                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card className="glass-panel premium-card animated-border">
+              <CardHeader>
+                <CardTitle>Proposed grant milestones</CardTitle>
+                <CardDescription>Concrete deliverables that a reviewer can evaluate without guessing.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                {grantMilestones.map(([phase, title, text]) => (
+                  <div key={phase} className="grid gap-3 rounded-lg border border-border bg-background/45 p-4 sm:grid-cols-[54px_1fr]">
+                    <span className="flex size-11 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 font-mono text-xs font-semibold text-primary">
+                      {phase}
+                    </span>
+                    <div>
+                      <p className="font-semibold text-white">{title}</p>
+                      <p className="mt-1 text-sm leading-6 text-muted-foreground">{text}</p>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      <section id="demo-proof" className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
+        <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <Badge variant="secondary" className="mb-4 w-fit gap-2 border-primary/30 text-primary">
+              <PackageCheck className="size-3.5" /> Demo proof
+            </Badge>
+            <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Everything a reviewer should click first.</h2>
+          </div>
+          <p className="max-w-xl text-muted-foreground">
+            The site now routes the jury directly to working surfaces instead of asking them to infer the product from a roadmap.
+          </p>
+        </div>
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+          {demoProof.map(([Icon, title, text, href, action]) => (
+            <Card key={title} className="glass-panel premium-card hover-lift">
+              <CardHeader>
+                <Icon className="mb-2 size-5 text-primary" />
+                <CardTitle>{title}</CardTitle>
+                <CardDescription>{text}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {href.endsWith(".zip") ? (
+                  <a href={href} className={`${buttonVariants({ variant: "outline" })} hover-lift w-full`} download>
+                    <Download data-icon="inline-start" /> {action}
+                  </a>
+                ) : (
+                  <Link href={href} className={`${buttonVariants({ variant: "outline" })} hover-lift w-full`}>
+                    {action} <ArrowRight data-icon="inline-end" />
+                  </Link>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
+
       <section className="mx-auto grid max-w-7xl gap-5 px-5 py-16 sm:px-8 lg:grid-cols-4">
         {painPoints.map((item, index) => (
           <Card key={item.title} className="glass-panel premium-card hover-lift reveal-up" style={{ animationDelay: `${index * 0.1}s` }}>
@@ -341,6 +494,27 @@ export function LandingPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             {scoringPrinciples.map(([title, text]) => (
               <div key={title} className="premium-card rounded-lg border border-border bg-background/60 p-5">
+                <p className="font-semibold text-white">{title}</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
+        <div className="grid gap-8 lg:grid-cols-[0.82fr_1.18fr] lg:items-start">
+          <div>
+            <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Security posture</Badge>
+            <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Useful protection without asking users to trust another wallet app.</h2>
+            <p className="mt-4 leading-7 text-muted-foreground">
+              Tri-Proof Guard works as a pre-sign and campaign-review layer. It explains risk before action, while keeping custody and secret material out of scope.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {privacyPrinciples.map(([title, text]) => (
+              <div key={title} className="premium-card rounded-lg border border-border bg-card/70 p-5">
+                <LockKeyhole className="mb-4 size-5 text-primary" />
                 <p className="font-semibold text-white">{title}</p>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p>
               </div>
@@ -394,7 +568,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
+      <section id="pricing" className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
         <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div><Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Simple pricing</Badge><h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Start free. Upgrade with USDC when the list gets bigger.</h2></div>
           <Link href="/pricing" className={`${buttonVariants({ variant: "outline" })} hover-lift w-fit`}>Full pricing <ArrowRight data-icon="inline-end" /></Link>

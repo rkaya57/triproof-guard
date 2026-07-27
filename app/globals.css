@@ -146,6 +146,14 @@
 
   body {
     @apply bg-background text-foreground;
+    font-family:
+      var(--font-geist-sans),
+      "Inter",
+      "Segoe UI",
+      Arial,
+      ui-sans-serif,
+      system-ui,
+      sans-serif;
     background-image:
       radial-gradient(
         58% 48% at 12% -4%,
@@ -167,6 +175,14 @@
 
   html {
     @apply font-sans;
+    font-family:
+      var(--font-geist-sans),
+      "Inter",
+      "Segoe UI",
+      Arial,
+      ui-sans-serif,
+      system-ui,
+      sans-serif;
   }
 
   ::selection {
