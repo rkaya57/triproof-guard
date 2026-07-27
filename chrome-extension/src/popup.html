@@ -26,16 +26,16 @@
 
       <section class="score-card">
         <div class="tab-copy">
-          <p class="eyebrow">Protected site</p>
+          <p class="eyebrow">Protection status</p>
           <h2 id="domainLabel">Loading...</h2>
           <p id="summaryLabel">Reading the page and checking the risk engine.</p>
         </div>
 
         <div class="score-row">
-          <div id="scoreMeter" class="score-meter" style="--score-angle: 0deg">
+          <div id="scoreMeter" class="score-meter" style="--score-fill: 0%">
             <div class="score-core">
               <span id="scoreLabel">--</span>
-              <small>score</small>
+              <small>shield</small>
             </div>
           </div>
           <div class="score-copy">
@@ -46,14 +46,48 @@
         </div>
       </section>
 
+      <section class="decision-card">
+        <div class="section-head">
+          <h3>Why this result?</h3>
+          <span id="confidencePill" class="mini-pill">Waiting</span>
+        </div>
+        <p id="decisionMessage" class="decision-message">ScamGuard will explain the source, action, and strongest risk driver after the scan.</p>
+        <div class="intel-grid" aria-label="ScamGuard intelligence summary">
+          <div class="intel-tile">
+            <span>Source</span>
+            <strong id="sourceIntel">Checking</strong>
+          </div>
+          <div class="intel-tile">
+            <span>Threat feed</span>
+            <strong id="feedIntel">Checking</strong>
+          </div>
+          <div class="intel-tile">
+            <span>Intent</span>
+            <strong id="intentIntel">URL scan</strong>
+          </div>
+          <div class="intel-tile">
+            <span>Contract</span>
+            <strong id="contractIntel">Not checked</strong>
+          </div>
+        </div>
+      </section>
+
       <section class="actions" aria-label="ScamGuard actions">
         <button id="scanLinksButton" type="button" class="button primary">Scan page links</button>
         <button id="openReportButton" type="button" class="button ghost">Open full report</button>
       </section>
 
+      <section class="link-card">
+        <div class="section-head">
+          <h3>Page links</h3>
+          <span id="linkScanPill" class="mini-pill">Idle</span>
+        </div>
+        <p id="linkScanSummary">Run a link scan to mark risky URLs directly on the page.</p>
+      </section>
+
       <section class="signals">
         <div class="section-head">
-          <h3>Signals</h3>
+          <h3>Top risk drivers</h3>
           <span class="mini-pill">Live</span>
         </div>
         <div id="signalsList" class="list empty">No signals yet. Open a page or rescan to start the read.</div>
@@ -66,8 +100,20 @@
         </summary>
         <div class="settings-grid">
           <label>
+            Protection level
+            <select id="protectionLevel">
+              <option value="balanced">Balanced</option>
+              <option value="strict">Strict</option>
+              <option value="paranoid">Paranoid</option>
+            </select>
+          </label>
+          <label>
             API base URL
             <input id="apiBaseUrl" type="url" placeholder="https://triproofprotocol.com">
+          </label>
+          <label class="check">
+            <input id="enableNotifications" type="checkbox">
+            <span>Show Chrome notifications for high-risk findings</span>
           </label>
           <label class="check">
             <input id="warnOnCaution" type="checkbox">

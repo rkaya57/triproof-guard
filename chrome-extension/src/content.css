@@ -39,6 +39,8 @@
 
 #scamguard-extension-banner[data-risk="safe"] {
   border-color: rgba(74, 222, 128, 0.48);
+  opacity: 0.78;
+  transform: scale(0.94);
 }
 
 #scamguard-extension-banner[data-risk="caution"] {
@@ -48,6 +50,7 @@
 #scamguard-extension-banner[data-risk="high"],
 #scamguard-extension-banner[data-risk="critical"] {
   border-color: rgba(248, 113, 113, 0.78);
+  animation: sgx-slide-up 0.52s cubic-bezier(0.16, 1, 0.3, 1), sgx-danger-glow 1.8s ease-in-out infinite;
 }
 
 #scamguard-extension-banner .sgx-orb {
@@ -213,6 +216,14 @@
   animation: sgx-modal-in 0.36s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+#scamguard-extension-overlay .sgx-modal.critical {
+  border-color: rgba(248, 113, 113, 0.72);
+  box-shadow:
+    0 30px 96px rgba(0, 0, 0, 0.58),
+    0 0 64px rgba(248, 113, 113, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
 #scamguard-extension-overlay .sgx-pill {
   display: inline-flex;
   width: fit-content;
@@ -250,6 +261,48 @@
   color: #c7d7e8;
   font-size: 14px;
   line-height: 1.6;
+}
+
+#scamguard-extension-overlay .sgx-transaction-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 18px;
+}
+
+#scamguard-extension-overlay .sgx-fact,
+#scamguard-extension-overlay .sgx-decision-note {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 14px;
+  background: rgba(4, 12, 24, 0.48);
+}
+
+#scamguard-extension-overlay .sgx-fact {
+  min-width: 0;
+  padding: 11px;
+}
+
+#scamguard-extension-overlay .sgx-fact span,
+#scamguard-extension-overlay .sgx-decision-note span {
+  display: block;
+  color: #9fb3c8;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+#scamguard-extension-overlay .sgx-fact strong,
+#scamguard-extension-overlay .sgx-decision-note strong {
+  display: block;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+  color: #f6fbff;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+#scamguard-extension-overlay .sgx-decision-note {
+  margin-top: 12px;
+  padding: 13px;
 }
 
 #scamguard-extension-overlay .sgx-modal-grid {
@@ -309,6 +362,61 @@
   color: #ffc0c6;
 }
 
+#scamguard-extension-overlay [data-decision="continue"]:disabled {
+  cursor: wait;
+  opacity: 0.58;
+  transform: none;
+}
+
+#scamguard-extension-overlay .sgx-force-block {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  border: 1px solid rgba(248, 113, 113, 0.42);
+  border-radius: 12px;
+  padding: 8px 10px;
+  color: #ffc0c6;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+a[data-sgx-risk] {
+  position: relative !important;
+  outline: 2px solid rgba(251, 191, 36, 0.78) !important;
+  outline-offset: 3px !important;
+  border-radius: 4px !important;
+  box-shadow: 0 0 0 5px rgba(251, 191, 36, 0.14) !important;
+}
+
+a[data-sgx-risk="high"],
+a[data-sgx-risk="critical"] {
+  outline-color: rgba(248, 113, 113, 0.88) !important;
+  box-shadow: 0 0 0 5px rgba(248, 113, 113, 0.16) !important;
+}
+
+.sgx-link-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  margin-left: 6px !important;
+  border: 1px solid rgba(251, 191, 36, 0.64) !important;
+  border-radius: 999px !important;
+  background: rgba(15, 23, 42, 0.94) !important;
+  color: #ffe28a !important;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  padding: 4px 6px !important;
+  text-decoration: none !important;
+  vertical-align: middle !important;
+}
+
+a[data-sgx-risk="high"] .sgx-link-badge,
+a[data-sgx-risk="critical"] .sgx-link-badge {
+  border-color: rgba(248, 113, 113, 0.76) !important;
+  color: #ffc0c6 !important;
+}
+
 @keyframes sgx-slide-up {
   from {
     transform: translateY(18px) scale(0.96);
@@ -332,6 +440,15 @@
   50% {
     transform: scale(1.08);
     opacity: 1;
+  }
+}
+
+@keyframes sgx-danger-glow {
+  50% {
+    box-shadow:
+      0 22px 68px rgba(0, 0, 0, 0.42),
+      0 0 44px rgba(248, 113, 113, 0.28),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 }
 
@@ -369,6 +486,7 @@
   }
 
   #scamguard-extension-overlay .sgx-modal-grid,
+  #scamguard-extension-overlay .sgx-transaction-strip,
   #scamguard-extension-overlay .sgx-modal-actions {
     grid-template-columns: 1fr;
     flex-direction: column;

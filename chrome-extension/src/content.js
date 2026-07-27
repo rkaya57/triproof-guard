@@ -117,20 +117,71 @@ function pageLinks() {
     .filter((href) => /^https?:\/\//i.test(href))
 }
 
+function linkKey(value) {
+  try {
+    const url = new URL(value)
+    url.hash = ""
+    return url.toString()
+  } catch {
+    return String(value)
+  }
+}
+
+function clearLinkMarks() {
+  document.querySelectorAll("a[data-sgx-risk]").forEach((link) => {
+    link.removeAttribute("data-sgx-risk")
+    link.querySelector(":scope > .sgx-link-badge")?.remove()
+  })
+}
+
+function linkScanCounts(results) {
+  return (results ?? []).reduce(
+    (counts, item) => {
+      counts.total += 1
+      if (item.riskLevel === "CRITICAL") counts.critical += 1
+      else if (item.riskLevel === "HIGH_RISK") counts.high += 1
+      else if (item.riskLevel === "CAUTION") counts.caution += 1
+      else counts.safe += 1
+      return counts
+    },
+    { total: 0, safe: 0, caution: 0, high: 0, critical: 0 },
+  )
+}
+
+function markScannedLinks(results) {
+  clearLinkMarks()
+  const byUrl = new Map((results ?? []).map((item) => [linkKey(item.value), item]))
+  document.querySelectorAll("a[href^='http']").forEach((link) => {
+    const result = byUrl.get(linkKey(link.href))
+    if (!result || result.riskLevel === "SAFE") return
+    const className = riskClass(result.riskLevel)
+    link.dataset.sgxRisk = className
+    link.title = `ScamGuard: ${riskLabel(result.riskLevel)} - ${result.summary ?? "Review before opening."}`
+    const badge = document.createElement("span")
+    badge.className = "sgx-link-badge"
+    badge.textContent = riskLabel(result.riskLevel)
+    link.appendChild(badge)
+  })
+}
+
 async function scanPageLinks() {
   const response = await sendMessage({ type: "SCAN_LINKS", links: pageLinks() })
-  if (!response?.ok) return
+  if (!response?.ok) return { ok: false, error: response?.error ?? "Link scan failed" }
+  markScannedLinks(response.results ?? [])
+  const counts = linkScanCounts(response.results ?? [])
   const risky = (response.results ?? [])
     .filter((item) => ["CAUTION", "HIGH_RISK", "CRITICAL"].includes(item.riskLevel))
     .sort((a, b) => Number(b.score ?? 0) - Number(a.score ?? 0))
   if (risky[0]) {
-    await showDecisionOverlay(risky[0], {
+    updateBanner({ riskLevel: risky[0].riskLevel, score: risky[0].score, summary: `${risky.length} risky page link${risky.length === 1 ? "" : "s"} marked.` })
+    void showDecisionOverlay(risky[0], {
       title: `${risky.length} risky link${risky.length === 1 ? "" : "s"} found`,
       mode: "links",
     })
   } else {
     updateBanner(latestUrlResult ?? { riskLevel: "SAFE", score: 0, summary: "No risky page links found." })
   }
+  return { ok: true, counts }
 }
 
 function overlayMarkup(result, options) {
@@ -142,13 +193,32 @@ function overlayMarkup(result, options) {
     .slice(0, 3)
     .map((action) => `<li>${escapeHtml(action)}</li>`)
     .join("")
-  const canContinue = !options.forceBlock
+  const canContinue = !options.forceBlock && result.riskLevel !== "CRITICAL"
+  const decision = result.metadata?.decision
+  const facts = transactionFacts(result)
+  const transactionSummary = facts.length
+    ? `
+      <div class="sgx-transaction-strip" aria-label="Decoded transaction summary">
+        ${facts.map((fact) => `
+          <div class="sgx-fact">
+            <span>${escapeHtml(fact.label)}</span>
+            <strong>${escapeHtml(fact.value)}</strong>
+          </div>
+        `).join("")}
+      </div>
+    `
+    : ""
   return `
-    <div class="sgx-modal" role="dialog" aria-modal="true">
+    <div class="sgx-modal ${riskClass(result.riskLevel)}" role="dialog" aria-modal="true">
       <div class="sgx-modal-header">
         <span class="sgx-pill ${riskClass(result.riskLevel)}">${riskLabel(result.riskLevel)} / ${securityScore(result)}</span>
         <h2>${escapeHtml(options.title ?? "ScamGuard warning")}</h2>
-        <p>${escapeHtml(result.summary ?? "Pause for a second and review this before continuing.")}</p>
+        <p>${escapeHtml(decision?.userMessage ?? result.summary ?? "Pause for a second and review this before continuing.")}</p>
+      </div>
+      ${transactionSummary}
+      <div class="sgx-decision-note">
+        <strong>${escapeHtml(decision?.headline ?? "Decision context")}</strong>
+        <span>${escapeHtml(decision?.primaryReason ?? result.explanation ?? "ScamGuard compares the source, wallet intent, reputation, and known scam patterns before showing this warning.")}</span>
       </div>
       <div class="sgx-modal-grid">
         <section>
@@ -162,10 +232,33 @@ function overlayMarkup(result, options) {
       </div>
       <div class="sgx-modal-actions">
         <button type="button" data-decision="cancel">Cancel safely</button>
-        ${canContinue ? '<button type="button" data-decision="continue">I understand, continue</button>' : ""}
+        ${canContinue ? `<button type="button" data-decision="continue" ${result.riskLevel === "HIGH_RISK" ? 'data-wait="true" disabled' : ""}>${result.riskLevel === "HIGH_RISK" ? "Read for 3 seconds" : "I understand, continue"}</button>` : '<span class="sgx-force-block">Critical risk cannot continue from this prompt.</span>'}
       </div>
     </div>
   `
+}
+
+function shortAddress(value) {
+  if (!value) return null
+  const text = String(value)
+  return text.length > 18 ? `${text.slice(0, 8)}...${text.slice(-6)}` : text
+}
+
+function transactionFacts(result) {
+  const metadata = result.metadata ?? {}
+  const intent = metadata.decodedIntent
+  const contract = metadata.contractIntelligence
+  const facts = []
+  if (metadata.chain && metadata.chain !== "unknown") facts.push({ label: "Chain", value: metadata.chain.toUpperCase() })
+  if (intent?.category && intent.category !== "unknown") facts.push({ label: "Intent", value: intent.category.replaceAll("_", " ") })
+  if (intent?.method) facts.push({ label: "Method", value: intent.method })
+  if (intent?.spender) facts.push({ label: "Spender", value: shortAddress(intent.spender) })
+  if (intent?.recipient) facts.push({ label: "Recipient", value: shortAddress(intent.recipient) })
+  if (intent?.amount) facts.push({ label: "Amount", value: String(intent.amount).length > 24 ? "Unlimited / very high" : String(intent.amount) })
+  if (contract?.checked) {
+    facts.push({ label: "Contract", value: contract.isContract ? (contract.verified ? "Verified" : "Unverified") : "EOA" })
+  }
+  return facts.slice(0, 6)
 }
 
 function escapeHtml(value) {
@@ -183,6 +276,13 @@ function showDecisionOverlay(result, options = {}) {
     const root = document.createElement("div")
     root.id = "scamguard-extension-overlay"
     root.innerHTML = overlayMarkup(result, options)
+    const waitButton = root.querySelector('[data-wait="true"]')
+    if (waitButton instanceof HTMLButtonElement) {
+      window.setTimeout(() => {
+        waitButton.disabled = false
+        waitButton.textContent = "I understand, continue"
+      }, 3000)
+    }
     root.addEventListener("click", (event) => {
       const target = event.target
       if (!(target instanceof HTMLElement)) return
@@ -217,12 +317,18 @@ async function handleSignRequest(payload) {
 
   const result = response.result
   const settings = await getSettings()
+  const protectionLevel = settings.protectionLevel ?? "balanced"
   const shouldWarn =
     result.riskLevel === "CRITICAL" ||
     result.riskLevel === "HIGH_RISK" ||
-    (settings.warnOnCaution && result.riskLevel === "CAUTION")
+    protectionLevel === "paranoid" ||
+    ((settings.warnOnCaution || protectionLevel === "strict") && result.riskLevel === "CAUTION")
   const allow = shouldWarn
-    ? await showDecisionOverlay(result, { title: "Review transaction before signing", mode: "transaction" })
+    ? await showDecisionOverlay(result, {
+      title: result.riskLevel === "CRITICAL" ? "ScamGuard blocked this signing request" : "Review transaction before signing",
+      mode: "transaction",
+      forceBlock: result.riskLevel === "CRITICAL",
+    })
     : true
 
   window.postMessage({
@@ -256,8 +362,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return
     }
     if (message?.type === "CONTENT_SCAN_LINKS") {
-      await scanPageLinks()
-      sendResponse({ ok: true })
+      sendResponse(await scanPageLinks())
       return
     }
     if (message?.type === "CONTENT_SET_COMPACT") {

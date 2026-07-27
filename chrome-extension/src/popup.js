@@ -12,10 +12,20 @@ const elements = {
   scoreMeter: document.getElementById("scoreMeter"),
   scoreBar: document.getElementById("scoreBar"),
   scoreWhisper: document.getElementById("scoreWhisper"),
+  confidencePill: document.getElementById("confidencePill"),
+  decisionMessage: document.getElementById("decisionMessage"),
+  sourceIntel: document.getElementById("sourceIntel"),
+  feedIntel: document.getElementById("feedIntel"),
+  intentIntel: document.getElementById("intentIntel"),
+  contractIntel: document.getElementById("contractIntel"),
+  linkScanPill: document.getElementById("linkScanPill"),
+  linkScanSummary: document.getElementById("linkScanSummary"),
   signalsList: document.getElementById("signalsList"),
   rescanButton: document.getElementById("rescanButton"),
   scanLinksButton: document.getElementById("scanLinksButton"),
   openReportButton: document.getElementById("openReportButton"),
+  protectionLevel: document.getElementById("protectionLevel"),
+  enableNotifications: document.getElementById("enableNotifications"),
   apiBaseUrl: document.getElementById("apiBaseUrl"),
   warnOnCaution: document.getElementById("warnOnCaution"),
   blockCriticalSites: document.getElementById("blockCriticalSites"),
@@ -78,14 +88,72 @@ function hostFromUrl(value) {
   }
 }
 
+function shortText(value, fallback = "Unknown") {
+  const text = String(value ?? "").trim()
+  if (!text) return fallback
+  return text.length > 34 ? `${text.slice(0, 18)}...${text.slice(-10)}` : text
+}
+
+function reputationText(reputation) {
+  if (!reputation) return "No feed hit"
+  if (reputation.verdict === "trusted") return `Trusted: ${reputation.source ?? "registry"}`
+  if (reputation.verdict === "known_bad") return `Known bad: ${reputation.source ?? "feed"}`
+  if (reputation.verdict === "suspicious") return `Suspicious: ${reputation.source ?? "feed"}`
+  return `Clean: ${reputation.source ?? "local read"}`
+}
+
+function intentText(metadata) {
+  const intent = metadata?.decodedIntent
+  if (!intent) return "URL / domain read"
+  const category = intent.category && intent.category !== "unknown" ? intent.category.replaceAll("_", " ") : "unknown intent"
+  return intent.method ? `${category} / ${intent.method}` : category
+}
+
+function contractText(metadata) {
+  const contract = metadata?.contractIntelligence
+  if (!contract) return metadata?.chain === "evm" ? "Not available" : "Not needed"
+  if (!contract.checked) return "Not checked"
+  if (!contract.isContract) return "EOA target"
+  if (contract.proxy) return contract.verified ? "Verified proxy" : "Unverified proxy"
+  return contract.verified ? "Verified contract" : "Unverified contract"
+}
+
+function renderDecision(result) {
+  const metadata = result.metadata ?? {}
+  const decision = metadata.decision ?? {}
+  elements.confidencePill.textContent = result.confidence ?? "LOW"
+  elements.decisionMessage.textContent = decision.userMessage ?? result.explanation ?? friendlySummary(result)
+  elements.sourceIntel.textContent = metadata.domain ? shortText(metadata.domain) : hostFromUrl(state.tab?.url)
+  elements.feedIntel.textContent = reputationText(metadata.reputation)
+  elements.intentIntel.textContent = intentText(metadata)
+  elements.contractIntel.textContent = contractText(metadata)
+}
+
+function linkSummary(counts) {
+  if (!counts?.total) return "No links were available to scan on this page."
+  const risky = Number(counts.caution ?? 0) + Number(counts.high ?? 0) + Number(counts.critical ?? 0)
+  if (!risky) return `${counts.total} links scanned. No risky links were marked on the page.`
+  const parts = []
+  if (counts.critical) parts.push(`${counts.critical} critical`)
+  if (counts.high) parts.push(`${counts.high} high risk`)
+  if (counts.caution) parts.push(`${counts.caution} caution`)
+  return `${counts.total} links scanned. ScamGuard marked ${parts.join(", ")} link${risky === 1 ? "" : "s"} on the page.`
+}
+
 function setBusy(message) {
   elements.riskBadge.className = "badge ready"
   elements.riskBadge.textContent = "Checking"
   elements.summaryLabel.textContent = message
   elements.scoreWhisper.textContent = "Reading links, intent, reputation, and known risk patterns."
   elements.scoreMeter.className = "score-meter"
-  elements.scoreMeter.style.setProperty("--score-angle", "0deg")
+  elements.scoreMeter.style.setProperty("--score-fill", "0%")
   elements.scoreBar.style.width = "0%"
+  elements.confidencePill.textContent = "Checking"
+  elements.decisionMessage.textContent = "ScamGuard is comparing source reputation, wallet intent, and known threat patterns."
+  elements.sourceIntel.textContent = "Reading"
+  elements.feedIntel.textContent = "Reading"
+  elements.intentIntel.textContent = "Reading"
+  elements.contractIntel.textContent = "Reading"
 }
 
 function renderResult(result) {
@@ -97,8 +165,9 @@ function renderResult(result) {
   elements.summaryLabel.textContent = friendlySummary(result)
   elements.scoreWhisper.textContent = scoreWhisper(securityScore, result.riskLevel)
   elements.scoreMeter.className = `score-meter ${riskClass(result.riskLevel)}`
-  elements.scoreMeter.style.setProperty("--score-angle", `${securityScore * 3.6}deg`)
+  elements.scoreMeter.style.setProperty("--score-fill", `${securityScore}%`)
   elements.scoreBar.style.width = `${securityScore}%`
+  renderDecision(result)
 
   const signals = result.signals ?? []
   if (!signals.length) {
@@ -111,7 +180,7 @@ function renderResult(result) {
   elements.signalsList.innerHTML = signals
     .slice(0, 5)
     .map((signal) => `
-      <div class="signal">
+      <div class="signal ${escapeHtml(signal.severity ?? "low")}">
         <strong>${escapeHtml(signal.title)}</strong>
         <span>${escapeHtml(signal.detail)}</span>
       </div>
@@ -121,6 +190,8 @@ function renderResult(result) {
 
 function renderSettings(settings) {
   state.settings = settings
+  elements.protectionLevel.value = settings.protectionLevel ?? "balanced"
+  elements.enableNotifications.checked = settings.enableNotifications !== false
   elements.apiBaseUrl.value = settings.apiBaseUrl ?? "https://triproofprotocol.com"
   elements.warnOnCaution.checked = Boolean(settings.warnOnCaution)
   elements.blockCriticalSites.checked = Boolean(settings.blockCriticalSites)
@@ -162,6 +233,8 @@ async function saveSettings() {
     type: "SAVE_SETTINGS",
     settings: {
       apiBaseUrl: elements.apiBaseUrl.value,
+      protectionLevel: elements.protectionLevel.value,
+      enableNotifications: elements.enableNotifications.checked,
       warnOnCaution: elements.warnOnCaution.checked,
       blockCriticalSites: elements.blockCriticalSites.checked,
       trustedDomainsText: elements.trustedDomains.value,
@@ -195,9 +268,18 @@ elements.rescanButton.addEventListener("click", () => {
 })
 
 elements.scanLinksButton.addEventListener("click", () => {
-  void messageActiveTab({ type: "CONTENT_SCAN_LINKS" }).catch(() => {
-    elements.summaryLabel.textContent = "Reload this page, then try the link scan again."
-  })
+  elements.linkScanPill.textContent = "Scanning"
+  elements.linkScanSummary.textContent = "Checking visible page links and preparing inline markers."
+  void messageActiveTab({ type: "CONTENT_SCAN_LINKS" })
+    .then((response) => {
+      if (!response?.ok) throw new Error(response?.error ?? "Link scan failed")
+      elements.linkScanPill.textContent = "Marked"
+      elements.linkScanSummary.textContent = linkSummary(response.counts)
+    })
+    .catch((error) => {
+      elements.linkScanPill.textContent = "Retry"
+      elements.linkScanSummary.textContent = error instanceof Error ? error.message : "Reload this page, then try the link scan again."
+    })
 })
 
 elements.openReportButton.addEventListener("click", () => {

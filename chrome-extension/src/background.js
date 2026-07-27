@@ -1,5 +1,7 @@
 const DEFAULT_SETTINGS = {
   apiBaseUrl: "https://triproofprotocol.com",
+  protectionLevel: "balanced",
+  enableNotifications: true,
   warnOnCaution: true,
   blockCriticalSites: true,
   trustedDomains: [],
@@ -55,6 +57,10 @@ async function saveSettings(nextSettings) {
     ...DEFAULT_SETTINGS,
     ...nextSettings,
     apiBaseUrl: normalizeApiBaseUrl(nextSettings.apiBaseUrl),
+    protectionLevel: ["balanced", "strict", "paranoid"].includes(nextSettings.protectionLevel) ? nextSettings.protectionLevel : DEFAULT_SETTINGS.protectionLevel,
+    enableNotifications: Boolean(nextSettings.enableNotifications),
+    warnOnCaution: Boolean(nextSettings.warnOnCaution),
+    blockCriticalSites: Boolean(nextSettings.blockCriticalSites),
     trustedDomains: String(nextSettings.trustedDomainsText ?? "")
       .split(/\s|,|\n/)
       .map((item) => item.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, ""))
@@ -76,6 +82,19 @@ async function requestJson(path, payload) {
   const body = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(body.error ?? `ScamGuard API failed: ${response.status}`)
   return body
+}
+
+async function notifyRisk(result, context) {
+  const settings = await getSettings()
+  if (!settings.enableNotifications || !chrome.notifications) return
+  if (!["HIGH_RISK", "CRITICAL"].includes(result?.riskLevel)) return
+  await chrome.notifications.create(`scamguard-${Date.now()}`, {
+    type: "basic",
+    iconUrl: chrome.runtime.getURL("assets/icon128.png"),
+    title: result.riskLevel === "CRITICAL" ? "ScamGuard blocked a critical risk" : "ScamGuard found a high-risk signal",
+    message: `${context}: ${result.summary ?? "Review before signing or clicking."}`.slice(0, 180),
+    priority: result.riskLevel === "CRITICAL" ? 2 : 1,
+  })
 }
 
 async function scanUrl(value, { force = false } = {}) {
@@ -111,11 +130,14 @@ async function scanUrl(value, { force = false } = {}) {
 
   const result = await requestJson("/api/scamguard/scan-url", { value })
   setCached("url", value, result)
+  await notifyRisk(result, hostFromUrl(value) || "Current site")
   return result
 }
 
 async function scanTransaction(value, walletAddress, chain, sourceUrl) {
-  return requestJson("/api/scamguard/scan-transaction", { value, walletAddress, chain, sourceUrl })
+  const result = await requestJson("/api/scamguard/scan-transaction", { value, walletAddress, chain, sourceUrl })
+  await notifyRisk(result, "Wallet request")
+  return result
 }
 
 async function scanLinks(links) {
@@ -123,7 +145,7 @@ async function scanLinks(links) {
   const results = []
   for (const link of uniqueLinks) {
     try {
-      results.push(await scanUrl(link))
+      results.push({ value: link, ...(await scanUrl(link)) })
     } catch (error) {
       results.push({
         type: "url",
