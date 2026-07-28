@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import { parseWalletCsv } from "@/lib/csv/parser"
 import { decisionLegendForApi } from "@/lib/decision-labels"
+import { getCurrentUser } from "@/lib/auth/session"
 import { analyzeWallets } from "@/lib/risk-engine"
 import { enrichWallets } from "@/lib/onchain/enrich-wallet"
 import { getOnChainConfig, isEnrichableChain } from "@/lib/onchain/enrichment-types"
@@ -88,6 +89,9 @@ function engineOnlyMeta(wallets: ParsedWallet[], warnings: string[]): Enrichment
 }
 
 export async function POST(request: Request) {
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: "Login is required to run a Sybil audit." }, { status: 401 })
+
   let body: MiniAuditRequest
 
   try {

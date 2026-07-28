@@ -26,9 +26,10 @@ import { Input } from "@/components/ui/input"
 
 type AuthFormProps = {
   mode: "login" | "register"
+  redirectTo: string
 }
 
-export function AuthForm({ mode }: AuthFormProps) {
+export function AuthForm({ mode, redirectTo }: AuthFormProps) {
   const router = useRouter()
   const [error, setError] = useState("")
   const [pending, setPending] = useState(false)
@@ -46,21 +47,26 @@ export function AuthForm({ mode }: AuthFormProps) {
       password: String(form.get("password") ?? ""),
     }
 
-    const response = await fetch(`/api/auth/${mode}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(isRegister ? payload : { email: payload.email, password: payload.password }),
-    })
+    try {
+      const response = await fetch(`/api/auth/${mode}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(isRegister ? payload : { email: payload.email, password: payload.password }),
+      })
 
-    if (!response.ok) {
-      const body = (await response.json().catch(() => null)) as { error?: string } | null
-      setError(body?.error ?? "Authentication failed")
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null
+        setError(body?.error ?? "Authentication failed")
+        return
+      }
+
+      router.replace(redirectTo)
+      router.refresh()
+    } catch {
+      setError("Could not reach Tri-Proof Guard. Check your connection and try again.")
+    } finally {
       setPending(false)
-      return
     }
-
-    router.push("/dashboard")
-    router.refresh()
   }
 
   return (
@@ -128,7 +134,7 @@ export function AuthForm({ mode }: AuthFormProps) {
             <div className="flex items-center justify-between text-sm text-muted-foreground">
               <span>{isRegister ? "Already have an account?" : "Need an account?"}</span>
               <Link
-                href={isRegister ? "/login" : "/register"}
+                href={`${isRegister ? "/login" : "/register"}?next=${encodeURIComponent(redirectTo)}`}
                 className={buttonVariants({ variant: "link" })}
               >
                 {isRegister ? "Login" : "Register"}

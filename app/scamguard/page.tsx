@@ -1,4 +1,5 @@
 import { ScamGuardPage } from "@/components/scamguard/scamguard-page"
+import { requirePageUser } from "@/lib/auth/page"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
@@ -9,6 +10,8 @@ export const metadata = {
     "Scan suspicious Web3 links, wallets, token contracts, and transactions before users sign.",
 }
 
-export default function Page() {
+export default async function Page() {
+  await requirePageUser("/scamguard")
+
   return <ScamGuardPage />
 }

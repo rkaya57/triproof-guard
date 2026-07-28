@@ -183,7 +183,7 @@ const outcomes = [
 ]
 
 const apiTouchpoints = [
-  ["POST /api/audit/mini", "Public engine preview for wallet lists and fast demo flows."],
+  ["POST /api/audit/mini", "Authenticated Sybil preview for wallet lists and fast campaign triage."],
   ["POST /api/scamguard/scan-url", "Scan a claim, mint, reward, presale, or suspicious Web3 URL."],
   ["POST /api/scamguard/scan-token", "Check token mint or contract context before interaction."],
   ["POST /api/scamguard/scan-transaction", "Decode Solana instruction text, serialized payloads, or EVM wallet request JSON."],
@@ -195,7 +195,7 @@ const apiTouchpoints = [
 ]
 
 const operatingModes = [
-  ["Mini Audit", "Fast public preview", "Best for first look, sales demos, and quick campaign triage."],
+  ["Mini Audit", "Account-backed preview", "Best for first look, sales demos, and quick campaign triage."],
   ["Dashboard Analysis", "Saved project workflow", "Best for full wallet-list review, team decisions, exports, and repeat operations."],
   ["ScamGuard Scanner", "Pre-click and pre-sign safety", "Best for suspicious URLs, mints, wallets, and transaction payloads."],
   ["Chrome Extension", "Live browser protection", "Best for users who want warnings directly on Web3 app pages."],

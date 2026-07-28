@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { FormEvent, useMemo, useState } from "react"
 import {
   AlertTriangle,
@@ -106,7 +107,7 @@ function buildMiniAuditBrief(report: MiniAuditResponse | null, walletInput: stri
     "First-pass engine findings:",
     findings || "- No wallet rows supplied.",
     "",
-    "Note: This public mini audit runs the Tri-Proof Guard decision engine immediately. Full Guard analysis adds account history persistence, queue processing, review workflow, exports and clean-list proof.",
+      "Note: This account-backed mini audit runs the Tri-Proof Guard decision engine immediately. Full Guard analysis adds account history persistence, queue processing, review workflow, exports and clean-list proof.",
   ].join("\n")
 }
 
@@ -117,6 +118,7 @@ function walletSortValue(wallet: WalletRiskResult) {
 }
 
 export function MiniRiskAudit() {
+  const router = useRouter()
   const [walletInput, setWalletInput] = useState(sampleWallets)
   const [chain, setChain] = useState<Chain>("Ethereum")
   const [riskPolicy, setRiskPolicy] = useState<RiskPolicy>("strict")
@@ -149,6 +151,10 @@ export function MiniRiskAudit() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ walletInput, chain, riskPolicy, campaignType: "Airdrop" }),
       })
+      if (response.status === 401) {
+        router.replace("/login?next=%2Faudit")
+        return
+      }
       const body = (await response.json().catch(() => ({}))) as Partial<MiniAuditResponse> & { error?: string }
       if (!response.ok || !body.result) {
         throw new Error(body.error ?? "Mini audit could not run.")
@@ -176,7 +182,7 @@ export function MiniRiskAudit() {
       <section className="glass-panel premium-card animated-border rounded-3xl p-5">
         <div className="mb-5 flex flex-wrap items-center gap-2">
           <Badge variant="secondary" className="border-primary/30 bg-primary/10 text-cyan-100">
-            Free Guard engine trial
+            Member Guard engine trial
           </Badge>
           <Badge variant="outline" className="border-green-400/30 bg-green-400/10 text-green-200">
             Real decision engine
@@ -186,7 +192,7 @@ export function MiniRiskAudit() {
           Paste campaign wallets and run a real Tri-Proof engine preview.
         </h1>
         <p className="mt-4 text-sm leading-6 text-muted-foreground">
-          This public mini audit submits the sample to Tri-Proof Guard&apos;s server-side decision engine with a strict first-pass policy. If an on-chain provider is configured, the preview enriches the sample before scoring; otherwise it clearly falls back to engine-only scoring.
+          This account-backed mini audit submits the sample to Tri-Proof Guard&apos;s server-side decision engine with a strict first-pass policy. If an on-chain provider is configured, the preview enriches the sample before scoring; otherwise it clearly falls back to engine-only scoring.
         </p>
 
         <form onSubmit={runMiniAudit} className="mt-6 grid gap-4">

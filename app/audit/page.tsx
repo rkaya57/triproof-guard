@@ -3,6 +3,7 @@ import Link from "next/link"
 import { ArrowLeft, BookOpen, ShieldCheck } from "lucide-react"
 
 import { MiniRiskAudit } from "@/components/audit/mini-risk-audit"
+import { requirePageUser } from "@/lib/auth/page"
 import { buttonVariants } from "@/components/ui/button"
 
 export const metadata = {
@@ -11,7 +12,9 @@ export const metadata = {
     "Paste a Web3 campaign wallet list and get a browser-only mini risk audit before running full Tri-Proof Guard analysis.",
 }
 
-export default function AuditPage() {
+export default async function AuditPage() {
+  await requirePageUser("/audit")
+
   return (
     <main className="premium-page min-h-screen bg-background text-foreground">
       <header className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
