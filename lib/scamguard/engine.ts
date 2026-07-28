@@ -1452,10 +1452,15 @@ function looksBase64(value: string) {
 }
 
 async function maybeSimulateTransaction(value: string): Promise<SimulationMetadata> {
-  if (!looksBase64(value)) return { attempted: false, ok: false }
+  const parsed = safeJson(value)
+  const serializedTransaction = parsed && typeof parsed === "object"
+    ? (parsed as Record<string, unknown>).serializedTransaction
+    : undefined
+  const encodedTransaction = typeof serializedTransaction === "string" ? serializedTransaction : value
+  if (!looksBase64(encodedTransaction)) return { attempted: false, ok: false }
   try {
     const result = await solanaRpc<SimulateResult>("simulateTransaction", [
-      value.trim(),
+      encodedTransaction.trim(),
       { encoding: "base64", commitment: "processed", sigVerify: false, replaceRecentBlockhash: true },
     ])
     return {
@@ -1608,7 +1613,11 @@ function isUnlimitedEvmApproval(decodedIntent: NonNullable<ScamGuardScanResult["
 function decodeIntent(value: string, chain: ScamGuardChain): NonNullable<ScamGuardScanResult["metadata"]["decodedIntent"]> {
   const text = value.toLowerCase()
   const parsed = safeJson(value)
-  const method = findStringField(parsed, ["method", "functionName", "name"]) ?? (/^[a-z_]+/i.exec(value.trim())?.[0])
+  const leadingMethod = /^[a-z][a-z0-9_]{0,64}$/i.exec(value.trim())?.[0]
+  const safeLeadingMethod = leadingMethod && /^(sign|transfer|approve|delegate|setauthority|closeaccount|mintto|wallet_|eth_|personal_)/i.test(leadingMethod)
+    ? leadingMethod
+    : undefined
+  const method = findStringField(parsed, ["method", "functionName", "name"]) ?? safeLeadingMethod
   const data = findStringField(parsed, ["data", "input"]) ?? (/0x[a-fA-F0-9]{8,}/.exec(value)?.[0])
   const warnings: string[] = []
 

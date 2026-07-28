@@ -88,7 +88,8 @@
     const signals = Array.isArray(result?.signals) ? result.signals : []
     const decision = metadata.decision ?? {}
     const host = metadata.domain ?? hostFromUrl(sourceUrl) ?? "Current site"
-    const sourceLabel = reputation.verdict === "trusted"
+    const verifiedSource = reputation.verdict === "trusted" || signals.some((signal) => /VERIFIED_(TRANSACTION_)?SOURCE|VERIFIED_PROJECT_DOMAIN/.test(signal.code ?? ""))
+    const sourceLabel = verifiedSource
       ? "Verified source context"
       : reputation.verdict === "known_bad"
         ? "Threat feed match"
@@ -97,7 +98,7 @@
           : "Source not yet verified"
     const intentLabel = intent.category && intent.category !== "unknown"
       ? intent.category.replaceAll("_", " ")
-      : "site and URL read"
+      : result?.type === "transaction" ? "wallet request (not decoded)" : "site and URL read"
     const evidenceLabel = signals.length
       ? `${signals.length} signal${signals.length === 1 ? "" : "s"} considered`
       : "No material signal found"

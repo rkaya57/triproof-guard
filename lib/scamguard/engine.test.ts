@@ -262,6 +262,27 @@ test("ScamGuard classifies Solana message signatures for plain-language review",
   assert.equal(result.metadata.decodedIntent?.method, "signMessage")
 })
 
+test("ScamGuard decodes extension-provided Solana transaction summaries", async () => {
+  const result = await scanScamGuard({
+    type: "transaction",
+    chain: "solana",
+    value: JSON.stringify({
+      kind: "solana_wallet_request",
+      method: "signTransaction",
+      instructions: [{
+        programId: "11111111111111111111111111111111",
+        programLabel: "System Program",
+        type: "transfer",
+        keyCount: 2,
+      }],
+      serializedTransaction: "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    }),
+  })
+
+  assert.equal(result.metadata.decodedIntent?.category, "transfer")
+  assert.equal(result.metadata.decodedIntent?.method, "transfer")
+})
+
 test("ScamGuard escalates unlimited EVM approvals", async () => {
   const spender = "0x2222222222222222222222222222222222222222"
   const result = await scanScamGuard({

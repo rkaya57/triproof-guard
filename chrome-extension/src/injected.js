@@ -15,6 +15,13 @@
     "wallet_addEthereumChain",
     "wallet_sendCalls",
   ])
+  const SOLANA_PROGRAM_LABELS = {
+    "11111111111111111111111111111111": "System Program",
+    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA": "SPL Token Program",
+    "TokenzQdBNbLqP5VEhdkAS6EPF1SMH1dbKqP6Xk6mN": "Token-2022 Program",
+    "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL": "Associated Token Program",
+    "ComputeBudget111111111111111111111111111111": "Compute Budget Program",
+  }
 
   function bytesToBase64(bytes) {
     let binary = ""
@@ -62,6 +69,71 @@
     }
   }
 
+  function addressText(value) {
+    try {
+      return value?.toBase58?.() ?? value?.toString?.() ?? (typeof value === "string" ? value : "")
+    } catch {
+      return ""
+    }
+  }
+
+  function instructionBytes(value) {
+    if (value instanceof Uint8Array) return value
+    if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+    if (Array.isArray(value)) return new Uint8Array(value)
+    return new Uint8Array()
+  }
+
+  function knownSolanaInstruction(programId, data) {
+    const opcode = data[0]
+    if (programId === "11111111111111111111111111111111" && data.length >= 4) {
+      const systemInstruction = data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24)
+      if (systemInstruction === 2) return "transfer"
+    }
+    if (programId === "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" || programId === "TokenzQdBNbLqP5VEhdkAS6EPF1SMH1dbKqP6Xk6mN") {
+      return ({
+        3: "transfer",
+        4: "approve",
+        6: "setAuthority",
+        7: "mintTo",
+        9: "closeAccount",
+        12: "transferChecked",
+        13: "approveChecked",
+        14: "mintToChecked",
+      })[opcode]
+    }
+    return undefined
+  }
+
+  function solanaInstructionSummary(instruction, staticAccountKeys) {
+    const programId = addressText(instruction?.programId) || addressText(staticAccountKeys?.[instruction?.programIdIndex])
+    const data = instructionBytes(instruction?.data)
+    const type = knownSolanaInstruction(programId, data)
+    return {
+      programId,
+      programLabel: SOLANA_PROGRAM_LABELS[programId] ?? "Unknown Solana program",
+      ...(type ? { type } : {}),
+      keyCount: Array.isArray(instruction?.keys) ? instruction.keys.length : Array.isArray(instruction?.accountKeyIndexes) ? instruction.accountKeyIndexes.length : 0,
+      dataLength: data.length,
+    }
+  }
+
+  function solanaRequestSummary(method, transaction) {
+    const transactions = Array.isArray(transaction) ? transaction : [transaction]
+    const instructions = transactions.flatMap((item) => {
+      const source = Array.isArray(item?.instructions) ? item.instructions : item?.message?.compiledInstructions
+      const staticAccountKeys = item?.message?.staticAccountKeys ?? item?.message?.accountKeys
+      return Array.isArray(source) ? source.slice(0, 16).map((instruction) => solanaInstructionSummary(instruction, staticAccountKeys)) : []
+    })
+    return {
+      kind: "solana_wallet_request",
+      method,
+      transactionCount: transactions.length,
+      instructionCount: instructions.length,
+      instructions,
+    }
+  }
+
   function publicKey(provider, chain) {
     try {
       if (chain === "evm") {
@@ -76,8 +148,9 @@
 
   function serializedScanValue(method, transaction, chain) {
     const serialized = serializeTransactionLike(transaction)
-    if (chain === "solana" && /signmessage/i.test(method)) {
-      return JSON.stringify({ method, message: serialized })
+    if (chain === "solana") {
+      if (/signmessage/i.test(method)) return JSON.stringify({ method, message: serialized })
+      return JSON.stringify({ ...solanaRequestSummary(method, transaction), serializedTransaction: serialized })
     }
     return serialized
   }

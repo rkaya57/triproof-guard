@@ -279,7 +279,9 @@ function transactionFacts(result) {
   const facts = []
   if (metadata.chain && metadata.chain !== "unknown") facts.push({ label: "Chain", value: metadata.chain.toUpperCase() })
   if (intent?.category && intent.category !== "unknown") facts.push({ label: "Intent", value: intent.category.replaceAll("_", " ") })
-  if (intent?.method) facts.push({ label: "Method", value: intent.method })
+  if (intent?.method && intent.method.length <= 64 && !/^[A-Za-z0-9+/=]{32,}$/.test(intent.method)) {
+    facts.push({ label: "Method", value: intent.method })
+  }
   if (intent?.spender) facts.push({ label: "Spender", value: shortAddress(intent.spender) })
   if (intent?.recipient) facts.push({ label: "Recipient", value: shortAddress(intent.recipient) })
   if (intent?.amount) facts.push({ label: "Amount", value: String(intent.amount).length > 24 ? "Unlimited / very high" : String(intent.amount) })

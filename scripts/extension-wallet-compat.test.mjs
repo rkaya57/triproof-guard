@@ -46,6 +46,7 @@ function walletLab({ decision = { allow: true }, solana, ethereum, extraWindow =
   const context = vm.createContext({
     window: pageWindow,
     crypto: { randomUUID },
+    ArrayBuffer,
     Uint8Array,
     JSON,
     String,
@@ -112,6 +113,27 @@ test("a rejected ScamGuard decision prevents the Solana wallet request", async (
 
   assert.equal(calls.length, 0)
   assert.equal(lab.pageMessages.length, 1)
+})
+
+test("Solana transaction summaries retain an actionable instruction label instead of raw payload text", async () => {
+  const { provider } = solanaProvider()
+  const lab = walletLab({ solana: provider })
+  const transaction = {
+    instructions: [{
+      programId: { toBase58: () => "11111111111111111111111111111111" },
+      keys: [{}, {}],
+      data: new Uint8Array([2, 0, 0, 0]),
+    }],
+    serialize: () => new Uint8Array(96),
+  }
+
+  await provider.signTransaction(transaction)
+  const summary = JSON.parse(lab.pageMessages[0].value)
+
+  assert.equal(summary.method, "signTransaction")
+  assert.equal(summary.instructions[0].programLabel, "System Program")
+  assert.equal(summary.instructions[0].type, "transfer")
+  assert.ok(summary.serializedTransaction.length > 80)
 })
 
 test("discovers MetaMask and Rabby style providers without touching safe EVM reads", async () => {
