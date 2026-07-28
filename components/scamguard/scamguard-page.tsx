@@ -21,6 +21,7 @@ import {
   Puzzle,
   Radar,
   SearchCheck,
+  Send,
   Settings2,
   ShieldAlert,
   ShieldCheck,
@@ -38,6 +39,7 @@ import {
 } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import { scamGuardTelegramBotUrl } from "@/lib/telegram/links"
 
 type ScanMode = "url" | "wallet" | "token" | "transaction"
 type ScanChain = "solana" | "evm"
@@ -826,12 +828,12 @@ export function ScamGuardPage() {
       <section id="extension" className="mx-auto max-w-7xl px-5 py-20 sm:px-8">
         <div className="grid gap-8 lg:grid-cols-[0.86fr_1.14fr] lg:items-start">
           <div>
-            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-primary">Browser layer</p>
+            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-primary">Browser and chat layer</p>
             <h2 className="mt-3 text-3xl font-semibold leading-tight text-white sm:text-5xl">
               Protection where risky requests actually happen.
             </h2>
             <p className="mt-4 leading-7 text-muted-foreground">
-              The Chrome extension carries the same server-side engine into live browsing sessions. It checks the current site, marks suspicious links on the page, and pauses risky wallet requests before the user signs.
+              The Chrome extension protects live browsing sessions, while the Telegram bot brings the same explained scans into chat. Both use the server-side ScamGuard engine and never request secret wallet material.
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <a href="/downloads/scamguard-chrome-extension.zip" className={`${buttonVariants()} glow-primary hover-lift`} download>
@@ -840,6 +842,9 @@ export function ScamGuardPage() {
               <Link href="/docs/api" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>
                 API docs <ArrowRight data-icon="inline-end" />
               </Link>
+              <a href={scamGuardTelegramBotUrl} target="_blank" rel="noreferrer" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>
+                <Send data-icon="inline-start" /> Open Telegram bot
+              </a>
             </div>
             <div className="mt-6 rounded-md border border-white/10 bg-slate-950/35 p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-primary">Protection profiles</p>

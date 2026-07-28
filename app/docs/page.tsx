@@ -25,6 +25,7 @@ import {
   PlugZap,
   Radar,
   SearchCheck,
+  Send,
   ServerCog,
   ShieldAlert,
   ShieldQuestion,
@@ -42,6 +43,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { scamGuardTelegramBotUrl } from "@/lib/telegram/links"
 
 export const metadata = {
   title: "How Tri-Proof Guard Works | Web3 Wallet Risk Analysis",
@@ -154,7 +156,7 @@ const scamguardFlow = [
   [Dna, "Compare Scam DNA", "DOM, scripts, copy, styles, behavior, redirects, and wallet targets are compared with prior cross-domain campaign evidence."],
   [ClipboardCheck, "Decode intent", "The engine explains what the request appears to do before the user signs it."],
   [Gauge, "Score and explain", "The result includes risk level, confidence, security score, primary reason, and recommended actions."],
-  [PlugZap, "Protect where users act", "The same engine powers the public scanner, Chrome extension, and B2B API endpoint."],
+  [PlugZap, "Protect where users act", "The same engine powers the public scanner, Chrome extension, Telegram Bot, and B2B API endpoint."],
 ]
 
 const outcomes = [
@@ -454,6 +456,9 @@ export default function DocsPage() {
                 <a href="/downloads/scamguard-chrome-extension.zip" className={`${buttonVariants({ variant: "outline" })} hover-lift`} download>
                   Download extension
                 </a>
+                <a href={scamGuardTelegramBotUrl} target="_blank" rel="noreferrer" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>
+                  <Send data-icon="inline-start" /> Open Telegram Bot
+                </a>
               </div>
             </div>
             <div className="grid gap-3">
@@ -599,6 +604,7 @@ export default function DocsPage() {
           <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
             <Link href="/audit" className={`${buttonVariants({ size: "lg" })} glow-primary hover-lift`}>Start mini audit</Link>
             <Link href="/scamguard" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>Open ScamGuard</Link>
+            <a href={scamGuardTelegramBotUrl} target="_blank" rel="noreferrer" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}><Send data-icon="inline-start" /> Telegram Bot</a>
             <Link href="/contact" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>Contact the team</Link>
           </div>
         </div>

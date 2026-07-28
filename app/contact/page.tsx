@@ -11,6 +11,7 @@ import {
   Mail,
   MessageSquare,
   ShieldCheck,
+  Send,
   Sparkles,
 } from "lucide-react"
 
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { scamGuardTelegramBotHandle, scamGuardTelegramBotUrl } from "@/lib/telegram/links"
 
 export const metadata = {
   title: "Contact Tri-Proof Protocol | Support, Partnerships, and Product Questions",
@@ -47,6 +49,7 @@ const contactCards = [
     email: "info@triproofprotocol.com",
     cta: "Email support",
     href: "mailto:info@triproofprotocol.com?subject=Tri-Proof%20Guard%20Question",
+    external: false,
   },
   {
     icon: Handshake,
@@ -55,6 +58,16 @@ const contactCards = [
     email: "sdemirbozan@triproofprotocol.com",
     cta: "Discuss partnership",
     href: "mailto:sdemirbozan@triproofprotocol.com?subject=Tri-Proof%20Partnership%20Inquiry",
+    external: false,
+  },
+  {
+    icon: Send,
+    title: "ScamGuard Telegram Bot",
+    text: "Paste a suspicious Web3 link, wallet, mint, or transaction request for an explained ScamGuard review in chat.",
+    email: scamGuardTelegramBotHandle,
+    cta: "Open ScamGuard Bot",
+    href: scamGuardTelegramBotUrl,
+    external: true,
   },
 ]
 
@@ -133,7 +146,7 @@ export default function ContactPage() {
                     </CardHeader>
                     <CardContent>
                       <p className="mb-4 break-all font-mono text-sm text-cyan-300">{card.email}</p>
-                      <a href={card.href} className={`${buttonVariants({ variant: "outline" })} text-white`}>{card.cta}</a>
+                      <a href={card.href} target={card.external ? "_blank" : undefined} rel={card.external ? "noreferrer" : undefined} className={`${buttonVariants({ variant: "outline" })} text-white`}>{card.cta}</a>
                     </CardContent>
                   </Card>
                 )

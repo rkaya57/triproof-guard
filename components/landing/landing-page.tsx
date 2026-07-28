@@ -21,6 +21,7 @@ import {
   Puzzle,
   Radar,
   Rocket,
+  Send,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
@@ -38,6 +39,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { scamGuardTelegramBotUrl } from "@/lib/telegram/links"
 
 const navLinks = [
   ["Product", "#product"],
@@ -51,7 +53,7 @@ const navLinks = [
 const heroStats = [
   ["Live product", "scanner, API, extension"],
   ["Solana-first", "campaign + pre-sign safety"],
-  ["23 tests", "risk engine coverage"],
+  ["68 checks", "automated product coverage"],
 ]
 
 const consoleStats = [
@@ -97,6 +99,7 @@ const productLayers = [
     text: "Upload campaign wallets, detect low-quality participants, review suspicious clusters, and export clean reward lists.",
     href: "/audit",
     action: "Run mini audit",
+    external: false,
   },
   {
     icon: ShieldAlert,
@@ -104,6 +107,7 @@ const productLayers = [
     text: "Scan Solana URLs, wallets, token mints, and transaction intent before users touch risky claim or mint flows.",
     href: "/scamguard",
     action: "Open scanner",
+    external: false,
   },
   {
     icon: Puzzle,
@@ -111,6 +115,15 @@ const productLayers = [
     text: "Add page banners, link scanning, and pre-sign wallet warnings directly inside the browser session.",
     href: "/downloads/scamguard-chrome-extension.zip",
     action: "Download extension",
+    external: false,
+  },
+  {
+    icon: Send,
+    title: "Telegram ScamGuard Bot",
+    text: "Paste suspicious links, wallets, mints, or transaction requests into Telegram for a fast, explained ScamGuard review.",
+    href: scamGuardTelegramBotUrl,
+    action: "Open bot",
+    external: true,
   },
   {
     icon: Code2,
@@ -118,6 +131,7 @@ const productLayers = [
     text: "Embed authenticated ScamGuard and Tri-Proof decisions into wallets, launchpads, quests, and internal review tools.",
     href: "/docs/api",
     action: "Read API docs",
+    external: false,
   },
 ]
 
@@ -325,7 +339,7 @@ export function LandingPage() {
             The product is built around the points where Web3 teams lose value: fake campaign wallets, unsafe claim links, risky token mints, and wallet popups users do not fully understand.
           </p>
         </div>
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
           {productLayers.map((layer) => {
             const Icon = layer.icon
             return (
@@ -341,6 +355,10 @@ export function LandingPage() {
                   {layer.href.startsWith("/downloads/") ? (
                     <a href={layer.href} className={`${buttonVariants({ variant: "outline" })} hover-lift w-full`} download>
                       <Download data-icon="inline-start" /> {layer.action}
+                    </a>
+                  ) : layer.external ? (
+                    <a href={layer.href} target="_blank" rel="noreferrer" className={`${buttonVariants({ variant: "outline" })} hover-lift w-full`}>
+                      {layer.action} <ArrowRight data-icon="inline-end" />
                     </a>
                   ) : (
                     <Link href={layer.href} className={`${buttonVariants({ variant: "outline" })} hover-lift w-full`}>
@@ -597,7 +615,7 @@ export function LandingPage() {
       <footer className="border-t border-border bg-muted/20">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-8 text-sm text-muted-foreground sm:px-8 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-2"><ShieldCheck className="text-primary" /><span>Tri-Proof Guard - Web3 wallet risk analysis for campaign teams.</span></div>
-          <div className="flex flex-wrap gap-4"><Link href="/docs" className="hover:text-primary">Docs</Link><Link href="/blog" className="hover:text-primary">Blog</Link><Link href="/contact" className="hover:text-primary">Contact</Link><Link href="/pricing" className="hover:text-primary">Pricing</Link><Link href="/demo/report" className="hover:text-primary">Demo</Link><Link href="/login" className="hover:text-primary">Login</Link></div>
+          <div className="flex flex-wrap gap-4"><Link href="/docs" className="hover:text-primary">Docs</Link><Link href="/blog" className="hover:text-primary">Blog</Link><a href={scamGuardTelegramBotUrl} target="_blank" rel="noreferrer" className="hover:text-primary">Telegram Bot</a><Link href="/contact" className="hover:text-primary">Contact</Link><Link href="/pricing" className="hover:text-primary">Pricing</Link><Link href="/demo/report" className="hover:text-primary">Demo</Link><Link href="/login" className="hover:text-primary">Login</Link></div>
         </div>
       </footer>
     </main>
