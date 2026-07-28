@@ -22,6 +22,7 @@
     "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL": "Associated Token Program",
     "ComputeBudget111111111111111111111111111111": "Compute Budget Program",
   }
+  const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 
   function bytesToBase64(bytes) {
     let binary = ""
@@ -81,7 +82,30 @@
     if (value instanceof Uint8Array) return value
     if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
     if (Array.isArray(value)) return new Uint8Array(value)
+    if (typeof value === "string" && /^[1-9A-HJ-NP-Za-km-z]+$/.test(value)) return base58Bytes(value)
     return new Uint8Array()
+  }
+
+  function base58Bytes(value) {
+    const bytes = []
+    for (const character of value) {
+      const alphabetIndex = BASE58_ALPHABET.indexOf(character)
+      if (alphabetIndex < 0) return new Uint8Array()
+      let carry = alphabetIndex
+      for (let index = 0; index < bytes.length; index += 1) {
+        const next = bytes[index] * 58 + carry
+        bytes[index] = next & 0xff
+        carry = next >> 8
+      }
+      while (carry > 0) {
+        bytes.push(carry & 0xff)
+        carry >>= 8
+      }
+    }
+    for (let index = 0; index < value.length && value[index] === "1"; index += 1) {
+      bytes.push(0)
+    }
+    return new Uint8Array(bytes.reverse())
   }
 
   function knownSolanaInstruction(programId, data) {

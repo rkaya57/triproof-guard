@@ -136,6 +136,28 @@ test("Solana transaction summaries retain an actionable instruction label instea
   assert.ok(summary.serializedTransaction.length > 80)
 })
 
+test("Solana compiled instructions decode Base58 program data when wallet adapters expose versioned messages", async () => {
+  const { provider } = solanaProvider()
+  const lab = walletLab({ solana: provider })
+  const transaction = {
+    message: {
+      staticAccountKeys: [{ toBase58: () => "11111111111111111111111111111111" }],
+      compiledInstructions: [{
+        programIdIndex: 0,
+        accountKeyIndexes: [1, 2],
+        data: "3xyZh",
+      }],
+    },
+    serialize: () => new Uint8Array(96),
+  }
+
+  await provider.signAndSendTransaction(transaction)
+  const summary = JSON.parse(lab.pageMessages[0].value)
+
+  assert.equal(summary.instructions[0].programLabel, "System Program")
+  assert.equal(summary.instructions[0].type, "transfer")
+})
+
 test("discovers MetaMask and Rabby style providers without touching safe EVM reads", async () => {
   const metaMask = evmProvider("metamask")
   const rabby = evmProvider("rabby")

@@ -282,6 +282,7 @@ function transactionFacts(result) {
   if (intent?.method && intent.method.length <= 64 && !/^[A-Za-z0-9+/=]{32,}$/.test(intent.method)) {
     facts.push({ label: "Method", value: intent.method })
   }
+  if (intent?.programs?.length) facts.push({ label: "Programs", value: intent.programs.slice(0, 2).join(", ") })
   if (intent?.spender) facts.push({ label: "Spender", value: shortAddress(intent.spender) })
   if (intent?.recipient) facts.push({ label: "Recipient", value: shortAddress(intent.recipient) })
   if (intent?.amount) facts.push({ label: "Amount", value: String(intent.amount).length > 24 ? "Unlimited / very high" : String(intent.amount) })

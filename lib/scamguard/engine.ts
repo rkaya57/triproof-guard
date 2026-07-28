@@ -65,6 +65,8 @@ export type ScamGuardScanResult = {
       spender?: string
       recipient?: string
       amount?: string
+      instructionCount?: number
+      programs?: string[]
       warnings: string[]
     }
     reputation?: {
@@ -1565,7 +1567,7 @@ function collectInstructionLikeObjects(value: unknown, out: Array<Record<string,
   return out
 }
 
-function decodeSolanaStructuredIntent(parsed: unknown, fallbackText: string) {
+function decodeSolanaStructuredIntent(parsed: unknown, fallbackText: string, fallbackMethod?: string) {
   const instructions = collectInstructionLikeObjects(parsed)
   const instructionText = [
     fallbackText,
@@ -1573,31 +1575,50 @@ function decodeSolanaStructuredIntent(parsed: unknown, fallbackText: string) {
       Object.entries(instruction).map(([key, value]) => `${key}:${typeof value === "string" ? value : JSON.stringify(value)}`)
     ),
   ].join(" ").toLowerCase()
-  const method =
+  const instructionMethod =
     instructions
       .map((instruction) => instruction.type ?? instruction.instruction ?? instruction.program)
       .find((value) => typeof value === "string") as string | undefined
+  const method = fallbackMethod ?? instructionMethod
+  const declaredInstructionCount =
+    parsed && typeof parsed === "object" && typeof (parsed as Record<string, unknown>).instructionCount === "number"
+      ? Math.max(0, Math.min(64, Math.floor((parsed as Record<string, unknown>).instructionCount as number)))
+      : undefined
+  const instructionCount = declaredInstructionCount ?? instructions.length
+  const programs = Array.from(new Set(
+    instructions
+      .map((instruction) => instruction.programLabel ?? instruction.programId)
+      .filter((value): value is string => typeof value === "string" && Boolean(value))
+  )).slice(0, 4)
+  const context = {
+    ...(instructionCount ? { instructionCount } : {}),
+    ...(programs.length ? { programs } : {}),
+  }
   const warnings: string[] = []
 
   if (/approvechecked|approve|delegate/.test(instructionText)) {
     warnings.push("Structured Solana instructions include delegate approval.")
-    return { method, category: "approval" as const, warnings }
+    return { method, category: "approval" as const, warnings, ...context }
   }
   if (/setauthority|set authority|authoritytype/.test(instructionText)) {
     warnings.push("Structured Solana instructions include an authority change.")
-    return { method, category: "authority" as const, warnings }
+    return { method, category: "authority" as const, warnings, ...context }
   }
   if (/closeaccount|close account/.test(instructionText)) {
     warnings.push("Structured Solana instructions include account close behavior.")
-    return { method, category: "account_close" as const, warnings }
+    return { method, category: "account_close" as const, warnings, ...context }
   }
   if (/mintto|mint to/.test(instructionText)) {
     warnings.push("Structured Solana instructions include mint behavior.")
-    return { method, category: "mint" as const, warnings }
+    return { method, category: "mint" as const, warnings, ...context }
   }
   if (/transferchecked|transfer/.test(instructionText)) {
     warnings.push("Structured Solana instructions include asset transfer behavior.")
-    return { method, category: "transfer" as const, warnings }
+    return { method, category: "transfer" as const, warnings, ...context }
+  }
+  if (instructionCount) {
+    warnings.push(`ScamGuard identified ${instructionCount} Solana instruction${instructionCount === 1 ? "" : "s"}, but no high-impact token or system action was decoded.`)
+    return { method, category: "unknown" as const, warnings, ...context }
   }
   return null
 }
@@ -1654,7 +1675,7 @@ function decodeIntent(value: string, chain: ScamGuardChain): NonNullable<ScamGua
     return { method: methodText, category: "unknown", warnings }
   }
 
-  const structuredSolanaIntent = decodeSolanaStructuredIntent(parsed, text)
+  const structuredSolanaIntent = decodeSolanaStructuredIntent(parsed, text, method)
   if (structuredSolanaIntent) return structuredSolanaIntent
 
   if (/approve|delegate|approvechecked/.test(text)) {

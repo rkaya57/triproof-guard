@@ -75,8 +75,10 @@
     }
     return {
       eyebrow: "Wallet request",
-      title: "Review an unclassified wallet request",
-      detail: "ScamGuard could not fully decode the requested action. Treat the wallet popup as the source of truth and compare every field with your intended action.",
+      title: intent.instructionCount ? `Review a Solana transaction with ${intent.instructionCount} instruction${intent.instructionCount === 1 ? "" : "s"}` : "Review an unclassified wallet request",
+      detail: intent.instructionCount
+        ? `ScamGuard identified ${intent.instructionCount} instruction${intent.instructionCount === 1 ? "" : "s"}${Array.isArray(intent.programs) && intent.programs.length ? ` involving ${intent.programs.join(", ")}` : ""}, but did not decode a high-impact transfer, approval, or authority change. Compare the wallet preview with your intended action.`
+        : "ScamGuard could not fully decode the requested action. Treat the wallet popup as the source of truth and compare every field with your intended action.",
       caution: "Do not approve until the destination, permissions, and amount are clear.",
     }
   }
@@ -98,7 +100,7 @@
           : "Source not yet verified"
     const intentLabel = intent.category && intent.category !== "unknown"
       ? intent.category.replaceAll("_", " ")
-      : result?.type === "transaction" ? "wallet request (not decoded)" : "site and URL read"
+      : result?.type === "transaction" ? intent.instructionCount ? `Solana transaction (${intent.instructionCount} instruction${intent.instructionCount === 1 ? "" : "s"})` : "wallet request (not decoded)" : "site and URL read"
     const evidenceLabel = signals.length
       ? `${signals.length} signal${signals.length === 1 ? "" : "s"} considered`
       : "No material signal found"

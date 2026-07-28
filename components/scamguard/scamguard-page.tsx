@@ -87,6 +87,8 @@ type ScanResult = {
       spender?: string
       recipient?: string
       amount?: string
+      instructionCount?: number
+      programs?: string[]
       warnings: string[]
     }
     reputation?: {
