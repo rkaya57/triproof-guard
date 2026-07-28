@@ -72,10 +72,24 @@
         </div>
       </section>
 
+      <section class="timeline-card" aria-label="Decision timeline">
+        <div class="section-head">
+          <div>
+            <h3>Decision path</h3>
+            <p>Why this source received its current status.</p>
+          </div>
+          <span class="mini-pill">Live</span>
+        </div>
+        <ol id="riskTimeline" class="risk-timeline" aria-live="polite"></ol>
+      </section>
+
       <section class="actions" aria-label="ScamGuard actions">
         <button id="scanLinksButton" type="button" class="button primary">Scan page links</button>
-        <button id="openReportButton" type="button" class="button ghost">Open full report</button>
+        <button id="shareReportButton" type="button" class="button ghost">Copy report link</button>
       </section>
+      <p id="shareStatus" class="share-status" role="status"></p>
+
+      <button id="openReportButton" type="button" class="text-action">Open live ScamGuard scanner</button>
 
       <section class="link-card">
         <div class="section-head">
@@ -91,6 +105,17 @@
           <span class="mini-pill">Live</span>
         </div>
         <div id="signalsList" class="list empty">No signals yet. Open a page or rescan to start the read.</div>
+      </section>
+
+      <section class="history-card">
+        <div class="section-head">
+          <div>
+            <h3>Recent protection activity</h3>
+            <p id="historyMeta">Private to this browser.</p>
+          </div>
+          <button id="clearHistoryButton" type="button" class="quiet-button">Clear</button>
+        </div>
+        <div id="historyList" class="history-list" aria-live="polite"></div>
       </section>
 
       <details class="settings">
@@ -132,6 +157,7 @@
         </div>
       </details>
     </main>
+    <script src="guard-utils.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

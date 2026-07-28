@@ -196,6 +196,10 @@ function overlayMarkup(result, options) {
   const canContinue = !options.forceBlock && result.riskLevel !== "CRITICAL"
   const decision = result.metadata?.decision
   const facts = transactionFacts(result)
+  const signingBrief = options.mode === "transaction"
+    ? globalThis.ScamGuardUtils?.signingExplanation(result)
+    : null
+  const timeline = globalThis.ScamGuardUtils?.riskTimeline(result, window.location.href) ?? []
   const transactionSummary = facts.length
     ? `
       <div class="sgx-transaction-strip" aria-label="Decoded transaction summary">
@@ -208,6 +212,28 @@ function overlayMarkup(result, options) {
       </div>
     `
     : ""
+  const signingSummary = signingBrief
+    ? `
+      <section class="sgx-approval-brief">
+        <span>${escapeHtml(signingBrief.eyebrow)}</span>
+        <h3>${escapeHtml(signingBrief.title)}</h3>
+        <p>${escapeHtml(signingBrief.detail)}</p>
+        <strong>${escapeHtml(signingBrief.caution)}</strong>
+      </section>
+    `
+    : ""
+  const timelineSummary = timeline.length
+    ? `
+      <ol class="sgx-mini-timeline" aria-label="ScamGuard decision path">
+        ${timeline.map((item, index) => `
+          <li class="${index === timeline.length - 1 ? riskClass(result.riskLevel) : ""}">
+            <span></span>
+            <div><strong>${escapeHtml(item.label)}</strong><b>${escapeHtml(item.value)}</b><small>${escapeHtml(item.status)}</small></div>
+          </li>
+        `).join("")}
+      </ol>
+    `
+    : ""
   return `
     <div class="sgx-modal ${riskClass(result.riskLevel)}" role="dialog" aria-modal="true">
       <div class="sgx-modal-header">
@@ -215,11 +241,13 @@ function overlayMarkup(result, options) {
         <h2>${escapeHtml(options.title ?? "ScamGuard warning")}</h2>
         <p>${escapeHtml(decision?.userMessage ?? result.summary ?? "Pause for a second and review this before continuing.")}</p>
       </div>
+      ${signingSummary}
       ${transactionSummary}
       <div class="sgx-decision-note">
         <strong>${escapeHtml(decision?.headline ?? "Decision context")}</strong>
         <span>${escapeHtml(decision?.primaryReason ?? result.explanation ?? "ScamGuard compares the source, wallet intent, reputation, and known scam patterns before showing this warning.")}</span>
       </div>
+      ${timelineSummary}
       <div class="sgx-modal-grid">
         <section>
           <h3>What triggered it</h3>
@@ -323,13 +351,15 @@ async function handleSignRequest(payload) {
     result.riskLevel === "HIGH_RISK" ||
     protectionLevel === "paranoid" ||
     ((settings.warnOnCaution || protectionLevel === "strict") && result.riskLevel === "CAUTION")
-  const allow = shouldWarn
-    ? await showDecisionOverlay(result, {
-      title: result.riskLevel === "CRITICAL" ? "ScamGuard blocked this signing request" : "Review transaction before signing",
-      mode: "transaction",
-      forceBlock: result.riskLevel === "CRITICAL",
-    })
-    : true
+  const allow = await showDecisionOverlay(result, {
+    title: result.riskLevel === "CRITICAL"
+      ? "ScamGuard blocked this signing request"
+      : shouldWarn
+        ? "Review this wallet request before signing"
+        : "Confirm what your wallet will sign",
+    mode: "transaction",
+    forceBlock: result.riskLevel === "CRITICAL",
+  })
 
   window.postMessage({
     source: EXTENSION_SOURCE,

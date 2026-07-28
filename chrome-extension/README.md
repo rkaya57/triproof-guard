@@ -2,7 +2,7 @@
 
 Pre-sign protection for Solana and EVM dApps, airdrops, token claims, and suspicious wallet actions.
 
-## MVP features
+## Protection features
 
 - Popup current-tab URL scanner.
 - Page banner with live URL risk status.
@@ -12,7 +12,10 @@ Pre-sign protection for Solana and EVM dApps, airdrops, token claims, and suspic
   - `signAndSendTransaction`
   - `signAllTransactions`
   - generic signing `provider.request(...)` calls
-- Warning overlay for caution, high-risk, and critical signing flows.
+- Plain-language signing review for every intercepted wallet request, including approvals, transfers, authority changes, account closure, mint actions, and message signatures.
+- A short decision timeline that shows source context, decoded intent, evidence, and the final risk decision.
+- Local scan history for the latest 100 site and wallet checks. History stores a redacted target and decision summary only.
+- Shareable, privacy-preserving report snapshots that omit raw wallet payloads, public keys, and URL query parameters.
 - Injected EVM provider pre-sign observer for MetaMask/Rabby/Coinbase style:
   - `eth_sendTransaction`
   - `personal_sign`
@@ -59,6 +62,7 @@ POST /api/scamguard/scan-transaction
 - It does not read wallet extension internal pages.
 - Transaction payloads are sent to the configured ScamGuard API for risk analysis.
 - The connected wallet public key may be sent as context when available.
+- Local history and shared reports never include raw transaction payloads, seed phrases, private keys, or query parameters.
 
 ## Validation
 

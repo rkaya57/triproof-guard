@@ -18,12 +18,18 @@ const elements = {
   feedIntel: document.getElementById("feedIntel"),
   intentIntel: document.getElementById("intentIntel"),
   contractIntel: document.getElementById("contractIntel"),
+  riskTimeline: document.getElementById("riskTimeline"),
   linkScanPill: document.getElementById("linkScanPill"),
   linkScanSummary: document.getElementById("linkScanSummary"),
   signalsList: document.getElementById("signalsList"),
   rescanButton: document.getElementById("rescanButton"),
   scanLinksButton: document.getElementById("scanLinksButton"),
+  shareReportButton: document.getElementById("shareReportButton"),
+  shareStatus: document.getElementById("shareStatus"),
   openReportButton: document.getElementById("openReportButton"),
+  historyMeta: document.getElementById("historyMeta"),
+  historyList: document.getElementById("historyList"),
+  clearHistoryButton: document.getElementById("clearHistoryButton"),
   protectionLevel: document.getElementById("protectionLevel"),
   enableNotifications: document.getElementById("enableNotifications"),
   apiBaseUrl: document.getElementById("apiBaseUrl"),
@@ -129,6 +135,22 @@ function renderDecision(result) {
   elements.contractIntel.textContent = contractText(metadata)
 }
 
+function renderTimeline(result) {
+  const timeline = globalThis.ScamGuardUtils?.riskTimeline(result, state.tab?.url) ?? []
+  elements.riskTimeline.innerHTML = timeline
+    .map((item, index) => `
+      <li class="timeline-item ${index === timeline.length - 1 ? riskClass(result.riskLevel) : ""}">
+        <span class="timeline-dot" aria-hidden="true"></span>
+        <div>
+          <strong>${escapeHtml(item.label)}</strong>
+          <b>${escapeHtml(item.value)}</b>
+          <p>${escapeHtml(item.status)}</p>
+        </div>
+      </li>
+    `)
+    .join("")
+}
+
 function linkSummary(counts) {
   if (!counts?.total) return "No links were available to scan on this page."
   const risky = Number(counts.caution ?? 0) + Number(counts.high ?? 0) + Number(counts.critical ?? 0)
@@ -154,6 +176,12 @@ function setBusy(message) {
   elements.feedIntel.textContent = "Reading"
   elements.intentIntel.textContent = "Reading"
   elements.contractIntel.textContent = "Reading"
+  elements.riskTimeline.innerHTML = `
+    <li class="timeline-item loading"><span class="timeline-dot" aria-hidden="true"></span><div><strong>Reading source</strong><p>Checking reputation and request intent.</p></div></li>
+    <li class="timeline-item loading"><span class="timeline-dot" aria-hidden="true"></span><div><strong>Building decision</strong><p>Comparing live evidence with ScamGuard rules.</p></div></li>
+  `
+  elements.shareReportButton.disabled = true
+  elements.shareStatus.textContent = ""
 }
 
 function renderResult(result) {
@@ -168,6 +196,8 @@ function renderResult(result) {
   elements.scoreMeter.style.setProperty("--score-fill", `${securityScore}%`)
   elements.scoreBar.style.width = `${securityScore}%`
   renderDecision(result)
+  renderTimeline(result)
+  elements.shareReportButton.disabled = false
 
   const signals = result.signals ?? []
   if (!signals.length) {
@@ -219,6 +249,62 @@ async function scanActiveTab(force = false) {
   const response = await sendMessage({ type: "SCAN_URL", value: state.tab.url, force })
   if (!response?.ok) throw new Error(response?.error ?? "Could not scan current tab")
   renderResult(response.result)
+  await loadHistory()
+}
+
+function relativeTime(value) {
+  const time = new Date(value).getTime()
+  const delta = Math.max(0, Date.now() - time)
+  if (delta < 60_000) return "just now"
+  if (delta < 3_600_000) return `${Math.floor(delta / 60_000)}m ago`
+  if (delta < 86_400_000) return `${Math.floor(delta / 3_600_000)}h ago`
+  return `${Math.floor(delta / 86_400_000)}d ago`
+}
+
+function renderHistory(items, total) {
+  elements.historyMeta.textContent = total ? `${total} private scan${total === 1 ? "" : "s"} stored on this device.` : "Private to this browser."
+  elements.clearHistoryButton.disabled = !total
+  if (!items.length) {
+    elements.historyList.className = "history-list empty"
+    elements.historyList.textContent = "Your next site or wallet check will appear here."
+    return
+  }
+  elements.historyList.className = "history-list"
+  elements.historyList.innerHTML = items.slice(0, 6).map((entry) => `
+    <article class="history-item ${riskClass(entry.riskLevel)}">
+      <div class="history-score">${escapeHtml(entry.shieldScore)}</div>
+      <div class="history-copy">
+        <div><strong>${escapeHtml(entry.target)}</strong><span>${escapeHtml(entry.type === "transaction" ? "Wallet request" : "Site scan")} · ${escapeHtml(relativeTime(entry.createdAt))}</span></div>
+        <p>${escapeHtml(entry.primaryReason || entry.summary)}</p>
+      </div>
+      <span class="history-risk">${escapeHtml(riskLabel(entry.riskLevel))}</span>
+    </article>
+  `).join("")
+}
+
+async function loadHistory() {
+  const response = await sendMessage({ type: "GET_HISTORY", limit: 12 })
+  if (!response?.ok) return
+  renderHistory(response.items ?? [], Number(response.total ?? 0))
+}
+
+async function copyShareReport() {
+  if (!state.result) return
+  const utils = globalThis.ScamGuardUtils
+  if (!utils) {
+    elements.shareStatus.textContent = "Report link helper is still loading. Try again."
+    return
+  }
+  const base = (state.settings?.apiBaseUrl ?? "https://triproofprotocol.com").replace(/\/$/, "")
+  const snapshot = utils.shareSnapshot(state.result, { sourceUrl: state.tab?.url })
+  const url = `${base}/scamguard/report?data=${encodeURIComponent(utils.encodeSnapshot(snapshot))}`
+  try {
+    await navigator.clipboard.writeText(url)
+    elements.shareStatus.textContent = "Report link copied. It contains a redacted decision snapshot, not wallet data."
+  } catch {
+    await chrome.tabs.create({ url })
+    elements.shareStatus.textContent = "Opened the shareable report. Copy its URL from the new tab."
+  }
 }
 
 async function loadSettings() {
@@ -282,10 +368,20 @@ elements.scanLinksButton.addEventListener("click", () => {
     })
 })
 
+elements.shareReportButton.addEventListener("click", () => {
+  void copyShareReport()
+})
+
 elements.openReportButton.addEventListener("click", () => {
   const base = (state.settings?.apiBaseUrl ?? "https://triproofprotocol.com").replace(/\/$/, "")
   const url = `${base}/scamguard`
   void chrome.tabs.create({ url })
+})
+
+elements.clearHistoryButton.addEventListener("click", () => {
+  void sendMessage({ type: "CLEAR_HISTORY" }).then((response) => {
+    if (response?.ok) renderHistory([], 0)
+  })
 })
 
 elements.saveSettingsButton.addEventListener("click", () => {
@@ -294,7 +390,7 @@ elements.saveSettingsButton.addEventListener("click", () => {
 
 void (async () => {
   try {
-    await Promise.all([loadSettings(), loadActiveTab()])
+    await Promise.all([loadSettings(), loadActiveTab(), loadHistory()])
     setPageBannerCompact(true)
     sendPopupHeartbeat()
     window.setInterval(sendPopupHeartbeat, 900)

@@ -10,6 +10,7 @@ const manifest = JSON.parse(readFileSync(manifestPath, "utf8"))
 const requiredFiles = [
   "manifest.json",
   "src/background.js",
+  "src/guard-utils.js",
   "src/content.js",
   "src/content.css",
   "src/injected.js",
@@ -44,7 +45,7 @@ for (const file of textFiles) {
   }
 }
 
-for (const file of ["src/background.js", "src/content.js", "src/injected.js", "src/popup.js"]) {
+for (const file of ["src/background.js", "src/guard-utils.js", "src/content.js", "src/injected.js", "src/popup.js"]) {
   const result = spawnSync(process.execPath, ["--check", join(extensionDir, file)], {
     encoding: "utf8",
   })

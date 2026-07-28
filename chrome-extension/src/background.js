@@ -8,6 +8,9 @@ const DEFAULT_SETTINGS = {
 }
 
 const CACHE_TTL_MS = 45_000
+const HISTORY_KEY = "scamguardScanHistory"
+const HISTORY_LIMIT = 100
+const HISTORY_DEDUPE_MS = 90_000
 const scanCache = new Map()
 
 function normalizeApiBaseUrl(value) {
@@ -40,6 +43,61 @@ function hostFromUrl(value) {
   } catch {
     return ""
   }
+}
+
+function cleanHistoryText(value, limit = 220) {
+  return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, limit)
+}
+
+function historyTarget(result, sourceUrl, type) {
+  const metadata = result?.metadata ?? {}
+  if (metadata.domain) return metadata.domain
+  const host = hostFromUrl(sourceUrl)
+  if (host) return host
+  const intent = metadata.decodedIntent
+  if (intent?.category && intent.category !== "unknown") return `${intent.category.replaceAll("_", " ")} request`
+  return type === "transaction" ? "Wallet request" : "Unknown source"
+}
+
+async function recordScan(result, { type, sourceUrl, origin = "extension" }) {
+  const target = historyTarget(result, sourceUrl, type)
+  const metadata = result?.metadata ?? {}
+  const intent = metadata.decodedIntent ?? {}
+  const decision = metadata.decision ?? {}
+  const now = new Date().toISOString()
+  const entry = {
+    id: crypto.randomUUID(),
+    createdAt: now,
+    type,
+    origin,
+    target,
+    chain: metadata.chain ?? "unknown",
+    riskLevel: result?.riskLevel ?? "CAUTION",
+    shieldScore: Math.max(0, Math.min(100, 100 - Number(result?.score ?? 0))),
+    summary: cleanHistoryText(decision.userMessage ?? result?.summary),
+    primaryReason: cleanHistoryText(decision.primaryReason ?? result?.explanation),
+    intent: cleanHistoryText(intent.category && intent.category !== "unknown" ? intent.category.replaceAll("_", " ") : "site read", 80),
+  }
+  const stored = await chrome.storage.local.get({ [HISTORY_KEY]: [] })
+  const history = Array.isArray(stored[HISTORY_KEY]) ? stored[HISTORY_KEY] : []
+  const existing = history.find((item) =>
+    item?.type === entry.type &&
+    item?.target === entry.target &&
+    item?.riskLevel === entry.riskLevel &&
+    Date.now() - new Date(item.createdAt ?? 0).getTime() < HISTORY_DEDUPE_MS
+  )
+  const next = existing
+    ? [{ ...existing, ...entry, id: existing.id, createdAt: now }, ...history.filter((item) => item?.id !== existing.id)]
+    : [entry, ...history]
+  await chrome.storage.local.set({ [HISTORY_KEY]: next.slice(0, HISTORY_LIMIT) })
+  return entry
+}
+
+async function getHistory(limit = 12) {
+  const stored = await chrome.storage.local.get({ [HISTORY_KEY]: [] })
+  const history = Array.isArray(stored[HISTORY_KEY]) ? stored[HISTORY_KEY] : []
+  const boundedLimit = Math.max(1, Math.min(Number(limit) || 12, HISTORY_LIMIT))
+  return { items: history.slice(0, boundedLimit), total: history.length }
 }
 
 async function getSettings() {
@@ -97,11 +155,11 @@ async function notifyRisk(result, context) {
   })
 }
 
-async function scanUrl(value, { force = false } = {}) {
+async function scanUrl(value, { force = false, record = true, origin = "site" } = {}) {
   const settings = await getSettings()
   const domain = hostFromUrl(value)
   if (domain && settings.trustedDomains.includes(domain)) {
-    return {
+    const localTrusted = {
       id: crypto.randomUUID(),
       type: "url",
       score: 1,
@@ -121,21 +179,28 @@ async function scanUrl(value, { force = false } = {}) {
       metadata: { chain: "unknown", rpcStatus: "not_applicable", domain },
       scannedAt: new Date().toISOString(),
     }
+    if (record) await recordScan(localTrusted, { type: "url", sourceUrl: value, origin })
+    return localTrusted
   }
 
   if (!force) {
     const cached = getCached("url", value)
-    if (cached) return cached
+    if (cached) {
+      if (record) await recordScan(cached, { type: "url", sourceUrl: value, origin })
+      return cached
+    }
   }
 
   const result = await requestJson("/api/scamguard/scan-url", { value })
   setCached("url", value, result)
+  if (record) await recordScan(result, { type: "url", sourceUrl: value, origin })
   await notifyRisk(result, hostFromUrl(value) || "Current site")
   return result
 }
 
 async function scanTransaction(value, walletAddress, chain, sourceUrl) {
   const result = await requestJson("/api/scamguard/scan-transaction", { value, walletAddress, chain, sourceUrl })
+  await recordScan(result, { type: "transaction", sourceUrl, origin: "wallet" })
   await notifyRisk(result, "Wallet request")
   return result
 }
@@ -145,7 +210,7 @@ async function scanLinks(links) {
   const results = []
   for (const link of uniqueLinks) {
     try {
-      results.push({ value: link, ...(await scanUrl(link)) })
+      results.push({ value: link, ...(await scanUrl(link, { record: false, origin: "link" })) })
     } catch (error) {
       results.push({
         type: "url",
@@ -191,6 +256,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       if (message?.type === "SCAN_LINKS") {
         sendResponse({ ok: true, results: await scanLinks(message.links ?? []) })
+        return
+      }
+      if (message?.type === "GET_HISTORY") {
+        sendResponse({ ok: true, ...(await getHistory(message.limit)) })
+        return
+      }
+      if (message?.type === "CLEAR_HISTORY") {
+        await chrome.storage.local.set({ [HISTORY_KEY]: [] })
+        sendResponse({ ok: true })
         return
       }
       if (message?.type === "GET_ACTIVE_TAB") {
