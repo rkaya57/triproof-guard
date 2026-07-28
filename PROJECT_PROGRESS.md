@@ -10,15 +10,48 @@ The app builds successfully and the core known-entity plus cluster scenarios wer
 
 Current product direction:
 
-1. Telegram Bot MVP
-2. Group Guardian for Telegram groups
-3. Full Project Registry with signed verification
-4. URL sandbox and Scam DNA fingerprinting
+1. Telegram Bot MVP - complete
+2. Group Guardian for Telegram groups - complete
+3. URL Sandbox and Scam DNA fingerprinting - complete
+4. Full Project Registry with signed verification
 5. Deeper wallet, referral, and funding graph intelligence
 6. AI-assisted explanation layer for reports and user replies
-7. Production observability, rate limits, and privacy controls
+7. Production observability, distributed rate limits, retention, and privacy controls
 
 ## Completed Work
+
+### URL Sandbox and Scam DNA
+
+- Added passive HTML retrieval with no JavaScript execution, form submission, downloads, cookies, credentials, or wallet connection.
+- Added strict HTTP/HTTPS validation, credential rejection, local/private/reserved IP blocking, all-record DNS validation, and per-redirect revalidation.
+- Pinned outbound requests to the validated public IP to close DNS rebinding gaps.
+- Added bounded request duration, response size, redirect count, HTML content type, and public endpoint rate limits.
+- Added deterministic page fingerprints for:
+  - content
+  - DOM structure
+  - script bundles and inline code
+  - normalized visible copy
+  - style assets
+  - favicon route
+  - redirect path
+  - static behavior
+  - EVM wallet/contract and Solana program targets
+- Added static behavior detection for secret-material forms, cross-origin submissions, hidden iframes, wallet APIs, obfuscated scripts, clipboard access, downloads, and urgency timers.
+- Added deduplicated Scam DNA fingerprints and campaign clusters in PostgreSQL.
+- Added conservative cross-domain similarity rules so same-domain repeats and generic single-component matches do not affect scoring.
+- Added admin-reviewed DNA verdicts and a management console at `/dashboard/admin/scamguard`.
+- Added URL Sandbox and Scam DNA evidence to the public scanner, authenticated API, Telegram bot, and shared ScamGuard engine.
+- Added RLS-enabled, server-only Prisma tables for DNA campaigns and fingerprints.
+- Added focused unit coverage for HTML fingerprinting, SSRF policy, IPv4/IPv6 blocking, and clone corroboration.
+
+Key files:
+
+- `lib/scamguard/url-sandbox.ts`
+- `lib/scamguard/html-fingerprint.ts`
+- `lib/scamguard/scam-dna.ts`
+- `app/api/admin/scamguard/dna/route.ts`
+- `components/admin/scam-dna-console.tsx`
+- `prisma/migrations/20260728210000_url_sandbox_scam_dna/migration.sql`
 
 ### Telegram Bot and Group Guardian Operations
 
@@ -267,26 +300,26 @@ Checked:
 ## Important Notes
 
 - Prisma Client was regenerated after schema changes.
-- A formal Prisma migration file has not yet been created in this pass.
-- If a real database is used, run a migration before production use.
+- Formal Prisma migrations exist for Telegram Guardian and URL Sandbox / Scam DNA storage.
+- New server-only Scam DNA tables enable RLS without public client policies.
 - Review drawer status changes currently work as UI/local state only. Persisting analyst decisions to the database is a good next step.
-- Dev server was observed on `http://localhost:3000`.
+- URL Sandbox rate limiting is process-local; a distributed production limiter remains a later hardening task.
 
 ## Suggested Next Steps
 
-1. Verify the production Telegram migration, webhook, admin controls, and daily cron after deployment.
-2. Add suspicious poster correlation and abuse/rate limits.
+1. Verify the production URL Sandbox migration, deep-scan API, and admin DNA controls after deployment.
+2. Add suspicious poster correlation and distributed abuse/rate limits.
 3. Create the full Project Registry with signed verification.
-4. Add URL sandbox and Scam DNA fingerprinting.
-5. Deepen wallet/referral/funding graph intelligence.
-6. Add AI-assisted explanation copy for reports and Telegram replies.
+4. Deepen wallet/referral/funding graph intelligence.
+5. Add AI-assisted explanation copy for reports and Telegram replies.
+6. Add DNA retention, reviewed corpus import, and campaign sharing controls.
 
 ## Resume Checklist
 
 Start from:
 
 ```powershell
-cd C:\Users\bahri\tri-proof-guard
+cd C:\Users\bahri\triproof-guard
 npm.cmd run dev
 ```
 

@@ -4,6 +4,7 @@ import { getV1ApiUser } from "@/lib/api/v1-auth"
 import { scanScamGuard, type ScamGuardChain, type ScamGuardScanType } from "@/lib/scamguard/engine"
 
 export const runtime = "nodejs"
+export const maxDuration = 20
 
 const scanTypes = new Set<ScamGuardScanType>(["url", "wallet", "token", "transaction"])
 
@@ -25,8 +26,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "type must be url, wallet, token, or transaction" }, { status: 400 })
   }
   if (!value) return NextResponse.json({ error: "value is required" }, { status: 400 })
+  if (type === "url" && value.length > 4_096) return NextResponse.json({ error: "URL is too long" }, { status: 413 })
 
-  const result = await scanScamGuard({ type, value, walletAddress: body?.walletAddress, chain: body?.chain, sourceUrl: body?.sourceUrl })
+  const result = await scanScamGuard({
+    type,
+    value,
+    walletAddress: body?.walletAddress,
+    chain: body?.chain,
+    sourceUrl: body?.sourceUrl,
+    deepScan: type === "url",
+  })
   return NextResponse.json(
     {
       ...result,

@@ -1,4 +1,6 @@
 import { findScamGuardIntelEntry } from "@/lib/scamguard/intelligence"
+import { findScamDnaMatch, persistScamDna, scamDnaSignal, type ScamDnaMetadata } from "@/lib/scamguard/scam-dna"
+import { inspectUrlSandbox } from "@/lib/scamguard/url-sandbox"
 
 export type ScamGuardScanType = "url" | "wallet" | "token" | "transaction"
 
@@ -21,6 +23,7 @@ export type ScamGuardScanInput = {
   walletAddress?: string
   chain?: ScamGuardChain
   sourceUrl?: string
+  deepScan?: boolean
 }
 
 export type ScamGuardScanResult = {
@@ -76,6 +79,28 @@ export type ScamGuardScanResult = {
       sourceUrl?: string
       features: string[]
     }
+    sandbox?: {
+      status: "complete" | "blocked" | "failed" | "unsupported" | "disabled"
+      sourceUrl: string
+      finalUrl?: string
+      httpStatus?: number
+      contentType?: string
+      contentBytes?: number
+      elapsedMs: number
+      redirectChain: string[]
+      resolvedAddressCount: number
+      blockReason?: string
+      error?: string
+      behaviorFlags: string[]
+      stats?: {
+        tagCount: number
+        scriptCount: number
+        formCount: number
+        iframeCount: number
+        externalScriptCount: number
+      }
+    }
+    scamDna?: ScamDnaMetadata
     contractIntelligence?: {
       target?: string
       checked: boolean
@@ -838,7 +863,7 @@ function brandMentioned(text: string) {
   )
 }
 
-async function scanUrl(value: string, chain: ScamGuardChain) {
+async function scanUrl(value: string, chain: ScamGuardChain, deepScan = false) {
   const text = value.toLowerCase()
   const url = parsedUrl(value)
   const domain = hostFromUrl(value)
@@ -1035,13 +1060,64 @@ async function scanUrl(value: string, chain: ScamGuardChain) {
     })
   }
 
-  return createResult("url", signals, {
+  const sandbox = deepScan && domain ? await inspectUrlSandbox(value) : null
+  if (sandbox) signals.push(...sandbox.signals)
+  const dnaMatch = sandbox?.fingerprint && domain
+    ? await findScamDnaMatch(sandbox.fingerprint, domain)
+    : null
+  const dnaRiskSignal = dnaMatch ? scamDnaSignal(dnaMatch) : null
+  if (dnaRiskSignal) signals.push(dnaRiskSignal)
+
+  const result = createResult("url", signals, {
     chain,
     rpcStatus: "not_applicable",
     domain: domain ?? undefined,
     domainIntelligence: domainIntel,
     reputation,
+    sandbox: sandbox
+      ? {
+          status: sandbox.status,
+          sourceUrl: sandbox.sourceUrl,
+          finalUrl: sandbox.finalUrl,
+          httpStatus: sandbox.httpStatus,
+          contentType: sandbox.contentType,
+          contentBytes: sandbox.contentBytes,
+          elapsedMs: sandbox.elapsedMs,
+          redirectChain: sandbox.redirectChain,
+          resolvedAddressCount: sandbox.resolvedAddressCount,
+          blockReason: sandbox.blockReason,
+          error: sandbox.error,
+          behaviorFlags: sandbox.fingerprint?.behaviorFlags ?? [],
+          stats: sandbox.fingerprint?.stats,
+        }
+      : undefined,
+    scamDna: sandbox?.fingerprint && dnaMatch
+      ? {
+          fingerprintKey: sandbox.fingerprint.fingerprintKey,
+          clusterKey: sandbox.fingerprint.clusterKey,
+          behaviorFlags: sandbox.fingerprint.behaviorFlags,
+          walletTargetCount: sandbox.fingerprint.walletTargets.length,
+          programTargetCount: sandbox.fingerprint.programTargets.length,
+          stats: sandbox.fingerprint.stats,
+          match: dnaMatch,
+          persisted: false,
+        }
+      : undefined,
   })
+
+  if (sandbox?.fingerprint && domain && result.metadata.scamDna) {
+    result.metadata.scamDna.persisted = await persistScamDna({
+      domain,
+      sourceUrl: sandbox.sourceUrl,
+      finalUrl: sandbox.finalUrl,
+      fingerprint: sandbox.fingerprint,
+      sandboxSignals: sandbox.signals,
+      riskLevel: result.riskLevel,
+      score: result.score,
+    })
+  }
+
+  return result
 }
 
 function parsedInfo(accountInfo: ParsedAccountInfo) {
@@ -1806,7 +1882,7 @@ export async function scanScamGuard(input: ScamGuardScanInput): Promise<ScamGuar
     return createResult(input.type, [], { chain, rpcStatus: "not_applicable" })
   }
 
-  if (input.type === "url") return scanUrl(value, chain)
+  if (input.type === "url") return scanUrl(value, chain, input.deepScan ?? false)
   if (input.type === "wallet") return scanWallet(value, chain)
   if (input.type === "token") return scanToken(value, chain)
   return scanTransaction(value, input.walletAddress, chain, input.sourceUrl)

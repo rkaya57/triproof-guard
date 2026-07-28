@@ -37,6 +37,9 @@ The current product build includes a public landing page, ScamGuard scanner, Tel
 - Verified project registry to reduce false positives for real projects
 - Known-bad and suspicious domain/counterparty intelligence
 - External phishing feed support
+- SSRF-safe passive URL Sandbox with DNS/IP validation, pinned connections, bounded HTML reads, and redirect revalidation
+- Scam DNA fingerprinting across DOM structure, scripts, copy, styles, redirects, static behavior, and wallet/program targets
+- Cross-domain campaign clone matching with corroboration thresholds and reviewed campaign verdicts
 - Solana wallet/account and token mint checks when RPC is configured
 - EVM contract bytecode, verified source, proxy, and deployer checks when provider keys are configured
 - EVM approval and unlimited allowance detection
@@ -107,7 +110,20 @@ The current product build includes a public landing page, ScamGuard scanner, Tel
 - Trusted, suspicious, and known-bad domain management
 - EVM spender/counterparty intelligence
 - Solana wallet/token/program intelligence
+- Scam DNA campaign clusters, cross-domain evidence, labels, and reviewed `SUSPICIOUS` / `KNOWN_BAD` verdicts
 - False positive and missed-risk feedback loop
+- Admin operations console at `/dashboard/admin/scamguard`
+
+### URL Sandbox and Scam DNA
+
+- `POST /api/scamguard/scan-url` runs a bounded passive HTML inspection by default.
+- JavaScript is never executed, forms are never submitted, downloads are never opened, and wallet providers are never connected.
+- Every target and redirect is restricted to HTTP/HTTPS, resolved across all A/AAAA records, rejected if any answer is private or reserved, and connected through a validated pinned IP.
+- The response body is limited by time and bytes. Non-HTML responses are reported without parsing.
+- Static analysis detects secret-material collection, cross-origin forms, hidden wallet frames, obfuscated wallet code, automatic downloads, wallet APIs, clipboard access, and urgency patterns.
+- Scam DNA stores deduplicated fingerprints and groups related observations into campaign clusters.
+- A generic framework or same-domain repeat does not create a risk escalation. Automated clone signals require a cross-domain match, at least two independent matching components, a similarity threshold, and prior high-risk or reviewed campaign context.
+- Admin-reviewed `KNOWN_BAD` DNA can create a critical signal; unreviewed `UNKNOWN` clusters remain evidence only.
 - Seed intelligence plus database-backed overrides
 
 ## Tech Stack
@@ -482,7 +498,7 @@ Proposed Solana Foundation Turkey Grants scope:
 - Telegram Bot hardening: language preference, richer `/report`, and abuse/rate limits
 - Group Guardian moderation: suspicious poster correlation and account-level campaign views
 - Full Project Registry with signed project verification messages
-- Scam DNA fingerprinting for phishing infrastructure reuse
+- Larger reviewed Scam DNA corpus and scheduled retention controls
 - Stronger Solana serialized transaction decoding
 - Wider SPL Token and Token-2022 instruction coverage
 - Public verified project registry workflow
@@ -494,13 +510,13 @@ Proposed Solana Foundation Turkey Grants scope:
 
 ## Active Development Order
 
-1. Telegram Bot MVP
-2. Group Guardian for Telegram groups
-3. Full Project Registry with signed verification
-4. URL sandbox and Scam DNA fingerprinting
+1. Telegram Bot MVP - complete
+2. Group Guardian for Telegram groups - complete
+3. URL Sandbox and Scam DNA fingerprinting - complete
+4. Full Project Registry with signed verification
 5. Deeper wallet, referral, and funding graph intelligence
 6. AI-assisted explanation layer for reports and user replies
-7. Production observability, rate limits, and privacy controls
+7. Production observability, distributed rate limits, retention, and privacy controls
 
 ## Disclaimer
 

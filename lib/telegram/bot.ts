@@ -428,6 +428,7 @@ async function scanCandidate(candidate: ScanCandidate) {
     value: candidate.value,
     chain: candidate.chain,
     sourceUrl: candidate.type === "transaction" ? undefined : candidate.value,
+    deepScan: candidate.type === "url",
   })
 }
 

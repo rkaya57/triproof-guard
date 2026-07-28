@@ -10,6 +10,7 @@ import {
   ClipboardCheck,
   Code2,
   DatabaseZap,
+  Dna,
   FileDown,
   FileSearch,
   Gauge,
@@ -130,6 +131,8 @@ const signals = [
   [Landmark, "Known entities", "Exchange, bridge, service, token mint, protocol, and program-owned accounts are marked for review or exclusion."],
   [GitBranch, "Suspicious clusters", "Related wallets are grouped so reviewers can inspect patterns across the list instead of one address at a time."],
   [Globe2, "Domain reputation", "ScamGuard separates verified project domains from disposable claim, airdrop, mint, and reward lookalike domains."],
+  [FileSearch, "URL Sandbox", "ScamGuard passively reads bounded HTML through validated public IPs without executing JavaScript or connecting a wallet."],
+  [Dna, "Scam DNA", "Page structure, scripts, behavior, redirects, and wallet targets are compared across domains to find reused campaign kits."],
   [LockKeyhole, "Signing intent", "Transaction payloads are checked for approvals, authority changes, transfers, close-account actions, and suspicious spenders."],
   [KeyRound, "Contract intelligence", "EVM scans can inspect bytecode, verification, proxy shape, and deployer or spender reputation when API keys are configured."],
 ]
@@ -146,6 +149,8 @@ const evidenceLayers = [
 const scamguardFlow = [
   [SearchCheck, "Classify the surface", "URL, wallet, token mint, contract address, serialized transaction, or wallet request JSON is routed to the right scanner."],
   [Globe2, "Check source context", "Domain patterns, trusted registries, suspicious TLDs, and project intelligence are evaluated together."],
+  [FileSearch, "Open URLs passively", "The URL Sandbox validates every DNS answer and redirect, pins the public destination IP, limits time and bytes, and never executes page code."],
+  [Dna, "Compare Scam DNA", "DOM, scripts, copy, styles, behavior, redirects, and wallet targets are compared with prior cross-domain campaign evidence."],
   [ClipboardCheck, "Decode intent", "The engine explains what the request appears to do before the user signs it."],
   [Gauge, "Score and explain", "The result includes risk level, confidence, security score, primary reason, and recommended actions."],
   [PlugZap, "Protect where users act", "The same engine powers the public scanner, Chrome extension, and B2B API endpoint."],
@@ -441,7 +446,7 @@ export default function DocsPage() {
               <span className="cyber-chip">ScamGuard</span>
               <h2 className="text-gradient mt-5 text-3xl font-semibold sm:text-5xl">Pre-sign protection for the moment users are most exposed.</h2>
               <p className="mt-5 leading-7 text-muted-foreground">
-                ScamGuard is the user-facing risk layer. It can scan the current page, every visible link, token mints, wallets, EVM contract targets, and transaction payloads. It is useful for browser extension protection, partner APIs, and internal project support workflows.
+                ScamGuard is the user-facing risk layer. It can scan the current page, every visible link, token mints, wallets, EVM contract targets, and transaction payloads. URL scans add an SSRF-safe passive sandbox and cross-domain Scam DNA comparison without executing page JavaScript.
               </p>
               <div className="mt-6 flex flex-col gap-3 sm:flex-row">
                 <Link href="/scamguard" className={`${buttonVariants()} glow-primary hover-lift`}>Open ScamGuard</Link>

@@ -39,6 +39,18 @@ const scamGuardExample = `curl -X POST https://triproofprotocol.com/api/v1/scamg
     "walletAddress": "0x0000000000000000000000000000000000000000"
   }'`
 
+const urlSandboxExample = `curl -X POST https://triproofprotocol.com/api/v1/scamguard/scan \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -d '{
+    "type": "url",
+    "chain": "solana",
+    "value": "https://project.example/rewards"
+  }'
+
+# URL responses include metadata.sandbox and metadata.scamDna.
+# The server performs passive HTML analysis and never executes page JavaScript.`
+
 const feedbackExample = `curl -X POST https://triproofprotocol.com/api/scamguard/feedback \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -49,7 +61,7 @@ const feedbackExample = `curl -X POST https://triproofprotocol.com/api/scamguard
 
 export const metadata = {
   title: "Tri-Proof Guard API Docs",
-  description: "V1.9 API documentation for wallet risk analyses, ScamGuard scans and analysis status.",
+  description: "V1.10 API documentation for wallet risk analyses, ScamGuard scans, URL Sandbox, Scam DNA and analysis status.",
 }
 
 export default function ApiDocsPage() {
@@ -57,7 +69,7 @@ export default function ApiDocsPage() {
     <main className="premium-page min-h-screen bg-background text-foreground">
       <section className="security-grid border-b border-border">
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
-          <Badge variant="secondary" className="mb-5 border-primary/30 text-primary">V1.9 API Endpoint</Badge>
+          <Badge variant="secondary" className="mb-5 border-primary/30 text-primary">V1.10 API Endpoint</Badge>
           <h1 className="text-gradient max-w-4xl text-4xl font-semibold sm:text-6xl">
             Create wallet risk analyses from your own workflow.
           </h1>
@@ -103,6 +115,10 @@ export default function ApiDocsPage() {
           <Card className="glass-panel premium-card">
             <CardHeader><CardTitle>ScamGuard example</CardTitle><CardDescription>Scan before a wallet or dApp asks the user to sign.</CardDescription></CardHeader>
             <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{scamGuardExample}</code></pre></CardContent>
+          </Card>
+          <Card className="glass-panel premium-card">
+            <CardHeader><CardTitle>URL Sandbox example</CardTitle><CardDescription>Passively inspect HTML and compare Scam DNA across campaigns.</CardDescription></CardHeader>
+            <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{urlSandboxExample}</code></pre></CardContent>
           </Card>
           <Card className="glass-panel premium-card">
             <CardHeader><CardTitle>Feedback example</CardTitle><CardDescription>Feed false positives and scam reports back into ScamGuard review.</CardDescription></CardHeader>

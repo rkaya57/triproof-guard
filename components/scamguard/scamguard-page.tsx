@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   Code2,
   DatabaseZap,
+  Dna,
   Download,
   ExternalLink,
   FileSearch,
@@ -104,6 +105,54 @@ type ScanResult = {
       sourceUrl?: string
       features: string[]
     }
+    sandbox?: {
+      status: "complete" | "blocked" | "failed" | "unsupported" | "disabled"
+      sourceUrl: string
+      finalUrl?: string
+      httpStatus?: number
+      contentType?: string
+      contentBytes?: number
+      elapsedMs: number
+      redirectChain: string[]
+      resolvedAddressCount: number
+      blockReason?: string
+      error?: string
+      behaviorFlags: string[]
+      stats?: {
+        tagCount: number
+        scriptCount: number
+        formCount: number
+        iframeCount: number
+        externalScriptCount: number
+      }
+    }
+    scamDna?: {
+      fingerprintKey: string
+      clusterKey: string
+      behaviorFlags: string[]
+      walletTargetCount: number
+      programTargetCount: number
+      stats: {
+        tagCount: number
+        scriptCount: number
+        formCount: number
+        iframeCount: number
+        externalScriptCount: number
+      }
+      match: {
+        matched: boolean
+        actionable: boolean
+        similarity: number
+        confidence: "LOW" | "MEDIUM" | "HIGH"
+        verdict: "unknown" | "suspicious" | "known_bad"
+        campaignId?: string
+        campaignLabel?: string
+        matchedDomain?: string
+        crossDomain: boolean
+        evidence: string[]
+      }
+      persisted: boolean
+    }
     contractIntelligence?: {
       target?: string
       checked: boolean
@@ -181,6 +230,8 @@ const scanPresets = [
 const scannerSources = [
   [DatabaseZap, "Threat feeds", "External phishing feeds plus custom ScamGuard intelligence."],
   [ServerCog, "RPC checks", "Solana mint/wallet state and EVM contract bytecode when providers are configured."],
+  [FileSearch, "URL Sandbox", "Passively reads bounded HTML through SSRF-safe, redirect-validated network isolation."],
+  [Dna, "Scam DNA", "Matches DOM, scripts, behavior, redirects, and wallet targets across campaign clones."],
   [Fingerprint, "Intent decode", "Approval, transfer, signature, authority, and close-account patterns."],
   [GitBranch, "Admin registry", "Trusted, suspicious, and known-bad domains or counterparties managed by the team."],
 ] as const
@@ -291,8 +342,27 @@ function dataSourceLabel(result: ScanResult | null) {
     result.metadata.rpcStatus !== "not_applicable" ? `RPC ${result.metadata.rpcStatus}` : null,
     result.metadata.contractIntelligence?.source,
     result.metadata.domainIntelligence?.features?.length ? "domain intelligence" : null,
+    result.metadata.sandbox ? `sandbox ${result.metadata.sandbox.status}` : null,
+    result.metadata.scamDna ? "Scam DNA" : null,
   ].filter(Boolean)
   return items.length ? items.join(" + ") : "local rule engine"
+}
+
+function sandboxLabel(result: ScanResult | null) {
+  const sandbox = result?.metadata.sandbox
+  if (!sandbox) return result?.type === "url" ? "Waiting" : "Not required"
+  if (sandbox.status === "complete") return `${sandbox.httpStatus ?? "HTTP"} · ${sandbox.elapsedMs} ms`
+  if (sandbox.status === "blocked") return "Network policy blocked"
+  if (sandbox.status === "unsupported") return "Non-HTML response"
+  if (sandbox.status === "failed") return "Fetch unavailable"
+  return "Disabled"
+}
+
+function dnaLabel(result: ScanResult | null) {
+  const dna = result?.metadata.scamDna
+  if (!dna) return result?.type === "url" ? "No fingerprint" : "Not required"
+  if (!dna.match.matched) return "New fingerprint"
+  return `${Math.round(dna.match.similarity * 100)}% · ${verdictLabel(dna.match.verdict)}`
 }
 
 function primaryReason(result: ScanResult | null) {
@@ -344,6 +414,8 @@ function resultMetricRows(result: ScanResult | null) {
     ["Decision", decisionTone(result)],
     ["Confidence", result?.confidence ?? "Waiting"],
     ["Reputation", verdictLabel(result?.metadata.reputation?.verdict)],
+    ["URL Sandbox", sandboxLabel(result)],
+    ["Scam DNA", dnaLabel(result)],
     ["Intent", intentLabel(result)],
     ["Contract", contractLabel(result)],
     ["Sources", dataSourceLabel(result)],
@@ -496,7 +568,7 @@ export function ScamGuardPage() {
               Pre-sign threat intelligence for Solana and EVM apps.
             </h1>
             <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-              ScamGuard checks suspicious links, wallets, token mints, contracts, and transaction intent before a user clicks or signs. It combines rule scoring, RPC context, external threat feeds, and admin intelligence into one explainable decision.
+              ScamGuard checks suspicious links, wallets, token mints, contracts, and transaction intent before a user clicks or signs. Its isolated URL Sandbox and Scam DNA engine add page-level clone detection to RPC context, threat feeds, and explainable scoring.
             </p>
             <div className="grid max-w-2xl gap-3 sm:grid-cols-3">
               {[
@@ -702,6 +774,27 @@ export function ScamGuardPage() {
                         {result?.metadata.ownerProgram && <span>Owner: {shortValue(result.metadata.ownerProgram)}</span>}
                         {result?.metadata.rpcError && <span>RPC note: {result.metadata.rpcError}</span>}
                         {result?.metadata.domainIntelligence?.features?.length ? <span>Domain features: {result.metadata.domainIntelligence.features.join(", ")}</span> : null}
+                        {result?.metadata.sandbox && (
+                          <span>
+                            URL Sandbox: {result.metadata.sandbox.status}
+                            {result.metadata.sandbox.httpStatus ? ` · HTTP ${result.metadata.sandbox.httpStatus}` : ""}
+                            {` · ${result.metadata.sandbox.elapsedMs} ms`}
+                            {result.metadata.sandbox.contentBytes !== undefined ? ` · ${Math.ceil(result.metadata.sandbox.contentBytes / 1024)} KB` : ""}
+                          </span>
+                        )}
+                        {result?.metadata.sandbox?.finalUrl && <span>Sandbox destination: {result.metadata.sandbox.finalUrl}</span>}
+                        {result?.metadata.sandbox?.redirectChain.length ? <span>Validated redirects: {result.metadata.sandbox.redirectChain.length}</span> : null}
+                        {result?.metadata.sandbox?.behaviorFlags.length ? <span>Static behaviors: {result.metadata.sandbox.behaviorFlags.join(", ")}</span> : null}
+                        {result?.metadata.sandbox?.blockReason && <span>Sandbox policy: {result.metadata.sandbox.blockReason}</span>}
+                        {result?.metadata.sandbox?.error && <span>Sandbox note: {result.metadata.sandbox.error}</span>}
+                        {result?.metadata.scamDna && (
+                          <span>
+                            Scam DNA: {result.metadata.scamDna.match.matched
+                              ? `${Math.round(result.metadata.scamDna.match.similarity * 100)}% match${result.metadata.scamDna.match.matchedDomain ? ` with ${result.metadata.scamDna.match.matchedDomain}` : ""}`
+                              : "new fingerprint with no corroborated campaign match"}
+                          </span>
+                        )}
+                        {result?.metadata.scamDna?.match.evidence.length ? <span>DNA evidence: {result.metadata.scamDna.match.evidence.join(", ")}</span> : null}
                         {result?.metadata.contractIntelligence?.target && <span>Contract target: {shortValue(result.metadata.contractIntelligence.target)}</span>}
                         {result?.metadata.decodedIntent?.warnings?.map((warning) => <span key={warning}>Decode note: {warning}</span>)}
                         {result?.metadata.reputation?.notes?.map((note) => <span key={note}>Reputation: {note}</span>)}

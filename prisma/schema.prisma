@@ -131,6 +131,12 @@ enum ScamGuardIntelVerdict {
   KNOWN_BAD
 }
 
+enum ScamDnaVerdict {
+  UNKNOWN
+  SUSPICIOUS
+  KNOWN_BAD
+}
+
 enum TelegramGuardianAlertLevel {
   CAUTION
   HIGH_RISK
@@ -578,6 +584,62 @@ model ScamGuardIntelEntry {
   @@index([kind, normalized])
   @@index([verdict, active])
   @@index([createdById])
+}
+
+model ScamDnaCampaign {
+  id            String               @id @default(cuid())
+  clusterKey    String               @unique
+  verdict       ScamDnaVerdict       @default(UNKNOWN)
+  label         String?
+  notes         String?              @db.Text
+  sampleCount   Int                  @default(0)
+  domainCount   Int                  @default(0)
+  strongestRisk String               @default("SAFE")
+  domains       Json
+  firstSeenAt   DateTime             @default(now())
+  lastSeenAt    DateTime             @default(now())
+  fingerprints ScamDnaFingerprint[]
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([verdict, lastSeenAt])
+  @@index([strongestRisk, lastSeenAt])
+}
+
+model ScamDnaFingerprint {
+  id               String           @id @default(cuid())
+  fingerprintKey   String           @unique
+  campaignId       String?
+  campaign         ScamDnaCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  domain           String
+  sourceUrl        String           @db.Text
+  finalUrl         String?          @db.Text
+  contentHash      String
+  domHash          String
+  scriptHash       String
+  textHash         String
+  styleHash        String
+  faviconUrlHash   String
+  redirectHash     String
+  behaviorHash     String
+  behaviorFlags    Json
+  walletTargets    Json
+  programTargets   Json
+  sandboxSignals   Json
+  riskLevel        String
+  score            Int
+  observationCount Int              @default(1)
+  firstSeenAt      DateTime          @default(now())
+  lastSeenAt       DateTime          @default(now())
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([campaignId, lastSeenAt])
+  @@index([domain, lastSeenAt])
+  @@index([domHash])
+  @@index([scriptHash])
+  @@index([behaviorHash])
+  @@index([riskLevel, lastSeenAt])
 }
 
 model TelegramGuardianGroup {
