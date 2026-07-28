@@ -7,14 +7,11 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Code2,
-  DatabaseZap,
-  Dna,
   Download,
   ExternalLink,
   FileSearch,
   Fingerprint,
   Gauge,
-  GitBranch,
   Link2,
   Loader2,
   LockKeyhole,
@@ -24,7 +21,6 @@ import {
   Puzzle,
   Radar,
   SearchCheck,
-  ServerCog,
   Settings2,
   ShieldAlert,
   ShieldCheck,
@@ -226,15 +222,6 @@ const scanPresets = [
     detail: "Token scan with mint and authority heuristics.",
   },
 ] satisfies Array<{ label: string; chain: ScanChain; mode: ScanMode; value: string; detail: string }>
-
-const scannerSources = [
-  [DatabaseZap, "Threat feeds", "External phishing feeds plus custom ScamGuard intelligence."],
-  [ServerCog, "RPC checks", "Solana mint/wallet state and EVM contract bytecode when providers are configured."],
-  [FileSearch, "URL Sandbox", "Passively reads bounded HTML through SSRF-safe, redirect-validated network isolation."],
-  [Dna, "Scam DNA", "Matches DOM, scripts, behavior, redirects, and wallet targets across campaign clones."],
-  [Fingerprint, "Intent decode", "Approval, transfer, signature, authority, and close-account patterns."],
-  [GitBranch, "Admin registry", "Trusted, suspicious, and known-bad domains or counterparties managed by the team."],
-] as const
 
 const intelligenceNetwork = [
   ["Known bad domains", "Blocks or escalates domains seen in phishing and drainer campaigns."],
@@ -539,84 +526,78 @@ export function ScamGuardPage() {
   return (
     <main className="premium-page min-h-screen overflow-hidden bg-background text-foreground">
       <section className="security-grid relative overflow-hidden border-b border-border">
-        <div aria-hidden className="pointer-events-none absolute inset-0">
-          <div className="glow-orb left-[-7rem] top-[-5rem] size-96" style={{ background: "var(--guard-cyan)" }} />
-          <div className="glow-orb right-[-8rem] top-24 size-[28rem]" style={{ background: "var(--guard-purple)", animationDelay: "2s" }} />
-        </div>
-
         <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
           <Link href="/" className="group flex items-center gap-3">
-            <span className="glow-primary flex size-11 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 transition-transform group-hover:scale-105">
+            <span className="flex size-11 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 transition-transform group-hover:scale-105">
               <ShieldCheck className="size-6 text-primary" />
             </span>
             <div className="flex flex-col">
-              <span className="text-sm font-semibold">Tri-Proof Guard</span>
-              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-primary/80">ScamGuard Multichain</span>
+              <span className="text-sm font-semibold tracking-tight">Tri-Proof Guard</span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-primary/80">ScamGuard</span>
             </div>
           </Link>
-          <div className="flex items-center gap-3">
+          <div className="hidden items-center gap-3 lg:flex">
+            <a href="#scan" className="hidden text-sm text-slate-300 transition hover:text-white md:inline-flex">Scanner</a>
+            <a href="#extension" className="hidden text-sm text-slate-300 transition hover:text-white lg:inline-flex">Extension</a>
             <Link href="/docs/api" className={`${buttonVariants({ variant: "outline" })} hover-lift hidden sm:inline-flex`}>API</Link>
             <a href="/downloads/scamguard-chrome-extension.zip" className={`${buttonVariants({ variant: "outline" })} hover-lift hidden md:inline-flex`} download>
               <Download data-icon="inline-start" /> Extension
             </a>
-            <Link href="/audit" className={`${buttonVariants()} glow-primary hover-lift`}>Sybil Analysis</Link>
+            <Link href="/audit" className={`${buttonVariants()} hover-lift`}>Sybil Analysis</Link>
           </div>
         </header>
 
-        <div className="relative z-10 mx-auto grid max-w-7xl gap-10 px-5 pb-16 pt-10 sm:px-8 lg:grid-cols-[0.92fr_1.08fr] lg:items-start lg:pb-24 lg:pt-16">
-          <div className="reveal-up flex flex-col gap-7">
-            <h1 className="max-w-4xl text-4xl font-semibold leading-tight text-balance text-white sm:text-6xl">
-              Pre-sign threat intelligence for Solana and EVM apps.
+        <div className="relative z-10 mx-auto grid max-w-7xl gap-10 px-5 pb-16 pt-10 sm:px-8 lg:grid-cols-[minmax(0,0.82fr)_minmax(540px,1.18fr)] lg:items-start lg:pb-24 lg:pt-16">
+          <div className="reveal-up flex flex-col gap-7 pt-1">
+            <div className="inline-flex w-fit items-center gap-2 rounded-md border border-primary/25 bg-primary/[0.07] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.14em] text-sky-200">
+              <span className="size-1.5 rounded-full bg-emerald-400" /> Pre-sign security workspace
+            </div>
+            <h1 className="max-w-3xl text-4xl font-semibold leading-[1.06] text-balance text-white sm:text-5xl">
+              Review every Web3 request before you sign.
             </h1>
-            <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-              ScamGuard checks suspicious links, wallets, token mints, contracts, and transaction intent before a user clicks or signs. Its isolated URL Sandbox and Scam DNA engine add page-level clone detection to RPC context, threat feeds, and explainable scoring.
+            <p className="max-w-xl text-base leading-7 text-slate-300 sm:text-lg">
+              Scan a link, wallet, mint, contract, or transaction request. ScamGuard combines intent decoding, source intelligence, live chain context, and passive page analysis into one explainable decision.
             </p>
-            <div className="grid max-w-2xl gap-3 sm:grid-cols-3">
+            <div className="grid max-w-xl gap-px overflow-hidden rounded-lg border border-white/10 bg-white/10 sm:grid-cols-3">
               {[
-                ["Pre-sign", "wallet prompt guard"],
-                ["Threat intel", "feeds + registry"],
-                ["B2B API", "wallets + launchpads"],
+                ["Before signing", "request intent"],
+                ["Across chains", "Solana + EVM"],
+                ["With evidence", "not a black box"],
               ].map(([value, label]) => (
-                <div key={label} className="rounded-lg border border-primary/20 bg-background/45 px-4 py-3 backdrop-blur">
-                  <p className="text-xl font-semibold text-white">{value}</p>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+                <div key={label} className="bg-slate-950/55 px-4 py-4 backdrop-blur">
+                  <p className="text-sm font-semibold text-white">{value}</p>
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.1em] text-slate-400">{label}</p>
                 </div>
               ))}
             </div>
-            <div className="grid max-w-2xl gap-3">
-              {scannerSources.map(([Icon, title, text]) => (
-                <div key={title} className="flex items-start gap-3 rounded-lg border border-border bg-background/40 p-4">
-                  <Icon className="mt-0.5 size-4 shrink-0 text-primary" />
-                  <div>
-                    <p className="font-medium text-white">{title}</p>
-                    <p className="mt-1 text-sm leading-6 text-muted-foreground">{text}</p>
-                  </div>
-                </div>
-              ))}
+            <div className="max-w-xl border-l-2 border-primary/50 pl-4 text-sm leading-6 text-slate-400">
+              ScamGuard never asks for a seed phrase or private key. A safe result lowers risk; it is not a guarantee. Every warning includes the evidence and the next safest action.
             </div>
           </div>
 
-          <Card className="glass-panel premium-card data-scan reveal-up delay-200 rounded-lg">
-            <CardHeader>
+          <Card id="scan" className="glass-panel data-scan reveal-up delay-200 rounded-lg border-white/15 bg-[#081426]/95 shadow-2xl shadow-black/35">
+            <CardHeader className="border-b border-white/10 pb-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <CardTitle className="text-2xl">Live risk console</CardTitle>
-                  <CardDescription>
-                    Choose a chain, paste a Web3 object, and get a scored decision with evidence.
+                  <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-primary">New scan</p>
+                  <CardTitle className="mt-2 text-2xl tracking-tight">Risk review workspace</CardTitle>
+                  <CardDescription className="mt-1 max-w-lg">
+                    Select the surface, add optional wallet context, then review a decision built from inspectable evidence.
                   </CardDescription>
                 </div>
-                <Badge variant="outline" className={cn("gap-2", result ? statusTone(result.riskLevel) : "border-primary/30 text-primary")}>
+                <Badge variant="outline" className={cn("gap-2 rounded-md px-3 py-1.5", result ? statusTone(result.riskLevel) : "border-primary/30 text-primary")}>
                   <span className="pulse-dot" /> {result ? statusLabel(result.riskLevel) : "Ready"}
                 </Badge>
               </div>
             </CardHeader>
-            <CardContent className="space-y-5">
+            <CardContent className="space-y-5 pt-5">
               <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
-                <div className="rounded-lg border border-border bg-background/45 p-3 text-sm text-slate-300">
+                <div className="rounded-md border border-white/10 bg-slate-950/45 px-3 py-2.5 text-sm text-slate-300">
+                  <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500">Optional wallet context</p>
                   {connectedWallet ? (
                     <span className="break-all font-mono text-primary">{connectedWallet}</span>
                   ) : (
-                    <span>No wallet connected. Scans still work without wallet context.</span>
+                    <span>No wallet connected. The scanner works without it.</span>
                   )}
                 </div>
                 <Button type="button" variant="outline" className="text-white" onClick={connectWallet}>
@@ -625,7 +606,7 @@ export function ScamGuardPage() {
               </div>
               {walletMessage && <p className="text-sm text-muted-foreground">{walletMessage}</p>}
 
-              <div className="grid gap-2 rounded-lg border border-border bg-background/35 p-2 sm:grid-cols-2">
+              <div className="grid gap-2 rounded-md border border-white/10 bg-slate-950/35 p-2 sm:grid-cols-2">
                 {[
                   ["solana", "Solana", "Phantom, Backpack, SPL mints"] as const,
                   ["evm", "EVM", "MetaMask, Rabby, Base, Ethereum"] as const,
@@ -646,21 +627,30 @@ export function ScamGuardPage() {
                 ))}
               </div>
 
-              <div className="grid gap-2 rounded-lg border border-border bg-background/30 p-2 md:grid-cols-2">
-                {scanPresets.map((preset) => (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    className="rounded-md border border-border bg-background/45 p-3 text-left transition hover:border-primary/40 hover:bg-primary/5"
-                    onClick={() => loadPreset(preset)}
-                  >
-                    <span className="block text-sm font-medium text-white">{preset.label}</span>
-                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">{preset.detail}</span>
-                  </button>
-                ))}
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">Quick checks</p>
+                  <p className="text-xs text-slate-500">Load a sample without connecting a wallet.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                  {scanPresets.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      aria-label={`${preset.label}: ${preset.detail}`}
+                      className="rounded-md border border-white/10 bg-slate-950/35 px-3 py-2.5 text-left transition hover:border-primary/40 hover:bg-primary/5"
+                      onClick={() => loadPreset(preset)}
+                    >
+                      <span className="block text-sm font-medium text-white">{preset.label}</span>
+                      <span className="sr-only">{preset.detail}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-4">
+              <div>
+                <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">What are you checking?</p>
+                <div className="grid gap-2 sm:grid-cols-4">
                 {(Object.keys(modeConfig) as ScanMode[]).map((item) => {
                   const Icon = modeConfig[item].icon
                   return (
@@ -676,6 +666,7 @@ export function ScamGuardPage() {
                     </Button>
                   )
                 })}
+                </div>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3 text-sm">
@@ -687,7 +678,7 @@ export function ScamGuardPage() {
                 <Textarea
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
-                  className="min-h-36 font-mono text-sm"
+                  className="min-h-32 border-white/10 bg-slate-950/40 font-mono text-sm"
                   placeholder="Paste a suspicious Solana item..."
                 />
               </div>
@@ -699,7 +690,13 @@ export function ScamGuardPage() {
                 {error && <span className="text-sm text-red-200">{error}</span>}
               </div>
 
-              <div className="rounded-lg border border-border bg-background/55 p-4">
+              {!result && (
+                <div className="rounded-md border border-dashed border-white/15 bg-slate-950/25 px-4 py-3 text-sm text-slate-400">
+                  Your result will show the decision, confidence, source reputation, and the strongest evidence behind it.
+                </div>
+              )}
+
+              <div className={cn("rounded-md border border-white/10 bg-[#07101f]/85 p-4", !result && "hidden")}>
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -715,7 +712,7 @@ export function ScamGuardPage() {
                       {result ? primaryReason(result) : "ScamGuard will show the strongest driver, confidence, and next step here."}
                     </p>
                   </div>
-                  <div className="w-full rounded-lg border border-border bg-slate-950/45 p-4 lg:w-40">
+                  <div className="w-full rounded-md border border-white/10 bg-slate-950/65 p-4 lg:w-40">
                     <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Shield</p>
                     <div className="mt-2 flex items-end gap-2">
                       <span className="text-4xl font-semibold text-white">{result ? securityScore : "--"}</span>
@@ -735,7 +732,7 @@ export function ScamGuardPage() {
 
                 <div className="mt-4 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-3">
                   {resultMetricRows(result).map(([label, value]) => (
-                    <span key={label} className="rounded-lg border border-border bg-background/45 px-3 py-2">
+                    <span key={label} className="rounded-md border border-white/10 bg-slate-950/35 px-3 py-2">
                       <strong className="block text-[10px] uppercase tracking-[0.14em] text-slate-500">{label}</strong>
                       <span className="mt-1 block break-words text-slate-300">{value}</span>
                     </span>
@@ -743,7 +740,7 @@ export function ScamGuardPage() {
                 </div>
 
                 <div className="mt-4 grid gap-3 lg:grid-cols-[1.05fr_0.95fr]">
-                  <section className="rounded-lg border border-border bg-background/45 p-3">
+                  <section className="rounded-md border border-white/10 bg-slate-950/35 p-3">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <p className="flex items-center gap-2 text-sm font-medium text-primary"><FileSearch className="size-4" /> Signals</p>
                       <span className="text-xs text-muted-foreground">{result ? `${result.signals.length} found` : "Waiting"}</span>
@@ -760,13 +757,13 @@ export function ScamGuardPage() {
                   </section>
 
                   <section className="grid gap-3">
-                    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+                    <div className="rounded-md border border-primary/20 bg-primary/[0.06] p-3">
                       <p className="mb-2 flex items-center gap-2 text-sm font-medium text-primary"><CheckCircle2 className="size-4" /> What would make this safer?</p>
                       <ul className="space-y-2 text-sm leading-5 text-muted-foreground">
                         {saferSteps(result).map((step) => <li key={step}>- {step}</li>)}
                       </ul>
                     </div>
-                    <div className="rounded-lg border border-border bg-background/45 p-3 text-xs text-muted-foreground">
+                    <div className="rounded-md border border-white/10 bg-slate-950/35 p-3 text-xs text-muted-foreground">
                       <p className="mb-2 font-medium text-white">Evidence layer</p>
                       <div className="grid gap-2">
                         <span>RPC: {result?.metadata.rpcStatus ?? "not_scanned"}</span>
@@ -805,7 +802,7 @@ export function ScamGuardPage() {
                       </div>
                     </div>
                     {result && (
-                      <div className="rounded-lg border border-border bg-background/45 p-3">
+                      <div className="rounded-md border border-white/10 bg-slate-950/35 p-3">
                         <p className="text-xs font-medium uppercase tracking-[0.16em] text-primary">Feedback loop</p>
                         <div className="mt-3 grid gap-2 sm:grid-cols-4 lg:grid-cols-2">
                           <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => void submitFeedback("reported_safe")}>Looks safe</Button>
@@ -824,11 +821,12 @@ export function ScamGuardPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
+      <section id="extension" className="mx-auto max-w-7xl px-5 py-20 sm:px-8">
         <div className="grid gap-8 lg:grid-cols-[0.86fr_1.14fr] lg:items-start">
           <div>
-            <h2 className="text-3xl font-semibold text-white sm:text-5xl">
-              Browser protection that appears at the exact moment of risk.
+            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-primary">Browser layer</p>
+            <h2 className="mt-3 text-3xl font-semibold leading-tight text-white sm:text-5xl">
+              Protection where risky requests actually happen.
             </h2>
             <p className="mt-4 leading-7 text-muted-foreground">
               The Chrome extension carries the same server-side engine into live browsing sessions. It checks the current site, marks suspicious links on the page, and pauses risky wallet requests before the user signs.
@@ -841,8 +839,8 @@ export function ScamGuardPage() {
                 API docs <ArrowRight data-icon="inline-end" />
               </Link>
             </div>
-            <div className="mt-6 rounded-lg border border-border bg-background/45 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-primary">Protection levels</p>
+            <div className="mt-6 rounded-md border border-white/10 bg-slate-950/35 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-primary">Protection profiles</p>
               <div className="mt-3 grid gap-2 text-sm text-muted-foreground">
                 {["Balanced warns on high-risk flows.", "Strict escalates caution-level signing.", "Paranoid reviews every signing request."].map((item) => (
                   <div key={item} className="flex items-center gap-2">
@@ -855,7 +853,7 @@ export function ScamGuardPage() {
           </div>
 
           <div className="grid gap-5">
-            <div className="rounded-lg border border-primary/20 bg-slate-950/70 p-5 shadow-2xl shadow-cyan-950/20">
+            <div className="rounded-lg border border-white/10 bg-slate-950/70 p-5 shadow-2xl shadow-black/25">
               <div className="flex items-center justify-between border-b border-border pb-4">
                 <div className="flex items-center gap-3">
                   <span className="flex size-10 items-center justify-center rounded-lg border border-primary/30 bg-primary/10">
@@ -898,7 +896,7 @@ export function ScamGuardPage() {
         </div>
 
         <div className="mt-8 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
-          <Card className="glass-panel premium-card">
+          <Card className="glass-panel rounded-lg border-white/10">
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><PackageCheck className="text-primary" /> Install flow</CardTitle>
               <CardDescription>Until the Chrome Web Store listing is ready, install the unpacked extension from the downloadable package.</CardDescription>
@@ -923,7 +921,7 @@ export function ScamGuardPage() {
             </CardContent>
           </Card>
 
-          <Card className="glass-panel premium-card animated-border">
+          <Card className="glass-panel rounded-lg border-white/10">
             <CardHeader>
               <CardTitle>What the extension sends</CardTitle>
               <CardDescription>Designed for pre-sign safety without touching secret material.</CardDescription>
