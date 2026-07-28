@@ -3,6 +3,7 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
+  Bot,
   Bug,
   CheckCircle2,
   Clock3,
@@ -262,6 +263,7 @@ export default async function Page() {
         {[
           [ShieldCheck, "System Health", "Database, API keys, treasury wallets and worker queue.", "/dashboard/admin/diagnostics"],
           [ShieldAlert, "ScamGuard Intelligence", "Manage trusted, suspicious and known-bad domains, spenders and contracts.", "/dashboard/admin/scamguard"],
+          [Bot, "Telegram Guardian", "Manage protected groups, alert thresholds, scan history and daily summaries.", "/dashboard/admin/telegram"],
           [Gift, "Airdrop Review", "Approve contribution proofs and credit Season 0 task points.", "/dashboard/admin/airdrop"],
           [Bug, "Issue Tracker", "Track bugs, broken flows, visual issues and Codex tasks.", "/dashboard/admin/bugs"],
           [Activity, "Analysis Ops", "Review recent wallet analyses and failed jobs.", "/dashboard/admin/analyses"],

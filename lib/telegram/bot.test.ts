@@ -150,3 +150,119 @@ test("Group Guardian warns on known scam links", async () => {
   assert.equal(actions.length, 1)
   assert.match(actions[0].payload.text, /ScamGuard Group Guardian/)
 })
+
+test("Group Guardian stays quiet when group protection is disabled", async () => {
+  const update: TelegramUpdate = {
+    update_id: 4,
+    message: {
+      message_id: 13,
+      text: "claim here https://airdrop.orbition.network/",
+      chat: { id: -100, type: "supergroup", title: "Test group" },
+    },
+  }
+
+  const actions = await handleTelegramUpdate(update, {
+    groupSettings: {
+      guardianEnabled: false,
+      allowlisted: true,
+      alertLevel: "CAUTION",
+      dailySummary: true,
+    },
+  })
+  assert.equal(actions.length, 0)
+})
+
+test("Group Guardian rejects settings changes from non-admin members", async () => {
+  const update: TelegramUpdate = {
+    update_id: 5,
+    message: {
+      message_id: 14,
+      text: "/guardian threshold critical",
+      chat: { id: -100, type: "supergroup", title: "Test group" },
+      from: { id: 42, first_name: "Member" },
+    },
+  }
+
+  const actions = await handleTelegramUpdate(update, {
+    isGroupAdmin: async () => false,
+  })
+  assert.equal(actions.length, 1)
+  assert.match(actions[0].payload.text, /Only a verified Telegram group administrator/)
+})
+
+test("Group Guardian lets verified admins change the alert threshold", async () => {
+  const update: TelegramUpdate = {
+    update_id: 6,
+    message: {
+      message_id: 15,
+      text: "/guardian threshold critical",
+      chat: { id: -100, type: "supergroup", title: "Test group" },
+      from: { id: 7, first_name: "Admin" },
+    },
+  }
+  let savedLevel = ""
+
+  const actions = await handleTelegramUpdate(update, {
+    isGroupAdmin: async () => true,
+    updateGroupSettings: async (_chatId, values) => {
+      savedLevel = values.alertLevel ?? ""
+      return {
+        guardianEnabled: true,
+        allowlisted: true,
+        alertLevel: values.alertLevel ?? "HIGH_RISK",
+        dailySummary: true,
+      }
+    },
+  })
+
+  assert.equal(savedLevel, "CRITICAL")
+  assert.match(actions[0].payload.text, /Alert threshold: CRITICAL/)
+})
+
+test("Group Guardian includes a repeated campaign escalation", async () => {
+  const update: TelegramUpdate = {
+    update_id: 7,
+    message: {
+      message_id: 16,
+      text: "claim here https://airdrop.orbition.network/",
+      chat: { id: -100, type: "group", title: "Test group" },
+    },
+  }
+
+  const actions = await handleTelegramUpdate(update, {
+    recordScan: async () => ({ occurrenceCount: 3, repeatedCampaign: true }),
+  })
+
+  assert.equal(actions.length, 1)
+  assert.match(actions[0].payload.text, /REPEATED CAMPAIGN/)
+  assert.match(actions[0].payload.text, /appeared 3 times/)
+})
+
+test("Telegram history command renders persisted scan history", async () => {
+  const update: TelegramUpdate = {
+    update_id: 8,
+    message: {
+      message_id: 17,
+      text: "/history",
+      chat: { id: 123, type: "private" },
+    },
+  }
+
+  const actions = await handleTelegramUpdate(update, {
+    loadHistory: async () => [
+      {
+        target: "https://airdrop.orbition.network/",
+        domain: "airdrop.orbition.network",
+        scanType: "url",
+        riskLevel: "CRITICAL",
+        score: 8,
+        alerted: true,
+        createdAt: new Date("2026-07-28T12:00:00.000Z"),
+      },
+    ],
+  })
+
+  assert.match(actions[0].payload.text, /SCAMGUARD SCAN HISTORY/)
+  assert.match(actions[0].payload.text, /airdrop\.orbition\.network/)
+  assert.match(actions[0].payload.text, /CRITICAL \| 8\/100/)
+})

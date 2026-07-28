@@ -131,10 +131,21 @@ enum ScamGuardIntelVerdict {
   KNOWN_BAD
 }
 
+enum TelegramGuardianAlertLevel {
+  CAUTION
+  HIGH_RISK
+  CRITICAL
+}
+
+enum TelegramScanSource {
+  PRIVATE_COMMAND
+  GROUP_GUARDIAN
+}
+
 model User {
-  id                         String               @id @default(cuid())
+  id                         String                @id @default(cuid())
   name                       String
-  email                      String               @unique
+  email                      String                @unique
   passwordHash               String
   projects                   Project[]
   teamReviews                TeamReview[]
@@ -143,11 +154,11 @@ model User {
   paymentTransactions        PaymentTransaction[]
   creditLedgerEntries        CreditLedger[]
   airdropProfile             AirdropProfile?
-  airdropSubmissions         AirdropSubmission[]  @relation("AirdropSubmissionUser")
-  reviewedAirdropSubmissions AirdropSubmission[]  @relation("AirdropSubmissionReviewer")
+  airdropSubmissions         AirdropSubmission[]   @relation("AirdropSubmissionUser")
+  reviewedAirdropSubmissions AirdropSubmission[]   @relation("AirdropSubmissionReviewer")
   scamGuardIntelEntries      ScamGuardIntelEntry[]
-  createdAt                  DateTime             @default(now())
-  updatedAt                  DateTime             @updatedAt
+  createdAt                  DateTime              @default(now())
+  updatedAt                  DateTime              @updatedAt
 }
 
 model Project {
@@ -548,23 +559,93 @@ model AirdropSubmission {
 }
 
 model ScamGuardIntelEntry {
-  id          String                 @id @default(cuid())
+  id          String                @id @default(cuid())
   kind        ScamGuardIntelKind
   value       String
   normalized  String
-  chain       String                 @default("")
+  chain       String                @default("")
   verdict     ScamGuardIntelVerdict
   label       String
-  source      String                 @default("admin")
-  notes       String?                @db.Text
-  active      Boolean                @default(true)
+  source      String                @default("admin")
+  notes       String?               @db.Text
+  active      Boolean               @default(true)
   createdById String?
-  createdBy   User?                  @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt   DateTime               @default(now())
-  updatedAt   DateTime               @updatedAt
+  createdBy   User?                 @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
 
   @@unique([kind, normalized, chain])
   @@index([kind, normalized])
   @@index([verdict, active])
   @@index([createdById])
+}
+
+model TelegramGuardianGroup {
+  id              String                     @id @default(cuid())
+  telegramChatId  String                     @unique
+  title           String?
+  username        String?
+  guardianEnabled Boolean                    @default(true)
+  allowlisted     Boolean                    @default(false)
+  alertLevel      TelegramGuardianAlertLevel @default(HIGH_RISK)
+  dailySummary    Boolean                    @default(true)
+  scanCount       Int                        @default(0)
+  alertCount      Int                        @default(0)
+  lastSeenAt      DateTime                   @default(now())
+  lastSummaryAt   DateTime?
+  scans           TelegramScanEvent[]
+  threatCampaigns TelegramThreatCampaign[]
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+
+  @@index([guardianEnabled, allowlisted])
+  @@index([lastSeenAt])
+}
+
+model TelegramScanEvent {
+  id                String                 @id @default(cuid())
+  groupId           String?
+  group             TelegramGuardianGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  telegramUpdateId  String?
+  telegramChatId    String
+  telegramMessageId Int
+  telegramUserId    String?
+  target            String                 @db.Text
+  targetHash        String
+  domain            String?
+  scanType          String
+  source            TelegramScanSource
+  chain             String
+  riskLevel         String
+  score             Int
+  confidence        String
+  summary           String                 @db.Text
+  alerted           Boolean                @default(false)
+  createdAt         DateTime               @default(now())
+
+  @@unique([telegramChatId, telegramMessageId, targetHash])
+  @@index([groupId, createdAt])
+  @@index([telegramChatId, createdAt])
+  @@index([targetHash, createdAt])
+  @@index([riskLevel, alerted, createdAt])
+}
+
+model TelegramThreatCampaign {
+  id              String                @id @default(cuid())
+  groupId         String
+  group           TelegramGuardianGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  fingerprint     String
+  target          String                @db.Text
+  domain          String?
+  occurrenceCount Int                   @default(1)
+  highestRisk     String
+  firstSeenAt     DateTime              @default(now())
+  lastSeenAt      DateTime              @default(now())
+  lastAlertAt     DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@unique([groupId, fingerprint])
+  @@index([groupId, lastSeenAt])
+  @@index([highestRisk, lastSeenAt])
 }

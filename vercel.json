@@ -3,6 +3,10 @@
     {
       "path": "/api/worker/analysis-queue",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/telegram/daily-summary",
+      "schedule": "0 8 * * *"
     }
   ]
 }

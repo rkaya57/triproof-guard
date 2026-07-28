@@ -54,6 +54,54 @@ export type TelegramBotAction = {
 export type TelegramBotContext = {
   publicBaseUrl?: string
   groupAlertLevel?: "CAUTION" | "HIGH_RISK" | "CRITICAL"
+  groupSettings?: {
+    guardianEnabled: boolean
+    allowlisted: boolean
+    alertLevel: "CAUTION" | "HIGH_RISK" | "CRITICAL"
+    dailySummary: boolean
+  }
+  isGroupAdmin?: (chatId: number, userId: number) => Promise<boolean>
+  updateGroupSettings?: (
+    chatId: number,
+    values: {
+      guardianEnabled?: boolean
+      alertLevel?: "CAUTION" | "HIGH_RISK" | "CRITICAL"
+      dailySummary?: boolean
+    }
+  ) => Promise<{
+    guardianEnabled: boolean
+    allowlisted: boolean
+    alertLevel: "CAUTION" | "HIGH_RISK" | "CRITICAL"
+    dailySummary: boolean
+  }>
+  loadHistory?: (chatId: number, limit?: number) => Promise<
+    Array<{
+      target: string
+      domain: string | null
+      scanType: string
+      riskLevel: string
+      score: number
+      alerted: boolean
+      createdAt: Date
+    }>
+  >
+  loadSummary?: (chatId: number, hours?: number) => Promise<{
+    hours: number
+    total: number
+    alerts: number
+    critical: number
+    repeated: number
+  }>
+  recordScan?: (input: {
+    message: TelegramMessage
+    candidate: ScanCandidate
+    result: ScamGuardScanResult
+    source: "PRIVATE_COMMAND" | "GROUP_GUARDIAN"
+    alerted: boolean
+  }) => Promise<{
+    occurrenceCount: number
+    repeatedCampaign: boolean
+  }>
 }
 
 type ScanCandidate = {
@@ -90,11 +138,14 @@ const commandHelp = [
   "/token <mint|contract>",
   "/tx <transaction payload>",
   "/report <item>",
+  "/history",
+  "/summary",
   "/settings",
   "",
   "Group Guardian",
   "--------------",
   "Add the bot to a Telegram group and it will scan posted links. It only replies when the risk crosses the configured alert threshold.",
+  "Group admins can use /guardian to manage protection.",
 ].join("\n")
 
 function textOf(message: TelegramMessage) {
@@ -324,7 +375,10 @@ export function formatTelegramScanReport(result: ScamGuardScanResult, context?: 
   return lines.join("\n").slice(0, 3900)
 }
 
-function groupWarningText(result: ScamGuardScanResult) {
+function groupWarningText(
+  result: ScamGuardScanResult,
+  campaign?: { occurrenceCount: number; repeatedCampaign: boolean }
+) {
   if (isProgramOwnedWalletResult(result)) return accountTypeReportText(result)
 
   const signals = strongestSignals(result)
@@ -341,6 +395,10 @@ function groupWarningText(result: ScamGuardScanResult) {
     result.summary,
     signals.length ? divider("strongest signals") : undefined,
     ...signals.slice(0, 3),
+    campaign?.repeatedCampaign ? divider("repeated campaign") : undefined,
+    campaign?.repeatedCampaign
+      ? `The same target appeared ${campaign.occurrenceCount} times in this group during the active detection window. Group admins should review the posting accounts.`
+      : undefined,
     "",
     "Action: verify the source from an official channel before connecting a wallet or signing anything.",
   ]
@@ -373,6 +431,153 @@ async function scanCandidate(candidate: ScanCandidate) {
   })
 }
 
+function currentGroupSettings(context: TelegramBotContext) {
+  return (
+    context.groupSettings ?? {
+      guardianEnabled: true,
+      allowlisted: true,
+      alertLevel: context.groupAlertLevel ?? "HIGH_RISK",
+      dailySummary: true,
+    }
+  )
+}
+
+function guardianStatusText(context: TelegramBotContext) {
+  const settings = currentGroupSettings(context)
+  return [
+    "ScamGuard Group Guardian",
+    "Protection controls",
+    "=======================",
+    "",
+    `Protection: ${settings.guardianEnabled ? "ON" : "OFF"}`,
+    `Group approval: ${settings.allowlisted ? "APPROVED" : "NOT APPROVED"}`,
+    `Alert threshold: ${settings.alertLevel}`,
+    `Daily summary: ${settings.dailySummary ? "ON" : "OFF"}`,
+    "",
+    "[ ADMIN COMMANDS ]",
+    "/guardian on",
+    "/guardian off",
+    "/guardian threshold caution",
+    "/guardian threshold high",
+    "/guardian threshold critical",
+    "/guardian summary on",
+    "/guardian summary off",
+    "",
+    "Use /history for recent scans and /summary for the last 24 hours.",
+  ].join("\n")
+}
+
+function historyText(
+  history: Awaited<ReturnType<NonNullable<TelegramBotContext["loadHistory"]>>>
+) {
+  if (!history.length) {
+    return "SCAMGUARD SCAN HISTORY\n======================\n\nNo scans have been recorded for this chat yet."
+  }
+
+  return [
+    "SCAMGUARD SCAN HISTORY",
+    "======================",
+    "",
+    ...history.map((item, index) => {
+      const target = item.domain ?? item.target
+      const time = item.createdAt.toISOString().replace("T", " ").slice(0, 16)
+      return `${index + 1}. ${item.riskLevel} | ${item.score}/100\n   ${target}\n   ${time} UTC`
+    }),
+  ]
+    .join("\n")
+    .slice(0, 3900)
+}
+
+export function formatGuardianSummary(summary: {
+  hours: number
+  total: number
+  alerts: number
+  critical: number
+  repeated: number
+}) {
+  return [
+    "ScamGuard Guardian Summary",
+    `${summary.hours}-hour community protection report`,
+    "====================================",
+    "",
+    `Links and items scanned: ${summary.total}`,
+    `Security alerts issued: ${summary.alerts}`,
+    `Critical detections: ${summary.critical}`,
+    `Repeated campaigns: ${summary.repeated}`,
+    "",
+    summary.alerts === 0
+      ? "No alert-level threat crossed this group's configured threshold."
+      : "Review alert messages and remove repeated malicious links or posting accounts.",
+  ].join("\n")
+}
+
+async function isVerifiedGroupAdmin(message: TelegramMessage, context: TelegramBotContext) {
+  if (!message.from?.id || !context.isGroupAdmin) return false
+  return context.isGroupAdmin(message.chat.id, message.from.id)
+}
+
+async function handleGuardianCommand(message: TelegramMessage, args: string, context: TelegramBotContext) {
+  const normalized = args.trim().toLowerCase()
+  if (!normalized || normalized === "status") {
+    return [simpleReply(message, guardianStatusText(context))]
+  }
+
+  const allowed = await isVerifiedGroupAdmin(message, context)
+  if (!allowed) {
+    return [simpleReply(message, "Only a verified Telegram group administrator can change Group Guardian settings.")]
+  }
+  if (!context.updateGroupSettings) {
+    return [simpleReply(message, "Group settings storage is temporarily unavailable. Please try again shortly.")]
+  }
+
+  let values:
+    | {
+        guardianEnabled?: boolean
+        alertLevel?: "CAUTION" | "HIGH_RISK" | "CRITICAL"
+        dailySummary?: boolean
+      }
+    | null = null
+
+  if (normalized === "on") values = { guardianEnabled: true }
+  if (normalized === "off") values = { guardianEnabled: false }
+  if (normalized === "summary on") values = { dailySummary: true }
+  if (normalized === "summary off") values = { dailySummary: false }
+  if (normalized === "threshold caution") values = { alertLevel: "CAUTION" }
+  if (normalized === "threshold high" || normalized === "threshold high_risk") values = { alertLevel: "HIGH_RISK" }
+  if (normalized === "threshold critical") values = { alertLevel: "CRITICAL" }
+
+  if (!values) {
+    return [simpleReply(message, `Unknown Guardian setting.\n\n${guardianStatusText(context)}`)]
+  }
+
+  const updated = await context.updateGroupSettings(message.chat.id, values)
+  return [
+    simpleReply(
+      message,
+      [
+        "GROUP GUARDIAN UPDATED",
+        "======================",
+        "",
+        `Protection: ${updated.guardianEnabled ? "ON" : "OFF"}`,
+        `Alert threshold: ${updated.alertLevel}`,
+        `Daily summary: ${updated.dailySummary ? "ON" : "OFF"}`,
+      ].join("\n")
+    ),
+  ]
+}
+
+async function recordScanSafely(
+  context: TelegramBotContext,
+  input: Parameters<NonNullable<TelegramBotContext["recordScan"]>>[0]
+) {
+  if (!context.recordScan) return { occurrenceCount: 1, repeatedCampaign: false }
+  try {
+    return await context.recordScan(input)
+  } catch {
+    return { occurrenceCount: 1, repeatedCampaign: false }
+  }
+}
+
 async function handlePrivateOrCommand(message: TelegramMessage, context: TelegramBotContext) {
   const text = textOf(message).trim()
   const command = parseCommand(text)
@@ -382,6 +587,9 @@ async function handlePrivateOrCommand(message: TelegramMessage, context: Telegra
   }
 
   if (command?.name === "settings") {
+    if (message.chat.type === "group" || message.chat.type === "supergroup") {
+      return [simpleReply(message, guardianStatusText(context))]
+    }
     return [
       simpleReply(
         message,
@@ -391,10 +599,27 @@ async function handlePrivateOrCommand(message: TelegramMessage, context: Telegra
           "",
           `Group alert threshold: ${context.groupAlertLevel ?? "HIGH_RISK"}`,
           "Data policy: the bot never asks for seed phrases, private keys, wallet passwords, or custody permissions.",
-          "History: this beta does not store Telegram scan history yet.",
+          "History: recent scans can be viewed with /history.",
         ].join("\n")
       ),
     ]
+  }
+
+  if (command?.name === "guardian") {
+    if (message.chat.type !== "group" && message.chat.type !== "supergroup") {
+      return [simpleReply(message, "Add ScamGuard to a Telegram group, then use /guardian there to manage Group Guardian.")]
+    }
+    return handleGuardianCommand(message, command.args, context)
+  }
+
+  if (command?.name === "history") {
+    if (!context.loadHistory) return [simpleReply(message, "Scan history is temporarily unavailable.")]
+    return [simpleReply(message, historyText(await context.loadHistory(message.chat.id, 6)))]
+  }
+
+  if (command?.name === "summary") {
+    if (!context.loadSummary) return [simpleReply(message, "Guardian summary is temporarily unavailable.")]
+    return [simpleReply(message, formatGuardianSummary(await context.loadSummary(message.chat.id, 24)))]
   }
 
   const forcedType =
@@ -418,24 +643,44 @@ async function handlePrivateOrCommand(message: TelegramMessage, context: Telegra
   }
 
   const result = await scanCandidate(candidate)
+  await recordScanSafely(context, {
+    message,
+    candidate,
+    result,
+    source:
+      message.chat.type === "group" || message.chat.type === "supergroup"
+        ? "GROUP_GUARDIAN"
+        : "PRIVATE_COMMAND",
+    alerted: false,
+  })
   return [simpleReply(message, formatTelegramScanReport(result, context))]
 }
 
 async function handleGroupGuardian(message: TelegramMessage, context: TelegramBotContext) {
-  const threshold = context.groupAlertLevel ?? "HIGH_RISK"
+  const command = parseCommand(textOf(message))
+  if (command) return handlePrivateOrCommand(message, context)
+
+  const settings = currentGroupSettings(context)
+  if (!settings.guardianEnabled || !settings.allowlisted) return []
+
+  const threshold = settings.alertLevel
   const urls = urlEntities(message).slice(0, 5)
   const actions: TelegramBotAction[] = []
 
   for (const url of urls) {
-    const result = await scanCandidate({ type: "url", value: url, chain: "unknown" })
-    if (levelMeetsThreshold(result.riskLevel, threshold)) {
-      actions.push(simpleReply(message, groupWarningText(result)))
+    const candidate: ScanCandidate = { type: "url", value: url, chain: "unknown" }
+    const result = await scanCandidate(candidate)
+    const alerted = levelMeetsThreshold(result.riskLevel, threshold)
+    const campaign = await recordScanSafely(context, {
+      message,
+      candidate,
+      result,
+      source: "GROUP_GUARDIAN",
+      alerted,
+    })
+    if (alerted) {
+      actions.push(simpleReply(message, groupWarningText(result, campaign)))
     }
-  }
-
-  const command = parseCommand(textOf(message))
-  if (command) {
-    actions.push(...(await handlePrivateOrCommand(message, context)))
   }
 
   return actions

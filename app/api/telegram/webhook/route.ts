@@ -1,6 +1,19 @@
 import { NextResponse } from "next/server"
 
-import { handleTelegramUpdate, type TelegramBotAction, type TelegramUpdate } from "@/lib/telegram/bot"
+import {
+  handleTelegramUpdate,
+  type TelegramBotAction,
+  type TelegramBotContext,
+  type TelegramUpdate,
+} from "@/lib/telegram/bot"
+import { isTelegramGroupAdmin, sendTelegramAction } from "@/lib/telegram/api"
+import {
+  ensureTelegramGroup,
+  getTelegramGroupSummary,
+  getTelegramHistory,
+  recordTelegramScan,
+  updateTelegramGroupSettings,
+} from "@/lib/telegram/store"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -23,19 +36,11 @@ function isSecretValid(request: Request) {
   return request.headers.get("x-telegram-bot-api-secret-token") === configured
 }
 
-async function sendTelegramAction(token: string, action: TelegramBotAction) {
-  if (action.method !== "sendMessage") return
-
-  const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(action.payload),
-  })
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => "")
-    throw new Error(`Telegram sendMessage failed: ${response.status} ${body.slice(0, 300)}`)
-  }
+function environmentAllowsGroup(chatId: number) {
+  const configured = process.env.TELEGRAM_GROUP_ALLOWLIST?.trim()
+  if (!configured) return true
+  const allowed = new Set(configured.split(",").map((value) => value.trim()).filter(Boolean))
+  return allowed.has(String(chatId))
 }
 
 export async function POST(request: Request) {
@@ -48,12 +53,78 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid Telegram update" }, { status: 400 })
   }
 
-  const actions = await handleTelegramUpdate(update, {
-    publicBaseUrl: configuredPublicBaseUrl(),
-    groupAlertLevel: configuredGroupAlertLevel(),
-  })
-
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim()
+  const message = update.message ?? update.edited_message
+  const isGroup = message?.chat.type === "group" || message?.chat.type === "supergroup"
+  let groupSettings: TelegramBotContext["groupSettings"]
+
+  if (isGroup && message) {
+    try {
+      const stored = await ensureTelegramGroup(message.chat, configuredGroupAlertLevel())
+      groupSettings = {
+        ...stored,
+        allowlisted: stored.allowlisted && environmentAllowsGroup(message.chat.id),
+      }
+    } catch (error) {
+      console.error("Telegram group settings could not be loaded", error)
+      groupSettings = {
+        guardianEnabled: false,
+        allowlisted: false,
+        alertLevel: configuredGroupAlertLevel(),
+        dailySummary: false,
+      }
+    }
+  }
+
+  let actions: TelegramBotAction[]
+  try {
+    actions = await handleTelegramUpdate(update, {
+      publicBaseUrl: configuredPublicBaseUrl(),
+      groupAlertLevel: configuredGroupAlertLevel(),
+      groupSettings,
+      isGroupAdmin: async (chatId, userId) => {
+        if (!token) return false
+        return isTelegramGroupAdmin(token, chatId, userId)
+      },
+      updateGroupSettings: (chatId, values) => updateTelegramGroupSettings(chatId, values),
+      loadHistory: getTelegramHistory,
+      loadSummary: getTelegramGroupSummary,
+      recordScan: ({ message: scanMessage, candidate, result, source, alerted }) =>
+        recordTelegramScan({
+          updateId: update.update_id,
+          chatId: scanMessage.chat.id,
+          messageId: scanMessage.message_id,
+          userId: scanMessage.from?.id,
+          group:
+            scanMessage.chat.type === "group" || scanMessage.chat.type === "supergroup"
+              ? {
+                  title: scanMessage.chat.title,
+                  username: scanMessage.chat.username,
+                }
+              : undefined,
+          target: candidate.value,
+          scanType: result.type,
+          source,
+          chain: result.metadata.chain,
+          riskLevel: result.riskLevel,
+          score: result.score,
+          confidence: result.confidence,
+          summary: result.summary,
+          domain: result.metadata.domain,
+          alerted,
+        }),
+    })
+  } catch (error) {
+    console.error("Telegram update handling failed", error)
+    return NextResponse.json(
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : "Telegram update handling failed",
+      },
+      { status: 500 }
+    )
+  }
+
   if (!token) {
     return NextResponse.json({
       ok: true,
@@ -90,6 +161,7 @@ export async function GET() {
       token: Boolean(process.env.TELEGRAM_BOT_TOKEN?.trim()),
       secret: Boolean(process.env.TELEGRAM_WEBHOOK_SECRET?.trim()),
       groupAlertLevel: configuredGroupAlertLevel(),
+      groupAllowlist: Boolean(process.env.TELEGRAM_GROUP_ALLOWLIST?.trim()),
     },
   })
 }

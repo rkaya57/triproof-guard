@@ -20,7 +20,7 @@ Current product direction:
 
 ## Completed Work
 
-### Telegram Bot and Group Guardian Beta
+### Telegram Bot and Group Guardian Operations
 
 - Added `/api/telegram/webhook` as the Telegram Bot API webhook endpoint.
 - Added private chat command handling for:
@@ -42,12 +42,28 @@ Current product direction:
   - `TELEGRAM_WEBHOOK_SECRET`
   - `TELEGRAM_GROUP_ALERT_LEVEL`
 - Added Telegram bot unit tests.
+- Added persistent Telegram scan history with privacy-aware transaction payload storage.
+- Added `/history`, `/summary`, and `/guardian` command families.
+- Added Telegram API verification so only current group creators/admins can change settings.
+- Added per-group:
+  - protection on/off
+  - database allowlist approval
+  - `CAUTION`, `HIGH_RISK`, or `CRITICAL` thresholds
+  - daily summary on/off
+- Added repeated campaign detection for targets posted three or more times in a 24-hour window.
+- Added a protected daily Vercel cron endpoint for 24-hour community summaries.
+- Added `/dashboard/admin/telegram` for group approval, thresholds, protection state, reports, and recent activity.
+- Added Prisma models and migration for groups, scan events, and repeated threat campaigns.
 
 Key files:
 
 - `app/api/telegram/webhook/route.ts`
 - `lib/telegram/bot.ts`
 - `lib/telegram/bot.test.ts`
+- `lib/telegram/store.ts`
+- `lib/telegram/api.ts`
+- `app/api/telegram/daily-summary/route.ts`
+- `app/dashboard/admin/telegram/page.tsx`
 
 ### Risk Engine
 
@@ -258,13 +274,12 @@ Checked:
 
 ## Suggested Next Steps
 
-1. Deploy Telegram webhook env vars and set the Telegram Bot API webhook.
-2. Add persistent Telegram scan history and `/history`.
-3. Add Group Guardian admin settings, group allowlist, and daily summaries.
-4. Create the full Project Registry with signed verification.
-5. Add URL sandbox and Scam DNA fingerprinting.
-6. Deepen wallet/referral/funding graph intelligence.
-7. Add AI-assisted explanation copy for reports and Telegram replies.
+1. Verify the production Telegram migration, webhook, admin controls, and daily cron after deployment.
+2. Add suspicious poster correlation and abuse/rate limits.
+3. Create the full Project Registry with signed verification.
+4. Add URL sandbox and Scam DNA fingerprinting.
+5. Deepen wallet/referral/funding graph intelligence.
+6. Add AI-assisted explanation copy for reports and Telegram replies.
 
 ## Resume Checklist
 

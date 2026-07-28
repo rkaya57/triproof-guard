@@ -63,7 +63,7 @@ The current product build includes a public landing page, ScamGuard scanner, Tel
 - Trusted domain controls
 - Configurable ScamGuard API base URL
 
-### Telegram Bot and Group Guardian Beta
+### Telegram Bot and Group Guardian
 
 - Webhook endpoint for Telegram Bot API updates
 - Private chat commands:
@@ -74,10 +74,18 @@ The current product build includes a public landing page, ScamGuard scanner, Tel
   - `/token <mint|contract>`
   - `/tx <transaction payload>`
   - `/report <item>`
+  - `/history`
+  - `/summary`
   - `/settings`
 - Natural input scanning when a user sends a URL, wallet, token, or transaction payload directly
 - Group Guardian mode for Telegram groups and supergroups
 - Automatic URL extraction from messages and Telegram URL entities
+- Persistent private and group scan history
+- Telegram-verified, admin-only `/guardian` controls
+- Per-group protection status, approval, alert threshold, and daily summary settings
+- Repeated campaign detection after the same target appears multiple times
+- Scheduled 24-hour community protection summaries
+- Admin operations console at `/dashboard/admin/telegram`
 - Configurable group alert threshold: `CAUTION`, `HIGH_RISK`, or `CRITICAL`
 - Replies only when a scanned group link meets the configured risk threshold
 - Uses the same ScamGuard engine as the web scanner, extension, and API
@@ -350,6 +358,7 @@ Optional:
 
 ```text
 TELEGRAM_GROUP_ALERT_LEVEL=HIGH_RISK
+TELEGRAM_GROUP_ALLOWLIST=-1001234567890,-1009876543210
 ```
 
 Allowed values for `TELEGRAM_GROUP_ALERT_LEVEL`:
@@ -357,6 +366,29 @@ Allowed values for `TELEGRAM_GROUP_ALERT_LEVEL`:
 - `CAUTION`: warn on medium and stronger risk
 - `HIGH_RISK`: warn on high and critical risk
 - `CRITICAL`: warn only on critical risk
+
+New groups start blocked and must be approved from `/dashboard/admin/telegram`.
+`TELEGRAM_GROUP_ALLOWLIST` adds an optional deployment-level restriction. When
+it is set, a group must be present in both the environment allowlist and the
+database allowlist.
+
+Group admin commands:
+
+```text
+/guardian
+/guardian on
+/guardian off
+/guardian threshold caution
+/guardian threshold high
+/guardian threshold critical
+/guardian summary on
+/guardian summary off
+/history
+/summary
+```
+
+Setting changes call Telegram `getChatMember`; only the group creator or a
+current Telegram administrator can change protection.
 
 Set the Telegram webhook after deployment:
 
@@ -372,6 +404,15 @@ Health check:
 ```text
 GET /api/telegram/webhook
 ```
+
+Daily summaries run through:
+
+```text
+GET /api/telegram/daily-summary
+```
+
+The production cron is declared in `vercel.json` and authenticated with
+`CRON_SECRET`. The endpoint is idempotent within its summary window.
 
 ## Testing and Validation
 
@@ -438,8 +479,8 @@ Proposed Solana Foundation Turkey Grants scope:
 
 ## Roadmap
 
-- Telegram Bot MVP hardening: scan history, language preference, richer `/report`, and abuse/rate limits
-- Group Guardian: group allowlist, admin-only settings, daily summaries, and repeated campaign detection
+- Telegram Bot hardening: language preference, richer `/report`, and abuse/rate limits
+- Group Guardian moderation: suspicious poster correlation and account-level campaign views
 - Full Project Registry with signed project verification messages
 - Scam DNA fingerprinting for phishing infrastructure reuse
 - Stronger Solana serialized transaction decoding
