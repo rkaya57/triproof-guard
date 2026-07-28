@@ -1,4 +1,5 @@
 import { scanScamGuard, type ScamGuardChain, type ScamGuardRiskLevel, type ScamGuardScanResult, type ScamGuardScanType } from "@/lib/scamguard/engine"
+import { generateScamGuardAiReply } from "@/lib/ai/scamguard-reply"
 
 export type TelegramChatType = "private" | "group" | "supergroup" | "channel" | string
 
@@ -375,6 +376,21 @@ export function formatTelegramScanReport(result: ScamGuardScanResult, context?: 
   return lines.join("\n").slice(0, 3900)
 }
 
+async function formatTelegramPrivateScanReport(result: ScamGuardScanResult, context?: TelegramBotContext) {
+  const report = formatTelegramScanReport(result, context)
+  if (isProgramOwnedWalletResult(result)) return report
+
+  const aiReply = await generateScamGuardAiReply(result)
+  const lines = [
+    report,
+    divider(aiReply.source === "gemini" ? "Gemini explanation" : "Evidence explanation"),
+    aiReply.headline,
+    aiReply.explanation,
+    ...aiReply.nextSteps.map((action) => `- ${action}`),
+  ]
+  return lines.join("\n").slice(0, 3900)
+}
+
 function groupWarningText(
   result: ScamGuardScanResult,
   campaign?: { occurrenceCount: number; repeatedCampaign: boolean }
@@ -654,7 +670,7 @@ async function handlePrivateOrCommand(message: TelegramMessage, context: Telegra
         : "PRIVATE_COMMAND",
     alerted: false,
   })
-  return [simpleReply(message, formatTelegramScanReport(result, context))]
+  return [simpleReply(message, await formatTelegramPrivateScanReport(result, context))]
 }
 
 async function handleGroupGuardian(message: TelegramMessage, context: TelegramBotContext) {

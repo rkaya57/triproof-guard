@@ -15,7 +15,7 @@ Current product direction:
 3. URL Sandbox and Scam DNA fingerprinting - complete
 4. Wallet, referral, and funding graph intelligence - complete
 5. AI-assisted explanation layer for reports - complete
-6. Gemini-assisted Telegram replies
+6. Gemini-assisted Telegram replies - complete
 7. Production observability, distributed rate limits, retention, and privacy controls
 8. Full Project Registry with signed verification
 
@@ -28,6 +28,8 @@ Current product direction:
 - Added a deterministic evidence-based fallback when Gemini is missing, unavailable, rate-limited, or returns invalid output.
 - Added per-user request limits and server-only Prisma storage with RLS enabled.
 - Added focused tests proving address sanitization and fallback-brief behavior.
+- Added Gemini-assisted private Telegram scan explanations with a four-second timeout and deterministic fallback.
+- Group Guardian remains deterministic to protect rate limits and avoid AI cost amplification from untrusted group traffic.
 
 ### Wallet, Referral, and Funding Graph Intelligence
 

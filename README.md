@@ -337,6 +337,10 @@ stored explanation. Requests are authenticated, scoped to the report owner, and
 rate-limited. The key must never use a `NEXT_PUBLIC_` prefix or be committed to
 source control.
 
+Private Telegram scans use the same optional Gemini key to append a short
+plain-language explanation. Group Guardian alerts keep the deterministic path,
+so untrusted group traffic cannot trigger AI-generation costs.
+
 ## ScamGuard API
 
 Public scanner endpoints:
