@@ -236,27 +236,29 @@ function overlayMarkup(result, options) {
     : ""
   return `
     <div class="sgx-modal ${riskClass(result.riskLevel)}" role="dialog" aria-modal="true">
-      <div class="sgx-modal-header">
-        <span class="sgx-pill ${riskClass(result.riskLevel)}">${riskLabel(result.riskLevel)} / ${securityScore(result)}</span>
-        <h2>${escapeHtml(options.title ?? "ScamGuard warning")}</h2>
-        <p>${escapeHtml(decision?.userMessage ?? result.summary ?? "Pause for a second and review this before continuing.")}</p>
-      </div>
-      ${signingSummary}
-      ${transactionSummary}
-      <div class="sgx-decision-note">
-        <strong>${escapeHtml(decision?.headline ?? "Decision context")}</strong>
-        <span>${escapeHtml(decision?.primaryReason ?? result.explanation ?? "ScamGuard compares the source, wallet intent, reputation, and known scam patterns before showing this warning.")}</span>
-      </div>
-      ${timelineSummary}
-      <div class="sgx-modal-grid">
-        <section>
-          <h3>What triggered it</h3>
-          <ul>${signals || "<li><strong>No signal details</strong><span>ScamGuard returned no additional evidence, but this action still deserves attention.</span></li>"}</ul>
-        </section>
-        <section>
-          <h3>Smart next move</h3>
-          <ul>${actions || "<li>Cancel and verify from the official project account.</li>"}</ul>
-        </section>
+      <div class="sgx-modal-scroll">
+        <div class="sgx-modal-header">
+          <span class="sgx-pill ${riskClass(result.riskLevel)}">${riskLabel(result.riskLevel)} / ${securityScore(result)}</span>
+          <h2>${escapeHtml(options.title ?? "ScamGuard warning")}</h2>
+          <p>${escapeHtml(decision?.userMessage ?? result.summary ?? "Pause for a second and review this before continuing.")}</p>
+        </div>
+        ${signingSummary}
+        ${transactionSummary}
+        <div class="sgx-decision-note">
+          <strong>${escapeHtml(decision?.headline ?? "Decision context")}</strong>
+          <span>${escapeHtml(decision?.primaryReason ?? result.explanation ?? "ScamGuard compares the source, wallet intent, reputation, and known scam patterns before showing this warning.")}</span>
+        </div>
+        ${timelineSummary}
+        <div class="sgx-modal-grid">
+          <section>
+            <h3>What triggered it</h3>
+            <ul>${signals || "<li><strong>No signal details</strong><span>ScamGuard returned no additional evidence, but this action still deserves attention.</span></li>"}</ul>
+          </section>
+          <section>
+            <h3>Smart next move</h3>
+            <ul>${actions || "<li>Cancel and verify from the official project account.</li>"}</ul>
+          </section>
+        </div>
       </div>
       <div class="sgx-modal-actions">
         <button type="button" data-decision="cancel">Cancel safely</button>
