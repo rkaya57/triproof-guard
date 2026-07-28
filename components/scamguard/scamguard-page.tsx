@@ -350,7 +350,7 @@ function dataSourceLabel(result: ScanResult | null) {
 
 function sandboxLabel(result: ScanResult | null) {
   const sandbox = result?.metadata.sandbox
-  if (!sandbox) return result?.type === "url" ? "Waiting" : "Not required"
+  if (!sandbox) return result ? (result.type === "url" ? "Not run" : "Not required") : "Waiting"
   if (sandbox.status === "complete") return `${sandbox.httpStatus ?? "HTTP"} · ${sandbox.elapsedMs} ms`
   if (sandbox.status === "blocked") return "Network policy blocked"
   if (sandbox.status === "unsupported") return "Non-HTML response"
@@ -360,7 +360,7 @@ function sandboxLabel(result: ScanResult | null) {
 
 function dnaLabel(result: ScanResult | null) {
   const dna = result?.metadata.scamDna
-  if (!dna) return result?.type === "url" ? "No fingerprint" : "Not required"
+  if (!dna) return result ? (result.type === "url" ? "No fingerprint" : "Not required") : "Waiting"
   if (!dna.match.matched) return "New fingerprint"
   return `${Math.round(dna.match.similarity * 100)}% · ${verdictLabel(dna.match.verdict)}`
 }
