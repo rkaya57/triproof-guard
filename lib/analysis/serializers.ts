@@ -1,5 +1,6 @@
 import type {
   AnalysisDetail,
+  AiAnalysisBrief,
   AnalysisMode,
   ClusterResult,
   EnrichmentMeta,
@@ -113,6 +114,16 @@ type DbAnalysis = {
     components: unknown
     findings: unknown
   } | null
+  aiBrief?: {
+    provider: string
+    model: string | null
+    executiveSummary: string
+    decisionRationale: string
+    riskDrivers: unknown
+    recommendedActions: unknown
+    limitations: unknown
+    updatedAt: Date
+  } | null
 }
 
 function reasonsToStrings(reasons: unknown) {
@@ -224,6 +235,20 @@ export function serializeAnalysis(analysis: DbAnalysis): AnalysisDetail {
           : [],
       }
     : null
+  const aiBrief: AiAnalysisBrief | null = analysis.aiBrief
+    ? {
+        source: analysis.aiBrief.provider === "gemini" ? "gemini" : "fallback",
+        model: analysis.aiBrief.model,
+        generatedAt: analysis.aiBrief.updatedAt.toISOString(),
+        executiveSummary: analysis.aiBrief.executiveSummary,
+        decisionRationale: analysis.aiBrief.decisionRationale,
+        riskDrivers: Array.isArray(analysis.aiBrief.riskDrivers)
+          ? (analysis.aiBrief.riskDrivers as AiAnalysisBrief["riskDrivers"])
+          : [],
+        recommendedActions: reasonsToStrings(analysis.aiBrief.recommendedActions),
+        limitations: reasonsToStrings(analysis.aiBrief.limitations),
+      }
+    : null
 
   return {
     id: analysis.id,
@@ -260,5 +285,6 @@ export function serializeAnalysis(analysis: DbAnalysis): AnalysisDetail {
     wallets,
     clusters,
     graph,
+    aiBrief,
   }
 }

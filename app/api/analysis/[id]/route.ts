@@ -18,6 +18,7 @@ async function getAnalysisWithReviewData(id: string, userId: string) {
       teamReviews: { include: { reviewer: { select: { name: true } } } },
       feedbackEvents: true,
       graphSummary: true,
+      aiBrief: true,
     },
   })
 }
@@ -30,6 +31,7 @@ async function getAnalysisWithoutReviewData(id: string, userId: string) {
       wallets: { orderBy: [{ riskScore: "desc" }, { walletAddress: "asc" }] },
       clusters: { orderBy: [{ averageRiskScore: "desc" }, { clusterLabel: "asc" }] },
       graphSummary: true,
+      aiBrief: true,
     },
   })
 }

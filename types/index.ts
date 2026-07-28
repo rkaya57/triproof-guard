@@ -176,6 +176,25 @@ export type WalletGraphData = WalletGraphSummary & {
   edges: WalletGraphEdge[]
 }
 
+export type AiBriefSource = "gemini" | "fallback"
+
+export type AiBriefDriver = {
+  title: string
+  explanation: string
+  severity: "info" | "caution" | "high"
+}
+
+export type AiAnalysisBrief = {
+  source: AiBriefSource
+  model: string | null
+  generatedAt: string
+  executiveSummary: string
+  decisionRationale: string
+  riskDrivers: AiBriefDriver[]
+  recommendedActions: string[]
+  limitations: string[]
+}
+
 export type CsvIssue = {
   row: number
   walletAddress?: string
@@ -314,4 +333,5 @@ export type AnalysisDetail = {
   wallets: WalletRiskResult[]
   clusters: ClusterResult[]
   graph?: WalletGraphSummary | null
+  aiBrief?: AiAnalysisBrief | null
 }

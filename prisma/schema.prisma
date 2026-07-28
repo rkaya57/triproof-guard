@@ -213,11 +213,31 @@ model Analysis {
   graphSummary            WalletGraphSummary?
   graphNodes              WalletGraphNode[]
   graphEdges              WalletGraphEdge[]
+  aiBrief                 AnalysisAiBrief?
   createdAt               DateTime           @default(now())
   completedAt             DateTime?
 
   @@index([projectId])
   @@index([createdAt])
+}
+
+model AnalysisAiBrief {
+  id                  String   @id @default(cuid())
+  analysisId          String   @unique
+  analysis            Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  inputHash           String
+  provider            String
+  model               String?
+  executiveSummary    String
+  decisionRationale   String
+  riskDrivers         Json
+  recommendedActions  Json
+  limitations         Json
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([analysisId])
+  @@index([updatedAt])
 }
 
 model WalletAnalysis {

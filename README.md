@@ -312,6 +312,31 @@ Sample files are available in `sample-data/`:
 - `suspicious-cluster-demo.csv`
 - `referral-funding-graph-demo.csv`
 
+## AI Decision Briefs
+
+Completed reports include an optional AI-assisted decision brief. It converts the
+existing decision output into an executive summary, the dominant risk drivers,
+recommended operational actions, and explicit limitations. It never changes a
+wallet score, status, or graph finding.
+
+The brief sends only aggregated evidence to Gemini: decision counts, risk-level
+distribution, sanitized repeated reasons, cluster statistics, enrichment
+coverage, and graph findings. Wallet addresses, raw CSV rows, project notes, and
+reviewer notes are excluded. If Gemini is unavailable or not configured, the
+same endpoint returns a deterministic, evidence-based fallback summary.
+
+Configure Gemini only as a server-side environment variable:
+
+```text
+GEMINI_API_KEY=your_server_only_key
+GEMINI_MODEL=gemini-3.5-flash
+```
+
+Use the report's **Generate Gemini brief** button to create or refresh the
+stored explanation. Requests are authenticated, scoped to the report owner, and
+rate-limited. The key must never use a `NEXT_PUBLIC_` prefix or be committed to
+source control.
+
 ## ScamGuard API
 
 Public scanner endpoints:

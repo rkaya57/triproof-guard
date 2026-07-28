@@ -4,7 +4,7 @@ Last updated: 2026-07-28
 
 ## Current State
 
-Tri-Proof Guard now has production-oriented wallet risk decisions, known entity detection, cluster-aware status handling, persistent wallet/referral/funding graphs, improved dashboard UX, and decision exports.
+Tri-Proof Guard now has production-oriented wallet risk decisions, known entity detection, cluster-aware status handling, persistent wallet/referral/funding graphs, Gemini-assisted decision briefs, improved dashboard UX, and decision exports.
 
 The app builds successfully and the core known-entity plus cluster scenarios were tested through the API and browser smoke checks.
 
@@ -14,9 +14,20 @@ Current product direction:
 2. Group Guardian for Telegram groups - complete
 3. URL Sandbox and Scam DNA fingerprinting - complete
 4. Wallet, referral, and funding graph intelligence - complete
-5. AI-assisted explanation layer for reports and user replies
-6. Production observability, distributed rate limits, retention, and privacy controls
-7. Full Project Registry with signed verification
+5. AI-assisted explanation layer for reports - complete
+6. Gemini-assisted Telegram replies
+7. Production observability, distributed rate limits, retention, and privacy controls
+8. Full Project Registry with signed verification
+
+### AI-assisted Explanation Layer
+
+- Added a report-level decision brief panel with executive summary, dominant drivers, actions, and limitations.
+- Added authenticated `GET` and `POST /api/analysis/:id/ai-brief` endpoints scoped to the report owner.
+- Gemini receives only aggregated, sanitized evidence; wallet addresses, raw CSV values, project notes, and reviewer notes are excluded.
+- Gemini output is JSON-validated, stored server-side with a fingerprint of its input evidence, and refreshed only by an explicit user action.
+- Added a deterministic evidence-based fallback when Gemini is missing, unavailable, rate-limited, or returns invalid output.
+- Added per-user request limits and server-only Prisma storage with RLS enabled.
+- Added focused tests proving address sanitization and fallback-brief behavior.
 
 ### Wallet, Referral, and Funding Graph Intelligence
 
