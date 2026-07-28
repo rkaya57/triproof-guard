@@ -1,6 +1,6 @@
 # Tri-Proof Guard Progress Notes
 
-Last updated: 2026-06-28
+Last updated: 2026-07-28
 
 ## Current State
 
@@ -8,7 +8,46 @@ Tri-Proof Guard MVP now has stronger wallet risk decisions, known entity detecti
 
 The app builds successfully and the core known-entity plus cluster scenarios were tested through the API and browser smoke checks.
 
+Current product direction:
+
+1. Telegram Bot MVP
+2. Group Guardian for Telegram groups
+3. Full Project Registry with signed verification
+4. URL sandbox and Scam DNA fingerprinting
+5. Deeper wallet, referral, and funding graph intelligence
+6. AI-assisted explanation layer for reports and user replies
+7. Production observability, rate limits, and privacy controls
+
 ## Completed Work
+
+### Telegram Bot and Group Guardian Beta
+
+- Added `/api/telegram/webhook` as the Telegram Bot API webhook endpoint.
+- Added private chat command handling for:
+  - `/start`
+  - `/help`
+  - `/scan`
+  - `/wallet`
+  - `/token`
+  - `/tx`
+  - `/report`
+  - `/settings`
+- Added natural input detection for URL, Solana wallet, EVM wallet, and transaction-like text.
+- Added Group Guardian behavior for Telegram groups and supergroups:
+  - extracts Telegram URL entities and plain URLs
+  - scans up to five links per message
+  - replies only when risk meets the configured threshold
+- Added environment controls:
+  - `TELEGRAM_BOT_TOKEN`
+  - `TELEGRAM_WEBHOOK_SECRET`
+  - `TELEGRAM_GROUP_ALERT_LEVEL`
+- Added Telegram bot unit tests.
+
+Key files:
+
+- `app/api/telegram/webhook/route.ts`
+- `lib/telegram/bot.ts`
+- `lib/telegram/bot.test.ts`
 
 ### Risk Engine
 
@@ -219,12 +258,13 @@ Checked:
 
 ## Suggested Next Steps
 
-1. Create and apply a Prisma migration for the new wallet fields.
-2. Add automated tests for risk decision order.
-3. Persist Review drawer status/notes to the database.
-4. Run a full browser test with the user's real CSV upload flow.
-5. Check login/register behavior against the active database/local-store setup.
-6. Prepare production deployment settings once the MVP behavior is accepted.
+1. Deploy Telegram webhook env vars and set the Telegram Bot API webhook.
+2. Add persistent Telegram scan history and `/history`.
+3. Add Group Guardian admin settings, group allowlist, and daily summaries.
+4. Create the full Project Registry with signed verification.
+5. Add URL sandbox and Scam DNA fingerprinting.
+6. Deepen wallet/referral/funding graph intelligence.
+7. Add AI-assisted explanation copy for reports and Telegram replies.
 
 ## Resume Checklist
 

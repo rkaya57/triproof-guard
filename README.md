@@ -2,7 +2,7 @@
 
 Tri-Proof Guard is a Solana-first Web3 security product for campaign teams, wallets, launchpads, and dApps. It combines wallet-list Sybil analysis with ScamGuard pre-sign protection so projects can reduce fake campaign participation and users can avoid unsafe claim, mint, reward, and wallet-signing flows.
 
-The current product build includes a public landing page, ScamGuard scanner, Chrome extension beta, authenticated API, admin intelligence console, Sybil analysis dashboard, CSV/PDF exports, and production-oriented tests.
+The current product build includes a public landing page, ScamGuard scanner, Telegram bot webhook beta, Group Guardian link scanning, Chrome extension beta, authenticated API, admin intelligence console, Sybil analysis dashboard, CSV/PDF exports, and production-oriented tests.
 
 ## Grant Reviewer Summary
 
@@ -24,6 +24,7 @@ The current product build includes a public landing page, ScamGuard scanner, Chr
 - API docs: `/docs/api`
 - Admin intelligence console: `/dashboard/admin/scamguard`
 - Chrome extension package: `/downloads/scamguard-chrome-extension.zip`
+- Telegram bot webhook: `/api/telegram/webhook`
 
 ## Core Features
 
@@ -61,6 +62,25 @@ The current product build includes a public landing page, ScamGuard scanner, Chr
 - Balanced, Strict, and Paranoid protection profiles
 - Trusted domain controls
 - Configurable ScamGuard API base URL
+
+### Telegram Bot and Group Guardian Beta
+
+- Webhook endpoint for Telegram Bot API updates
+- Private chat commands:
+  - `/start`
+  - `/help`
+  - `/scan <link|wallet|token|tx>`
+  - `/wallet <address>`
+  - `/token <mint|contract>`
+  - `/tx <transaction payload>`
+  - `/report <item>`
+  - `/settings`
+- Natural input scanning when a user sends a URL, wallet, token, or transaction payload directly
+- Group Guardian mode for Telegram groups and supergroups
+- Automatic URL extraction from messages and Telegram URL entities
+- Configurable group alert threshold: `CAUTION`, `HIGH_RISK`, or `CRITICAL`
+- Replies only when a scanned group link meets the configured risk threshold
+- Uses the same ScamGuard engine as the web scanner, extension, and API
 
 ### Sybil Campaign Analysis
 
@@ -108,6 +128,7 @@ lib/scamguard/               ScamGuard risk engine and tests
 lib/risk-engine/             Campaign wallet risk engine and tests
 lib/onchain/                 Provider routing and enrichment adapters
 lib/sdk/                     Tri-Proof API client
+lib/telegram/                Telegram bot and Group Guardian handlers
 chrome-extension/            ScamGuard Chrome extension beta
 sample-data/                 Example wallet CSV files
 scripts/                     Build, validation, and maintenance scripts
@@ -315,6 +336,43 @@ The extension default API base URL is:
 https://triproofprotocol.com
 ```
 
+## Telegram Bot and Group Guardian
+
+Required production environment variables:
+
+```text
+TELEGRAM_BOT_TOKEN=123456:telegram_bot_token
+TELEGRAM_WEBHOOK_SECRET=random-long-secret
+NEXT_PUBLIC_APP_URL=https://triproofprotocol.com
+```
+
+Optional:
+
+```text
+TELEGRAM_GROUP_ALERT_LEVEL=HIGH_RISK
+```
+
+Allowed values for `TELEGRAM_GROUP_ALERT_LEVEL`:
+
+- `CAUTION`: warn on medium and stronger risk
+- `HIGH_RISK`: warn on high and critical risk
+- `CRITICAL`: warn only on critical risk
+
+Set the Telegram webhook after deployment:
+
+```bash
+curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
+  -d "url=https://triproofprotocol.com/api/telegram/webhook" \
+  -d "secret_token=$TELEGRAM_WEBHOOK_SECRET" \
+  -d "drop_pending_updates=true"
+```
+
+Health check:
+
+```text
+GET /api/telegram/webhook
+```
+
 ## Testing and Validation
 
 Run the risk-engine test suite:
@@ -357,6 +415,8 @@ Current core coverage includes:
 - unlimited approvals
 - known bad EVM counterparties
 - Solana parsed token instructions
+- Telegram bot command routing
+- Group Guardian risky-link warning behavior
 
 ## Grant Milestones
 
@@ -378,6 +438,10 @@ Proposed Solana Foundation Turkey Grants scope:
 
 ## Roadmap
 
+- Telegram Bot MVP hardening: scan history, language preference, richer `/report`, and abuse/rate limits
+- Group Guardian: group allowlist, admin-only settings, daily summaries, and repeated campaign detection
+- Full Project Registry with signed project verification messages
+- Scam DNA fingerprinting for phishing infrastructure reuse
 - Stronger Solana serialized transaction decoding
 - Wider SPL Token and Token-2022 instruction coverage
 - Public verified project registry workflow
@@ -386,6 +450,16 @@ Proposed Solana Foundation Turkey Grants scope:
 - Workspace-level scan history
 - Partner SDK examples
 - More production-grade Sybil enrichment for Solana campaigns
+
+## Active Development Order
+
+1. Telegram Bot MVP
+2. Group Guardian for Telegram groups
+3. Full Project Registry with signed verification
+4. URL sandbox and Scam DNA fingerprinting
+5. Deeper wallet, referral, and funding graph intelligence
+6. AI-assisted explanation layer for reports and user replies
+7. Production observability, rate limits, and privacy controls
 
 ## Disclaimer
 

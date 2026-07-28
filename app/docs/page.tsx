@@ -179,6 +179,7 @@ const apiTouchpoints = [
   ["POST /api/scamguard/scan-url", "Scan a claim, mint, reward, presale, or suspicious Web3 URL."],
   ["POST /api/scamguard/scan-token", "Check token mint or contract context before interaction."],
   ["POST /api/scamguard/scan-transaction", "Decode Solana instruction text, serialized payloads, or EVM wallet request JSON."],
+  ["POST /api/telegram/webhook", "Telegram Bot and Group Guardian webhook for private scans and group link warnings."],
   ["POST /api/v1/scamguard/scan", "Authenticated partner endpoint for wallets, launchpads, extensions, and dApps."],
   ["POST /api/v1/analyze", "Authenticated wallet-list analysis entrypoint for campaign teams."],
 ]
@@ -188,6 +189,8 @@ const operatingModes = [
   ["Dashboard Analysis", "Saved project workflow", "Best for full wallet-list review, team decisions, exports, and repeat operations."],
   ["ScamGuard Scanner", "Pre-click and pre-sign safety", "Best for suspicious URLs, mints, wallets, and transaction payloads."],
   ["Chrome Extension", "Live browser protection", "Best for users who want warnings directly on Web3 app pages."],
+  ["Telegram Bot", "Chat-native ScamGuard scans", "Best for users and communities that want to paste suspicious links, wallets, tokens, or transactions into Telegram."],
+  ["Group Guardian", "Community link defense", "Best for Telegram groups that need automatic warnings on risky claim, reward, mint, and wallet-signing links."],
   ["B2B API", "Embedded security layer", "Best for wallets, launchpads, and campaign platforms that need automated risk checks."],
 ]
 
