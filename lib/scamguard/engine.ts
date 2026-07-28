@@ -224,10 +224,20 @@ const knownDrainerFragments = [
   "claim-bonus",
 ]
 
-const knownScamDomains = new Set([
-  "phantom-airdrop-claim.example",
-  "airdrop.orbition.network",
-])
+function bootstrapKnownBadDomains() {
+  const configured = (process.env.SCAMGUARD_BOOTSTRAP_KNOWN_BAD_DOMAINS ?? "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, ""))
+    .filter((value) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(value))
+
+  // Keep the fixture available for deterministic tests, but never ship an
+  // unreviewed real-world domain as a production stop signal in source code.
+  if (process.env.NODE_ENV === "test" || process.env.npm_lifecycle_event?.startsWith("test")) {
+    configured.push("phantom-airdrop-claim.example")
+  }
+
+  return new Set(configured)
+}
 
 const defaultThreatFeedUrls = [
   "https://raw.githubusercontent.com/MetaMask/eth-phishing-detect/master/src/config.json",
@@ -622,8 +632,8 @@ function defaultReputation(): NonNullable<ScamGuardScanResult["metadata"]["reput
 
 function domainReputation(domain?: string): NonNullable<ScamGuardScanResult["metadata"]["reputation"]> {
   if (!domain) return defaultReputation()
-  if (domainMatchesSet(domain, knownScamDomains)) {
-    return { verdict: "known_bad", source: "seed_intelligence", notes: [`${domain} is in the known suspicious domain seed list.`] }
+  if (domainMatchesSet(domain, bootstrapKnownBadDomains())) {
+    return { verdict: "known_bad", source: "emergency_blocklist", notes: [`${domain} is in the emergency known-bad domain blocklist.`] }
   }
   if (domainMatchesSet(domain, verifiedProjectDomains)) {
     return { verdict: "trusted", source: "verified_project_registry", notes: [`${domain} is in the local verified project registry.`] }
@@ -876,7 +886,7 @@ async function scanUrl(value: string, chain: ScamGuardChain, deepScan = false) {
   const hasClaimLanguage = highRiskWords.some((word) => text.includes(word))
   const hasCampaignSurface = campaignSurfaceWords.some((word) => path.includes(word))
   const isAppSurface = Boolean(domain?.startsWith("app.") || domain?.startsWith("dapp."))
-  const isKnownScamDomain = domainMatchesSet(domain ?? undefined, knownScamDomains)
+  const isKnownScamDomain = domainMatchesSet(domain ?? undefined, bootstrapKnownBadDomains())
   const isOfficialDomain = domainMatchesSet(domain ?? undefined, officialDomains)
   const isVerifiedProjectDomain = domainMatchesSet(domain ?? undefined, verifiedProjectDomains)
   const hasKnownBadWording = knownDrainerFragments.some((fragment) => text.includes(fragment))
@@ -948,7 +958,7 @@ async function scanUrl(value: string, chain: ScamGuardChain, deepScan = false) {
       code: "KNOWN_SCAM_DOMAIN",
       severity: "critical",
       title: "Known suspicious domain",
-      detail: `${domain} is in ScamGuard's seed threat intelligence list.`,
+      detail: `${domain} is in ScamGuard's emergency known-bad domain blocklist.`,
     })
   }
   if (domain && reputation.verdict === "known_bad" && !isKnownScamDomain) {

@@ -141,7 +141,7 @@ test("Group Guardian warns on known scam links", async () => {
     update_id: 3,
     message: {
       message_id: 12,
-      text: "claim here https://airdrop.orbition.network/",
+      text: "claim here https://phantom-airdrop-claim.example/",
       chat: { id: -100, type: "group", title: "Test group" },
     },
   }
@@ -156,7 +156,7 @@ test("Group Guardian stays quiet when group protection is disabled", async () =>
     update_id: 4,
     message: {
       message_id: 13,
-      text: "claim here https://airdrop.orbition.network/",
+      text: "claim here https://phantom-airdrop-claim.example/",
       chat: { id: -100, type: "supergroup", title: "Test group" },
     },
   }
@@ -224,7 +224,7 @@ test("Group Guardian includes a repeated campaign escalation", async () => {
     update_id: 7,
     message: {
       message_id: 16,
-      text: "claim here https://airdrop.orbition.network/",
+      text: "claim here https://phantom-airdrop-claim.example/",
       chat: { id: -100, type: "group", title: "Test group" },
     },
   }

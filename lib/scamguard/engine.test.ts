@@ -6,10 +6,10 @@ import { scanScamGuard } from "./engine"
 const evmWord = (value: bigint) => value.toString(16).padStart(64, "0")
 const evmAddressWord = (address: string) => address.toLowerCase().replace(/^0x/, "").padStart(64, "0")
 
-test("ScamGuard flags known scam domains as critical", async () => {
+test("ScamGuard flags an emergency known-bad domain as critical", async () => {
   const result = await scanScamGuard({
     type: "url",
-    value: "https://airdrop.orbition.network/",
+    value: "https://phantom-airdrop-claim.example/",
     chain: "solana",
   })
 
@@ -17,6 +17,17 @@ test("ScamGuard flags known scam domains as critical", async () => {
   assert.equal(result.metadata.chain, "solana")
   assert.equal(result.metadata.reputation?.verdict, "known_bad")
   assert.ok(result.signals.some((signal) => signal.code === "KNOWN_SCAM_DOMAIN"))
+})
+
+test("ScamGuard does not ship unreviewed project domains as hard-coded stop signals", async () => {
+  const result = await scanScamGuard({
+    type: "url",
+    value: "https://airdrop.orbition.network/",
+    chain: "evm",
+  })
+
+  assert.notEqual(result.metadata.reputation?.source, "emergency_blocklist")
+  assert.ok(!result.signals.some((signal) => signal.code === "KNOWN_SCAM_DOMAIN"))
 })
 
 test("ScamGuard reduces false positives for verified domains", async () => {

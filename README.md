@@ -341,6 +341,19 @@ Private Telegram scans use the same optional Gemini key to append a short
 plain-language explanation. Group Guardian alerts keep the deterministic path,
 so untrusted group traffic cannot trigger AI-generation costs.
 
+### Threat intelligence policy
+
+ScamGuard does not ship real project domains as hard-coded stop signals. A
+critical URL verdict comes from reviewed admin intelligence, a configured
+emergency blocklist, an external phishing feed, dangerous URL behavior, or
+corroborated cross-domain Scam DNA. Campaign wording and an unknown project
+surface are context signals rather than scam verdicts. Same-domain Scam DNA is
+stored as a baseline and never treated as a clone match.
+
+`SCAMGUARD_BOOTSTRAP_KNOWN_BAD_DOMAINS` is reserved for urgent, reviewed
+emergency blocks. Use the ScamGuard admin intelligence console for normal
+domain reputation management so every decision has an accountable source.
+
 ## ScamGuard API
 
 Public scanner endpoints:

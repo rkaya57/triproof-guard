@@ -362,6 +362,7 @@ function dnaLabel(result: ScanResult | null) {
   const dna = result?.metadata.scamDna
   if (!dna) return result ? (result.type === "url" ? "No fingerprint" : "Not required") : "Waiting"
   if (!dna.match.matched) return "New fingerprint"
+  if (!dna.match.crossDomain) return "Site baseline"
   return `${Math.round(dna.match.similarity * 100)}% · ${verdictLabel(dna.match.verdict)}`
 }
 
@@ -790,11 +791,13 @@ export function ScamGuardPage() {
                         {result?.metadata.scamDna && (
                           <span>
                             Scam DNA: {result.metadata.scamDna.match.matched
-                              ? `${Math.round(result.metadata.scamDna.match.similarity * 100)}% match${result.metadata.scamDna.match.matchedDomain ? ` with ${result.metadata.scamDna.match.matchedDomain}` : ""}`
+                              ? result.metadata.scamDna.match.crossDomain
+                                ? `${Math.round(result.metadata.scamDna.match.similarity * 100)}% cross-domain match${result.metadata.scamDna.match.matchedDomain ? ` with ${result.metadata.scamDna.match.matchedDomain}` : ""}`
+                                : "current-site baseline only; this is not a clone signal"
                               : "new fingerprint with no corroborated campaign match"}
                           </span>
                         )}
-                        {result?.metadata.scamDna?.match.evidence.length ? <span>DNA evidence: {result.metadata.scamDna.match.evidence.join(", ")}</span> : null}
+                        {result?.metadata.scamDna?.match.evidence.length && result.metadata.scamDna.match.crossDomain ? <span>DNA evidence: {result.metadata.scamDna.match.evidence.join(", ")}</span> : null}
                         {result?.metadata.contractIntelligence?.target && <span>Contract target: {shortValue(result.metadata.contractIntelligence.target)}</span>}
                         {result?.metadata.decodedIntent?.warnings?.map((warning) => <span key={warning}>Decode note: {warning}</span>)}
                         {result?.metadata.reputation?.notes?.map((note) => <span key={note}>Reputation: {note}</span>)}

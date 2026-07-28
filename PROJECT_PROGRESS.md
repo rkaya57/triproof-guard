@@ -31,6 +31,11 @@ Current product direction:
 - Added Gemini-assisted private Telegram scan explanations with a four-second timeout and deterministic fallback.
 - Group Guardian remains deterministic to protect rate limits and avoid AI cost amplification from untrusted group traffic.
 
+### Threat Decision Quality
+
+- Removed unreviewed real-world domains from the source-code stop list; production hard blocks now require reviewed intelligence, an external feed, or an explicit emergency configuration.
+- Clarified that same-domain Scam DNA observations are baselines, not cross-domain clone evidence.
+
 ### Wallet, Referral, and Funding Graph Intelligence
 
 - Added optional CSV referral ingestion for referrer wallets, referral codes, and referral timestamps.
