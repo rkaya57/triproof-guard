@@ -11,6 +11,7 @@ Pre-sign protection for Solana and EVM dApps, airdrops, token claims, and suspic
   - `signTransaction`
   - `signAndSendTransaction`
   - `signAllTransactions`
+  - `signMessage`
   - generic signing `provider.request(...)` calls
 - Plain-language signing review for every intercepted wallet request, including approvals, transfers, authority changes, account closure, mint actions, and message signatures.
 - A short decision timeline that shows source context, decoded intent, evidence, and the final risk decision.
@@ -18,10 +19,13 @@ Pre-sign protection for Solana and EVM dApps, airdrops, token claims, and suspic
 - Shareable, privacy-preserving report snapshots that omit raw wallet payloads, public keys, and URL query parameters.
 - Injected EVM provider pre-sign observer for MetaMask/Rabby/Coinbase style:
   - `eth_sendTransaction`
+  - `eth_signTransaction`
   - `personal_sign`
   - `eth_sign`
   - `eth_signTypedData_v4`
   - `wallet_switchEthereumChain`
+  - `wallet_addEthereumChain`
+  - `wallet_sendCalls`
 - Local settings:
   - API base URL
   - warn on caution-level signing
@@ -71,3 +75,16 @@ From the repo root:
 ```bash
 npm run extension:validate
 ```
+
+## Wallet compatibility lab
+
+The repository includes an automated provider compatibility matrix. It runs the
+real injected hook against mocked Phantom/Backpack-style and MetaMask/Rabby-style
+providers, verifies safe read calls pass through unchanged, and checks that a
+blocked review never reaches the wallet provider.
+
+```bash
+npm run extension:test
+```
+
+For browser wallet release testing, use [WALLET_QA.md](./WALLET_QA.md).

@@ -55,13 +55,17 @@ The current product build includes a public landing page, ScamGuard scanner, Tel
   - `signTransaction`
   - `signAndSendTransaction`
   - `signAllTransactions`
+  - `signMessage`
   - generic provider request calls
 - EVM provider pre-sign observer:
   - `eth_sendTransaction`
+  - `eth_signTransaction`
   - `personal_sign`
   - `eth_sign`
   - `eth_signTypedData_v4`
   - `wallet_switchEthereumChain`
+  - `wallet_addEthereumChain`
+  - `wallet_sendCalls`
 - Balanced, Strict, and Paranoid protection profiles
 - Trusted domain controls
 - Configurable ScamGuard API base URL
@@ -514,6 +518,12 @@ Validate the Chrome extension:
 
 ```bash
 npm run extension:validate
+```
+
+Run the wallet compatibility matrix:
+
+```bash
+npm run extension:test
 ```
 
 Build production output:

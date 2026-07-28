@@ -2,9 +2,19 @@
   const PAGE_SOURCE = "SCAMGUARD_PAGE"
   const EXTENSION_SOURCE = "SCAMGUARD_EXTENSION"
   const pending = new Map()
-  let solanaInstalled = false
-  let evmInstalled = false
   let installAttempts = 0
+  const EVM_GUARDED_METHODS = new Set([
+    "eth_sendTransaction",
+    "eth_signTransaction",
+    "personal_sign",
+    "eth_sign",
+    "eth_signTypedData",
+    "eth_signTypedData_v3",
+    "eth_signTypedData_v4",
+    "wallet_switchEthereumChain",
+    "wallet_addEthereumChain",
+    "wallet_sendCalls",
+  ])
 
   function bytesToBase64(bytes) {
     let binary = ""
@@ -64,9 +74,17 @@
     }
   }
 
+  function serializedScanValue(method, transaction, chain) {
+    const serialized = serializeTransactionLike(transaction)
+    if (chain === "solana" && /signmessage/i.test(method)) {
+      return JSON.stringify({ method, message: serialized })
+    }
+    return serialized
+  }
+
   function askScamGuard({ method, transaction, provider, chain }) {
     const requestId = crypto.randomUUID()
-    const value = serializeTransactionLike(transaction)
+    const value = serializedScanValue(method, transaction, chain)
     window.postMessage({
       source: PAGE_SOURCE,
       type: "SCAMGUARD_SIGN_REQUEST",
@@ -100,7 +118,7 @@
   function wrapProvider(provider) {
     if (!provider || provider.__scamguardWrapped) return
 
-    const methods = ["signTransaction", "signAndSendTransaction", "signAllTransactions"]
+    const methods = ["signTransaction", "signAndSendTransaction", "signAllTransactions", "signMessage"]
     for (const method of methods) {
       const original = provider[method]
       if (typeof original !== "function") continue
@@ -145,15 +163,7 @@
     const originalRequest = provider.request
     provider.request = async function wrappedScamGuardEvmRequest(args) {
       const method = args?.method
-      const shouldScan = typeof method === "string" && (
-        method === "eth_sendTransaction" ||
-        method === "personal_sign" ||
-        method === "eth_sign" ||
-        method === "eth_signTypedData" ||
-        method === "eth_signTypedData_v3" ||
-        method === "eth_signTypedData_v4" ||
-        method === "wallet_switchEthereumChain"
-      )
+      const shouldScan = typeof method === "string" && EVM_GUARDED_METHODS.has(method)
       if (shouldScan) {
         const decision = await askScamGuard({
           method,
@@ -174,22 +184,44 @@
     })
   }
 
+  function uniqueProviders(candidates) {
+    return [...new Set(candidates.filter(Boolean))]
+  }
+
+  function solanaProviders() {
+    return uniqueProviders([
+      window.solana,
+      window.backpack?.solana,
+      window.phantom?.solana,
+      window.solflare,
+      window.glow,
+    ])
+  }
+
+  function evmProviders() {
+    const root = window.ethereum
+    return uniqueProviders([
+      root,
+      ...(Array.isArray(root?.providers) ? root.providers : []),
+      window.rabby,
+      window.rabby?.ethereum,
+      window.trustwallet?.ethereum,
+      window.okxwallet,
+      window.okxwallet?.ethereum,
+      window.coinbaseWalletExtension,
+      window.coinbaseWalletExtension?.ethereum,
+    ])
+  }
+
   function install() {
-    const provider = window.solana || window.backpack?.solana
-    if (provider && !solanaInstalled) {
-      wrapProvider(provider)
-      solanaInstalled = true
-    }
-    if (window.ethereum && !evmInstalled) {
-      wrapEvmProvider(window.ethereum)
-      evmInstalled = true
-    }
+    for (const provider of solanaProviders()) wrapProvider(provider)
+    for (const provider of evmProviders()) wrapEvmProvider(provider)
   }
 
   install()
   const timer = window.setInterval(() => {
     installAttempts += 1
     install()
-    if ((solanaInstalled && evmInstalled) || installAttempts > 80) window.clearInterval(timer)
+    if (installAttempts > 80) window.clearInterval(timer)
   }, 300)
 })()

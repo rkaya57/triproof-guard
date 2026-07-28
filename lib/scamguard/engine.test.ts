@@ -251,6 +251,17 @@ test("ScamGuard decodes structured Solana token instructions", async () => {
   assert.ok(result.metadata.decision?.primaryReason)
 })
 
+test("ScamGuard classifies Solana message signatures for plain-language review", async () => {
+  const result = await scanScamGuard({
+    type: "transaction",
+    chain: "solana",
+    value: JSON.stringify({ method: "signMessage", message: "Login to trusted app" }),
+  })
+
+  assert.equal(result.metadata.decodedIntent?.category, "signature")
+  assert.equal(result.metadata.decodedIntent?.method, "signMessage")
+})
+
 test("ScamGuard escalates unlimited EVM approvals", async () => {
   const spender = "0x2222222222222222222222222222222222222222"
   const result = await scanScamGuard({

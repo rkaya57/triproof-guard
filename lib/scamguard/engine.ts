@@ -232,7 +232,12 @@ function bootstrapKnownBadDomains() {
 
   // Keep the fixture available for deterministic tests, but never ship an
   // unreviewed real-world domain as a production stop signal in source code.
-  if (process.env.NODE_ENV === "test" || process.env.npm_lifecycle_event?.startsWith("test")) {
+  const isTestRuntime =
+    process.env.NODE_ENV === "test" ||
+    process.env.npm_lifecycle_event?.startsWith("test") ||
+    process.execArgv.includes("--test") ||
+    process.argv.some((value) => /\.test\.[cm]?[jt]sx?$/i.test(value))
+  if (isTestRuntime) {
     configured.push("phantom-airdrop-claim.example")
   }
 
@@ -1658,6 +1663,10 @@ function decodeIntent(value: string, chain: ScamGuardChain): NonNullable<ScamGua
   if (/transfer all|all sol|drain|sweep|empty wallet|transfer/.test(text)) {
     warnings.push("Transfer language suggests asset movement.")
     return { method, category: "transfer", warnings }
+  }
+  if (/signmessage|sign message/.test(text)) {
+    warnings.push("Message signatures can authorize off-chain access, login challenges, orders, or permit-like flows.")
+    return { method, category: "signature", warnings }
   }
   return { method, category: "unknown", warnings }
 }
