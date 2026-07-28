@@ -99,6 +99,9 @@ The current product build includes a public landing page, ScamGuard scanner, Tel
 - Basic and enriched CSV support
 - Wallet age, transaction count, funding source, activity, balance, and contract-interaction context
 - Shared funding cluster detection
+- Persistent wallet, referral, and funding evidence graphs
+- Referral fan-out, self-referral, burst funding, circular path, and coordinated cohort detection
+- Known exchange/service funding neutralization to reduce false positives
 - Known entity handling for exchange, service, contract, and protocol accounts
 - Approved, Gray Zone, and rejected/not-eligible outputs
 - CSV and PDF exports
@@ -278,15 +281,36 @@ wallet_address
 Enriched:
 
 ```csv
-wallet_address,chain,tx_count,wallet_age_days,funding_source,first_seen,last_seen,total_volume,contracts_count,campaign_actions_count
-0x123...,Base,12,45,0xabc...,2026-01-10,2026-02-12,102.5,5,8
+wallet_address,chain,tx_count,wallet_age_days,funding_source,first_seen,last_seen,total_volume,contracts_count,campaign_actions_count,referrer_address,referral_code,referral_timestamp
+0x123...,Base,12,45,0xabc...,2026-01-10,2026-02-12,102.5,5,8,0xreferrer...,SPRING-26,2026-01-10T09:30:00Z
 ```
+
+Referral columns are optional. Supported aliases include `referrer_wallet`,
+`referred_by`, `inviter_wallet`, `invite_code`, `ref_code`, `referred_at`, and
+`invited_at`. Invalid referrer addresses are ignored and reported without
+dropping the participant row.
+
+## Wallet, Referral, and Funding Graph Intelligence
+
+Every completed analysis now persists a campaign-scoped evidence graph:
+
+- participant wallets, external funders, referrers, referral codes, and known services become typed nodes
+- first funding relationships and explicit campaign referrals become confidence-scored edges
+- connected components retain the evidence behind each relationship
+- known exchange, bridge, protocol, and service funding sources are neutralized instead of being treated as Sybil evidence
+- admin-managed `TRUSTED` wallet intelligence can neutralize partner funders, while `KNOWN_BAD` funding origins become high-confidence evidence
+- shared unknown funding alone remains a review signal; timing bursts, low-activity referral fan-out, funding/referral overlap, self-referral, and circular paths provide corroboration
+- only corroborated graph patterns add graph risk to wallet decisions
+
+The dashboard renders component-level graph evidence and the authenticated
+`GET /api/v1/analysis/:id` response includes `graphIntelligence`.
 
 Sample files are available in `sample-data/`:
 
 - `basic-wallets.csv`
 - `enriched-wallets.csv`
 - `suspicious-cluster-demo.csv`
+- `referral-funding-graph-demo.csv`
 
 ## ScamGuard API
 
@@ -497,7 +521,6 @@ Proposed Solana Foundation Turkey Grants scope:
 
 - Telegram Bot hardening: language preference, richer `/report`, and abuse/rate limits
 - Group Guardian moderation: suspicious poster correlation and account-level campaign views
-- Full Project Registry with signed project verification messages
 - Larger reviewed Scam DNA corpus and scheduled retention controls
 - Stronger Solana serialized transaction decoding
 - Wider SPL Token and Token-2022 instruction coverage
@@ -507,16 +530,17 @@ Proposed Solana Foundation Turkey Grants scope:
 - Workspace-level scan history
 - Partner SDK examples
 - More production-grade Sybil enrichment for Solana campaigns
+- Full Project Registry with signed project verification messages
 
 ## Active Development Order
 
 1. Telegram Bot MVP - complete
 2. Group Guardian for Telegram groups - complete
 3. URL Sandbox and Scam DNA fingerprinting - complete
-4. Full Project Registry with signed verification
-5. Deeper wallet, referral, and funding graph intelligence
-6. AI-assisted explanation layer for reports and user replies
-7. Production observability, distributed rate limits, retention, and privacy controls
+4. Wallet, referral, and funding graph intelligence - complete
+5. AI-assisted explanation layer for reports and user replies
+6. Production observability, distributed rate limits, retention, and privacy controls
+7. Full Project Registry with signed verification
 
 ## Disclaimer
 

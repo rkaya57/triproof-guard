@@ -68,6 +68,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { MetricCard } from "@/components/dashboard/metric-card"
+import { WalletGraphIntelligencePanel } from "@/components/analysis/wallet-graph-intelligence"
 import { useToast } from "@/components/ui/toast"
 import {
   getCampaignPolicy,
@@ -1513,6 +1514,8 @@ export function AnalysisDetail({
         <PolicySimulator analysis={analysis} />
         <ClusterGraphView analysis={analysis} />
       </div>
+
+      <WalletGraphIntelligencePanel analysisId={analysis.id} summary={analysis.graph} />
 
       <ReviewOpsPanel analysis={analysis} />
 

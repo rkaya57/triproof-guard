@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client"
 
 import { db } from "@/lib/db/prisma"
 import { analyzeWallets, riskPolicyFromNotes } from "@/lib/risk-engine"
+import { fundingContextKey, type WalletGraphContext } from "@/lib/graph-intelligence"
 import { enrichWallets } from "@/lib/onchain/enrich-wallet"
 import { mergeEnrichment } from "@/lib/onchain/merge"
 import { parseCampaignContracts } from "@/lib/validators/wallet"
@@ -45,6 +46,13 @@ function extractCampaignContracts(notes: string | null | undefined) {
     .find((value) => value.startsWith("TRIPROOF_CAMPAIGN_CONTRACTS="))
   if (!line) return []
   return parseCampaignContracts(line.replace("TRIPROOF_CAMPAIGN_CONTRACTS=", ""))
+}
+
+function intelChainMatches(entryChain: string, walletChain: string) {
+  if (!entryChain) return true
+  const normalizedWalletChain = walletChain.trim().toLowerCase()
+  if (entryChain === normalizedWalletChain) return true
+  return entryChain === "evm" && normalizedWalletChain !== "solana"
 }
 
 function chunkArray<T>(items: T[], size: number) {
@@ -248,12 +256,59 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
     const walletsForAnalysis = enrichmentResults.size
       ? mergeEnrichment(originalWallets, enrichmentResults, mode)
       : originalWallets
-    const result = analyzeWallets(walletsForAnalysis, enrichmentMeta, riskPolicy)
+    const fundingIntel = await tx.scamGuardIntelEntry.findMany({
+      where: {
+        active: true,
+        kind: { in: ["WALLET", "EVM_ADDRESS", "SOLANA_ADDRESS"] },
+        verdict: { in: ["TRUSTED", "KNOWN_BAD"] },
+      },
+      select: {
+        normalized: true,
+        chain: true,
+        verdict: true,
+        label: true,
+      },
+    })
+    const graphContext: WalletGraphContext = {
+      trustedFundingSources: {},
+      knownBadFundingSources: {},
+    }
+    const fundingIntelByAddress = new Map<string, typeof fundingIntel>()
+    fundingIntel.forEach((entry) => {
+      fundingIntelByAddress.set(entry.normalized, [
+        ...(fundingIntelByAddress.get(entry.normalized) ?? []),
+        entry,
+      ])
+    })
+    walletsForAnalysis.forEach((wallet) => {
+      if (!wallet.fundingSource) return
+      const normalized = wallet.fundingSource.trim().toLowerCase()
+      const entry = (fundingIntelByAddress.get(normalized) ?? []).find(
+        (candidate) =>
+          intelChainMatches(candidate.chain, wallet.chain)
+      )
+      if (!entry) return
+      const key = fundingContextKey(wallet.fundingSource, wallet.chain)
+      if (entry.verdict === "TRUSTED") {
+        graphContext.trustedFundingSources![key] = entry.label
+      } else {
+        graphContext.knownBadFundingSources![key] = entry.label
+      }
+    })
+    const result = analyzeWallets(
+      walletsForAnalysis,
+      enrichmentMeta,
+      riskPolicy,
+      graphContext
+    )
 
     await tx.analysis.update({ where: { id: analysisId }, data: { status: "analyzing" } })
     await tx.walletAnalysis.deleteMany({ where: { analysisId } })
     await tx.walletEnrichment.deleteMany({ where: { analysisId } })
     await tx.cluster.deleteMany({ where: { analysisId } })
+    await tx.walletGraphEdge.deleteMany({ where: { analysisId } })
+    await tx.walletGraphNode.deleteMany({ where: { analysisId } })
+    await tx.walletGraphSummary.deleteMany({ where: { analysisId } })
 
     await tx.walletAnalysis.createMany({
       data: result.wallets.map((wallet) => ({
@@ -275,6 +330,8 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
         contractsCount: wallet.contractsCount,
         campaignActionsCount: wallet.campaignActionsCount,
         clusterId: wallet.clusterId,
+        graphComponentId: wallet.graphComponentId ?? null,
+        graphRiskScore: wallet.graphRiskScore ?? null,
         reasons: wallet.reasons,
         firstSeen: toDate(wallet.firstSeen),
         lastSeen: toDate(wallet.lastSeen),
@@ -339,6 +396,59 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
           behaviorSimilarityScore: cluster.behaviorSimilarityScore,
           suggestedAction: cluster.suggestedAction,
           reasons: cluster.reasons,
+        })),
+      })
+    }
+
+    await tx.walletGraphSummary.create({
+      data: {
+        analysisId,
+        totalNodes: result.graph.totalNodes,
+        totalEdges: result.graph.totalEdges,
+        connectedWallets: result.graph.connectedWallets,
+        externalFunders: result.graph.externalFunders,
+        referralLinks: result.graph.referralLinks,
+        highRiskComponents: result.graph.highRiskComponents,
+        neutralServiceFunders: result.graph.neutralServiceFunders,
+        largestComponent: result.graph.largestComponent,
+        maxComponentRisk: result.graph.maxComponentRisk,
+        components: result.graph.components,
+        findings: result.graph.findings,
+      },
+    })
+
+    if (result.graph.nodes.length) {
+      await tx.walletGraphNode.createMany({
+        data: result.graph.nodes.map((node) => ({
+          analysisId,
+          nodeKey: node.nodeKey,
+          address: node.address,
+          chain: node.chain,
+          kind: node.kind,
+          label: node.label,
+          walletAddress: node.walletAddress,
+          componentId: node.componentId,
+          metadata: node.metadata as Prisma.InputJsonValue,
+        })),
+      })
+    }
+
+    if (result.graph.edges.length) {
+      await tx.walletGraphEdge.createMany({
+        data: result.graph.edges.map((edge) => ({
+          analysisId,
+          edgeKey: edge.edgeKey,
+          sourceKey: edge.sourceKey,
+          targetKey: edge.targetKey,
+          kind: edge.kind,
+          confidence: edge.confidence,
+          isRiskBearing: edge.isRiskBearing,
+          componentId: edge.componentId,
+          observedAt: toDate(edge.observedAt),
+          transactionId: edge.transactionId,
+          amount: edge.amount,
+          evidence: edge.evidence,
+          metadata: edge.metadata as Prisma.InputJsonValue,
         })),
       })
     }

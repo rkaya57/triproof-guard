@@ -210,6 +210,9 @@ model Analysis {
   feedbackEvents          FeedbackEvent[]
   webhookDeliveries       WebhookDelivery[]
   creditLedgerEntries     CreditLedger[]
+  graphSummary            WalletGraphSummary?
+  graphNodes              WalletGraphNode[]
+  graphEdges              WalletGraphEdge[]
   createdAt               DateTime           @default(now())
   completedAt             DateTime?
 
@@ -238,6 +241,8 @@ model WalletAnalysis {
   contractsCount       Int?
   campaignActionsCount Int?
   clusterId            String?
+  graphComponentId     String?
+  graphRiskScore       Int?
   reasons              Json
   firstSeen            DateTime?
   lastSeen             DateTime?
@@ -256,6 +261,7 @@ model WalletAnalysis {
   @@index([analysisId])
   @@index([walletAddress])
   @@index([clusterId])
+  @@index([graphComponentId])
 }
 
 model TeamReview {
@@ -393,6 +399,73 @@ model Cluster {
 
   @@unique([analysisId, clusterLabel])
   @@index([analysisId])
+}
+
+model WalletGraphSummary {
+  id                    String   @id @default(cuid())
+  analysisId            String   @unique
+  analysis              Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  totalNodes            Int
+  totalEdges            Int
+  connectedWallets      Int
+  externalFunders       Int
+  referralLinks         Int
+  highRiskComponents    Int
+  neutralServiceFunders Int
+  largestComponent      Int
+  maxComponentRisk      Int
+  components            Json
+  findings              Json
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([analysisId])
+}
+
+model WalletGraphNode {
+  id            String   @id @default(cuid())
+  analysisId    String
+  analysis      Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  nodeKey       String
+  address       String?
+  chain         String?
+  kind          String
+  label         String?
+  walletAddress String?
+  componentId   String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  @@unique([analysisId, nodeKey])
+  @@index([analysisId])
+  @@index([analysisId, componentId])
+  @@index([analysisId, walletAddress])
+}
+
+model WalletGraphEdge {
+  id            String   @id @default(cuid())
+  analysisId    String
+  analysis      Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  edgeKey       String
+  sourceKey     String
+  targetKey     String
+  kind          String
+  confidence    Int
+  isRiskBearing Boolean  @default(false)
+  componentId   String?
+  observedAt    DateTime?
+  transactionId String?
+  amount        Float?
+  evidence      Json
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  @@unique([analysisId, edgeKey])
+  @@index([analysisId])
+  @@index([analysisId, componentId])
+  @@index([analysisId, sourceKey])
+  @@index([analysisId, targetKey])
+  @@index([analysisId, isRiskBearing])
 }
 
 model PaymentTransaction {

@@ -90,9 +90,90 @@ export type ParsedWallet = {
   reputationLabel?: string | null
   policyReason?: string | null
   customerLabel?: string | null
+  referrerAddress?: string | null
+  referralCode?: string | null
+  referralTimestamp?: string | null
   enrichmentProvider?: string | null
   enrichmentStatus?: EnrichmentStatus | null
   sourceRow?: number
+}
+
+export type WalletGraphNodeKind =
+  | "wallet"
+  | "funder"
+  | "referrer"
+  | "referral_code"
+  | "service"
+
+export type WalletGraphEdgeKind = "funded" | "referred" | "self_referral"
+
+export type WalletGraphSeverity = "info" | "caution" | "high" | "critical"
+
+export type WalletGraphNode = {
+  nodeKey: string
+  address: string | null
+  chain: string | null
+  kind: WalletGraphNodeKind
+  label: string | null
+  walletAddress: string | null
+  componentId: string | null
+  metadata: Record<string, unknown>
+}
+
+export type WalletGraphEdge = {
+  edgeKey: string
+  sourceKey: string
+  targetKey: string
+  kind: WalletGraphEdgeKind
+  confidence: number
+  isRiskBearing: boolean
+  componentId: string | null
+  observedAt: string | null
+  transactionId: string | null
+  amount: number | null
+  evidence: string[]
+  metadata: Record<string, unknown>
+}
+
+export type WalletGraphFinding = {
+  code: string
+  title: string
+  description: string
+  severity: WalletGraphSeverity
+  evidenceCount: number
+  walletAddresses: string[]
+  nodeKey: string | null
+}
+
+export type WalletGraphComponent = {
+  componentId: string
+  nodeKeys: string[]
+  walletAddresses: string[]
+  edgeCount: number
+  riskScore: number
+  severity: WalletGraphSeverity
+  dominantFunder: string | null
+  dominantReferrer: string | null
+  reasons: string[]
+}
+
+export type WalletGraphSummary = {
+  totalNodes: number
+  totalEdges: number
+  connectedWallets: number
+  externalFunders: number
+  referralLinks: number
+  highRiskComponents: number
+  neutralServiceFunders: number
+  largestComponent: number
+  maxComponentRisk: number
+  components: WalletGraphComponent[]
+  findings: WalletGraphFinding[]
+}
+
+export type WalletGraphData = WalletGraphSummary & {
+  nodes: WalletGraphNode[]
+  edges: WalletGraphEdge[]
 }
 
 export type CsvIssue = {
@@ -127,6 +208,8 @@ export type WalletRiskResult = {
   contractsCount: number | null
   campaignActionsCount: number | null
   clusterId: string | null
+  graphComponentId?: string | null
+  graphRiskScore?: number | null
   reasons: string[]
   firstSeen?: string | null
   lastSeen?: string | null
@@ -194,6 +277,7 @@ export type TeamReviewSummary = {
 export type AnalysisResult = {
   wallets: WalletRiskResult[]
   clusters: ClusterResult[]
+  graph: WalletGraphData
   totalWallets: number
   approvedCount: number
   manualReviewCount: number
@@ -229,4 +313,5 @@ export type AnalysisDetail = {
   }
   wallets: WalletRiskResult[]
   clusters: ClusterResult[]
+  graph?: WalletGraphSummary | null
 }

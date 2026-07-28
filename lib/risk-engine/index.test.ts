@@ -142,6 +142,24 @@ describe("risk engine fixture coverage", () => {
     )
   })
 
+  it("does not create a suspicious cluster from a known exchange funding source", () => {
+    const exchangeFunding = "0x28c6c06298d514db089934071355e5743bf21d60"
+    const wallets = Array.from({ length: 8 }, (_, index) =>
+      wallet({
+        walletAddress: `0x${(index + 300).toString(16).padStart(40, "0")}`,
+        fundingSource: exchangeFunding,
+        txCount: 40 + index * 7,
+        walletAgeDays: 200 + index * 40,
+        contractsCount: 5 + index * 4,
+      })
+    )
+    const result = analyzeWallets(wallets)
+
+    assert.equal(result.clusters.length, 0)
+    assert.ok(result.wallets.every((item) => item.clusterId === null))
+    assert.equal(result.graph.neutralServiceFunders, 1)
+  })
+
   it("rejects campaign-only farming behavior", () => {
     const campaignOnly = wallet({
       walletAddress: "0x1000000000000000000000000000000000000004",

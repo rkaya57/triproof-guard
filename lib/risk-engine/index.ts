@@ -12,6 +12,13 @@ import type {
   WalletRiskResult,
   WalletStatus,
 } from "@/types"
+import {
+  buildWalletGraphIntelligence,
+  graphSignalForWallet,
+  isNeutralServiceAddress,
+  normalizeGraphAddress,
+  type WalletGraphContext,
+} from "@/lib/graph-intelligence"
 import { detectKnownEntity, isReviewOnlyEntityType } from "@/lib/risk-engine/known-entities"
 
 type StatusDecision = {
@@ -49,6 +56,9 @@ type EnrichedWallet = {
   reputationLabel: string | null
   policyReason: string | null
   customerLabel: string | null
+  referrerAddress: string | null
+  referralCode: string | null
+  referralTimestamp: string | null
   enrichmentProvider: string | null
   enrichmentStatus: EnrichmentStatus | null
 }
@@ -158,6 +168,9 @@ function hydrateWallet(wallet: ParsedWallet): EnrichedWallet {
     reputationLabel: wallet.reputationLabel ?? null,
     policyReason: wallet.policyReason ?? null,
     customerLabel: wallet.customerLabel ?? null,
+    referrerAddress: wallet.referrerAddress ?? null,
+    referralCode: wallet.referralCode ?? null,
+    referralTimestamp: wallet.referralTimestamp ?? null,
     enrichmentProvider: wallet.enrichmentProvider ?? null,
     enrichmentStatus: wallet.enrichmentStatus ?? null,
   }
@@ -406,14 +419,21 @@ function hasBehaviorClusterInputs(wallet: EnrichedWallet) {
   )
 }
 
-function createClusters(wallets: EnrichedWallet[]) {
+function createClusters(
+  wallets: EnrichedWallet[],
+  graphContext: WalletGraphContext | null
+) {
   const drafts: ClusterDraft[] = []
   const assigned = new Map<number, string>()
   const fundingGroups = new Map<string, number[]>()
 
   wallets.forEach((wallet, index) => {
-    if (!isUserLikeAccount(wallet) || !wallet.fundingSource) return
-    const key = wallet.fundingSource.toLowerCase()
+    if (
+      !isUserLikeAccount(wallet) ||
+      !wallet.fundingSource ||
+      isNeutralServiceAddress(wallet.fundingSource, wallet.chain, graphContext)
+    ) return
+    const key = normalizeGraphAddress(wallet.fundingSource, wallet.chain)
     fundingGroups.set(key, [...(fundingGroups.get(key) ?? []), index])
   })
 
@@ -527,11 +547,13 @@ function suggestedActionFromCluster(
 export function analyzeWallets(
   wallets: ParsedWallet[],
   enrichment: EnrichmentMeta | null = null,
-  riskPolicy: RiskPolicy = "balanced"
+  riskPolicy: RiskPolicy = "balanced",
+  graphContext: WalletGraphContext | null = null
 ): AnalysisResult {
   const config = POLICY_CONFIG[riskPolicy]
   const enrichedWallets = wallets.map(hydrateWallet)
-  const { drafts, assigned, fundingGroups } = createClusters(enrichedWallets)
+  const graphIntelligence = buildWalletGraphIntelligence(enrichedWallets, graphContext)
+  const { drafts, assigned, fundingGroups } = createClusters(enrichedWallets, graphContext)
 
   const walletResults: WalletRiskResult[] = enrichedWallets.map((wallet, index) => {
     const reasons: string[] = [`V1.6 risk policy: ${config.label}`]
@@ -542,8 +564,13 @@ export function analyzeWallets(
     const evidenceAvailable = hasEvidence(wallet, entityType)
     let score = 0
     const fundingGroupSize = wallet.fundingSource
-      ? fundingGroups.get(wallet.fundingSource.toLowerCase())?.length ?? 0
+      ? fundingGroups.get(normalizeGraphAddress(wallet.fundingSource, wallet.chain))?.length ?? 0
       : 0
+    const graphSignal = graphSignalForWallet(
+      graphIntelligence,
+      wallet.walletAddress,
+      wallet.chain
+    )
     const clusterId = assigned.get(index) ?? null
     const cluster = clusterId ? drafts.find((item) => item.clusterLabel === clusterId) ?? null : null
     const clusterSize = cluster?.walletIndexes.length ?? 0
@@ -667,6 +694,11 @@ export function analyzeWallets(
       }
     }
 
+    if (graphSignal.riskDelta > 0) {
+      score += Math.min(graphSignal.riskDelta, 70)
+      reasons.push(...graphSignal.reasons)
+    }
+
     const fundingRisk = clusterRisk(fundingGroupSize)
     if (fundingRisk > 0) {
       score += fundingRisk
@@ -749,6 +781,7 @@ export function analyzeWallets(
       (wallet.botScriptScore !== null && wallet.botScriptScore >= 80) ||
       (wallet.campaignOnlyRatio !== null && wallet.campaignOnlyRatio >= 0.8 && (wallet.txCount ?? 0) <= 15) ||
       (wallet.behaviorDiversityScore !== null && wallet.behaviorDiversityScore < 20 && (wallet.txCount ?? 0) <= 5) ||
+      graphSignal.hardSignal ||
       (wallet.walletAgeDays !== null && wallet.walletAgeDays < 7 && wallet.txCount !== null && wallet.txCount <= 2)
 
     const riskScore = Math.min(100, Math.round(score * config.scoreMultiplier))
@@ -787,6 +820,8 @@ export function analyzeWallets(
       contractsCount: wallet.contractsCount,
       campaignActionsCount: wallet.campaignActionsCount,
       clusterId,
+      graphComponentId: graphSignal.componentId,
+      graphRiskScore: graphSignal.riskDelta,
       reasons,
       firstSeen: wallet.firstSeen,
       lastSeen: wallet.lastSeen,
@@ -845,6 +880,7 @@ export function analyzeWallets(
   return {
     wallets: walletResults,
     clusters,
+    graph: graphIntelligence.graph,
     totalWallets,
     approvedCount,
     manualReviewCount,

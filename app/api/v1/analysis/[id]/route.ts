@@ -24,6 +24,7 @@ export async function GET(
         project: true,
         wallets: { orderBy: [{ riskScore: "desc" }, { walletAddress: "asc" }] },
         clusters: { orderBy: [{ averageRiskScore: "desc" }, { clusterLabel: "asc" }] },
+        graphSummary: true,
       },
     })
 
@@ -68,9 +69,12 @@ export async function GET(
         status: wallet.status,
         statusExplanation: wallet.statusExplanation,
         clusterId: wallet.clusterId,
+        graphComponentId: wallet.graphComponentId,
+        graphRiskScore: wallet.graphRiskScore,
         reasons: wallet.reasons.slice(0, 6),
       })),
       clusters: serialized.clusters.slice(0, 20),
+      graphIntelligence: serialized.graph,
     })
   } catch (error) {
     if (isDatabaseConnectionError(error)) {

@@ -21,7 +21,11 @@ const createExample = `curl -X POST https://triproofprotocol.com/api/v1/analyze 
     "riskPolicy": "balanced",
     "analysisMode": "onchain",
     "wallets": [
-      "Ch8kCo2FW4HXQMTm2wpbLeaVZJxXa4Rg8S4KVXUxcdVm",
+      {
+        "walletAddress": "Ch8kCo2FW4HXQMTm2wpbLeaVZJxXa4Rg8S4KVXUxcdVm",
+        "referrerAddress": "7VgXv5XxRrP9DziP5Q3WmH4r7iKL3JZ7W4PB7XqqNmMu",
+        "referralCode": "COMMUNITY-26"
+      },
       "DJt9LW4Mma6q5dgE7gXaVmHi8Msjcax1D4wQ78RCDfcw"
     ]
   }'`
@@ -94,7 +98,7 @@ export default function ApiDocsPage() {
         </Card>
         <Card className="glass-panel premium-card">
           <CardHeader><Code2 className="text-primary" /><CardTitle>Read status</CardTitle><CardDescription>GET /api/v1/analysis/ANALYSIS_ID</CardDescription></CardHeader>
-          <CardContent className="text-sm text-muted-foreground">Returns summary counts, top wallet decisions, clusters and export URLs.</CardContent>
+          <CardContent className="text-sm text-muted-foreground">Returns summary counts, top wallet decisions, clusters, graph intelligence and export URLs.</CardContent>
         </Card>
         <Card className="glass-panel premium-card">
           <CardHeader><ShieldAlert className="text-primary" /><CardTitle>ScamGuard scan</CardTitle><CardDescription>POST /api/v1/scamguard/scan</CardDescription></CardHeader>

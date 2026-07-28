@@ -7,6 +7,9 @@ import type {
   FeedbackLabel,
   RiskPolicy,
   TeamReviewState,
+  WalletGraphComponent,
+  WalletGraphFinding,
+  WalletGraphSummary,
   WalletRiskResult,
   WalletStatus,
 } from "@/types"
@@ -29,6 +32,8 @@ type DbWallet = {
   contractsCount: number | null
   campaignActionsCount: number | null
   clusterId: string | null
+  graphComponentId?: string | null
+  graphRiskScore?: number | null
   reasons: unknown
   firstSeen?: Date | null
   lastSeen?: Date | null
@@ -95,6 +100,19 @@ type DbAnalysis = {
   clusters: DbCluster[]
   teamReviews?: DbTeamReview[]
   feedbackEvents?: DbFeedbackEvent[]
+  graphSummary?: {
+    totalNodes: number
+    totalEdges: number
+    connectedWallets: number
+    externalFunders: number
+    referralLinks: number
+    highRiskComponents: number
+    neutralServiceFunders: number
+    largestComponent: number
+    maxComponentRisk: number
+    components: unknown
+    findings: unknown
+  } | null
 }
 
 function reasonsToStrings(reasons: unknown) {
@@ -144,6 +162,8 @@ export function serializeAnalysis(analysis: DbAnalysis): AnalysisDetail {
     contractsCount: wallet.contractsCount,
     campaignActionsCount: wallet.campaignActionsCount,
     clusterId: wallet.clusterId,
+    graphComponentId: wallet.graphComponentId ?? null,
+    graphRiskScore: wallet.graphRiskScore ?? null,
     reasons: reasonsToStrings(wallet.reasons),
     firstSeen: wallet.firstSeen ? wallet.firstSeen.toISOString() : null,
     lastSeen: wallet.lastSeen ? wallet.lastSeen.toISOString() : null,
@@ -185,6 +205,25 @@ export function serializeAnalysis(analysis: DbAnalysis): AnalysisDetail {
 
   const reviewedWallets = analysis.teamReviews?.length ?? 0
   const feedbackEvents = analysis.feedbackEvents ?? []
+  const graph: WalletGraphSummary | null = analysis.graphSummary
+    ? {
+        totalNodes: analysis.graphSummary.totalNodes,
+        totalEdges: analysis.graphSummary.totalEdges,
+        connectedWallets: analysis.graphSummary.connectedWallets,
+        externalFunders: analysis.graphSummary.externalFunders,
+        referralLinks: analysis.graphSummary.referralLinks,
+        highRiskComponents: analysis.graphSummary.highRiskComponents,
+        neutralServiceFunders: analysis.graphSummary.neutralServiceFunders,
+        largestComponent: analysis.graphSummary.largestComponent,
+        maxComponentRisk: analysis.graphSummary.maxComponentRisk,
+        components: Array.isArray(analysis.graphSummary.components)
+          ? (analysis.graphSummary.components as WalletGraphComponent[])
+          : [],
+        findings: Array.isArray(analysis.graphSummary.findings)
+          ? (analysis.graphSummary.findings as WalletGraphFinding[])
+          : [],
+      }
+    : null
 
   return {
     id: analysis.id,
@@ -220,5 +259,6 @@ export function serializeAnalysis(analysis: DbAnalysis): AnalysisDetail {
     project: analysis.project,
     wallets,
     clusters,
+    graph,
   }
 }

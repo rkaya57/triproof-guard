@@ -4,7 +4,7 @@ Last updated: 2026-07-28
 
 ## Current State
 
-Tri-Proof Guard MVP now has stronger wallet risk decisions, known entity detection, cluster-aware status handling, improved dashboard UX, and updated CSV/PDF exports.
+Tri-Proof Guard now has production-oriented wallet risk decisions, known entity detection, cluster-aware status handling, persistent wallet/referral/funding graphs, improved dashboard UX, and decision exports.
 
 The app builds successfully and the core known-entity plus cluster scenarios were tested through the API and browser smoke checks.
 
@@ -13,10 +13,24 @@ Current product direction:
 1. Telegram Bot MVP - complete
 2. Group Guardian for Telegram groups - complete
 3. URL Sandbox and Scam DNA fingerprinting - complete
-4. Full Project Registry with signed verification
-5. Deeper wallet, referral, and funding graph intelligence
-6. AI-assisted explanation layer for reports and user replies
-7. Production observability, distributed rate limits, retention, and privacy controls
+4. Wallet, referral, and funding graph intelligence - complete
+5. AI-assisted explanation layer for reports and user replies
+6. Production observability, distributed rate limits, retention, and privacy controls
+7. Full Project Registry with signed verification
+
+### Wallet, Referral, and Funding Graph Intelligence
+
+- Added optional CSV referral ingestion for referrer wallets, referral codes, and referral timestamps.
+- Added persistent graph summary, node, and edge evidence tables with server-only RLS.
+- Added typed wallet, funder, referrer, referral-code, and known-service nodes.
+- Added confidence-scored funding and referral edges with retained evidence.
+- Added unknown funder fan-out, burst funding, self-referral, low-activity referral fan-out, coordinated funding/referral cohort, and circular path detection.
+- Known exchange, bridge, service, and protocol funding sources are neutralized so common withdrawal sources do not create false Sybil clusters.
+- Existing admin wallet intelligence now controls trusted and known-bad funding origins without code changes.
+- Graph risk reaches wallet decisions only when corroborating evidence exists.
+- Added a component selector, interactive evidence graph, connection inspector, findings, and graph metrics to analysis reports.
+- Added authenticated graph evidence API and V1 analysis summary output.
+- Added graph engine and referral CSV parser test coverage.
 
 ## Completed Work
 
@@ -309,10 +323,10 @@ Checked:
 
 1. Verify the production URL Sandbox migration, deep-scan API, and admin DNA controls after deployment.
 2. Add suspicious poster correlation and distributed abuse/rate limits.
-3. Create the full Project Registry with signed verification.
-4. Deepen wallet/referral/funding graph intelligence.
-5. Add AI-assisted explanation copy for reports and Telegram replies.
-6. Add DNA retention, reviewed corpus import, and campaign sharing controls.
+3. Add AI-assisted explanation copy for reports and Telegram replies.
+4. Add DNA retention, reviewed corpus import, and campaign sharing controls.
+5. Add production observability, distributed rate limits, retention, and privacy controls.
+6. Create the full Project Registry with signed verification.
 
 ## Resume Checklist
 

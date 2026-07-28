@@ -90,8 +90,8 @@ const workflow = [
   },
   {
     icon: Network,
-    title: "Group suspicious clusters",
-    text: "Shared funding sources, similar account behavior, low diversity, and repeated campaign-only activity are surfaced as review groups.",
+    title: "Build the evidence graph",
+    text: "Funding origins, referrers, referral codes, timing, and known-service context are joined into explainable campaign components.",
   },
   {
     icon: FileDown,
@@ -126,7 +126,7 @@ const productLayers = [
 const signals = [
   [WalletCards, "Wallet age", "Newly created wallets are reviewed more carefully when combined with weak history, low balance, or campaign-only behavior."],
   [Radar, "Transaction history", "Low activity, thin signature history, repetitive actions, and missing organic usage reduce confidence."],
-  [Network, "Funding source", "Groups funded from the same origin can indicate farming, managed wallets, or reward leakage risk."],
+  [Network, "Funding and referral graph", "Unknown funder fan-out, referral overlap, cycles, and timing bursts are correlated while recognized exchange or service funding is neutralized."],
   [Layers3, "Contract diversity", "The engine checks whether wallets show broad real usage or narrow one-purpose interaction patterns."],
   [Landmark, "Known entities", "Exchange, bridge, service, token mint, protocol, and program-owned accounts are marked for review or exclusion."],
   [GitBranch, "Suspicious clusters", "Related wallets are grouped so reviewers can inspect patterns across the list instead of one address at a time."],
@@ -141,6 +141,7 @@ const evidenceLayers = [
   ["Input quality", "Duplicate rows, invalid addresses, chain mismatch, CSV parsing errors, and row-level exclusions."],
   ["On-chain account state", "Age, balance, token holdings, owner program, transaction count, and sampled historical activity."],
   ["Behavioral signals", "Funding concentration, campaign-only usage, low diversity, similar timing, and repeated wallet patterns."],
+  ["Graph evidence", "Typed funding and referral edges, connected components, confidence, service neutralization, and corroborated coordination findings."],
   ["Reputation intelligence", "Trusted project domains, suspicious surfaces, known bad counterparties, verified mints, and admin overrides."],
   ["Transaction semantics", "Human-readable interpretation of approval, transfer, authority, and contract interaction intent."],
   ["Reviewer context", "Primary reason, confidence, risk drivers, next action, and limitations behind the decision."],

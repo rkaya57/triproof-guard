@@ -80,10 +80,26 @@ function walletRows(input: unknown, chain: Chain): { wallets: ParsedWallet[]; is
   const issues: string[] = []
 
   values.forEach((item, index) => {
+    const row = typeof item === "object" && item !== null
+      ? (item as Record<string, unknown>)
+      : null
     const rawAddress = typeof item === "string" ? item : typeof item === "object" && item !== null ? String((item as { wallet?: unknown; walletAddress?: unknown; address?: unknown }).wallet ?? (item as { walletAddress?: unknown }).walletAddress ?? (item as { address?: unknown }).address ?? "") : ""
     const policyAction = typeof item === "object" && item !== null ? String((item as { policyAction?: unknown; policy_action?: unknown }).policyAction ?? (item as { policy_action?: unknown }).policy_action ?? "") : ""
     const reputationLabel = typeof item === "object" && item !== null ? String((item as { reputationLabel?: unknown; reputation_label?: unknown }).reputationLabel ?? (item as { reputation_label?: unknown }).reputation_label ?? "") : ""
     const policyReason = typeof item === "object" && item !== null ? String((item as { policyReason?: unknown; policy_reason?: unknown }).policyReason ?? (item as { policy_reason?: unknown }).policy_reason ?? "") : ""
+    const rawReferrer = String(
+      row?.referrerAddress ??
+      row?.referrer_address ??
+      row?.referrerWallet ??
+      row?.referredBy ??
+      ""
+    ).trim()
+    const referralCode = String(
+      row?.referralCode ?? row?.referral_code ?? row?.inviteCode ?? ""
+    ).trim()
+    const referralTimestamp = String(
+      row?.referralTimestamp ?? row?.referral_timestamp ?? row?.referredAt ?? ""
+    ).trim()
 
     if (!rawAddress.trim()) {
       issues.push(`wallets[${index}] is missing an address`)
@@ -96,6 +112,13 @@ function walletRows(input: unknown, chain: Chain): { wallets: ParsedWallet[]; is
     }
 
     const normalized = normalizeWalletAddress(rawAddress, chain)
+    const referrerAddress =
+      rawReferrer && isValidWalletAddress(rawReferrer, chain)
+        ? normalizeWalletAddress(rawReferrer, chain)
+        : null
+    if (rawReferrer && !referrerAddress) {
+      issues.push(`wallets[${index}] has an invalid ${chain} referrer address; referral link ignored`)
+    }
     const key = `${chain}:${normalized}`
     if (seen.has(key)) return
     seen.add(key)
@@ -115,6 +138,9 @@ function walletRows(input: unknown, chain: Chain): { wallets: ParsedWallet[]; is
       reputationLabel: reputationLabel.trim() || null,
       policyReason: policyReason.trim() || null,
       customerLabel: reputationLabel.trim() || null,
+      referrerAddress,
+      referralCode: referralCode || null,
+      referralTimestamp: referralTimestamp || null,
       sourceRow: index + 1,
     })
   })

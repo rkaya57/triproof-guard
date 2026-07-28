@@ -186,6 +186,25 @@ export function parseWalletCsv(csvText: string, selectedChain: string): CsvParse
     const entityLabel = firstText(row, ["entity_label", "known_entity", "entity", "wallet_label"])
     const entityType = normalizeEntityType(firstText(row, ["entity_type", "known_entity_type"]))
     const policyReason = firstText(row, ["policy_reason", "reason", "note", "notes", "review_note"])
+    const rawReferrerAddress = firstText(row, [
+      "referrer_address",
+      "referrer_wallet",
+      "referred_by",
+      "inviter_wallet",
+      "inviter_address",
+    ])
+    const referrerAddress =
+      rawReferrerAddress && isValidWalletAddress(rawReferrerAddress, rowChain)
+        ? normalizeWalletAddress(rawReferrerAddress, rowChain)
+        : null
+
+    if (rawReferrerAddress && !referrerAddress) {
+      issues.push({
+        row: rowNumber,
+        walletAddress: normalizedAddress,
+        issue: `Invalid ${rowChain} referrer address ignored`,
+      })
+    }
 
     wallets.push({
       walletAddress: normalizedAddress,
@@ -204,6 +223,14 @@ export function parseWalletCsv(csvText: string, selectedChain: string): CsvParse
       reputationLabel,
       policyReason,
       customerLabel: firstText(row, ["customer_label", "review_label", "label"]),
+      referrerAddress,
+      referralCode: firstText(row, ["referral_code", "invite_code", "ref_code"]),
+      referralTimestamp: firstText(row, [
+        "referral_timestamp",
+        "referred_at",
+        "invited_at",
+        "referral_created_at",
+      ]),
       sourceRow: rowNumber,
     })
   })
@@ -227,6 +254,17 @@ export function parseWalletCsv(csvText: string, selectedChain: string): CsvParse
     "customer_label",
     "entity_label",
     "entity_type",
+    "referrer_address",
+    "referrer_wallet",
+    "referred_by",
+    "inviter_wallet",
+    "inviter_address",
+    "referral_code",
+    "invite_code",
+    "ref_code",
+    "referral_timestamp",
+    "referred_at",
+    "invited_at",
   ]
 
   return {
