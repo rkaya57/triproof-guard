@@ -75,11 +75,13 @@ const riskRank: Record<ScamGuardRiskLevel, number> = {
 }
 
 const commandHelp = [
-  "ScamGuard Telegram beta",
+  "SCAMGUARD TELEGRAM BETA",
+  "=======================",
   "",
-  "Bana bir link, wallet, token mint veya transaction payload gonder; birkac saniye icinde aciklanabilir risk raporu doneyim.",
+  "Send a URL, wallet, token mint, contract, transaction payload, or suspicious message. ScamGuard will return an explainable pre-sign risk report in seconds.",
   "",
-  "Komutlar:",
+  "Commands",
+  "--------",
   "/scan <link|wallet|token|tx>",
   "/wallet <address>",
   "/token <mint|contract>",
@@ -87,7 +89,9 @@ const commandHelp = [
   "/report <item>",
   "/settings",
   "",
-  "Grup modu: Gruplarda linkleri otomatik tararim ve riskli claim, mint, reward veya wallet-signing akislarinda uyari veririm.",
+  "Group Guardian",
+  "--------------",
+  "Add the bot to a Telegram group and it will scan posted links. It only replies when the risk crosses the configured alert threshold.",
 ].join("\n")
 
 function textOf(message: TelegramMessage) {
@@ -185,34 +189,55 @@ function levelMeetsThreshold(level: ScamGuardRiskLevel, threshold: NonNullable<T
 }
 
 function statusLine(result: ScamGuardScanResult) {
-  if (result.riskLevel === "CRITICAL") return "KRITIK RISK"
-  if (result.riskLevel === "HIGH_RISK") return "YUKSEK RISK"
-  if (result.riskLevel === "CAUTION") return "DIKKAT"
-  return "DUSUK RISK"
+  if (result.riskLevel === "CRITICAL") return "CRITICAL RISK"
+  if (result.riskLevel === "HIGH_RISK") return "HIGH RISK"
+  if (result.riskLevel === "CAUTION") return "CAUTION"
+  return "LOW RISK"
 }
 
 function strongestSignals(result: ScamGuardScanResult) {
-  return result.signals.slice(0, 4).map((signal) => `- ${signal.title}: ${signal.detail}`)
+  return result.signals.slice(0, 4).map((signal, index) => `${index + 1}. ${signal.title}\n   ${signal.detail}`)
+}
+
+function divider(label: string) {
+  return `\n-- ${label.toUpperCase()} --`
+}
+
+function compactTarget(result: ScamGuardScanResult) {
+  return (
+    result.metadata.domain ??
+    result.metadata.walletAddress ??
+    result.metadata.contractIntelligence?.target ??
+    result.metadata.decodedIntent?.recipient ??
+    result.type
+  )
 }
 
 function scanReportText(result: ScamGuardScanResult, context?: TelegramBotContext) {
   const lines = [
-    `ScamGuard sonucu: ${statusLine(result)}`,
-    `Skor: ${result.score}/100 | Guven: ${result.confidence}`,
+    "SCAMGUARD PRE-SIGN REPORT",
+    "=========================",
     "",
+    `Status: ${statusLine(result)}`,
+    `Shield score: ${result.score}/100`,
+    `Confidence: ${result.confidence}`,
+    `Target: ${compactTarget(result)}`,
+    `Scan type: ${result.type}`,
+    "",
+    divider("summary"),
     result.summary,
     "",
-    "Neden?",
+    divider("decision"),
     result.explanation,
   ]
 
   const signals = strongestSignals(result)
-  if (signals.length) lines.push("", "Kanitlar:", ...signals)
+  if (signals.length) lines.push(divider("evidence"), ...signals)
 
-  if (result.actions.length) lines.push("", "Oneri:", ...result.actions.slice(0, 3).map((action) => `- ${action}`))
+  if (result.actions.length) lines.push(divider("recommended action"), ...result.actions.slice(0, 3).map((action) => `- ${action}`))
 
   const reportUrl = context?.publicBaseUrl ? `${context.publicBaseUrl.replace(/\/$/, "")}/scamguard` : null
-  if (reportUrl) lines.push("", `Tam scanner: ${reportUrl}`)
+  if (reportUrl) lines.push(divider("open full scanner"), reportUrl)
 
   return lines.join("\n").slice(0, 3900)
 }
@@ -220,15 +245,19 @@ function scanReportText(result: ScamGuardScanResult, context?: TelegramBotContex
 function groupWarningText(result: ScamGuardScanResult) {
   const signals = strongestSignals(result)
   return [
-    `ScamGuard grup uyarisi: ${statusLine(result)}`,
-    `Skor: ${result.score}/100`,
+    "SCAMGUARD GROUP GUARDIAN",
+    "=======================",
     "",
+    `Alert: ${statusLine(result)}`,
+    `Shield score: ${result.score}/100`,
+    `Target: ${compactTarget(result)}`,
+    "",
+    divider("summary"),
     result.summary,
-    signals.length ? "" : undefined,
-    signals.length ? "En guclu sinyaller:" : undefined,
+    signals.length ? divider("strongest signals") : undefined,
     ...signals.slice(0, 3),
     "",
-    "Kaynagi resmi kanaldan dogrulamadan cuzdan baglamayin veya islem imzalamayin.",
+    "Action: verify the source from an official channel before connecting a wallet or signing anything.",
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n")
@@ -272,11 +301,12 @@ async function handlePrivateOrCommand(message: TelegramMessage, context: Telegra
       simpleReply(
         message,
         [
-          "ScamGuard ayarlari",
+          "SCAMGUARD SETTINGS",
+          "==================",
           "",
-          `Grup uyari esigi: ${context.groupAlertLevel ?? "HIGH_RISK"}`,
-          "Veri politikasi: Bot seed phrase, private key veya cuzdan sifresi istemez.",
-          "Gecmis: Bu ilk surumde Telegram scan gecmisi saklanmaz.",
+          `Group alert threshold: ${context.groupAlertLevel ?? "HIGH_RISK"}`,
+          "Data policy: the bot never asks for seed phrases, private keys, wallet passwords, or custody permissions.",
+          "History: this beta does not store Telegram scan history yet.",
         ].join("\n")
       ),
     ]
@@ -297,7 +327,7 @@ async function handlePrivateOrCommand(message: TelegramMessage, context: Telegra
     return [
       simpleReply(
         message,
-        "Taranacak bir link, wallet, token mint veya transaction payload bulamadim. Ornek: /scan https://example.com/claim"
+        "I could not find a URL, wallet, token mint, contract, or transaction payload to scan. Example: /scan https://example.com/claim"
       ),
     ]
   }

@@ -28,7 +28,7 @@ test("Telegram bot returns help for private /start", async () => {
   const actions = await handleTelegramUpdate(update)
   assert.equal(actions.length, 1)
   assert.equal(actions[0].method, "sendMessage")
-  assert.match(actions[0].payload.text, /ScamGuard Telegram beta/)
+  assert.match(actions[0].payload.text, /SCAMGUARD TELEGRAM BETA/)
 })
 
 test("Group Guardian stays quiet for non-command text without links", async () => {
@@ -57,5 +57,5 @@ test("Group Guardian warns on known scam links", async () => {
 
   const actions = await handleTelegramUpdate(update)
   assert.equal(actions.length, 1)
-  assert.match(actions[0].payload.text, /ScamGuard grup uyar/)
+  assert.match(actions[0].payload.text, /SCAMGUARD GROUP GUARDIAN/)
 })
