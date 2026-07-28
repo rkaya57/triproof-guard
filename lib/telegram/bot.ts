@@ -66,6 +66,9 @@ const urlRegex = /\bhttps?:\/\/[^\s<>"')\]]+/gi
 const solanaAddressRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
 const evmAddressRegex = /^0x[a-fA-F0-9]{40}$/
 const base64ishRegex = /^[A-Za-z0-9+/=_-]{80,}$/
+const solanaSystemProgramId = "11111111111111111111111111111111"
+const splTokenProgramId = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+const token2022ProgramId = "TokenzQdBNbLqP5VEhdkAS6EPF1SMH1dbKqP6Xk6mN"
 
 const riskRank: Record<ScamGuardRiskLevel, number> = {
   SAFE: 0,
@@ -196,11 +199,17 @@ function statusLine(result: ScamGuardScanResult) {
 }
 
 function strongestSignals(result: ScamGuardScanResult) {
-  return result.signals.slice(0, 4).map((signal, index) => `${index + 1}. ${signal.title}\n   ${signal.detail}`)
+  return result.signals.slice(0, 4).map((signal, index) => {
+    const source = sourceFromSignal(signal.detail)
+    const reason = source ? signal.detail.replace(source, "this target") : signal.detail
+    return [`${index + 1}. ${signal.title}`, source ? `   Source: ${source}` : undefined, `   Reason: ${reason}`]
+      .filter((line): line is string => Boolean(line))
+      .join("\n")
+  })
 }
 
 function divider(label: string) {
-  return `\n-- ${label.toUpperCase()} --`
+  return `\n[ ${label.toUpperCase()} ]`
 }
 
 function compactTarget(result: ScamGuardScanResult) {
@@ -213,10 +222,83 @@ function compactTarget(result: ScamGuardScanResult) {
   )
 }
 
-function scanReportText(result: ScamGuardScanResult, context?: TelegramBotContext) {
+function sourceFromSignal(detail: string) {
+  const domain = detail.match(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/i)?.[0]
+  if (domain) return domain
+  const evmAddress = detail.match(/\b0x[a-fA-F0-9]{40}\b/)?.[0]
+  if (evmAddress) return evmAddress
+  const solanaAddress = detail.match(/\b[1-9A-HJ-NP-Za-km-z]{32,44}\b/)?.[0]
+  return solanaAddress ?? null
+}
+
+function isSeedExposureResult(result: ScamGuardScanResult) {
+  return result.signals.some((signal) => signal.code === "SECRET_MATERIAL_REQUEST" || signal.code === "SECRET_MATERIAL_IN_TRANSACTION_PROMPT")
+}
+
+function recommendedActions(result: ScamGuardScanResult) {
+  return result.actions
+    .filter((action) => isSeedExposureResult(result) || !/fresh wallet|seed phrase|private key/i.test(action))
+    .slice(0, 3)
+}
+
+function isSolanaTokenProgram(ownerProgram?: string | null) {
+  return ownerProgram === splTokenProgramId || ownerProgram === token2022ProgramId
+}
+
+function isProgramOwnedWalletResult(result: ScamGuardScanResult) {
+  return (
+    result.type === "wallet" &&
+    result.metadata.chain === "solana" &&
+    Boolean(result.metadata.ownerProgram) &&
+    result.metadata.ownerProgram !== solanaSystemProgramId
+  )
+}
+
+function accountTypeReportText(result: ScamGuardScanResult, context?: TelegramBotContext) {
+  const owner = result.metadata.ownerProgram
+  const tokenOwned = isSolanaTokenProgram(owner)
+  const title = tokenOwned ? "SPL TOKEN ACCOUNT DETECTED" : "PROGRAM-OWNED ACCOUNT DETECTED"
   const lines = [
-    "SCAMGUARD PRE-SIGN REPORT",
-    "=========================",
+    "ScamGuard Report",
+    "Pre-sign account classification",
+    "==============================",
+    "",
+    `Result: ${title}`,
+    `Target: ${compactTarget(result)}`,
+    `Owner program: ${owner ?? "unknown"}`,
+    `RPC evidence: ${result.metadata.rpcStatus}`,
+    "",
+    divider("what this means"),
+    tokenOwned
+      ? "This address does not look like a normal end-user wallet. It is owned by the Solana SPL Token program, so it is likely a token mint or token account."
+      : "This address is not owned by the Solana system program. It appears to be a program-owned account rather than a normal user wallet.",
+    "",
+    divider("decision"),
+    tokenOwned
+      ? "Do not judge this as a user wallet. If you expected a token mint, run token analysis. If you expected a user wallet, ask the project to provide the correct wallet address."
+      : "Treat this as an account-type mismatch. Verify the project documentation before using it as a destination, wallet, or campaign participant.",
+    divider("evidence"),
+    `1. Owner program\n   Source: ${owner ?? "unknown"}\n   Reason: Solana RPC reports this owner instead of the system program.`,
+    divider("recommended action"),
+    tokenOwned ? "- Run /token with this address if it is meant to be a token mint." : "- Verify the account role with official project documentation.",
+    "- Do not treat this address as a normal participant wallet.",
+    "- Compare the expected account type before signing or sending funds.",
+  ]
+
+  const reportUrl = context?.publicBaseUrl ? `${context.publicBaseUrl.replace(/\/$/, "")}/scamguard` : null
+  if (reportUrl) lines.push(divider("open full scanner"), reportUrl)
+
+  return lines.join("\n").slice(0, 3900)
+}
+
+export function formatTelegramScanReport(result: ScamGuardScanResult, context?: TelegramBotContext) {
+  if (isProgramOwnedWalletResult(result)) return accountTypeReportText(result, context)
+
+  const actions = recommendedActions(result)
+  const lines = [
+    "ScamGuard Report",
+    "Pre-sign security check",
+    "=======================",
     "",
     `Status: ${statusLine(result)}`,
     `Shield score: ${result.score}/100`,
@@ -234,7 +316,7 @@ function scanReportText(result: ScamGuardScanResult, context?: TelegramBotContex
   const signals = strongestSignals(result)
   if (signals.length) lines.push(divider("evidence"), ...signals)
 
-  if (result.actions.length) lines.push(divider("recommended action"), ...result.actions.slice(0, 3).map((action) => `- ${action}`))
+  if (actions.length) lines.push(divider("recommended action"), ...actions.map((action) => `- ${action}`))
 
   const reportUrl = context?.publicBaseUrl ? `${context.publicBaseUrl.replace(/\/$/, "")}/scamguard` : null
   if (reportUrl) lines.push(divider("open full scanner"), reportUrl)
@@ -243,10 +325,13 @@ function scanReportText(result: ScamGuardScanResult, context?: TelegramBotContex
 }
 
 function groupWarningText(result: ScamGuardScanResult) {
+  if (isProgramOwnedWalletResult(result)) return accountTypeReportText(result)
+
   const signals = strongestSignals(result)
   return [
-    "SCAMGUARD GROUP GUARDIAN",
-    "=======================",
+    "ScamGuard Group Guardian",
+    "Community link protection",
+    "=========================",
     "",
     `Alert: ${statusLine(result)}`,
     `Shield score: ${result.score}/100`,
@@ -259,7 +344,7 @@ function groupWarningText(result: ScamGuardScanResult) {
     "",
     "Action: verify the source from an official channel before connecting a wallet or signing anything.",
   ]
-    .filter((line): line is string => Boolean(line))
+    .filter((line): line is string => line !== undefined)
     .join("\n")
     .slice(0, 3900)
 }
@@ -333,7 +418,7 @@ async function handlePrivateOrCommand(message: TelegramMessage, context: Telegra
   }
 
   const result = await scanCandidate(candidate)
-  return [simpleReply(message, scanReportText(result, context))]
+  return [simpleReply(message, formatTelegramScanReport(result, context))]
 }
 
 async function handleGroupGuardian(message: TelegramMessage, context: TelegramBotContext) {
