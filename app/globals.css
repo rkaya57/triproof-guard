@@ -460,3 +460,54 @@
 .risk-critical {
   color: var(--guard-red);
 }
+
+.legal-copy {
+  color: var(--muted-foreground);
+  font-size: 0.98rem;
+  line-height: 1.8;
+}
+
+.legal-copy h2 {
+  margin-top: 2.75rem;
+  margin-bottom: 0.8rem;
+  color: var(--foreground);
+  font-size: 1.35rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.legal-copy h2:first-child {
+  margin-top: 0;
+}
+
+.legal-copy p {
+  margin: 0 0 1.15rem;
+}
+
+.legal-copy ul {
+  margin: 0 0 1.2rem;
+  padding-left: 1.25rem;
+}
+
+.legal-copy li {
+  margin: 0.5rem 0;
+  padding-left: 0.2rem;
+}
+
+.legal-copy a {
+  color: var(--guard-cyan);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.legal-copy a:hover {
+  color: color-mix(in oklab, var(--guard-cyan), white 20%);
+}
+
+.legal-copy .legal-note {
+  margin-top: 2.5rem;
+  border-left: 2px solid var(--guard-cyan);
+  background: color-mix(in oklab, var(--guard-cyan), transparent 94%);
+  padding: 0.9rem 1rem;
+  font-size: 0.9rem;
+}
