@@ -9,8 +9,10 @@
     "lint": "eslint",
     "extension:validate": "node scripts/validate-chrome-extension.mjs",
     "extension:test": "node --test scripts/extension-wallet-compat.test.mjs",
-    "test": "node --import tsx --test lib/auth/redirects.test.ts lib/ai/analysis-brief.test.ts lib/ai/scamguard-reply.test.ts lib/billing/plans.test.ts lib/billing/sol-price-quote.test.ts lib/risk-engine/index.test.ts lib/graph-intelligence/index.test.ts lib/csv/parser.test.ts lib/scamguard/engine.test.ts lib/scamguard/html-fingerprint.test.ts lib/scamguard/url-sandbox.test.ts lib/scamguard/scam-dna.test.ts lib/scamguard/share-report.test.ts lib/telegram/bot.test.ts scripts/extension-wallet-compat.test.mjs",
-    "test:ci": "node --import tsx --test --test-reporter=spec lib/auth/redirects.test.ts lib/ai/analysis-brief.test.ts lib/ai/scamguard-reply.test.ts lib/billing/plans.test.ts lib/billing/sol-price-quote.test.ts lib/risk-engine/index.test.ts lib/graph-intelligence/index.test.ts lib/csv/parser.test.ts lib/scamguard/engine.test.ts lib/scamguard/html-fingerprint.test.ts lib/scamguard/url-sandbox.test.ts lib/scamguard/scam-dna.test.ts lib/scamguard/share-report.test.ts lib/telegram/bot.test.ts scripts/extension-wallet-compat.test.mjs",
+    "test": "node --import tsx --test lib/auth/redirects.test.ts lib/ai/analysis-brief.test.ts lib/ai/scamguard-reply.test.ts lib/billing/plans.test.ts lib/billing/sol-price-quote.test.ts lib/risk-engine/index.test.ts lib/graph-intelligence/index.test.ts lib/csv/parser.test.ts lib/scamguard/engine.test.ts lib/scamguard/html-fingerprint.test.ts lib/scamguard/url-sandbox.test.ts lib/scamguard/scam-dna.test.ts lib/scamguard/share-report.test.ts lib/scamguard/scan-access.test.ts lib/telegram/bot.test.ts scripts/extension-wallet-compat.test.mjs",
+    "test:ci": "node --import tsx --test --test-reporter=spec lib/auth/redirects.test.ts lib/ai/analysis-brief.test.ts lib/ai/scamguard-reply.test.ts lib/billing/plans.test.ts lib/billing/sol-price-quote.test.ts lib/risk-engine/index.test.ts lib/graph-intelligence/index.test.ts lib/csv/parser.test.ts lib/scamguard/engine.test.ts lib/scamguard/html-fingerprint.test.ts lib/scamguard/url-sandbox.test.ts lib/scamguard/scam-dna.test.ts lib/scamguard/share-report.test.ts lib/scamguard/scan-access.test.ts lib/telegram/bot.test.ts scripts/extension-wallet-compat.test.mjs",
+    "test:e2e": "playwright test",
+    "test:security": "npm run test:ci && npm run test:e2e",
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -42,6 +44,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",

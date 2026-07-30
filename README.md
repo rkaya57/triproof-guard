@@ -526,6 +526,26 @@ Run the risk-engine test suite:
 npm test
 ```
 
+Run the browser-based security E2E suite:
+
+```bash
+npx playwright install chromium
+npm run test:e2e
+```
+
+Run the complete security gate before a release:
+
+```bash
+npm run test:security
+```
+
+The E2E suite starts an isolated local server on port `3100` with an unreachable
+test database URL. It never uses production data, a live wallet, a live Telegram
+group, or an on-chain payment. It verifies registration/session cookie hardening,
+anonymous ScamGuard denial, payment/API-key/Telegram/API access gates, admin-only
+Telegram controls, malformed scan rejection, and deterministic daily scan-limit
+and deep-analysis plan decisions.
+
 Run lint:
 
 ```bash
@@ -568,6 +588,9 @@ Current core coverage includes:
 - Solana parsed token instructions
 - Telegram bot command routing
 - Group Guardian risky-link warning behavior
+- signed-in ScamGuard access, daily caps, and plan-gated deep scans
+- browser-level registration and hardened session cookies
+- anonymous payment, API key, Telegram Guardian, admin, and B2B API denial
 
 ## Grant Milestones
 
