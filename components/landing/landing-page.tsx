@@ -48,6 +48,7 @@ const navLinks = [
   ["Demo", "#demo-proof"],
   ["ScamGuard", "/scamguard"],
   ["Docs", "/docs"],
+  ["Learn", "/learn"],
   ["Pricing", "#pricing"],
 ]
 
@@ -662,7 +663,7 @@ export function LandingPage() {
       <footer className="border-t border-border bg-muted/20">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-8 text-sm text-muted-foreground sm:px-8 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-2"><ShieldCheck className="text-primary" /><span>Tri-Proof Guard - Web3 wallet risk analysis for campaign teams.</span></div>
-          <div className="flex flex-wrap gap-4"><Link href="/docs" className="hover:text-primary">Docs</Link><Link href="/blog" className="hover:text-primary">Blog</Link><a href={scamGuardTelegramBotUrl} target="_blank" rel="noreferrer" className="hover:text-primary">Telegram Bot</a><Link href="/contact" className="hover:text-primary">Contact</Link><Link href="/pricing" className="hover:text-primary">Pricing</Link><Link href="/demo/report" className="hover:text-primary">Demo</Link><Link href="/login" className="hover:text-primary">Login</Link></div>
+          <div className="flex flex-wrap gap-4"><Link href="/docs" className="hover:text-primary">Docs</Link><Link href="/learn" className="hover:text-primary">Product Academy</Link><Link href="/blog" className="hover:text-primary">Blog</Link><a href={scamGuardTelegramBotUrl} target="_blank" rel="noreferrer" className="hover:text-primary">Telegram Bot</a><Link href="/contact" className="hover:text-primary">Contact</Link><Link href="/pricing" className="hover:text-primary">Pricing</Link><Link href="/demo/report" className="hover:text-primary">Demo</Link><Link href="/login" className="hover:text-primary">Login</Link></div>
         </div>
       </footer>
     </main>

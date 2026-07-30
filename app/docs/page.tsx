@@ -53,6 +53,7 @@ export const metadata = {
 
 const navLinks = [
   ["Home", "/"],
+  ["Academy", "/learn"],
   ["Trust", "/docs/trust"],
   ["API", "/docs/api"],
   ["Pricing", "/pricing"],
