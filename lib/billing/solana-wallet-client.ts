@@ -111,6 +111,14 @@ function transferCheckedData(amount: bigint) {
   return data
 }
 
+function nativeTransferData(amountLamports: bigint) {
+  const data = new Uint8Array(12)
+  const view = new DataView(data.buffer)
+  view.setUint32(0, 2, true)
+  view.setBigUint64(4, amountLamports, true)
+  return data
+}
+
 function associatedTokenAddress(
   web3: SolanaWeb3,
   mint: PublicKeyInstance,
@@ -168,18 +176,41 @@ function createTransferCheckedInstruction(
   })
 }
 
-export async function paySolanaUsdcWithWallet({
+function createNativeTransferInstruction(
+  web3: SolanaWeb3,
+  source: PublicKeyInstance,
+  destination: PublicKeyInstance,
+  amountLamports: bigint
+) {
+  return new web3.TransactionInstruction({
+    programId: web3.SystemProgram.programId,
+    keys: [
+      { pubkey: source, isSigner: true, isWritable: true },
+      { pubkey: destination, isSigner: false, isWritable: true },
+    ],
+    data: nativeTransferData(amountLamports),
+  })
+}
+
+async function sendSolanaPayment({
   treasuryAddress,
-  amountUsdc,
   reference,
+  memo,
+  buildPaymentInstruction,
 }: {
   treasuryAddress: string
-  amountUsdc: string
   reference: string
+  memo: string
+  buildPaymentInstruction: (input: {
+    web3: SolanaWeb3
+    owner: PublicKeyInstance
+    treasury: PublicKeyInstance
+    connection: ConnectionInstance
+  }) => Promise<TransactionInstructionInstance[]>
 }) {
   const wallet = getWallet()
   if (!wallet) {
-    throw new Error("Phantom or Solflare extension was not found. Install/open a Solana wallet and try again.")
+    throw new Error("Phantom or Solflare extension was not found. Install or unlock a Solana wallet and try again.")
   }
 
   const web3 = await loadSolanaWeb3()
@@ -187,54 +218,20 @@ export async function paySolanaUsdcWithWallet({
   const connected = await wallet.connect()
   const publicKey = connected?.publicKey ?? wallet.publicKey
 
-  if (!publicKey) {
-    throw new Error("Wallet connection failed.")
-  }
+  if (!publicKey) throw new Error("Wallet connection failed.")
 
   const owner = new web3.PublicKey(publicKey.toString())
   const treasury = new web3.PublicKey(treasuryAddress)
-  const mint = new web3.PublicKey(USDC_MINT)
   const referenceKey = new web3.PublicKey(reference)
-  const tokenProgramId = new web3.PublicKey(TOKEN_PROGRAM_ID)
-  const associatedProgramId = new web3.PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID)
   const memoProgramId = new web3.PublicKey(MEMO_PROGRAM_ID)
-  const sourceAta = associatedTokenAddress(web3, mint, owner, tokenProgramId, associatedProgramId)
-  const destinationAta = associatedTokenAddress(web3, mint, treasury, tokenProgramId, associatedProgramId)
-  const amount = amountToUsdcUnits(amountUsdc)
   const transaction = new web3.Transaction()
 
-  const destinationAccount = await connection.getAccountInfo(destinationAta, "confirmed")
-  if (!destinationAccount) {
-    transaction.add(
-      createAssociatedTokenAccountInstruction(
-        web3,
-        owner,
-        destinationAta,
-        treasury,
-        mint,
-        tokenProgramId,
-        associatedProgramId
-      )
-    )
-  }
-
-  transaction.add(
-    createTransferCheckedInstruction(
-      web3,
-      sourceAta,
-      mint,
-      destinationAta,
-      owner,
-      amount,
-      tokenProgramId
-    )
-  )
-
+  transaction.add(...(await buildPaymentInstruction({ web3, owner, treasury, connection })))
   transaction.add(
     new web3.TransactionInstruction({
       programId: memoProgramId,
       keys: [{ pubkey: referenceKey, isSigner: false, isWritable: false }],
-      data: new TextEncoder().encode("Tri-Proof Solana USDC checkout"),
+      data: new TextEncoder().encode(memo),
     })
   )
 
@@ -244,19 +241,69 @@ export async function paySolanaUsdcWithWallet({
 
   const result = await wallet.signAndSendTransaction(transaction)
   const signature = typeof result === "string" ? result : result.signature
-
-  if (!signature) {
-    throw new Error("Wallet did not return a transaction signature.")
-  }
+  if (!signature) throw new Error("Wallet did not return a transaction signature.")
 
   await connection.confirmTransaction(
-    {
-      signature,
-      blockhash: latest.blockhash,
-      lastValidBlockHeight: latest.lastValidBlockHeight,
-    },
+    { signature, blockhash: latest.blockhash, lastValidBlockHeight: latest.lastValidBlockHeight },
     "confirmed"
   )
 
   return { signature }
+}
+
+export async function paySolanaUsdcWithWallet({
+  treasuryAddress,
+  amountUsdc,
+  reference,
+}: {
+  treasuryAddress: string
+  amountUsdc: string
+  reference: string
+}) {
+  return sendSolanaPayment({
+    treasuryAddress,
+    reference,
+    memo: "Tri-Proof Solana USDC checkout",
+    buildPaymentInstruction: async ({ web3, owner, treasury, connection }) => {
+      const mint = new web3.PublicKey(USDC_MINT)
+      const tokenProgramId = new web3.PublicKey(TOKEN_PROGRAM_ID)
+      const associatedProgramId = new web3.PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID)
+      const sourceAta = associatedTokenAddress(web3, mint, owner, tokenProgramId, associatedProgramId)
+      const destinationAta = associatedTokenAddress(web3, mint, treasury, tokenProgramId, associatedProgramId)
+      const instructions: TransactionInstructionInstance[] = []
+
+      if (!(await connection.getAccountInfo(destinationAta, "confirmed"))) {
+        instructions.push(
+          createAssociatedTokenAccountInstruction(web3, owner, destinationAta, treasury, mint, tokenProgramId, associatedProgramId)
+        )
+      }
+
+      instructions.push(
+        createTransferCheckedInstruction(web3, sourceAta, mint, destinationAta, owner, amountToUsdcUnits(amountUsdc), tokenProgramId)
+      )
+      return instructions
+    },
+  })
+}
+
+export async function paySolanaSolWithWallet({
+  treasuryAddress,
+  amountSol,
+  reference,
+}: {
+  treasuryAddress: string
+  amountSol: number
+  reference: string
+}) {
+  if (!Number.isFinite(amountSol) || amountSol <= 0) throw new Error("Invalid SOL amount.")
+
+  const amountLamports = BigInt(Math.ceil(amountSol * 1_000_000_000))
+  return sendSolanaPayment({
+    treasuryAddress,
+    reference,
+    memo: "Tri-Proof Solana SOL checkout",
+    buildPaymentInstruction: async ({ web3, owner, treasury }) => [
+      createNativeTransferInstruction(web3, owner, treasury, amountLamports),
+    ],
+  })
 }

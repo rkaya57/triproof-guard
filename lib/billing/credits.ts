@@ -93,6 +93,7 @@ export async function recordVerifiedSolanaPayment({
   confirmations,
   network = "solana",
   rawData,
+  provider = "solana_usdc",
 }: {
   userId: string
   plan: string
@@ -103,6 +104,7 @@ export async function recordVerifiedSolanaPayment({
   confirmations: number
   network?: string
   rawData?: Prisma.InputJsonValue
+  provider?: "solana_usdc" | "solana_sol"
 }) {
   return db.$transaction(async (tx: Prisma.TransactionClient) => {
     await lockBillingAccount(tx, userId)
@@ -140,7 +142,7 @@ export async function recordVerifiedSolanaPayment({
           balanceAfter: balanceBefore + existing.walletCredits,
           idempotencyKey: `payment:${txHash}`,
           metadata: {
-            source: "solana_usdc_payment_repair",
+            source: `${provider}_payment_repair`,
             plan: existing.plan,
             txHash,
           },
@@ -158,7 +160,7 @@ export async function recordVerifiedSolanaPayment({
     const payment = await tx.paymentTransaction.create({
       data: {
         userId,
-        provider: "solana_usdc",
+        provider,
         network,
         plan,
         txHash,
@@ -183,7 +185,7 @@ export async function recordVerifiedSolanaPayment({
         balanceAfter: balanceBefore + walletCredits,
         idempotencyKey: `payment:${txHash}`,
         metadata: {
-          source: "solana_usdc_payment",
+          source: `${provider}_payment`,
           plan,
           txHash,
           reference: reference || null,

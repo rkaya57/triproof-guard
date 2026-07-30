@@ -8,9 +8,11 @@ import {
 import { recordVerifiedSolanaPayment } from "@/lib/billing/credits"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import {
+  verifySolanaNativeSolTransfer,
   verifySolanaUsdcTransfer,
   verifySolanaUsdcTransferByReference,
 } from "@/lib/billing/solana-pay"
+import { verifySolPaymentQuote } from "@/lib/billing/sol-price-quote"
 
 export const runtime = "nodejs"
 
@@ -56,12 +58,16 @@ export async function POST(request: Request) {
     plan?: string
     txHash?: string
     reference?: string
+    currency?: string
+    quote?: string
   }
 
   const planId = body.plan as PlanId
   const plan = plans[planId]
   const txHash = String(body.txHash ?? "").trim()
   const reference = String(body.reference ?? "").trim()
+  const currency = String(body.currency ?? "USDC").trim().toUpperCase()
+  const quoteToken = String(body.quote ?? "").trim()
 
   if (!plan) {
     return NextResponse.json({ error: "Invalid plan." }, { status: 400 })
@@ -81,20 +87,39 @@ export async function POST(request: Request) {
     )
   }
 
+  if (currency !== "USDC" && currency !== "SOL") {
+    return NextResponse.json({ error: "Unsupported payment currency." }, { status: 400 })
+  }
+
   try {
     assertAccessPassSigningConfigured()
 
-    const verification = reference
-      ? await verifySolanaUsdcTransferByReference({
-          reference,
-          network: solanaNetwork,
-          expectedAmountUsdc: plan.amountUsdc,
-        })
-      : await verifySolanaUsdcTransfer({
-          txHash,
-          network: solanaNetwork,
-          expectedAmountUsdc: plan.amountUsdc,
-        })
+    const quote = currency === "SOL" ? await verifySolPaymentQuote(quoteToken) : null
+    if (currency === "SOL" && (!quote || quote.userId !== user.id || quote.plan !== planId || quote.amountUsdc !== plan.amountUsdc)) {
+      return NextResponse.json(
+        { error: "Your SOL quote is invalid or expired. Request a new quote before paying." },
+        { status: 400 }
+      )
+    }
+
+    const verification =
+      currency === "SOL"
+        ? await verifySolanaNativeSolTransfer({
+            txHash,
+            network: solanaNetwork,
+            expectedAmountSol: quote!.amountSol,
+          })
+        : reference
+          ? await verifySolanaUsdcTransferByReference({
+              reference,
+              network: solanaNetwork,
+              expectedAmountUsdc: plan.amountUsdc,
+            })
+          : await verifySolanaUsdcTransfer({
+              txHash,
+              network: solanaNetwork,
+              expectedAmountUsdc: plan.amountUsdc,
+            })
 
     if (!verification.ok) {
       const isPending = "pending" in verification && verification.pending
@@ -104,21 +129,36 @@ export async function POST(request: Request) {
       )
     }
 
+    const receivedAmountUsdc =
+      currency === "USDC" && "receivedAmountUsdc" in verification
+        ? verification.receivedAmountUsdc
+        : null
+    const receivedAmountSol =
+      currency === "SOL" && "receivedAmountSol" in verification
+        ? verification.receivedAmountSol
+        : null
+
     const persisted = await recordVerifiedSolanaPayment({
       userId: user.id,
       plan: planId,
       txHash: verification.txHash,
       reference: reference || null,
-      amountUsdc: verification.receivedAmountUsdc,
+      // The ledger is denominated in the plan's stable USD value for both payment assets.
+      amountUsdc: plan.amountUsdc,
       walletCredits: plan.walletCredits,
       confirmations: verification.confirmations,
       network: "solana",
+      provider: currency === "SOL" ? "solana_sol" : "solana_usdc",
       rawData: {
+        currency,
         reference: reference || null,
         requestedTxHash: txHash || null,
         verifiedTxHash: verification.txHash,
         expectedAmountUsdc: plan.amountUsdc,
-        receivedAmountUsdc: verification.receivedAmountUsdc,
+        expectedAmountSol: currency === "SOL" ? quote!.amountSol : null,
+        receivedAmountSol,
+        receivedAmountUsdc,
+        solUsdPrice: currency === "SOL" ? quote!.solUsdPrice : null,
         confirmations: verification.confirmations,
       },
     })
@@ -129,14 +169,14 @@ export async function POST(request: Request) {
       network: "solana",
       txHash: verification.txHash,
       reference: reference || null,
-      amountUsdc: verification.receivedAmountUsdc,
+      amountUsdc: plan.amountUsdc,
       confirmations: verification.confirmations,
       walletCredits: plan.walletCredits,
       creditBalance: persisted.balance,
       alreadyRecorded: persisted.alreadyRecorded,
       message: persisted.alreadyRecorded
-        ? "Solana USDC payment was already verified. Persistent analysis credits are available."
-        : "Solana USDC payment verified. Persistent analysis credits are active.",
+        ? `Solana ${currency} payment was already verified. Persistent analysis credits are available.`
+        : `Solana ${currency} payment verified. Persistent analysis credits are active.`,
     })
 
     await attachAccessPassCookie(response, {
@@ -145,7 +185,7 @@ export async function POST(request: Request) {
       txHash: verification.txHash,
       network: "solana",
       walletCredits: plan.walletCredits,
-      amountUsdc: verification.receivedAmountUsdc,
+      amountUsdc: plan.amountUsdc,
     })
 
     return response

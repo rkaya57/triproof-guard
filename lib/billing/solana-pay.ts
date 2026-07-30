@@ -74,6 +74,17 @@ function isMatchingUsdcTransfer(
   return instructionAmountUnits(instruction) >= expectedUnits
 }
 
+function isMatchingNativeSolTransfer(
+  instruction: ParsedInstruction,
+  treasury: string,
+  expectedLamports: bigint
+) {
+  const info = instruction.parsed?.info ?? {}
+  if (instruction.program !== "system" || instruction.parsed?.type !== "transfer") return false
+  if (String(info.destination ?? "") !== treasury) return false
+  return tokenAmountToUnits(info.lamports) >= expectedLamports
+}
+
 function flattenInstructions(transaction: ParsedSolanaTransaction) {
   const direct = transaction.transaction?.message?.instructions ?? []
   const inner = (transaction.meta?.innerInstructions ?? []).flatMap((group) => group.instructions ?? [])
@@ -189,6 +200,53 @@ export async function verifySolanaUsdcTransfer({
     ok: true as const,
     txHash,
     receivedAmountUsdc: Number(instructionAmountUnits(matchingTransfer)) / Number(usdcDecimals),
+    confirmations,
+  }
+}
+
+export async function verifySolanaNativeSolTransfer({
+  txHash,
+  network,
+  expectedAmountSol,
+}: {
+  txHash: string
+  network: SolanaPaymentNetwork
+  expectedAmountSol: number
+}) {
+  const treasury = network.treasury?.trim()
+  if (!treasury || !validateSolanaAddress(treasury)) {
+    return { ok: false as const, error: "Solana treasury wallet is not configured correctly." }
+  }
+  if (!solanaSignatureRegex.test(txHash)) {
+    return { ok: false as const, error: "Invalid Solana transaction signature." }
+  }
+
+  const transaction = await solanaRpc<ParsedSolanaTransaction | null>("getTransaction", [
+    txHash,
+    { encoding: "jsonParsed", commitment: "confirmed", maxSupportedTransactionVersion: 0 },
+  ])
+  if (!transaction) return { ok: false as const, error: "Solana transaction was not found yet." }
+  if (transaction.meta?.err) return { ok: false as const, error: "Solana transaction is not successful." }
+
+  const expectedLamports = BigInt(Math.ceil(expectedAmountSol * 1_000_000_000))
+  const matchingTransfer = flattenInstructions(transaction).find((instruction) =>
+    isMatchingNativeSolTransfer(instruction, treasury, expectedLamports)
+  )
+  if (!matchingTransfer) {
+    return { ok: false as const, error: "No matching SOL transfer to the treasury wallet was found in this transaction." }
+  }
+
+  const latestSlot = await solanaRpc<number>("getSlot", [{ commitment: "confirmed" }])
+  const confirmations = transaction.slot && latestSlot >= transaction.slot ? latestSlot - transaction.slot + 1 : 0
+  const requiredConfirmations = Number.parseInt(process.env.PAYMENT_CONFIRMATIONS ?? "1", 10)
+  if (confirmations < requiredConfirmations) {
+    return { ok: false as const, error: `Waiting for confirmations. Current: ${confirmations}, required: ${requiredConfirmations}.` }
+  }
+
+  return {
+    ok: true as const,
+    txHash,
+    receivedAmountSol: Number(tokenAmountToUnits(matchingTransfer.parsed?.info?.lamports)) / 1_000_000_000,
     confirmations,
   }
 }

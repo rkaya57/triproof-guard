@@ -199,7 +199,7 @@ const features = [
   "Approved / gray-zone / rejected lists",
   "CSV and PDF reporting",
   "Policy presets",
-  "Solana USDC checkout",
+  "Solana USDC or SOL checkout",
   "ScamGuard Solana pre-sign scanner",
   "Suspicious URL and token mint checks",
 ]
@@ -319,7 +319,7 @@ export function LandingPage() {
               ))}
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              {[[LockKeyhole, "No token required"], [CircleDollarSign, "Solana USDC"], [Layers3, "Batch queue ready"]].map(([Icon, label]) => (
+              {[[LockKeyhole, "No token required"], [CircleDollarSign, "USDC or SOL"], [Layers3, "Batch queue ready"]].map(([Icon, label]) => (
                 <div key={label as string} className="flex items-center gap-2 rounded-xl border border-border bg-background/45 px-3 py-2 text-xs text-muted-foreground">
                   <Icon className="size-4 text-primary" /><span>{label as string}</span>
                 </div>
@@ -588,7 +588,7 @@ export function LandingPage() {
 
       <section id="pricing" className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
         <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div><Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Simple pricing</Badge><h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Start free. Upgrade with USDC when the list gets bigger.</h2></div>
+          <div><Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Simple pricing</Badge><h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Start free. Upgrade with USDC or SOL when the list gets bigger.</h2></div>
           <Link href="/pricing" className={`${buttonVariants({ variant: "outline" })} hover-lift w-fit`}>Full pricing <ArrowRight data-icon="inline-end" /></Link>
         </div>
         <div className="grid gap-5 md:grid-cols-4">

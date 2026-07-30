@@ -47,14 +47,14 @@ export default async function Page({
           <CardHeader>
             <CardTitle>Checkout: {plan.name}</CardTitle>
             <CardDescription>
-              Free trial is limited to 100 wallets. Continue with Solana USDC to unlock larger analyses.
+              Free trial is limited to 100 wallets. Continue with a verified Solana USDC or SOL payment to unlock larger analyses.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-lg border border-border bg-background/50 p-4">
                 <p className="text-xs text-muted-foreground">Plan amount</p>
-                <p className="mt-1 text-2xl font-semibold">{plan.amount} USDC</p>
+                <p className="mt-1 text-2xl font-semibold">{plan.amount} USDC or live SOL equivalent</p>
               </div>
               <div className="rounded-lg border border-border bg-background/50 p-4">
                 <p className="text-xs text-muted-foreground">Wallet credits</p>

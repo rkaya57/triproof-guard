@@ -3,9 +3,9 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { CheckCircle2, Copy, ExternalLink, Loader2 } from "lucide-react"
+import { CheckCircle2, CircleDollarSign, Copy, ExternalLink, Loader2, WalletCards } from "lucide-react"
 
-import { paySolanaUsdcWithWallet } from "@/lib/billing/solana-wallet-client"
+import { paySolanaSolWithWallet, paySolanaUsdcWithWallet } from "@/lib/billing/solana-wallet-client"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toast"
@@ -29,20 +29,58 @@ type VerifyResponse = {
   message?: string
 }
 
+type SolQuote = {
+  amountSol: number
+  solUsdPrice: number
+  expiresAt: string
+  quote: string
+}
+
 export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network[] }) {
   const router = useRouter()
   const { toast } = useToast()
   const solanaNetwork = networks.find((network) => network.id === "solana" && network.treasuryAddress)
   const [txSignature, setTxSignature] = useState("")
+  const [currency, setCurrency] = useState<"USDC" | "SOL">("USDC")
+  const [solQuote, setSolQuote] = useState<SolQuote | null>(null)
+  const [quotePending, setQuotePending] = useState(false)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
 
-  async function verifyPayment(signature: string) {
+  async function loadSolQuote() {
+    setQuotePending(true)
+    setError("")
+    try {
+      const response = await fetch("/api/billing/sol-quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: plan.id }),
+      })
+      const body = (await response.json().catch(() => ({}))) as SolQuote & { error?: string }
+      if (!response.ok || !body.quote || !Number.isFinite(body.amountSol)) {
+        throw new Error(body.error ?? "Could not prepare a SOL payment quote.")
+      }
+      setSolQuote(body)
+    } catch (quoteError) {
+      setSolQuote(null)
+      setError(quoteError instanceof Error ? quoteError.message : "Could not prepare a SOL payment quote.")
+    } finally {
+      setQuotePending(false)
+    }
+  }
+
+  function chooseCurrency(nextCurrency: "USDC" | "SOL") {
+    setCurrency(nextCurrency)
+    setError("")
+    if (nextCurrency === "SOL") void loadSolQuote()
+  }
+
+  async function verifyPayment(signature: string, paymentCurrency: "USDC" | "SOL", quote?: SolQuote | null) {
     const response = await fetch("/api/billing/verify-solana", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan: plan.id, txHash: signature }),
+      body: JSON.stringify({ plan: plan.id, txHash: signature, currency: paymentCurrency, quote: quote?.quote }),
     })
     const body = (await response.json().catch(() => ({}))) as VerifyResponse
 
@@ -50,9 +88,9 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
       throw new Error(body.error ?? "Payment verification failed.")
     }
 
-    setSuccess(body.message ?? "Solana USDC payment verified. Analysis credits are active.")
+    setSuccess(body.message ?? `Solana ${paymentCurrency} payment verified. Analysis credits are active.`)
     setError("")
-    toast("Solana USDC payment verified", "success")
+    toast(`Solana ${paymentCurrency} payment verified`, "success")
     setTimeout(() => router.push("/dashboard/new-analysis"), 900)
   }
 
@@ -64,13 +102,24 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
     setSuccess("")
 
     try {
-      const payment = await paySolanaUsdcWithWallet({
-        treasuryAddress: solanaNetwork.treasuryAddress,
-        amountUsdc: plan.amount,
-        reference: solanaNetwork.treasuryAddress,
-      })
+      if (currency === "SOL" && !solQuote) {
+        throw new Error("Preparing a fresh SOL quote. Please try again in a moment.")
+      }
+
+      const payment =
+        currency === "SOL"
+          ? await paySolanaSolWithWallet({
+              treasuryAddress: solanaNetwork.treasuryAddress,
+              amountSol: solQuote!.amountSol,
+              reference: solanaNetwork.treasuryAddress,
+            })
+          : await paySolanaUsdcWithWallet({
+              treasuryAddress: solanaNetwork.treasuryAddress,
+              amountUsdc: plan.amount,
+              reference: solanaNetwork.treasuryAddress,
+            })
       setTxSignature(payment.signature)
-      await verifyPayment(payment.signature)
+      await verifyPayment(payment.signature, currency, solQuote)
     } catch (paymentError) {
       setError(
         paymentError instanceof Error
@@ -103,11 +152,13 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-lg border border-border bg-background/50 p-4">
           <p className="text-xs text-muted-foreground">Payment network</p>
-          <p className="mt-2 text-lg font-semibold">Solana USDC</p>
+          <p className="mt-2 text-lg font-semibold">Solana mainnet</p>
         </div>
         <div className="rounded-lg border border-border bg-background/50 p-4">
           <p className="text-xs text-muted-foreground">Required amount</p>
-          <p className="mt-2 text-2xl font-semibold">{plan.amount} USDC</p>
+          <p className="mt-2 text-2xl font-semibold">
+            {currency === "SOL" && solQuote ? `${solQuote.amountSol.toFixed(6)} SOL` : `${plan.amount} USDC`}
+          </p>
         </div>
       </div>
 
@@ -121,8 +172,20 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
         <code className="block overflow-x-auto rounded-md border border-border bg-background p-3 text-xs">
           {solanaNetwork.treasuryAddress}
         </code>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <Button type="button" variant={currency === "USDC" ? "default" : "outline"} onClick={() => chooseCurrency("USDC")}>
+            <CircleDollarSign data-icon="inline-start" /> Pay with USDC
+          </Button>
+          <Button type="button" variant={currency === "SOL" ? "default" : "outline"} onClick={() => chooseCurrency("SOL")}>
+            <WalletCards data-icon="inline-start" /> Pay with SOL
+          </Button>
+        </div>
         <p className="mt-3 text-sm text-muted-foreground">
-          Click Open Wallet & Pay. Phantom or Solflare will open a transaction popup. Approve {plan.amount} USDC and Tri-Proof will verify the payment automatically.
+          {currency === "SOL"
+            ? solQuote
+              ? `Locked quote: ${solQuote.amountSol.toFixed(6)} SOL at $${solQuote.solUsdPrice.toFixed(2)} per SOL. It expires ${new Date(solQuote.expiresAt).toLocaleTimeString()}.`
+              : "Preparing a short-lived live SOL quote."
+            : `Click Open Wallet & Pay. Phantom or Solflare will transfer ${plan.amount} USDC and Tri-Proof will verify it automatically.`}
         </p>
         {txSignature && (
           <p className="mt-2 break-all text-xs text-muted-foreground">
@@ -130,9 +193,9 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
           </p>
         )}
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-          <Button type="button" variant="secondary" onClick={payWithWallet} disabled={pending}>
+          <Button type="button" variant="secondary" onClick={payWithWallet} disabled={pending || quotePending || (currency === "SOL" && !solQuote)}>
             {pending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <ExternalLink data-icon="inline-start" />}
-            Open Wallet & Pay
+            {quotePending ? "Preparing SOL quote" : `Open Wallet & Pay ${currency}`}
           </Button>
         </div>
       </div>
