@@ -71,8 +71,33 @@ export const subscriptionPlans = {
   },
 } as const
 
+// One credit pays for one wallet row in a Sybil campaign analysis. These packs
+// are intentionally separate from access subscriptions: they never renew and
+// stay in the user's credit ledger until they are used.
+export const analysisCreditPacks = {
+  sybil_starter: {
+    id: "sybil_starter",
+    name: "Sybil Starter",
+    amountUsdc: 29,
+    walletCredits: 1_000,
+  },
+  sybil_growth: {
+    id: "sybil_growth",
+    name: "Sybil Growth",
+    amountUsdc: 99,
+    walletCredits: 10_000,
+  },
+  sybil_pro: {
+    id: "sybil_pro",
+    name: "Sybil Pro",
+    amountUsdc: 249,
+    walletCredits: 50_000,
+  },
+} as const
+
 export type SubscriptionPlanId = keyof typeof subscriptionPlans
 export type SubscriptionDbPlan = (typeof subscriptionPlans)[SubscriptionPlanId]["dbPlan"]
+export type AnalysisCreditPackId = keyof typeof analysisCreditPacks
 
 const plansByDbValue = Object.values(subscriptionPlans).reduce<Record<string, (typeof subscriptionPlans)[SubscriptionPlanId]>>(
   (all, plan) => ({ ...all, [plan.dbPlan]: plan }),
@@ -82,6 +107,11 @@ const plansByDbValue = Object.values(subscriptionPlans).reduce<Record<string, (t
 export function getSubscriptionPlan(value: unknown) {
   if (typeof value !== "string" || !(value in subscriptionPlans)) return null
   return subscriptionPlans[value as SubscriptionPlanId]
+}
+
+export function getAnalysisCreditPack(value: unknown) {
+  if (typeof value !== "string" || !(value in analysisCreditPacks)) return null
+  return analysisCreditPacks[value as AnalysisCreditPackId]
 }
 
 export function subscriptionPlanFromDb(value: string | null | undefined) {

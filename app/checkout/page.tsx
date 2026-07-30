@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { requirePageUser } from "@/lib/auth/page"
-import { getSubscriptionPlan, subscriptionPlans } from "@/lib/billing/plans"
+import { getAnalysisCreditPack, getSubscriptionPlan, subscriptionPlans } from "@/lib/billing/plans"
 
 const featureCopy = {
   free: ["Extension and Telegram bot", "Basic scans with daily limit", "Shareable security reports"],
@@ -17,18 +17,31 @@ const featureCopy = {
   api_growth: ["25,000 API requests each month", "Signed analysis webhooks", "Priority integration support"],
 } as const
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ plan?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<{ plan?: string; pack?: string }> }) {
   const params = await searchParams
+  const creditPack = getAnalysisCreditPack(params.pack)
   const selectedPlan = getSubscriptionPlan(params.plan)?.id ?? "builder"
-  const plan = subscriptionPlans[selectedPlan]
-  await requirePageUser(`/checkout?plan=${encodeURIComponent(selectedPlan)}`)
+  const plan = creditPack ? null : subscriptionPlans[selectedPlan]
+  const checkoutQuery = creditPack ? `pack=${encodeURIComponent(creditPack.id)}` : `plan=${encodeURIComponent(selectedPlan)}`
+  await requirePageUser(`/checkout?${checkoutQuery}`)
 
-  if (plan.id === "free") {
+  if (plan?.id === "free") {
     return null
   }
 
   const networks = [{ id: "solana" as const, label: "Solana Pay", treasuryAddress: process.env.TRIPROOF_TREASURY_SOLANA_ADDRESS }]
-  const icons = [ShieldCheck, plan.telegramGroupLimit ? Bot : Code2, BellRing]
+  const isCreditPack = Boolean(creditPack)
+  const name = creditPack?.name ?? plan!.name
+  const amountUsdc = creditPack?.amountUsdc ?? plan!.amountUsdc
+  const perWallet = creditPack ? (creditPack.amountUsdc / creditPack.walletCredits).toFixed(4) : null
+  const featureItems = creditPack
+    ? [
+        `${creditPack.walletCredits.toLocaleString()} wallet analyses included`,
+        "One credit is used for each wallet analyzed",
+        "Persistent credit balance with no renewal",
+      ]
+    : featureCopy[plan!.id]
+  const icons = [ShieldCheck, isCreditPack ? WalletCards : plan!.telegramGroupLimit ? Bot : Code2, BellRing]
 
   return (
     <main className="premium-page security-grid min-h-screen bg-background text-foreground">
@@ -43,15 +56,15 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
         <div className="grid gap-8 lg:grid-cols-[0.82fr_1.18fr] lg:items-start">
           <section className="relative overflow-hidden rounded-xl border border-primary/25 bg-card/75 p-6 shadow-[0_0_44px_rgba(56,189,248,0.1)] sm:p-8">
             <div className="absolute inset-x-0 top-0 h-px bg-primary/80" />
-            <Badge variant="secondary" className="mb-5 gap-2 border-primary/30 text-primary"><WalletCards className="size-3.5" /> 30-day access pass</Badge>
-            <h1 className="text-3xl font-semibold sm:text-4xl">Activate {plan.name}.</h1>
-            <p className="mt-4 max-w-xl text-sm leading-7 text-muted-foreground">A verified on-chain payment activates this plan for 30 days. Renewal is always manual: we never create wallet approvals or recurring transfers.</p>
-            <div className="mt-8 rounded-lg border border-border bg-background/55 p-5"><p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Plan value</p><p className="mt-2 text-4xl font-semibold text-primary">{plan.amountUsdc} USDC<span className="ml-1 text-base text-muted-foreground">/ 30 days</span></p><p className="mt-2 text-xs text-muted-foreground">Pay in USDC or a short-lived live SOL equivalent.</p></div>
+            <Badge variant="secondary" className="mb-5 gap-2 border-primary/30 text-primary"><WalletCards className="size-3.5" /> {isCreditPack ? "Persistent Sybil wallet credits" : "30-day access pass"}</Badge>
+            <h1 className="text-3xl font-semibold sm:text-4xl">{isCreditPack ? `Purchase ${name}.` : `Activate ${name}.`}</h1>
+            <p className="mt-4 max-w-xl text-sm leading-7 text-muted-foreground">{isCreditPack ? "Credits are consumed one wallet at a time when a Sybil campaign analysis runs. They stay in your ledger until used, with no monthly renewal." : "A verified on-chain payment activates this plan for 30 days. Renewal is always manual: we never create wallet approvals or recurring transfers."}</p>
+            <div className="mt-8 rounded-lg border border-border bg-background/55 p-5"><p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">{isCreditPack ? "Credit-pack value" : "Plan value"}</p><p className="mt-2 text-4xl font-semibold text-primary">{amountUsdc} USDC<span className="ml-1 text-base text-muted-foreground">{isCreditPack ? ` / ${creditPack!.walletCredits.toLocaleString()} wallets` : " / 30 days"}</span></p><p className="mt-2 text-xs text-muted-foreground">{isCreditPack ? `${perWallet} USDC per wallet. Pay in USDC or a short-lived live SOL equivalent.` : "Pay in USDC or a short-lived live SOL equivalent."}</p></div>
             <div className="mt-8 grid gap-4 border-t border-border pt-6">
-              {featureCopy[plan.id].map((detail, index) => { const Icon = icons[index]; return <div key={detail} className="flex gap-3"><span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-primary/25 bg-primary/10"><Icon className="size-4 text-primary" /></span><p className="pt-1 text-sm leading-5 text-muted-foreground">{detail}</p></div> })}
+              {featureItems.map((detail, index) => { const Icon = icons[index]; return <div key={detail} className="flex gap-3"><span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-primary/25 bg-primary/10"><Icon className="size-4 text-primary" /></span><p className="pt-1 text-sm leading-5 text-muted-foreground">{detail}</p></div> })}
             </div>
           </section>
-          <Card className="glass-panel premium-card animated-border overflow-hidden border-primary/35"><CardHeader className="border-b border-border bg-primary/5"><Badge variant="secondary" className="mb-3 w-fit border-primary/30 text-primary">Secure settlement</Badge><CardTitle className="text-2xl">Complete your {plan.name} access pass</CardTitle><CardDescription>The USDC amount is fixed. Native SOL uses a signed, short-lived quote before your wallet opens.</CardDescription></CardHeader><CardContent className="pt-6"><CheckoutForm plan={{ id: plan.id, name: plan.name, amount: String(plan.amountUsdc), wallets: "30 days" }} networks={networks} /></CardContent></Card>
+          <Card className="glass-panel premium-card animated-border overflow-hidden border-primary/35"><CardHeader className="border-b border-border bg-primary/5"><Badge variant="secondary" className="mb-3 w-fit border-primary/30 text-primary">Secure settlement</Badge><CardTitle className="text-2xl">{isCreditPack ? `Complete your ${name} purchase` : `Complete your ${name} access pass`}</CardTitle><CardDescription>{isCreditPack ? "The wallet-credit amount is fixed. Native SOL uses a signed, short-lived quote before your wallet opens." : "The USDC amount is fixed. Native SOL uses a signed, short-lived quote before your wallet opens."}</CardDescription></CardHeader><CardContent className="pt-6"><CheckoutForm plan={{ id: creditPack?.id ?? plan!.id, name, amount: String(amountUsdc), wallets: isCreditPack ? `${creditPack!.walletCredits.toLocaleString()} wallets` : "30 days", purchaseKind: isCreditPack ? "credits" : "subscription" }} networks={networks} /></CardContent></Card>
         </div>
       </section>
     </main>

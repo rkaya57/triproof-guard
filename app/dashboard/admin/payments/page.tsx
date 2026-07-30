@@ -2,7 +2,7 @@ import Link from "next/link"
 import { CircleDollarSign, Coins, ExternalLink, ShieldCheck, TriangleAlert } from "lucide-react"
 
 import { getAdminUser } from "@/lib/auth/admin"
-import { subscriptionPlans } from "@/lib/billing/plans"
+import { analysisCreditPacks, subscriptionPlans } from "@/lib/billing/plans"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -47,6 +47,8 @@ export default async function PaymentsAdminPage() {
           {Object.values(subscriptionPlans).map((plan) => <div key={plan.id} className="flex items-center justify-between rounded-xl border border-border bg-background/45 p-4"><div><p className="font-medium text-white">{plan.name}</p><p className="mt-1 text-xs text-slate-400">{plan.id === "free" ? "Daily basic scan allowance" : "30-day access pass"}</p></div><p className="text-xl font-semibold text-primary">{plan.id === "free" ? "$0" : `${plan.amountUsdc} USDC`}</p></div>)}
         </CardContent></Card>
       </section>
+
+      <Card className="glass-panel premium-card border-primary/25"><CardHeader><CardTitle className="flex items-center gap-2"><Coins className="text-primary" /> Sybil wallet-credit packs</CardTitle><CardDescription>Persistent, one-time wallet credits. One credit is deducted for each wallet analyzed; these are not 30-day subscriptions.</CardDescription></CardHeader><CardContent className="grid gap-3 md:grid-cols-3">{Object.values(analysisCreditPacks).map((pack) => <div key={pack.id} className="rounded-xl border border-border bg-background/45 p-4"><p className="font-medium text-white">{pack.name}</p><p className="mt-2 text-2xl font-semibold text-primary">{pack.amountUsdc} USDC</p><p className="mt-1 text-xs text-slate-400">{pack.walletCredits.toLocaleString()} wallet credits</p><p className="mt-4 border-t border-border pt-3 text-sm text-muted-foreground">{(pack.amountUsdc / pack.walletCredits).toFixed(pack.walletCredits >= 50_000 ? 3 : 4)} USDC / wallet</p></div>)}</CardContent></Card>
 
       <Card className="glass-panel premium-card border-primary/25"><CardHeader><CardTitle className="flex items-center gap-2"><TriangleAlert className="text-yellow-300" /> Operating notes</CardTitle></CardHeader><CardContent className="grid gap-3 text-sm text-muted-foreground"><p>Never paste treasury secrets or API keys into the product UI. Only the public treasury address is sent to a payer wallet.</p><p>USDC payments are checked against the configured mint and treasury token account. Native SOL payments are checked against a user-bound, signed quote and direct treasury transfer.</p><div className="flex flex-wrap gap-3 pt-2"><Link href="/pricing" className={buttonVariants({ variant: "outline" })}>Open pricing</Link><Link href="/admin/diagnostics" className={buttonVariants({ variant: "outline" })}>Open diagnostics <ExternalLink data-icon="inline-end" /></Link></div></CardContent></Card>
     </div>

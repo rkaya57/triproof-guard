@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { getCurrentUser } from "@/lib/auth/session"
-import { getBillingPlan } from "@/lib/billing/plans"
+import { getAnalysisCreditPack, getSubscriptionPlan } from "@/lib/billing/plans"
 import { createSolPaymentQuote } from "@/lib/billing/sol-price-quote"
 
 export const runtime = "nodejs"
@@ -10,16 +10,18 @@ export async function POST(request: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const body = (await request.json().catch(() => ({}))) as { plan?: string }
-  const plan = getBillingPlan(body.plan)
+  const body = (await request.json().catch(() => ({}))) as { plan?: string; pack?: string }
+  const plan = getSubscriptionPlan(body.plan)
+  const pack = getAnalysisCreditPack(body.pack)
+  const item = plan ?? pack
 
-  if (!plan) return NextResponse.json({ error: "Invalid plan." }, { status: 400 })
+  if (!item || plan?.id === "free") return NextResponse.json({ error: "Invalid checkout item." }, { status: 400 })
 
   try {
     const quote = await createSolPaymentQuote({
       userId: user.id,
-      plan: plan.id,
-      amountUsdc: plan.amountUsdc,
+      plan: item.id,
+      amountUsdc: item.amountUsdc,
     })
 
     return NextResponse.json({

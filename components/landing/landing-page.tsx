@@ -39,7 +39,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { subscriptionPlans } from "@/lib/billing/plans"
+import { analysisCreditPacks, subscriptionPlans } from "@/lib/billing/plans"
 import { scamGuardTelegramBotUrl } from "@/lib/telegram/links"
 
 const navLinks = [
@@ -247,6 +247,11 @@ const plans = [
     cta: "Choose API Growth",
   },
 ]
+
+const sybilCreditPacks = Object.values(analysisCreditPacks).map((pack) => ({
+  ...pack,
+  perWallet: (pack.amountUsdc / pack.walletCredits).toFixed(pack.walletCredits >= 50_000 ? 3 : 4),
+}))
 
 export function LandingPage() {
   return (
@@ -626,6 +631,10 @@ export function LandingPage() {
           {plans.map((plan) => { const featured = "featured" in plan && plan.featured; return <Card key={plan.name} className={`glass-panel premium-card hover-lift relative overflow-hidden ${featured ? "border-primary/60 bg-primary/10 shadow-[0_0_36px_rgba(56,189,248,0.15)]" : ""}`}>
             {featured && <Badge className="absolute right-4 top-4 bg-primary text-primary-foreground">Most selected</Badge>}
             <CardHeader><CardTitle>{plan.name}</CardTitle><CardDescription>{plan.detail}</CardDescription></CardHeader><CardContent className="flex flex-col gap-5"><div><p className="text-gradient text-2xl font-semibold">{plan.price}</p><p className="mt-1 text-xs text-muted-foreground">{plan.credits}</p></div><div className="flex items-center justify-between gap-3 border-t border-border pt-4"><span className="flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck className="size-3.5 text-primary" />{plan.name === "Free" ? "No payment required" : "USDC or SOL"}</span><Link href={plan.href} className={`${buttonVariants({ variant: featured || plan.name === "Free" ? "default" : "outline" })} hover-lift`}>{plan.cta}<ArrowRight data-icon="inline-end" /></Link></div></CardContent></Card> })}
+        </div>
+        <div className="mt-10 border-t border-border pt-8">
+          <div className="flex flex-col justify-between gap-3 md:flex-row md:items-end"><div><p className="font-mono text-xs uppercase tracking-[0.16em] text-primary">Sybil campaign credits</p><h3 className="mt-2 text-2xl font-semibold">One-time wallet analysis packs.</h3><p className="mt-2 max-w-2xl text-sm text-muted-foreground">One credit analyzes one campaign wallet. Credits persist until used; no subscription or automatic renewal.</p></div><Link href="/pricing" className={`${buttonVariants({ variant: "outline", size: "sm" })} w-fit`}>Compare packs <ArrowRight data-icon="inline-end" /></Link></div>
+          <div className="mt-5 grid gap-4 md:grid-cols-3">{sybilCreditPacks.map((pack) => <div key={pack.id} className="rounded-lg border border-border bg-background/45 p-5"><p className="font-semibold">{pack.name}</p><p className="mt-2 text-2xl font-semibold text-primary">{pack.amountUsdc} USDC</p><p className="mt-1 text-xs text-muted-foreground">{pack.walletCredits.toLocaleString()} wallet credits</p><div className="mt-4 flex items-center justify-between border-t border-border pt-4"><span className="text-sm text-muted-foreground">{pack.perWallet} USDC / wallet</span><Link href={`/checkout?pack=${pack.id}`} className="text-sm font-medium text-primary hover:underline">Choose pack</Link></div></div>)}</div>
         </div>
         </div>
       </section>

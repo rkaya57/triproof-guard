@@ -21,6 +21,7 @@ type Plan = {
   name: string
   amount: string
   wallets: string
+  purchaseKind?: "subscription" | "credits"
 }
 
 type VerifyResponse = {
@@ -55,7 +56,7 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
       const response = await fetch("/api/billing/sol-quote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: plan.id }),
+        body: JSON.stringify(plan.purchaseKind === "credits" ? { pack: plan.id } : { plan: plan.id }),
       })
       const body = (await response.json().catch(() => ({}))) as SolQuote & { error?: string }
       if (!response.ok || !body.quote || !Number.isFinite(body.amountSol)) {
@@ -80,7 +81,12 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
     const response = await fetch("/api/billing/verify-solana", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan: plan.id, txHash: signature, currency: paymentCurrency, quote: quote?.quote }),
+      body: JSON.stringify({
+        ...(plan.purchaseKind === "credits" ? { pack: plan.id } : { plan: plan.id }),
+        txHash: signature,
+        currency: paymentCurrency,
+        quote: quote?.quote,
+      }),
     })
     const body = (await response.json().catch(() => ({}))) as VerifyResponse
 
@@ -160,7 +166,7 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
           <p className="mt-2 text-2xl font-semibold">
             {currency === "SOL" && solQuote ? `${solQuote.amountSol.toFixed(6)} SOL` : `${plan.amount} USDC`}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">{currency === "SOL" ? "Live quote for this payment" : "Fixed plan denomination"}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{currency === "SOL" ? "Live quote for this payment" : plan.purchaseKind === "credits" ? "Fixed Sybil credit-pack denomination" : "Fixed plan denomination"}</p>
         </div>
       </div>
 

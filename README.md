@@ -123,6 +123,13 @@ The current product build includes a public landing page, ScamGuard scanner, Tel
 - API Growth: `$79 / 30 days` with 25,000 API requests, signed webhooks, and one Telegram group
 - Payments use Solana USDC or a signed, short-lived native SOL equivalent. Access is activated for 30 days after on-chain verification; renewal is always manual.
 
+### Sybil Wallet-Credit Packs
+
+- Sybil Starter: `$29` for `1,000` persistent wallet-analysis credits (`$0.0290` per wallet)
+- Sybil Growth: `$99` for `10,000` persistent wallet-analysis credits (`$0.0099` per wallet)
+- Sybil Pro: `$249` for `50,000` persistent wallet-analysis credits (`$0.0050` per wallet)
+- One credit is debited per wallet analyzed. Packs are one-time purchases, never renew automatically, and remain in the credit ledger until consumed.
+
 ### Admin Intelligence
 
 - Trusted, suspicious, and known-bad domain management
