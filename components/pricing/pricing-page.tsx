@@ -21,7 +21,7 @@ const plans = [
     cta: "Start mini audit",
     href: "/audit",
     features: [
-      "100-500 wallet sample",
+      "Up to 100 wallet sample",
       "Duplicate and invalid row checks",
       "Simple cluster hints",
       "No raw data submission",
@@ -34,7 +34,7 @@ const plans = [
     cta: "Pay with USDC or SOL",
     href: "/checkout?plan=starter",
     features: [
-      "Up to 1,000 wallet credits",
+      `${billingPlans.starter.walletCredits.toLocaleString("en-US")} analysis credits`,
       "Wallet risk score",
       "CSV export",
       "Clean reward list",
@@ -48,7 +48,7 @@ const plans = [
     href: "/checkout?plan=growth",
     highlighted: true,
     features: [
-      "Up to 10,000 wallet credits",
+      `${billingPlans.growth.walletCredits.toLocaleString("en-US")} analysis credits`,
       "Cluster analysis",
       "Funding source analysis",
       "PDF report",
@@ -62,7 +62,7 @@ const plans = [
     cta: "Pay with USDC or SOL",
     href: "/checkout?plan=pro",
     features: [
-      "Up to 50,000 wallet credits",
+      `${billingPlans.pro.walletCredits.toLocaleString("en-US")} analysis credits`,
       "Priority analysis",
       "Advanced report",
       "API beta access",
@@ -99,13 +99,13 @@ export function PricingPage() {
       <section className="security-grid border-y border-border">
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
           <Badge variant="secondary" className="mb-5 w-fit border-primary/30 text-primary">
-            Live Solana USDC and SOL checkout
+            Fixed-price Solana USDC and SOL checkout
           </Badge>
           <h1 className="max-w-3xl text-4xl font-semibold sm:text-6xl">
             Pricing built for Web3 campaign scale.
           </h1>
           <p className="mt-5 max-w-2xl text-muted-foreground">
-            Every account can test up to 100 wallets for free. Larger analyses continue through verified Solana USDC or native SOL payments.
+            Every account can test up to 100 wallets for free. Paid plans are one-time analysis credit packs with a fixed USDC value, payable in verified Solana USDC or native SOL. No recurring billing.
           </p>
         </div>
       </section>
@@ -130,6 +130,7 @@ export function PricingPage() {
               <CardTitle>{plan.name}</CardTitle>
               <CardDescription>{plan.detail}</CardDescription>
               <div className="pt-3 text-3xl font-semibold">{plan.price}</div>
+              <p className="pt-2 text-xs font-medium text-primary">{plan.name === "Mini Audit" ? "No payment required" : "One-time credit pack. No recurring billing."}</p>
             </CardHeader>
             <CardContent className="flex flex-col gap-6">
               <ul className="flex flex-col gap-3">

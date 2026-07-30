@@ -39,6 +39,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { billingPlans } from "@/lib/billing/plans"
 import { scamGuardTelegramBotUrl } from "@/lib/telegram/links"
 
 const navLinks = [
@@ -88,7 +89,7 @@ const painPoints = [
   {
     icon: ShieldAlert,
     title: "Users sign risky Solana transactions",
-    text: "Airdrop, mint and claim links can hide delegate approvals, authority changes and drain-style asset movement.",
+    text: "Airdrop, mint and claim links can hide approvals, authority changes and drain-style asset movement across wallet flows.",
   },
 ]
 
@@ -104,7 +105,7 @@ const productLayers = [
   {
     icon: ShieldAlert,
     title: "ScamGuard Scanner",
-    text: "Scan Solana URLs, wallets, token mints, and transaction intent before users touch risky claim or mint flows.",
+    text: "Scan Web3 URLs, wallets, token mints, and transaction intent across Solana and EVM before users touch risky claim or mint flows.",
     href: "/scamguard",
     action: "Open scanner",
     external: false,
@@ -191,7 +192,7 @@ const scoringPrinciples = [
 
 const features = [
   "Real on-chain enrichment",
-  "Solana wallet analysis",
+  "Multi-chain wallet analysis",
   "Wallet risk score",
   "Funding source analysis",
   "Suspicious cluster detection",
@@ -200,7 +201,7 @@ const features = [
   "CSV and PDF reporting",
   "Policy presets",
   "Solana USDC or SOL checkout",
-  "ScamGuard Solana pre-sign scanner",
+  "ScamGuard pre-sign scanner",
   "Suspicious URL and token mint checks",
 ]
 
@@ -212,10 +213,39 @@ const useCases = [
 ]
 
 const plans = [
-  ["Free Trial", "100 wallets", "Try the mini audit before payment", "/audit"],
-  ["Starter", "29 USDC", "Up to 1,000 wallet credits", "/checkout?plan=starter"],
-  ["Growth", "99 USDC", "Up to 10,000 wallet credits", "/checkout?plan=growth"],
-  ["Pro", "249 USDC", "Up to 50,000 wallet credits", "/checkout?plan=pro"],
+  {
+    name: "Mini Audit",
+    price: "Free",
+    credits: "100 wallets",
+    detail: "Test the product with a first-pass campaign review.",
+    href: "/audit",
+    cta: "Run free audit",
+  },
+  {
+    name: billingPlans.starter.name,
+    price: `${billingPlans.starter.amountUsdc} USDC`,
+    credits: `${billingPlans.starter.walletCredits.toLocaleString("en-US")} analysis credits`,
+    detail: "One-time credit pack for small campaign reviews.",
+    href: "/checkout?plan=starter",
+    cta: "Choose Starter",
+  },
+  {
+    name: billingPlans.growth.name,
+    price: `${billingPlans.growth.amountUsdc} USDC`,
+    credits: `${billingPlans.growth.walletCredits.toLocaleString("en-US")} analysis credits`,
+    detail: "One-time credit pack for active reward campaigns.",
+    href: "/checkout?plan=growth",
+    cta: "Choose Growth",
+    featured: true,
+  },
+  {
+    name: billingPlans.pro.name,
+    price: `${billingPlans.pro.amountUsdc} USDC`,
+    credits: `${billingPlans.pro.walletCredits.toLocaleString("en-US")} analysis credits`,
+    detail: "One-time credit pack for high-volume operations.",
+    href: "/checkout?plan=pro",
+    cta: "Choose Pro",
+  },
 ]
 
 export function LandingPage() {
@@ -586,13 +616,17 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section id="pricing" className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
+      <section id="pricing" className="security-grid relative overflow-hidden border-y border-border bg-card/20">
+        <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
         <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div><Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Simple pricing</Badge><h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Start free. Upgrade with USDC or SOL when the list gets bigger.</h2></div>
+          <div><Badge variant="secondary" className="mb-4 w-fit gap-2 border-primary/30 text-primary"><WalletCards className="size-3.5" />Analysis credit packs</Badge><h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Start free. Unlock one-time credit packs when the list gets bigger.</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">Every paid pack has a fixed USDC denomination, can be settled with USDC or a live SOL equivalent, and never renews automatically.</p></div>
           <Link href="/pricing" className={`${buttonVariants({ variant: "outline" })} hover-lift w-fit`}>Full pricing <ArrowRight data-icon="inline-end" /></Link>
         </div>
         <div className="grid gap-5 md:grid-cols-4">
-          {plans.map(([name, price, detail, href]) => (<Card key={name} className="glass-panel premium-card hover-lift"><CardHeader><CardTitle>{name}</CardTitle><CardDescription>{detail}</CardDescription></CardHeader><CardContent className="flex items-center justify-between gap-4"><span className="text-gradient text-xl font-semibold">{price}</span><Link href={href} className={`${buttonVariants({ variant: name === "Free Trial" ? "default" : "outline" })} hover-lift`}>Open</Link></CardContent></Card>))}
+          {plans.map((plan) => (<Card key={plan.name} className={`glass-panel premium-card hover-lift relative overflow-hidden ${plan.featured ? "border-primary/60 bg-primary/10 shadow-[0_0_36px_rgba(56,189,248,0.15)]" : ""}`}>
+            {plan.featured && <Badge className="absolute right-4 top-4 bg-primary text-primary-foreground">Most selected</Badge>}
+            <CardHeader><CardTitle>{plan.name}</CardTitle><CardDescription>{plan.detail}</CardDescription></CardHeader><CardContent className="flex flex-col gap-5"><div><p className="text-gradient text-2xl font-semibold">{plan.price}</p><p className="mt-1 text-xs text-muted-foreground">{plan.credits}</p></div><div className="flex items-center justify-between gap-3 border-t border-border pt-4"><span className="flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck className="size-3.5 text-primary" />{plan.name === "Mini Audit" ? "No payment required" : "USDC or SOL"}</span><Link href={plan.href} className={`${buttonVariants({ variant: plan.featured || plan.name === "Mini Audit" ? "default" : "outline" })} hover-lift`}>{plan.cta}<ArrowRight data-icon="inline-end" /></Link></div></CardContent></Card>))}
+        </div>
         </div>
       </section>
 

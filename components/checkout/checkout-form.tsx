@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { CheckCircle2, CircleDollarSign, Copy, ExternalLink, Loader2, WalletCards } from "lucide-react"
+import { BadgeCheck, CheckCircle2, CircleDollarSign, Clock3, Copy, ExternalLink, Loader2, ShieldCheck, WalletCards } from "lucide-react"
 
 import { paySolanaSolWithWallet, paySolanaUsdcWithWallet } from "@/lib/billing/solana-wallet-client"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -151,20 +151,22 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
     <div className="flex flex-col gap-5">
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-lg border border-border bg-background/50 p-4">
-          <p className="text-xs text-muted-foreground">Payment network</p>
-          <p className="mt-2 text-lg font-semibold">Solana mainnet</p>
+          <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Payment network</p>
+          <p className="mt-2 flex items-center gap-2 text-lg font-semibold"><BadgeCheck className="size-4 text-primary" /> Solana mainnet</p>
+          <p className="mt-1 text-xs text-muted-foreground">USDC or native SOL</p>
         </div>
         <div className="rounded-lg border border-border bg-background/50 p-4">
-          <p className="text-xs text-muted-foreground">Required amount</p>
+          <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Selected settlement</p>
           <p className="mt-2 text-2xl font-semibold">
             {currency === "SOL" && solQuote ? `${solQuote.amountSol.toFixed(6)} SOL` : `${plan.amount} USDC`}
           </p>
+          <p className="mt-1 text-xs text-muted-foreground">{currency === "SOL" ? "Live quote for this payment" : "Fixed plan denomination"}</p>
         </div>
       </div>
 
-      <div className="rounded-lg border border-primary/25 bg-primary/5 p-4">
+      <div className="rounded-lg border border-primary/30 bg-primary/5 p-5">
         <div className="mb-2 flex items-center justify-between gap-3">
-          <p className="font-medium">Wallet checkout</p>
+          <div><p className="font-medium">Choose your settlement asset</p><p className="mt-1 text-xs text-muted-foreground">Your wallet creates the transfer. Tri-Proof never takes custody.</p></div>
           <Button type="button" variant="outline" size="sm" onClick={copyAddress}>
             <Copy data-icon="inline-start" /> Copy Address
           </Button>
@@ -173,10 +175,10 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
           {solanaNetwork.treasuryAddress}
         </code>
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          <Button type="button" variant={currency === "USDC" ? "default" : "outline"} onClick={() => chooseCurrency("USDC")}>
+          <Button type="button" variant={currency === "USDC" ? "default" : "outline"} className="justify-start" onClick={() => chooseCurrency("USDC")}>
             <CircleDollarSign data-icon="inline-start" /> Pay with USDC
           </Button>
-          <Button type="button" variant={currency === "SOL" ? "default" : "outline"} onClick={() => chooseCurrency("SOL")}>
+          <Button type="button" variant={currency === "SOL" ? "default" : "outline"} className="justify-start" onClick={() => chooseCurrency("SOL")}>
             <WalletCards data-icon="inline-start" /> Pay with SOL
           </Button>
         </div>
@@ -192,12 +194,18 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
             Transaction: {txSignature}
           </p>
         )}
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-          <Button type="button" variant="secondary" onClick={payWithWallet} disabled={pending || quotePending || (currency === "SOL" && !solQuote)}>
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+          <Button type="button" variant="secondary" className="glow-primary" onClick={payWithWallet} disabled={pending || quotePending || (currency === "SOL" && !solQuote)}>
             {pending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <ExternalLink data-icon="inline-start" />}
             {quotePending ? "Preparing SOL quote" : `Open Wallet & Pay ${currency}`}
           </Button>
         </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-border bg-background/35 p-3"><ShieldCheck className="size-4 text-primary" /><p className="mt-2 text-xs font-medium">Self-custody</p><p className="mt-1 text-[11px] leading-4 text-muted-foreground">No card data or wallet custody.</p></div>
+        <div className="rounded-lg border border-border bg-background/35 p-3"><BadgeCheck className="size-4 text-primary" /><p className="mt-2 text-xs font-medium">On-chain verification</p><p className="mt-1 text-[11px] leading-4 text-muted-foreground">Credits activate only after validation.</p></div>
+        <div className="rounded-lg border border-border bg-background/35 p-3"><Clock3 className="size-4 text-primary" /><p className="mt-2 text-xs font-medium">Fresh SOL quote</p><p className="mt-1 text-[11px] leading-4 text-muted-foreground">SOL quotes are signed and short-lived.</p></div>
       </div>
 
       {error && (
