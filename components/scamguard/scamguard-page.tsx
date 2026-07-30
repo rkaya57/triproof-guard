@@ -446,7 +446,7 @@ export function ScamGuardPage({ access }: { access: ScamGuardAccess }) {
     isAdmin: access.isAdmin,
   })
 
-  const securityScore = useMemo(() => {
+  const safetyScore = useMemo(() => {
     if (!result) return 100
     return Math.max(0, 100 - result.score)
   }, [result])
@@ -752,20 +752,24 @@ export function ScamGuardPage({ access }: { access: ScamGuardAccess }) {
                     </p>
                   </div>
                   <div className="w-full rounded-md border border-white/10 bg-slate-950/65 p-4 lg:w-40">
-                    <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Shield</p>
+                    <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Safety score</p>
                     <div className="mt-2 flex items-end gap-2">
-                      <span className="text-4xl font-semibold text-white">{result ? securityScore : "--"}</span>
+                      <span className="text-4xl font-semibold text-white">{result ? safetyScore : "--"}</span>
                       <span className="pb-1 text-xs text-muted-foreground">/100</span>
                     </div>
+                    <p className="mt-1 text-[11px] leading-4 text-muted-foreground">Higher means fewer risk signals.</p>
                     <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800">
                       <div
                         className={cn(
                           "h-full rounded-full transition-all",
                           result?.riskLevel === "CRITICAL" || result?.riskLevel === "HIGH_RISK" ? "bg-red-400" : result?.riskLevel === "CAUTION" ? "bg-amber-300" : "bg-emerald-400",
                         )}
-                        style={{ width: `${result ? securityScore : 0}%` }}
+                        style={{ width: `${result ? safetyScore : 0}%` }}
                       />
                     </div>
+                    <p className="mt-3 border-t border-white/10 pt-3 text-xs text-muted-foreground">
+                      Risk score <span className="font-medium text-slate-200">{result ? result.score : "--"}/100</span>
+                    </p>
                   </div>
                 </div>
 

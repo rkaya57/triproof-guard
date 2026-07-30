@@ -45,14 +45,29 @@ type MiniAuditResponse = {
   result: AnalysisResult
 }
 
-const sampleWallets = [
+const evmSampleWallets = [
   "0x8f3c2a6b4e9d1f705c8a9b2d3e4f5061728394ab",
   "0x4c1a9e8b7d6f5032a1b0c9d8e7f6543210ab9cde",
   "0xa2b4c6d8e0f13579bdf2468ace13579bdf2468ac",
   "0x19f8e7d6c5b4a3928172635445362718f9e8d7c6",
   "0x0000000000000000000000000000000000000001",
-  "bad-wallet-row",
 ].join("\n")
+
+const solanaSampleWallets = [
+  "4wyQ6qUALucuJKenpyGqX3zGPi9Z81DsQbA2yWdw5HcQ",
+  "FM4LWAWdmP8eXAwk9mkBf5cg5KncQeqdU65k1fZPAeiN",
+  "DizJX9JjYZwDX9quZZZjJ2M1VY3TkEK9hZpAafNJfuhF",
+  "6nTWhudJH11qvu37g2rfGeisveScU6GYn5KknovMC81h",
+  "9cyrE1NYCHGYwDBtiMZbM2PaEcpnXrVXihHXwUqXwdxz",
+].join("\n")
+
+function sampleWalletsForChain(chain: Chain) {
+  return chain === "Solana" ? solanaSampleWallets : evmSampleWallets
+}
+
+function containsEvmAddress(value: string) {
+  return value.split(/[\n,;\t ]+/).some((entry) => /^0x[a-fA-F0-9]{40}$/.test(entry.trim()))
+}
 
 const selectClass =
   "h-9 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -119,7 +134,7 @@ function walletSortValue(wallet: WalletRiskResult) {
 
 export function MiniRiskAudit() {
   const router = useRouter()
-  const [walletInput, setWalletInput] = useState(sampleWallets)
+  const [walletInput, setWalletInput] = useState(() => sampleWalletsForChain("Ethereum"))
   const [chain, setChain] = useState<Chain>("Ethereum")
   const [riskPolicy, setRiskPolicy] = useState<RiskPolicy>("strict")
   const [report, setReport] = useState<MiniAuditResponse | null>(null)
@@ -142,6 +157,13 @@ export function MiniRiskAudit() {
 
   async function runMiniAudit(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault()
+
+    if (chain === "Solana" && containsEvmAddress(walletInput)) {
+      setReport(null)
+      setError("This wallet list contains EVM 0x addresses. Select an EVM chain or load the Solana sample before running the audit.")
+      return
+    }
+
     setPending(true)
     setError("")
 
@@ -177,6 +199,22 @@ export function MiniRiskAudit() {
     URL.revokeObjectURL(url)
   }
 
+  function selectChain(nextChain: Chain) {
+    const currentSample = sampleWalletsForChain(chain)
+    const shouldReplaceSample = walletInput.trim() === currentSample
+
+    setChain(nextChain)
+    if (shouldReplaceSample) setWalletInput(sampleWalletsForChain(nextChain))
+    setReport(null)
+    setError("")
+  }
+
+  function loadSample() {
+    setWalletInput(sampleWalletsForChain(chain))
+    setReport(null)
+    setError("")
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
       <section className="glass-panel premium-card animated-border rounded-3xl p-5">
@@ -199,7 +237,7 @@ export function MiniRiskAudit() {
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="grid gap-2 text-sm font-medium">
               Chain
-              <select value={chain} onChange={(event) => setChain(event.target.value as Chain)} className={selectClass}>
+              <select value={chain} onChange={(event) => selectChain(event.target.value as Chain)} className={selectClass}>
                 {["Ethereum", "Base", "Arbitrum", "Optimism", "Polygon", "BNB Chain", "Solana"].map((item) => (
                   <option key={item} value={item}>{item}</option>
                 ))}
@@ -217,12 +255,15 @@ export function MiniRiskAudit() {
 
           <label className="grid gap-2 text-sm font-medium">
             Wallet list
+            <span className="text-xs font-normal text-muted-foreground">
+              {chain === "Solana" ? "Solana sample: base58 wallet addresses." : "EVM sample: 0x wallet addresses."}
+            </span>
             <Textarea
               value={walletInput}
               onChange={(event) => setWalletInput(event.target.value)}
               rows={12}
               className="font-mono text-xs"
-              placeholder="Paste one wallet address per line"
+              placeholder={chain === "Solana" ? "Paste one Solana wallet address per line" : "Paste one EVM wallet address per line"}
             />
           </label>
 
@@ -233,7 +274,7 @@ export function MiniRiskAudit() {
               {pending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Gauge data-icon="inline-start" />}
               Run engine audit
             </button>
-            <button type="button" onClick={() => setWalletInput(sampleWallets)} className={buttonVariants({ variant: "outline" })}>
+            <button type="button" onClick={loadSample} className={buttonVariants({ variant: "outline" })}>
               <ClipboardPaste data-icon="inline-start" />
               Load sample
             </button>
