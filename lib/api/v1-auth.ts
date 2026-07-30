@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { getCurrentUser } from "@/lib/auth/session"
+import { consumeApiRequest, hashApiKey, SubscriptionLimitError } from "@/lib/billing/subscription"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
 
@@ -38,6 +39,25 @@ export async function getV1ApiUser(request: Request): Promise<
   const token = bearerToken(request)
 
   if (token) {
+    if (token.startsWith("tp_live_")) {
+      try {
+        const key = await db.apiKey.findUnique({
+          where: { keyHash: hashApiKey(token) },
+          include: { user: { select: { id: true, name: true, email: true, createdAt: true } } },
+        })
+        if (!key || !key.isActive || key.revokedAt) return { user: null, error: apiError("Invalid API key", 401) }
+        await consumeApiRequest(key.user)
+        await db.apiKey.update({ where: { id: key.id }, data: { lastUsedAt: new Date() } })
+        return { user: key.user, error: null }
+      } catch (error) {
+        if (error instanceof SubscriptionLimitError) {
+          return { user: null, error: apiError(error.message, error.code === "API_QUOTA_REACHED" ? 429 : 403, { code: error.code }) }
+        }
+        if (isDatabaseConnectionError(error)) return { user: null, error: apiError("Database is required for API usage", 503) }
+        throw error
+      }
+    }
+
     const expected = process.env.TRIPROOF_API_KEY?.trim()
     if (!expected || !constantTimeEqual(token, expected)) {
       return { user: null, error: apiError("Invalid API key", 401) }
@@ -61,6 +81,7 @@ export async function getV1ApiUser(request: Request): Promise<
         return { user: null, error: apiError("Configured API user was not found", 503) }
       }
 
+      await consumeApiRequest(user)
       return { user, error: null }
     } catch (error) {
       if (isDatabaseConnectionError(error)) {
@@ -78,5 +99,13 @@ export async function getV1ApiUser(request: Request): Promise<
     }
   }
 
-  return { user: sessionUser, error: null }
+  try {
+    await consumeApiRequest(sessionUser)
+    return { user: sessionUser, error: null }
+  } catch (error) {
+    if (error instanceof SubscriptionLimitError) {
+      return { user: null, error: apiError(error.message, error.code === "API_QUOTA_REACHED" ? 429 : 403, { code: error.code }) }
+    }
+    throw error
+  }
 }

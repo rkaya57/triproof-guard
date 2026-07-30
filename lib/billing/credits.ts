@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client"
 
 import { db } from "@/lib/db/prisma"
+import { subscriptionPlanFromDb } from "@/lib/billing/plans"
 
 export type BillingGate =
   | {
@@ -22,6 +23,19 @@ export type BillingGate =
       creditsToDeduct: number
       balanceBefore: number
       balanceAfter: number
+    }
+  | {
+      source: "subscription"
+      userId: string
+      walletCount: number
+      usedWallets: number
+      remainingFreeWallets: number
+      creditsToDeduct: 0
+      balanceBefore: number
+      balanceAfter: number
+      subscriptionPlan: string
+      subscriptionPeriodStart: Date
+      dailyWalletLimit: number
     }
 
 export class BillingCreditError extends Error {
@@ -221,6 +235,44 @@ export async function prepareAnalysisBillingGate(
   const remainingFreeWallets = Math.max(freeTrialWalletLimit - usedWallets, 0)
   const balanceBefore = await creditBalance(tx, userId)
 
+  const subscription = await tx.subscription.findUnique({
+    where: { userId },
+    select: { plan: true, status: true, expiresAt: true },
+  })
+  const subscriptionPlan = subscription && subscription.status === "ACTIVE" && (!subscription.expiresAt || subscription.expiresAt > new Date())
+    ? subscriptionPlanFromDb(subscription.plan)
+    : null
+  if (subscriptionPlan && subscriptionPlan.dailyAnalysisWalletLimit > 0) {
+    const now = new Date()
+    const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+    const usage = await tx.subscriptionUsage.findUnique({
+      where: { userId_period_periodStart: { userId, period: "daily_analysis", periodStart } },
+      select: { analysisWalletCount: true },
+    })
+    const usedToday = usage?.analysisWalletCount ?? 0
+    if (usedToday + walletCount > subscriptionPlan.dailyAnalysisWalletLimit) {
+      throw new BillingCreditError({
+        walletCount,
+        availableCredits: Math.max(subscriptionPlan.dailyAnalysisWalletLimit - usedToday, 0),
+        remainingFreeWallets,
+        requiredCredits: walletCount,
+      })
+    }
+    return {
+      source: "subscription",
+      userId,
+      walletCount,
+      usedWallets,
+      remainingFreeWallets,
+      creditsToDeduct: 0,
+      balanceBefore,
+      balanceAfter: balanceBefore,
+      subscriptionPlan: subscriptionPlan.id,
+      subscriptionPeriodStart: periodStart,
+      dailyWalletLimit: subscriptionPlan.dailyAnalysisWalletLimit,
+    }
+  }
+
   if (walletCount <= remainingFreeWallets) {
     return {
       source: "free_trial",
@@ -267,6 +319,13 @@ export async function commitAnalysisCreditDebit(
     metadata?: Prisma.InputJsonValue
   }
 ) {
+  if (gate.source === "subscription") {
+    return tx.subscriptionUsage.upsert({
+      where: { userId_period_periodStart: { userId: gate.userId, period: "daily_analysis", periodStart: gate.subscriptionPeriodStart } },
+      create: { userId: gate.userId, period: "daily_analysis", periodStart: gate.subscriptionPeriodStart, analysisWalletCount: gate.walletCount },
+      update: { analysisWalletCount: { increment: gate.walletCount } },
+    })
+  }
   if (gate.creditsToDeduct <= 0) return null
 
   const existing = await tx.creditLedger.findUnique({

@@ -251,7 +251,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           code: error.code,
-          error: `Free trial includes ${freeTrialWalletLimit.toLocaleString()} wallets. This upload needs ${error.requiredCredits.toLocaleString()} persistent wallet credits, but your DB credit balance is ${error.availableCredits.toLocaleString()}. Please choose a paid USDC or SOL plan to continue.`,
+          error: `Free trial includes ${freeTrialWalletLimit.toLocaleString()} wallets. This upload needs ${error.requiredCredits.toLocaleString()} wallet capacity, but your available paid capacity is ${error.availableCredits.toLocaleString()}. Choose or renew a paid USDC or SOL plan to continue.`,
           freeTrialWalletLimit,
           remainingWallets: error.remainingFreeWallets,
           requiredWallets: error.walletCount,

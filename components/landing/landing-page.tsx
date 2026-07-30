@@ -39,7 +39,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { billingPlans } from "@/lib/billing/plans"
+import { subscriptionPlans } from "@/lib/billing/plans"
 import { scamGuardTelegramBotUrl } from "@/lib/telegram/links"
 
 const navLinks = [
@@ -214,37 +214,37 @@ const useCases = [
 
 const plans = [
   {
-    name: "Mini Audit",
-    price: "Free",
-    credits: "100 wallets",
-    detail: "Test the product with a first-pass campaign review.",
-    href: "/audit",
-    cta: "Run free audit",
+    name: subscriptionPlans.free.name,
+    price: "$0",
+    credits: "Extension, Telegram Bot, basic scans",
+    detail: "Everyday Web3 safety with a daily scan limit.",
+    href: "/scamguard",
+    cta: "Open Scanner",
   },
   {
-    name: billingPlans.starter.name,
-    price: `${billingPlans.starter.amountUsdc} USDC`,
-    credits: `${billingPlans.starter.walletCredits.toLocaleString("en-US")} analysis credits`,
-    detail: "One-time credit pack for small campaign reviews.",
-    href: "/checkout?plan=starter",
-    cta: "Choose Starter",
+    name: subscriptionPlans.builder.name,
+    price: `$${subscriptionPlans.builder.amountUsdc}/mo`,
+    credits: "History, deep URL scans, Scam DNA",
+    detail: "For researchers and active Web3 users.",
+    href: "/checkout?plan=builder",
+    cta: "Choose Builder",
   },
   {
-    name: billingPlans.growth.name,
-    price: `${billingPlans.growth.amountUsdc} USDC`,
-    credits: `${billingPlans.growth.walletCredits.toLocaleString("en-US")} analysis credits`,
-    detail: "One-time credit pack for active reward campaigns.",
-    href: "/checkout?plan=growth",
-    cta: "Choose Growth",
+    name: subscriptionPlans.community.name,
+    price: `$${subscriptionPlans.community.amountUsdc}/mo`,
+    credits: "Telegram Group Guardian and reports",
+    detail: "Protection for one active Telegram community.",
+    href: "/checkout?plan=community",
+    cta: "Choose Community",
     featured: true,
   },
   {
-    name: billingPlans.pro.name,
-    price: `${billingPlans.pro.amountUsdc} USDC`,
-    credits: `${billingPlans.pro.walletCredits.toLocaleString("en-US")} analysis credits`,
-    detail: "One-time credit pack for high-volume operations.",
-    href: "/checkout?plan=pro",
-    cta: "Choose Pro",
+    name: subscriptionPlans.api_growth.name,
+    price: `$${subscriptionPlans.api_growth.amountUsdc}/mo`,
+    credits: "25,000 API requests and webhooks",
+    detail: "Production-grade dApp and wallet integration.",
+    href: "/checkout?plan=api_growth",
+    cta: "Choose API Growth",
   },
 ]
 
@@ -619,13 +619,13 @@ export function LandingPage() {
       <section id="pricing" className="security-grid relative overflow-hidden border-y border-border bg-card/20">
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
         <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div><Badge variant="secondary" className="mb-4 w-fit gap-2 border-primary/30 text-primary"><WalletCards className="size-3.5" />Analysis credit packs</Badge><h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Start free. Unlock one-time credit packs when the list gets bigger.</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">Every paid pack has a fixed USDC denomination, can be settled with USDC or a live SOL equivalent, and never renews automatically.</p></div>
+          <div><Badge variant="secondary" className="mb-4 w-fit gap-2 border-primary/30 text-primary"><WalletCards className="size-3.5" />ScamGuard access plans</Badge><h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Start free. Add deeper intelligence when your surface grows.</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">Paid plans are 30-day access passes with fixed USDC pricing or a live SOL equivalent. You renew manually; the product never creates automatic wallet transfers.</p></div>
           <Link href="/pricing" className={`${buttonVariants({ variant: "outline" })} hover-lift w-fit`}>Full pricing <ArrowRight data-icon="inline-end" /></Link>
         </div>
         <div className="grid gap-5 md:grid-cols-4">
-          {plans.map((plan) => (<Card key={plan.name} className={`glass-panel premium-card hover-lift relative overflow-hidden ${plan.featured ? "border-primary/60 bg-primary/10 shadow-[0_0_36px_rgba(56,189,248,0.15)]" : ""}`}>
-            {plan.featured && <Badge className="absolute right-4 top-4 bg-primary text-primary-foreground">Most selected</Badge>}
-            <CardHeader><CardTitle>{plan.name}</CardTitle><CardDescription>{plan.detail}</CardDescription></CardHeader><CardContent className="flex flex-col gap-5"><div><p className="text-gradient text-2xl font-semibold">{plan.price}</p><p className="mt-1 text-xs text-muted-foreground">{plan.credits}</p></div><div className="flex items-center justify-between gap-3 border-t border-border pt-4"><span className="flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck className="size-3.5 text-primary" />{plan.name === "Mini Audit" ? "No payment required" : "USDC or SOL"}</span><Link href={plan.href} className={`${buttonVariants({ variant: plan.featured || plan.name === "Mini Audit" ? "default" : "outline" })} hover-lift`}>{plan.cta}<ArrowRight data-icon="inline-end" /></Link></div></CardContent></Card>))}
+          {plans.map((plan) => { const featured = "featured" in plan && plan.featured; return <Card key={plan.name} className={`glass-panel premium-card hover-lift relative overflow-hidden ${featured ? "border-primary/60 bg-primary/10 shadow-[0_0_36px_rgba(56,189,248,0.15)]" : ""}`}>
+            {featured && <Badge className="absolute right-4 top-4 bg-primary text-primary-foreground">Most selected</Badge>}
+            <CardHeader><CardTitle>{plan.name}</CardTitle><CardDescription>{plan.detail}</CardDescription></CardHeader><CardContent className="flex flex-col gap-5"><div><p className="text-gradient text-2xl font-semibold">{plan.price}</p><p className="mt-1 text-xs text-muted-foreground">{plan.credits}</p></div><div className="flex items-center justify-between gap-3 border-t border-border pt-4"><span className="flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck className="size-3.5 text-primary" />{plan.name === "Free" ? "No payment required" : "USDC or SOL"}</span><Link href={plan.href} className={`${buttonVariants({ variant: featured || plan.name === "Free" ? "default" : "outline" })} hover-lift`}>{plan.cta}<ArrowRight data-icon="inline-end" /></Link></div></CardContent></Card> })}
         </div>
         </div>
       </section>

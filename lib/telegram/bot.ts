@@ -75,6 +75,7 @@ export type TelegramBotContext = {
     alertLevel: "CAUTION" | "HIGH_RISK" | "CRITICAL"
     dailySummary: boolean
   }>
+  claimGroup?: (chatId: number, code: string) => Promise<{ ok: boolean; reason?: string; title?: string; plan?: string }>
   loadHistory?: (chatId: number, limit?: number) => Promise<
     Array<{
       target: string
@@ -141,12 +142,13 @@ const commandHelp = [
   "/report <item>",
   "/history",
   "/summary",
+  "/monthly",
   "/settings",
   "",
   "Group Guardian",
   "--------------",
   "Add the bot to a Telegram group and it will scan posted links. It only replies when the risk crosses the configured alert threshold.",
-  "Group admins can use /guardian to manage protection.",
+  "Group admins can use /guardian to manage protection and /guardian connect <code> to link a paid group.",
 ].join("\n")
 
 function textOf(message: TelegramMessage) {
@@ -543,6 +545,11 @@ async function handleGuardianCommand(message: TelegramMessage, args: string, con
   if (!allowed) {
     return [simpleReply(message, "Only a verified Telegram group administrator can change Group Guardian settings.")]
   }
+  if (normalized.startsWith("connect ")) {
+    if (!context.claimGroup) return [simpleReply(message, "Group connection is temporarily unavailable. Please try again shortly.")]
+    const connected = await context.claimGroup(message.chat.id, normalized.slice("connect ".length).trim())
+    return [simpleReply(message, connected.ok ? `GROUP GUARDIAN CONNECTED\n\n${connected.title ?? "This group"} is now protected under the ${connected.plan ?? "Community"} plan.` : connected.reason ?? "This group could not be connected.")]
+  }
   if (!context.updateGroupSettings) {
     return [simpleReply(message, "Group settings storage is temporarily unavailable. Please try again shortly.")]
   }
@@ -637,6 +644,11 @@ async function handlePrivateOrCommand(message: TelegramMessage, context: Telegra
   if (command?.name === "summary") {
     if (!context.loadSummary) return [simpleReply(message, "Guardian summary is temporarily unavailable.")]
     return [simpleReply(message, formatGuardianSummary(await context.loadSummary(message.chat.id, 24)))]
+  }
+
+  if (command?.name === "monthly") {
+    if (!context.loadSummary) return [simpleReply(message, "Guardian summary is temporarily unavailable.")]
+    return [simpleReply(message, formatGuardianSummary(await context.loadSummary(message.chat.id, 24 * 30)))]
   }
 
   const forcedType =

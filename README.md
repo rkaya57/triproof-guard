@@ -2,7 +2,7 @@
 
 Tri-Proof Guard is a Solana-first Web3 security product for campaign teams, wallets, launchpads, and dApps. It combines wallet-list Sybil analysis with ScamGuard pre-sign protection so projects can reduce fake campaign participation and users can avoid unsafe claim, mint, reward, and wallet-signing flows.
 
-The current product build includes a public landing page, ScamGuard scanner, Telegram bot webhook beta, Group Guardian link scanning, Chrome extension beta, authenticated API, admin intelligence console, Sybil analysis dashboard, CSV/PDF exports, and production-oriented tests.
+The current product build includes a public landing page, ScamGuard scanner, Telegram bot webhook beta, Group Guardian link scanning, Chrome extension beta, subscription access control, authenticated API keys and quotas, admin intelligence console, Sybil analysis dashboard, CSV/PDF exports, and production-oriented tests.
 
 ## Grant Reviewer Summary
 
@@ -25,6 +25,7 @@ The current product build includes a public landing page, ScamGuard scanner, Tel
 - Admin intelligence console: `/dashboard/admin/scamguard`
 - Chrome extension package: `/downloads/scamguard-chrome-extension.zip`
 - Telegram bot webhook: `/api/telegram/webhook`
+- Developer access: `/dashboard/developer`
 
 ## Core Features
 
@@ -92,6 +93,7 @@ The current product build includes a public landing page, ScamGuard scanner, Tel
 - Per-group protection status, approval, alert threshold, and daily summary settings
 - Repeated campaign detection after the same target appears multiple times
 - Scheduled 24-hour community protection summaries
+- Community/API Growth groups are linked through a short-lived dashboard connection code and Telegram admin confirmation
 - Admin operations console at `/dashboard/admin/telegram`
 - Configurable group alert threshold: `CAUTION`, `HIGH_RISK`, or `CRITICAL`
 - Replies only when a scanned group link meets the configured risk threshold
@@ -111,6 +113,15 @@ The current product build includes a public landing page, ScamGuard scanner, Tel
 - CSV and PDF exports
 - Dashboard review flow
 - Public demo mode
+
+### Subscription Access and API Plans
+
+- Free: extension, Telegram bot, basic scans, shareable reports, and daily scan limit
+- Builder: `$12 / 30 days` for scan history, higher limits, deep URL Sandbox and Scam DNA
+- Community: `$39 / 30 days` for one connected Telegram group and Group Guardian operations
+- API Starter: `$29 / 30 days` with a personal API key and 5,000 API requests
+- API Growth: `$79 / 30 days` with 25,000 API requests, signed webhooks, and one Telegram group
+- Payments use Solana USDC or a signed, short-lived native SOL equivalent. Access is activated for 30 days after on-chain verification; renewal is always manual.
 
 ### Admin Intelligence
 

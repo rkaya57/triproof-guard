@@ -79,6 +79,20 @@ enum PaymentStatus {
   failed
 }
 
+enum SubscriptionPlan {
+  FREE
+  BUILDER
+  COMMUNITY
+  API_STARTER
+  API_GROWTH
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELED
+}
+
 enum CreditLedgerKind {
   payment_credit
   analysis_debit
@@ -159,6 +173,11 @@ model User {
   webhookEndpoints           WebhookEndpoint[]
   paymentTransactions        PaymentTransaction[]
   creditLedgerEntries        CreditLedger[]
+  subscription               Subscription?
+  subscriptionUsage          SubscriptionUsage[]
+  apiKeys                    ApiKey[]
+  ownedTelegramGroups        TelegramGuardianGroup[] @relation("TelegramGroupOwner")
+  telegramGroupInvites       TelegramGroupInvite[]
   airdropProfile             AirdropProfile?
   airdropSubmissions         AirdropSubmission[]   @relation("AirdropSubmissionUser")
   reviewedAirdropSubmissions AirdropSubmission[]   @relation("AirdropSubmissionReviewer")
@@ -503,11 +522,74 @@ model PaymentTransaction {
   status              PaymentStatus  @default(verified)
   rawData             Json?
   creditLedgerEntries CreditLedger[]
+  subscription        Subscription?
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 
   @@index([userId])
   @@index([createdAt])
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  userId               String             @unique
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paymentTransactionId String?            @unique
+  paymentTransaction   PaymentTransaction? @relation(fields: [paymentTransactionId], references: [id], onDelete: SetNull)
+  plan                 SubscriptionPlan   @default(FREE)
+  status               SubscriptionStatus @default(ACTIVE)
+  startsAt             DateTime           @default(now())
+  expiresAt            DateTime?
+  canceledAt           DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([plan, status, expiresAt])
+}
+
+model SubscriptionUsage {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  period          String
+  periodStart     DateTime
+  scanCount       Int      @default(0)
+  deepScanCount   Int      @default(0)
+  analysisWalletCount Int  @default(0)
+  apiRequestCount Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, period, periodStart])
+  @@index([userId, periodStart])
+}
+
+model ApiKey {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  keyHash    String   @unique
+  prefix     String
+  lastFour   String
+  isActive   Boolean  @default(true)
+  lastUsedAt DateTime?
+  createdAt  DateTime @default(now())
+  revokedAt  DateTime?
+
+  @@index([userId, isActive])
+}
+
+model TelegramGroupInvite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, expiresAt])
 }
 
 model CreditLedger {
@@ -737,6 +819,8 @@ model ScamDnaFingerprint {
 
 model TelegramGuardianGroup {
   id              String                     @id @default(cuid())
+  ownerId         String?
+  owner           User?                      @relation("TelegramGroupOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   telegramChatId  String                     @unique
   title           String?
   username        String?
@@ -754,6 +838,7 @@ model TelegramGuardianGroup {
   updatedAt       DateTime                   @updatedAt
 
   @@index([guardianEnabled, allowlisted])
+  @@index([ownerId])
   @@index([lastSeenAt])
 }
 

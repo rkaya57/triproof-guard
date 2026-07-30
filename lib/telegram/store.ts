@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 
 import { db } from "@/lib/db/prisma"
+import { getSubscriptionEntitlement, hashTelegramConnectCode } from "@/lib/billing/subscription"
 
 export type GuardianAlertLevel = "CAUTION" | "HIGH_RISK" | "CRITICAL"
 
@@ -111,6 +112,29 @@ export async function updateTelegramGroupSettings(
       alertLevel: true,
       dailySummary: true,
     },
+  })
+}
+
+export async function claimTelegramGroup(chatId: number, code: string) {
+  const codeHash = hashTelegramConnectCode(code)
+  const now = new Date()
+  return db.$transaction(async (tx) => {
+    const invite = await tx.telegramGroupInvite.findUnique({
+      where: { codeHash },
+      include: { user: { select: { id: true, email: true } } },
+    })
+    if (!invite || invite.usedAt || invite.expiresAt <= now) return { ok: false, reason: "This connection code is invalid or expired." }
+    const entitlement = await getSubscriptionEntitlement(invite.user)
+    if (entitlement.plan.telegramGroupLimit <= 0) return { ok: false, reason: "The linked account needs a Community or API Growth plan." }
+    const ownedCount = await tx.telegramGuardianGroup.count({ where: { ownerId: invite.userId } })
+    if (ownedCount >= entitlement.plan.telegramGroupLimit) return { ok: false, reason: `This plan can protect up to ${entitlement.plan.telegramGroupLimit} Telegram group.` }
+    const group = await tx.telegramGuardianGroup.upsert({
+      where: { telegramChatId: String(chatId) },
+      create: { telegramChatId: String(chatId), ownerId: invite.userId, allowlisted: true, guardianEnabled: true },
+      update: { ownerId: invite.userId, allowlisted: true, guardianEnabled: true, lastSeenAt: now },
+    })
+    await tx.telegramGroupInvite.update({ where: { id: invite.id }, data: { usedAt: now } })
+    return { ok: true, title: group.title ?? "this group", plan: entitlement.plan.name }
   })
 }
 

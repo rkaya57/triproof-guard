@@ -219,6 +219,24 @@ test("Group Guardian lets verified admins change the alert threshold", async () 
   assert.match(actions[0].payload.text, /Alert threshold: CRITICAL/)
 })
 
+test("Group Guardian lets a verified admin connect a paid group", async () => {
+  const update: TelegramUpdate = {
+    update_id: 61,
+    message: {
+      message_id: 151,
+      text: "/guardian connect TPG-ABC123",
+      chat: { id: -101, type: "supergroup", title: "Paid group" },
+      from: { id: 7, first_name: "Admin" },
+    },
+  }
+  const actions = await handleTelegramUpdate(update, {
+    isGroupAdmin: async () => true,
+    claimGroup: async (_chatId, code) => ({ ok: code === "tpg-abc123", title: "Paid group", plan: "Community" }),
+  })
+  assert.match(actions[0].payload.text, /GROUP GUARDIAN CONNECTED/)
+  assert.match(actions[0].payload.text, /Community plan/)
+})
+
 test("Group Guardian includes a repeated campaign escalation", async () => {
   const update: TelegramUpdate = {
     update_id: 7,

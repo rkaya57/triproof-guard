@@ -96,7 +96,7 @@ export function buildSolanaPayUrl({
   amountUsdc,
   reference,
   label = "Tri-Proof Protocol",
-  message = "Tri-Proof analysis credits",
+  message = "Tri-Proof 30-day access pass",
 }: {
   recipient: string
   amountUsdc: number

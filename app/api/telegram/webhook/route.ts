@@ -11,6 +11,7 @@ import {
   ensureTelegramGroup,
   getTelegramGroupSummary,
   getTelegramHistory,
+  claimTelegramGroup,
   recordTelegramScan,
   updateTelegramGroupSettings,
 } from "@/lib/telegram/store"
@@ -87,6 +88,7 @@ export async function POST(request: Request) {
         return isTelegramGroupAdmin(token, chatId, userId)
       },
       updateGroupSettings: (chatId, values) => updateTelegramGroupSettings(chatId, values),
+      claimGroup: (chatId, code) => claimTelegramGroup(chatId, code),
       loadHistory: getTelegramHistory,
       loadSummary: getTelegramGroupSummary,
       recordScan: ({ message: scanMessage, candidate, result, source, alerted }) =>

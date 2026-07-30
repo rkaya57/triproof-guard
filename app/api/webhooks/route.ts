@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth/session"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
 import { createWebhookSecret } from "@/lib/webhooks/sign"
+import { assertWebhookAccess, SubscriptionLimitError } from "@/lib/billing/subscription"
 
 export const runtime = "nodejs"
 
@@ -72,6 +73,12 @@ export async function GET() {
 export async function POST(request: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  try {
+    await assertWebhookAccess(user)
+  } catch (error) {
+    if (error instanceof SubscriptionLimitError) return NextResponse.json({ error: error.message, code: error.code }, { status: 403 })
+    throw error
+  }
 
   const body = (await request.json().catch(() => null)) as {
     url?: string

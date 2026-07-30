@@ -143,7 +143,7 @@ export default async function Page() {
         <div className="glass-panel premium-card rounded-2xl p-8">
           <div className="mb-3 flex items-center gap-2 text-primary"><BookOpen className="size-5" /><span className="font-medium">For campaign teams</span></div>
           <h2 className="text-2xl font-semibold">Ready to check your own wallet list?</h2>
-          <p className="mt-2 text-muted-foreground">Start with 100 wallets free, then upgrade with a one-time USDC or SOL credit pack when your campaign list grows.</p>
+          <p className="mt-2 text-muted-foreground">Start with basic protection free, then activate a 30-day USDC or SOL access plan when your campaign needs deeper intelligence.</p>
           <Link href="/audit" className={`${buttonVariants()} mt-5`}>Start mini audit</Link>
         </div>
       </section>

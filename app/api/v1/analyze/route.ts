@@ -295,7 +295,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           code: error.code,
-          error: "Wallet credit limit reached. Add persistent wallet credits through USDC or SOL checkout before running this API analysis.",
+          error: "Analysis capacity reached. Choose or renew a paid USDC or SOL plan before running this API analysis.",
           freeTrialWalletLimit,
           remainingWallets: error.remainingFreeWallets,
           requiredWallets: error.walletCount,

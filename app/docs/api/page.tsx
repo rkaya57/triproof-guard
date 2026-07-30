@@ -89,8 +89,8 @@ export default function ApiDocsPage() {
 
       <section className="mx-auto grid max-w-7xl gap-5 px-5 py-14 sm:px-8 lg:grid-cols-4">
         <Card className="glass-panel premium-card">
-          <CardHeader><KeyRound className="text-primary" /><CardTitle>Authentication</CardTitle><CardDescription>Use a dashboard session or an API key header.</CardDescription></CardHeader>
-          <CardContent className="text-sm text-muted-foreground">Set TRIPROOF_API_KEY and TRIPROOF_API_USER_EMAIL in Vercel for server-to-server use.</CardContent>
+          <CardHeader><KeyRound className="text-primary" /><CardTitle>Authentication</CardTitle><CardDescription>Use an API Starter or API Growth key in the Authorization header.</CardDescription></CardHeader>
+          <CardContent className="text-sm text-muted-foreground">Create, copy, and revoke personal keys in Dashboard → Developer. API usage is metered against the active monthly plan.</CardContent>
         </Card>
         <Card className="glass-panel premium-card">
           <CardHeader><ServerCog className="text-primary" /><CardTitle>Create analysis</CardTitle><CardDescription>POST /api/v1/analyze</CardDescription></CardHeader>

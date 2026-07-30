@@ -8,6 +8,7 @@ import {
   ChevronDown,
   FileText,
   FilePlus2,
+  Code2,
   Gift,
   HeartPulse,
   Home,
@@ -29,6 +30,7 @@ const navItems = [
   { href: "/dashboard/demo", label: "Demo Report", icon: BarChart3 },
   { href: "/dashboard/airdrop", label: "Airdrop Tasks", icon: Gift },
   { href: "/dashboard/reports", label: "Reports", icon: FileText },
+  { href: "/dashboard/developer", label: "Developer", icon: Code2 },
   { href: "/pricing", label: "Pricing", icon: Tags },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ]
@@ -52,6 +54,7 @@ const routeTitles = [
   { href: "/dashboard/demo", title: "Demo Report", eyebrow: "Sample campaign intelligence" },
   { href: "/dashboard/airdrop", title: "Airdrop Tasks", eyebrow: "Community contribution season" },
   { href: "/dashboard/reports", title: "Reports", eyebrow: "Saved exports and analysis history" },
+  { href: "/dashboard/developer", title: "Developer", eyebrow: "API keys and Group Guardian access" },
   { href: "/dashboard/settings", title: "Settings", eyebrow: "Workspace preferences" },
   { href: "/dashboard/analysis", title: "Analysis Report", eyebrow: "Risk decision center" },
   { href: "/dashboard", title: "Overview", eyebrow: "Web3 Campaign Wallet Risk Analysis" },
