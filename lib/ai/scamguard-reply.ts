@@ -3,12 +3,13 @@ import type { ScamGuardScanResult } from "@/lib/scamguard/engine"
 export type ScamGuardAiReply = {
   source: "gemini" | "fallback"
   model: string | null
+  fallbackReason?: "not_configured" | "provider_unavailable" | "invalid_response"
   headline: string
   explanation: string
   nextSteps: string[]
 }
 
-const defaultModel = "gemini-3.5-flash"
+const defaultModel = "gemini-2.5-flash"
 const endpoint = "https://generativelanguage.googleapis.com/v1beta/models"
 
 function sanitizeText(value: string) {
@@ -24,6 +25,10 @@ function sanitizeText(value: string) {
 function configuredModel() {
   const model = process.env.GEMINI_MODEL?.trim() || defaultModel
   return /^[a-zA-Z0-9._-]{1,80}$/.test(model) ? model : defaultModel
+}
+
+function candidateModels() {
+  return [...new Set([configuredModel(), defaultModel, "gemini-2.5-flash-lite"])].slice(0, 2)
 }
 
 function safeList(value: unknown, limit: number) {
@@ -45,10 +50,11 @@ export function buildScamGuardReplyFallback(result: ScamGuardScanResult): ScamGu
   }
 }
 
-function parseReply(value: string): Omit<ScamGuardAiReply, "source" | "model"> | null {
-  const normalized = value.trim().replace(/^```json\s*/i, "").replace(/\s*```$/, "")
+function parseReply(value: string): Omit<ScamGuardAiReply, "source" | "model" | "fallbackReason"> | null {
+  const normalized = value.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/, "")
+  const json = normalized.match(/\{[\s\S]*\}/)?.[0] ?? normalized
   try {
-    const parsed = JSON.parse(normalized) as Record<string, unknown>
+    const parsed = JSON.parse(json) as Record<string, unknown>
     const headline = typeof parsed.headline === "string" ? sanitizeText(parsed.headline).slice(0, 180) : ""
     const explanation = typeof parsed.explanation === "string" ? sanitizeText(parsed.explanation).slice(0, 720) : ""
     if (!headline || !explanation) return null
@@ -61,7 +67,7 @@ function parseReply(value: string): Omit<ScamGuardAiReply, "source" | "model"> |
 export async function generateScamGuardAiReply(result: ScamGuardScanResult): Promise<ScamGuardAiReply> {
   const fallback = buildScamGuardReplyFallback(result)
   const apiKey = process.env.GEMINI_API_KEY?.trim()
-  if (!apiKey) return fallback
+  if (!apiKey) return { ...fallback, fallbackReason: "not_configured" }
 
   const evidence = {
     riskLevel: result.riskLevel,
@@ -84,26 +90,33 @@ export async function generateScamGuardAiReply(result: ScamGuardScanResult): Pro
     "Return JSON only with headline, explanation, nextSteps. Keep nextSteps to at most three concise strings.",
     `Evidence JSON:\n${JSON.stringify(evidence)}`,
   ].join("\n\n")
-  const model = configuredModel()
-
-  try {
-    const response = await fetch(`${endpoint}/${encodeURIComponent(model)}:generateContent`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 420, responseMimeType: "application/json" },
-      }),
-      signal: AbortSignal.timeout(4_000),
-    })
-    if (!response.ok) return fallback
-    const body = (await response.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
+  let receivedResponse = false
+  for (const model of candidateModels()) {
+    try {
+      const response = await fetch(`${endpoint}/${encodeURIComponent(model)}:generateContent`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: "You are ScamGuard's conservative Web3 security explainer. Return only valid JSON and never override the supplied security decision." }],
+          },
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 420, responseMimeType: "application/json" },
+        }),
+        signal: AbortSignal.timeout(9_000),
+      })
+      if (!response.ok) continue
+      receivedResponse = true
+      const body = (await response.json()) as {
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
+      }
+      const text = body.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("\n") ?? ""
+      const parsed = parseReply(text)
+      if (parsed) return { ...parsed, source: "gemini", model }
+    } catch {
+      // A deterministic explanation remains the security-safe fallback.
     }
-    const text = body.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("\n") ?? ""
-    const parsed = parseReply(text)
-    return parsed ? { ...parsed, source: "gemini", model } : fallback
-  } catch {
-    return fallback
   }
+
+  return { ...fallback, fallbackReason: receivedResponse ? "invalid_response" : "provider_unavailable" }
 }

@@ -351,7 +351,7 @@ Configure Gemini only as a server-side environment variable:
 
 ```text
 GEMINI_API_KEY=your_server_only_key
-GEMINI_MODEL=gemini-3.5-flash
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
 Use the report's **Generate Gemini brief** button to create or refresh the

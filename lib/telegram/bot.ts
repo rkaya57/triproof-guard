@@ -54,6 +54,7 @@ export type TelegramBotAction = {
 
 export type TelegramBotContext = {
   publicBaseUrl?: string
+  geminiConfigured?: boolean
   groupAlertLevel?: "CAUTION" | "HIGH_RISK" | "CRITICAL"
   groupSettings?: {
     guardianEnabled: boolean
@@ -129,25 +130,22 @@ const riskRank: Record<ScamGuardRiskLevel, number> = {
 }
 
 const commandHelp = [
-  "SCAMGUARD TELEGRAM BETA",
-  "=======================",
+  "🛡️ SCAMGUARD BOT",
+  "Pre-sign intelligence for Web3",
+  "━━━━━━━━━━━━━━━━━━━━",
   "",
   "Send a URL, wallet, token mint, contract, transaction payload, or suspicious message. ScamGuard will return an explainable pre-sign risk report in seconds.",
   "",
-  "Commands",
-  "--------",
-  "/scan <link|wallet|token|tx>",
-  "/wallet <address>",
-  "/token <mint|contract>",
-  "/tx <transaction payload>",
-  "/report <item>",
-  "/history",
-  "/summary",
-  "/monthly",
-  "/settings",
+  "⚡ Commands",
+  "• /scan <link|wallet|token|tx>",
+  "• /wallet <address>",
+  "• /token <mint|contract>",
+  "• /tx <transaction payload>",
+  "• /report <item>",
+  "• /history, /summary, /monthly",
+  "• /settings",
   "",
-  "Group Guardian",
-  "--------------",
+  "👥 Group Guardian",
   "Add the bot to a Telegram group and it will scan posted links. It only replies when the risk crosses the configured alert threshold.",
   "Group admins can use /guardian to manage protection and /guardian connect <code> to link a paid group.",
 ].join("\n")
@@ -247,10 +245,10 @@ function levelMeetsThreshold(level: ScamGuardRiskLevel, threshold: NonNullable<T
 }
 
 function statusLine(result: ScamGuardScanResult) {
-  if (result.riskLevel === "CRITICAL") return "CRITICAL RISK"
-  if (result.riskLevel === "HIGH_RISK") return "HIGH RISK"
-  if (result.riskLevel === "CAUTION") return "CAUTION"
-  return "LOW RISK"
+  if (result.riskLevel === "CRITICAL") return "🛑 CRITICAL RISK"
+  if (result.riskLevel === "HIGH_RISK") return "⚠️ HIGH RISK"
+  if (result.riskLevel === "CAUTION") return "🟡 CAUTION"
+  return "🟢 LOW RISK"
 }
 
 function strongestSignals(result: ScamGuardScanResult) {
@@ -264,7 +262,8 @@ function strongestSignals(result: ScamGuardScanResult) {
 }
 
 function divider(label: string) {
-  return `\n[ ${label.toUpperCase()} ]`
+  const icon = label.includes("summary") ? "📌" : label.includes("evidence") || label.includes("signals") ? "🔎" : label.includes("action") || label.includes("decision") ? "🧭" : label.includes("scanner") ? "↗️" : "•"
+  return `\n${icon} [ ${label.toUpperCase()} ]`
 }
 
 function compactTarget(result: ScamGuardScanResult) {
@@ -351,15 +350,14 @@ export function formatTelegramScanReport(result: ScamGuardScanResult, context?: 
 
   const actions = recommendedActions(result)
   const lines = [
-    "ScamGuard Report",
+    "🛡️ ScamGuard Report",
     "Pre-sign security check",
-    "=======================",
+    "━━━━━━━━━━━━━━━━━━━━",
     "",
-    `Status: ${statusLine(result)}`,
-    `Shield score: ${result.score}/100`,
-    `Confidence: ${result.confidence}`,
-    `Target: ${compactTarget(result)}`,
-    `Scan type: ${result.type}`,
+    `Risk: ${statusLine(result)}`,
+    `🛡️ Shield score: ${result.score}/100  •  Confidence: ${result.confidence}`,
+    `🎯 Target: ${compactTarget(result)}`,
+    `🧪 Scan type: ${result.type}`,
     "",
     divider("summary"),
     result.summary,
@@ -386,10 +384,11 @@ async function formatTelegramPrivateScanReport(result: ScamGuardScanResult, cont
   const aiReply = await generateScamGuardAiReply(result)
   const lines = [
     report,
-    divider(aiReply.source === "gemini" ? "Gemini explanation" : "Evidence explanation"),
-    aiReply.headline,
+    divider(aiReply.source === "gemini" ? "Gemini analyst" : "Evidence analyst"),
+    aiReply.source === "gemini" ? `✨ Gemini model: ${aiReply.model}` : "🧠 Deterministic explanation from ScamGuard evidence.",
+    `• ${aiReply.headline}`,
     aiReply.explanation,
-    ...aiReply.nextSteps.map((action) => `- ${action}`),
+    ...aiReply.nextSteps.map((action) => `• ${action}`),
   ]
   return lines.join("\n").slice(0, 3900)
 }
@@ -402,13 +401,13 @@ function groupWarningText(
 
   const signals = strongestSignals(result)
   return [
-    "ScamGuard Group Guardian",
+    "🛡️ ScamGuard Group Guardian",
     "Community link protection",
-    "=========================",
+    "━━━━━━━━━━━━━━━━━━━━",
     "",
     `Alert: ${statusLine(result)}`,
-    `Shield score: ${result.score}/100`,
-    `Target: ${compactTarget(result)}`,
+    `🛡️ Shield score: ${result.score}/100`,
+    `🎯 Target: ${compactTarget(result)}`,
     "",
     divider("summary"),
     result.summary,
@@ -419,7 +418,7 @@ function groupWarningText(
       ? `The same target appeared ${campaign.occurrenceCount} times in this group during the active detection window. Group admins should review the posting accounts.`
       : undefined,
     "",
-    "Action: verify the source from an official channel before connecting a wallet or signing anything.",
+    "🧭 Action: verify the source from an official channel before connecting a wallet or signing anything.",
   ]
     .filter((line): line is string => line !== undefined)
     .join("\n")
@@ -465,14 +464,15 @@ function currentGroupSettings(context: TelegramBotContext) {
 function guardianStatusText(context: TelegramBotContext) {
   const settings = currentGroupSettings(context)
   return [
-    "ScamGuard Group Guardian",
+    "🛡️ ScamGuard Group Guardian",
     "Protection controls",
-    "=======================",
+    "━━━━━━━━━━━━━━━━━━━━",
     "",
-    `Protection: ${settings.guardianEnabled ? "ON" : "OFF"}`,
-    `Group approval: ${settings.allowlisted ? "APPROVED" : "NOT APPROVED"}`,
-    `Alert threshold: ${settings.alertLevel}`,
-    `Daily summary: ${settings.dailySummary ? "ON" : "OFF"}`,
+    `🛡️ Protection: ${settings.guardianEnabled ? "ON" : "OFF"}`,
+    `✅ Group approval: ${settings.allowlisted ? "APPROVED" : "NOT APPROVED"}`,
+    `⚠️ Alert threshold: ${settings.alertLevel}`,
+    `📅 Daily summary: ${settings.dailySummary ? "ON" : "OFF"}`,
+    `✨ Gemini analyst: ${context.geminiConfigured ? "CONFIGURED" : "EVIDENCE FALLBACK"}`,
     "",
     "[ ADMIN COMMANDS ]",
     "/guardian on",
@@ -491,12 +491,12 @@ function historyText(
   history: Awaited<ReturnType<NonNullable<TelegramBotContext["loadHistory"]>>>
 ) {
   if (!history.length) {
-    return "SCAMGUARD SCAN HISTORY\n======================\n\nNo scans have been recorded for this chat yet."
+    return "🕘 SCAMGUARD SCAN HISTORY\n━━━━━━━━━━━━━━━━━━━━\n\nNo scans have been recorded for this chat yet."
   }
 
   return [
-    "SCAMGUARD SCAN HISTORY",
-    "======================",
+    "🕘 SCAMGUARD SCAN HISTORY",
+    "━━━━━━━━━━━━━━━━━━━━",
     "",
     ...history.map((item, index) => {
       const target = item.domain ?? item.target
@@ -516,14 +516,14 @@ export function formatGuardianSummary(summary: {
   repeated: number
 }) {
   return [
-    "ScamGuard Guardian Summary",
+    "📊 ScamGuard Guardian Summary",
     `${summary.hours}-hour community protection report`,
-    "====================================",
+    "━━━━━━━━━━━━━━━━━━━━",
     "",
-    `Links and items scanned: ${summary.total}`,
-    `Security alerts issued: ${summary.alerts}`,
-    `Critical detections: ${summary.critical}`,
-    `Repeated campaigns: ${summary.repeated}`,
+    `🔎 Links and items scanned: ${summary.total}`,
+    `⚠️ Security alerts issued: ${summary.alerts}`,
+    `🛑 Critical detections: ${summary.critical}`,
+    `🔁 Repeated campaigns: ${summary.repeated}`,
     "",
     summary.alerts === 0
       ? "No alert-level threat crossed this group's configured threshold."
@@ -622,10 +622,11 @@ async function handlePrivateOrCommand(message: TelegramMessage, context: Telegra
       simpleReply(
         message,
         [
-          "SCAMGUARD SETTINGS",
-          "==================",
+          "⚙️ SCAMGUARD SETTINGS",
+          "━━━━━━━━━━━━━━━━━━━━",
           "",
-          `Group alert threshold: ${context.groupAlertLevel ?? "HIGH_RISK"}`,
+          `⚠️ Group alert threshold: ${context.groupAlertLevel ?? "HIGH_RISK"}`,
+          `✨ Gemini analyst: ${context.geminiConfigured ? "CONFIGURED" : "EVIDENCE FALLBACK"}`,
           "Data policy: the bot never asks for seed phrases, private keys, wallet passwords, or custody permissions.",
           "History: recent scans can be viewed with /history.",
         ].join("\n")

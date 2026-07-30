@@ -9,7 +9,7 @@ import type {
   WalletRiskResult,
 } from "@/types"
 
-const defaultModel = "gemini-3.5-flash"
+const defaultModel = "gemini-2.5-flash"
 const geminiEndpoint = "https://generativelanguage.googleapis.com/v1beta/models"
 const maxReasonCount = 8
 const maxGraphFindings = 5

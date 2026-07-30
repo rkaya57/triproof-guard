@@ -61,12 +61,13 @@ test("Telegram bot returns help for private /start", async () => {
   const actions = await handleTelegramUpdate(update)
   assert.equal(actions.length, 1)
   assert.equal(actions[0].method, "sendMessage")
-  assert.match(actions[0].payload.text, /SCAMGUARD TELEGRAM BETA/)
+  assert.match(actions[0].payload.text, /SCAMGUARD BOT/)
 })
 
 test("Telegram report uses premium English sections", () => {
   const text = formatTelegramScanReport(fakeResult(), { publicBaseUrl: "https://triproofprotocol.com" })
   assert.match(text, /ScamGuard Report/)
+  assert.match(text, /🛑 CRITICAL RISK/)
   assert.match(text, /\[ SUMMARY \]/)
   assert.match(text, /\[ EVIDENCE \]/)
   assert.match(text, /\[ RECOMMENDED ACTION \]/)

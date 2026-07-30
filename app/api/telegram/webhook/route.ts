@@ -82,6 +82,7 @@ export async function POST(request: Request) {
   try {
     actions = await handleTelegramUpdate(update, {
       publicBaseUrl: configuredPublicBaseUrl(),
+      geminiConfigured: Boolean(process.env.GEMINI_API_KEY?.trim()),
       groupAlertLevel: configuredGroupAlertLevel(),
       groupSettings,
       isGroupAdmin: async (chatId, userId) => {
@@ -164,6 +165,8 @@ export async function GET() {
     configured: {
       token: Boolean(process.env.TELEGRAM_BOT_TOKEN?.trim()),
       secret: Boolean(process.env.TELEGRAM_WEBHOOK_SECRET?.trim()),
+      gemini: Boolean(process.env.GEMINI_API_KEY?.trim()),
+      geminiModel: process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash",
       groupAlertLevel: configuredGroupAlertLevel(),
       groupAllowlist: Boolean(process.env.TELEGRAM_GROUP_ALLOWLIST?.trim()),
     },
