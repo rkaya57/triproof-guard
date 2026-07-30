@@ -30,6 +30,17 @@ test("ScamGuard does not ship unreviewed project domains as hard-coded stop sign
   assert.ok(!result.signals.some((signal) => signal.code === "KNOWN_SCAM_DOMAIN"))
 })
 
+test("ScamGuard keeps URL reports chain-neutral without an explicit or detected chain", async () => {
+  const result = await scanScamGuard({
+    type: "url",
+    value: "https://app.pax.trading/",
+  })
+
+  assert.equal(result.metadata.chain, "unknown")
+  assert.match(result.explanation, /^Web3 scan found /)
+  assert.doesNotMatch(result.explanation, /^Solana scan found /)
+})
+
 test("ScamGuard reduces false positives for verified domains", async () => {
   const result = await scanScamGuard({
     type: "url",

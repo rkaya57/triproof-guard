@@ -615,6 +615,16 @@ function inferChain(value: string, chain?: ScamGuardChain): ScamGuardChain {
   return "solana"
 }
 
+function inferUrlChain(
+  requestedChain: ScamGuardChain,
+  fingerprint?: { chainHints: Array<"solana" | "evm"> }
+): ScamGuardChain {
+  if (requestedChain !== "unknown") return requestedChain
+  const hints = fingerprint?.chainHints ?? []
+  if (hints.length === 1) return hints[0]
+  return "unknown"
+}
+
 function confidenceFor(signals: ScamGuardSignal[], metadata: ScamGuardScanResult["metadata"]) {
   if (signals.some((signal) => signal.severity === "critical" || signal.code.startsWith("KNOWN_"))) return "HIGH"
   if (metadata.rpcStatus === "checked" || metadata.decodedIntent?.category !== "unknown") return "MEDIUM"
@@ -627,7 +637,7 @@ function explanationFor(level: ScamGuardRiskLevel, signals: ScamGuardSignal[], m
   const signalText = topSignals.length
     ? topSignals.map((signal) => signal.title.toLowerCase()).join(" and ")
     : "no high-confidence rule"
-  const chainText = metadata.chain === "evm" ? "EVM" : metadata.chain === "solana" ? "Solana" : "multichain"
+  const chainText = metadata.chain === "evm" ? "EVM" : metadata.chain === "solana" ? "Solana" : "Web3"
   const rpcText =
     metadata.rpcStatus === "checked"
       ? "with live RPC evidence"
@@ -1101,8 +1111,9 @@ async function scanUrl(value: string, chain: ScamGuardChain, deepScan = false) {
   const dnaRiskSignal = dnaMatch ? scamDnaSignal(dnaMatch) : null
   if (dnaRiskSignal) signals.push(dnaRiskSignal)
 
+  const resolvedChain = inferUrlChain(chain, sandbox?.fingerprint)
   const result = createResult("url", signals, {
-    chain,
+    chain: resolvedChain,
     rpcStatus: "not_applicable",
     domain: domain ?? undefined,
     domainIntelligence: domainIntel,
@@ -1943,7 +1954,11 @@ async function scanTransaction(value: string, walletAddress: string | undefined,
 
 export async function scanScamGuard(input: ScamGuardScanInput): Promise<ScamGuardScanResult> {
   const value = normalizeValue(input.value)
-  const chain = inferChain(value, input.chain)
+  // A URL alone does not reliably identify a blockchain. Keep it neutral until
+  // the passive sandbox finds a single-chain integration hint.
+  const chain = input.type === "url" && normalizeChain(input.chain) === "unknown"
+    ? "unknown"
+    : inferChain(value, input.chain)
   if (!value) {
     return createResult(input.type, [], { chain, rpcStatus: "not_applicable" })
   }

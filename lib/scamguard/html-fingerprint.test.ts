@@ -46,8 +46,20 @@ test("fingerprintHtml produces deterministic Scam DNA and static danger signals"
   assert.ok(first.fingerprint.behaviorFlags.includes("clipboard_access"))
   assert.ok(first.fingerprint.behaviorFlags.includes("hidden_iframe"))
   assert.ok(first.fingerprint.walletTargets.includes("0x1111111111111111111111111111111111111111"))
+  assert.deepEqual(first.fingerprint.chainHints, ["evm"])
   assert.ok(first.signals.some((signal) => signal.code === "SANDBOX_SECRET_REQUEST" && signal.severity === "critical"))
   assert.ok(first.signals.some((signal) => signal.code === "SANDBOX_EXTERNAL_SECRET_FORM" && signal.severity === "critical"))
+})
+
+test("fingerprintHtml keeps Solana and EVM integration hints distinct", () => {
+  const result = fingerprintHtml({
+    html: '<script>window.solana.connect(); window.ethereum.request({ method: "eth_requestAccounts" })</script>',
+    sourceUrl: "https://multichain.example",
+    finalUrl: "https://multichain.example",
+    redirectChain: ["https://multichain.example"],
+  })
+
+  assert.deepEqual(result.fingerprint.chainHints, ["evm", "solana"])
 })
 
 test("fingerprintHtml normalizes hashed asset names across cloned domains", () => {

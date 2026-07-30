@@ -16,6 +16,7 @@ const fingerprint: ScamDnaFingerprintData = {
   fingerprintKey: "fingerprint-a",
   clusterKey: "cluster-a",
   behaviorFlags: ["wallet_signing_api", "obfuscated_script"],
+  chainHints: ["evm"],
   walletTargets: ["0x1111111111111111111111111111111111111111"],
   programTargets: [],
   featureTokens: ["behavior:wallet_signing_api"],

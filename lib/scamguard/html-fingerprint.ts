@@ -19,6 +19,7 @@ export type ScamDnaFingerprintData = {
   fingerprintKey: string
   clusterKey: string
   behaviorFlags: string[]
+  chainHints: Array<"solana" | "evm">
   walletTargets: string[]
   programTargets: string[]
   featureTokens: string[]
@@ -319,6 +320,19 @@ export function fingerprintHtml(input: {
 
   const walletTargets = distinctMatches(searchableHtml, evmAddressPattern).map((address) => address.toLowerCase())
   const programTargets = distinctMatches(searchableHtml, solanaAddressPattern)
+  const chainHints = new Set<"solana" | "evm">()
+  if (
+    walletTargets.length > 0
+    || /window\.ethereum|eth_requestaccounts|eth_sendtransaction|eth_signtypeddata|wallet_switchethereumchain|metamask|walletconnect|\b(?:wagmi|viem|ethers)\b/i.test(searchableHtml)
+  ) {
+    chainHints.add("evm")
+  }
+  if (
+    programTargets.length > 0
+    || /solana\.connect\s*\(|signalltransactions|phantom|solflare|backpack|@solana\/web3/i.test(searchableHtml)
+  ) {
+    chainHints.add("solana")
+  }
   const sortedFlags = [...behaviorFlags].sort()
   const featureTokens = jaccardTokens(sortedFlags, [...externalScripts, ...styleAssets], domTokens)
   const domHash = sha256(domTokens.join("|"))
@@ -408,6 +422,7 @@ export function fingerprintHtml(input: {
       fingerprintKey,
       clusterKey,
       behaviorFlags: sortedFlags,
+      chainHints: [...chainHints].sort() as Array<"solana" | "evm">,
       walletTargets,
       programTargets,
       featureTokens,
