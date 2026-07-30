@@ -138,6 +138,26 @@ export async function claimTelegramGroup(chatId: number, code: string) {
   })
 }
 
+export async function authorizeTelegramGuardianAdmin(chatId: number, telegramUserId: number) {
+  const group = await db.telegramGuardianGroup.findUnique({
+    where: { telegramChatId: String(chatId) },
+    select: { id: true, owner: { select: { id: true, email: true } } },
+  })
+  if (!group?.owner) return false
+  const entitlement = await getSubscriptionEntitlement(group.owner)
+  const limit = entitlement.plan.telegramAdminLimit
+  if (limit <= 0) return false
+  const existing = await db.telegramGuardianAdmin.findUnique({
+    where: { groupId_telegramUserId: { groupId: group.id, telegramUserId: String(telegramUserId) } },
+    select: { id: true },
+  })
+  if (existing) return true
+  const used = await db.telegramGuardianAdmin.count({ where: { groupId: group.id } })
+  if (used >= limit) return false
+  await db.telegramGuardianAdmin.create({ data: { groupId: group.id, telegramUserId: String(telegramUserId) } })
+  return true
+}
+
 export async function recordTelegramScan(input: TelegramScanRecordInput): Promise<TelegramScanRecordResult> {
   const targetHash = fingerprint(input.target)
   const chatId = String(input.chatId)

@@ -76,6 +76,7 @@ export type TelegramBotContext = {
     dailySummary: boolean
   }>
   claimGroup?: (chatId: number, code: string) => Promise<{ ok: boolean; reason?: string; title?: string; plan?: string }>
+  authorizeGroupManager?: (chatId: number, userId: number) => Promise<boolean>
   loadHistory?: (chatId: number, limit?: number) => Promise<
     Array<{
       target: string
@@ -549,6 +550,9 @@ async function handleGuardianCommand(message: TelegramMessage, args: string, con
     if (!context.claimGroup) return [simpleReply(message, "Group connection is temporarily unavailable. Please try again shortly.")]
     const connected = await context.claimGroup(message.chat.id, normalized.slice("connect ".length).trim())
     return [simpleReply(message, connected.ok ? `GROUP GUARDIAN CONNECTED\n\n${connected.title ?? "This group"} is now protected under the ${connected.plan ?? "Community"} plan.` : connected.reason ?? "This group could not be connected.")]
+  }
+  if (context.authorizeGroupManager && message.from?.id && !(await context.authorizeGroupManager(message.chat.id, message.from.id))) {
+    return [simpleReply(message, "This plan allows a limited number of Group Guardian administrators. Ask the workspace owner to manage administrator slots.")]
   }
   if (!context.updateGroupSettings) {
     return [simpleReply(message, "Group settings storage is temporarily unavailable. Please try again shortly.")]

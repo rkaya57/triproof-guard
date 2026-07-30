@@ -237,6 +237,23 @@ test("Group Guardian lets a verified admin connect a paid group", async () => {
   assert.match(actions[0].payload.text, /Community plan/)
 })
 
+test("Group Guardian enforces the paid administrator slot limit", async () => {
+  const update: TelegramUpdate = {
+    update_id: 62,
+    message: {
+      message_id: 152,
+      text: "/guardian threshold caution",
+      chat: { id: -102, type: "supergroup", title: "Limited group" },
+      from: { id: 9, first_name: "Extra admin" },
+    },
+  }
+  const actions = await handleTelegramUpdate(update, {
+    isGroupAdmin: async () => true,
+    authorizeGroupManager: async () => false,
+  })
+  assert.match(actions[0].payload.text, /limited number of Group Guardian administrators/)
+})
+
 test("Group Guardian includes a repeated campaign escalation", async () => {
   const update: TelegramUpdate = {
     update_id: 7,

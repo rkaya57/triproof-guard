@@ -834,12 +834,25 @@ model TelegramGuardianGroup {
   lastSummaryAt   DateTime?
   scans           TelegramScanEvent[]
   threatCampaigns TelegramThreatCampaign[]
+  managers        TelegramGuardianAdmin[]
   createdAt       DateTime                   @default(now())
   updatedAt       DateTime                   @updatedAt
 
   @@index([guardianEnabled, allowlisted])
   @@index([ownerId])
   @@index([lastSeenAt])
+}
+
+model TelegramGuardianAdmin {
+  id             String                 @id @default(cuid())
+  groupId        String
+  group          TelegramGuardianGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  telegramUserId String
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@unique([groupId, telegramUserId])
+  @@index([groupId])
 }
 
 model TelegramScanEvent {
