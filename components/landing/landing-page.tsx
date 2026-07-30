@@ -169,6 +169,8 @@ const grantMilestones = [
   ["M4", "Partner API package", "Document B2B endpoint examples, SDK usage, response schema, and integration patterns for Solana teams."],
 ]
 
+const pilotAuditHref = "mailto:sdemirbozan@triproofprotocol.com?subject=Tri-Proof%20Pilot%20Audit%20Request&body=Project%20name%3A%0AChain%3A%0ACampaign%20type%3A%0AWallet%20count%3A%0A%0APlease%20describe%20the%20campaign.%20Do%20not%20include%20seed%20phrases%2C%20private%20keys%2C%20or%20wallet%20access%20details."
+
 const privacyPrinciples = [
   ["No private keys", "The product never asks for seed phrases, private keys, or wallet passwords."],
   ["Minimal inputs", "Scans use URLs, public addresses, transaction payloads, and optional wallet public key context."],
@@ -306,7 +308,7 @@ export function LandingPage() {
               <a href="/downloads/scamguard-chrome-extension.zip" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`} download>
                 <Download data-icon="inline-start" /> Download extension
               </a>
-              <Link href="#grant-fit" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>Grant fit</Link>
+              <a href={pilotAuditHref} className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>Request pilot audit</a>
             </div>
             <div className="grid max-w-2xl gap-3 sm:grid-cols-3">
               {heroStats.map(([value, label], index) => (
@@ -600,9 +602,10 @@ export function LandingPage() {
             <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Guard engine</Badge>
             <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Built for campaign teams, not generic analytics dashboards.</h2>
             <p className="mt-4 leading-7 text-muted-foreground">Tri-Proof Guard focuses on one job: help Web3 projects review wallet lists before rewards go out. It returns signals, clusters and suggested actions without making impossible &quot;100% detection&quot; claims.</p>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">Selected teams can request a limited 1,000-5,000 wallet pilot using public or anonymized addresses. We never need seed phrases, private keys, or wallet access.</p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link href="/docs" className={`${buttonVariants({ variant: "outline" })} hover-lift`}><BookOpen data-icon="inline-start" /> How it works</Link>
-              <Link href="/contact" className={`${buttonVariants({ variant: "outline" })} hover-lift`}><Mail data-icon="inline-start" /> Contact us</Link>
+              <a href={pilotAuditHref} className={`${buttonVariants({ variant: "outline" })} hover-lift`}><Mail data-icon="inline-start" /> Request pilot audit</a>
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -655,8 +658,8 @@ export function LandingPage() {
 
       <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
         <div className="glass-panel scan-accent premium-card animated-border relative flex flex-col items-start justify-between gap-6 overflow-hidden rounded-2xl p-8 sm:p-10 md:flex-row md:items-center">
-          <div className="relative z-10"><div className="mb-3 flex items-center gap-2 text-primary"><Sparkles className="size-5" /><span className="font-mono text-xs uppercase tracking-[0.2em]">Live product</span></div><h2 className="text-gradient text-2xl font-semibold sm:text-3xl">Test the first 100 wallets free today.</h2><p className="mt-2 max-w-xl text-muted-foreground">Upload a CSV, review risk signals and see whether Tri-Proof Guard fits your Web3 campaign workflow.</p></div>
-          <div className="relative z-10 flex flex-col gap-3 sm:flex-row"><Link href="/audit" className={`${buttonVariants()} glow-primary hover-lift`}>Start mini audit</Link><Link href="/scamguard" className={`${buttonVariants({ variant: "outline" })} hover-lift`}><Globe2 data-icon="inline-start" /> Open ScamGuard</Link><Link href="/contact" className={`${buttonVariants({ variant: "outline" })} hover-lift`}>Contact</Link></div>
+          <div className="relative z-10"><div className="mb-3 flex items-center gap-2 text-primary"><Sparkles className="size-5" /><span className="font-mono text-xs uppercase tracking-[0.2em]">Live product</span></div><h2 className="text-gradient text-2xl font-semibold sm:text-3xl">Test the first 100 wallets free today.</h2><p className="mt-2 max-w-xl text-muted-foreground">Upload a CSV, review risk signals and see whether Tri-Proof Guard fits your Web3 campaign workflow. For an active campaign, request a limited pilot review.</p></div>
+          <div className="relative z-10 flex flex-col gap-3 sm:flex-row"><Link href="/audit" className={`${buttonVariants()} glow-primary hover-lift`}>Start mini audit</Link><a href={pilotAuditHref} className={`${buttonVariants({ variant: "outline" })} hover-lift`}>Request pilot audit</a><Link href="/scamguard" className={`${buttonVariants({ variant: "outline" })} hover-lift`}><Globe2 data-icon="inline-start" /> Open ScamGuard</Link></div>
         </div>
       </section>
 

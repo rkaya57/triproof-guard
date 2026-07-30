@@ -1,4 +1,14 @@
-import { expect, request as playwrightRequest, test } from "@playwright/test"
+import { expect, request as playwrightRequest, test, type Page } from "@playwright/test"
+
+async function registerWithBrowser(page: Page, next = "/") {
+  const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  await page.goto(`/register?next=${encodeURIComponent(next)}`)
+  await page.getByLabel("Name").fill("Security Test User")
+  await page.getByLabel("Email").fill(`security-${suffix}@example.test`)
+  await page.getByLabel("Password").fill("A-safe-e2e-password-123")
+  await page.getByRole("button", { name: "Create Account" }).click()
+  return suffix
+}
 
 test.describe("security access boundaries", () => {
   test("redirects anonymous visitors from ScamGuard to sign in", async ({ page }) => {
@@ -8,12 +18,7 @@ test.describe("security access boundaries", () => {
   })
 
   test("registers an account through the browser and the server issues a hardened session", async ({ page }) => {
-    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`
-    await page.goto("/register?next=/")
-    await page.getByLabel("Name").fill("Security Test User")
-    await page.getByLabel("Email").fill(`security-${suffix}@example.test`)
-    await page.getByLabel("Password").fill("A-safe-e2e-password-123")
-    await page.getByRole("button", { name: "Create Account" }).click()
+    const suffix = await registerWithBrowser(page)
     await expect(page).toHaveURL(/\/$/)
 
     const api = await playwrightRequest.newContext({ baseURL: "http://127.0.0.1:3100" })
@@ -66,5 +71,67 @@ test.describe("security access boundaries", () => {
     const response = await request.post("/api/scamguard/scan-url", { data: { value: "" } })
     expect(response.status()).toBe(400)
     await expect(response.json()).resolves.toEqual({ error: "value is required" })
+  })
+
+  test("uses chain-appropriate Mini Audit samples and blocks EVM addresses on Solana", async ({ page }) => {
+    await registerWithBrowser(page, "/audit")
+    await expect(page).toHaveURL(/\/audit$/)
+
+    await page.getByTestId("mini-audit-chain").selectOption("Solana")
+    const walletList = page.getByTestId("mini-audit-wallet-list")
+    await expect(walletList).toHaveAttribute("placeholder", "Paste one Solana wallet address per line")
+    await expect(walletList).toHaveValue(/^[1-9A-HJ-NP-Za-km-z]{32,44}(\r?\n|$)/)
+
+    const evmAddress = "0x8f3c2a6b4e9d1f705c8a9b2d3e4f5061728394ab"
+    await walletList.fill(evmAddress)
+    await page.getByRole("button", { name: "Run engine audit" }).click()
+    await expect(page.getByText("This wallet list contains EVM 0x addresses. Select an EVM chain or load the Solana sample before running the audit.", { exact: true })).toBeVisible()
+
+    const emailReview = page.getByTestId("mini-audit-email-review")
+    await expect(emailReview).not.toHaveAttribute("href", new RegExp(evmAddress))
+    await page.getByTestId("mini-audit-include-details").check()
+    await expect(emailReview).toHaveAttribute("href", new RegExp(evmAddress))
+  })
+
+  test("renders separate safety and risk scores for a critical ScamGuard result", async ({ page }) => {
+    await registerWithBrowser(page, "/scamguard")
+    await expect(page).toHaveURL(/\/scamguard$/)
+
+    await page.route("**/api/scamguard/scan-url", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        headers: {
+          "X-ScamGuard-Plan": "Free",
+          "X-ScamGuard-Daily-Limit": "3",
+          "X-ScamGuard-Scans-Used": "1",
+        },
+        body: JSON.stringify({
+          id: "e2e-critical-result",
+          type: "url",
+          score: 100,
+          riskLevel: "CRITICAL",
+          summary: "Critical risk detected.",
+          confidence: "HIGH",
+          explanation: "A corroborated test result.",
+          signals: [{ code: "E2E_CRITICAL", severity: "critical", title: "Critical test signal", detail: "Test-only corroborated evidence." }],
+          actions: ["Do not connect a wallet or sign a transaction."],
+          metadata: {
+            chain: "solana",
+            rpcStatus: "skipped",
+            decision: {
+              primaryReason: "Critical test signal",
+              userMessage: "Do not continue until the source is verified.",
+            },
+          },
+        }),
+      })
+    })
+
+    await page.getByRole("button", { name: "Run ScamGuard scan" }).click()
+    await expect(page.getByTestId("scamguard-safety-score")).toHaveText("Safety score")
+    await expect(page.getByTestId("scamguard-safety-score-value")).toHaveText("0")
+    await expect(page.getByTestId("scamguard-risk-score")).toContainText("Risk score")
+    await expect(page.getByTestId("scamguard-risk-score-value")).toHaveText("100/100")
   })
 })

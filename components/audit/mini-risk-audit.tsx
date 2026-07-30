@@ -87,22 +87,34 @@ function statusTone(status: WalletStatus) {
   return "border-red-400/30 bg-red-400/10 text-red-200"
 }
 
-function buildMiniAuditBrief(report: MiniAuditResponse | null, walletInput: string) {
+function buildMiniAuditBrief(report: MiniAuditResponse | null, walletInput: string, includeWalletDetails: boolean) {
   if (!report) {
     return [
       "Tri-Proof Guard Mini Wallet Risk Audit",
       "",
       "No engine result has been generated yet.",
-      "",
-      "Wallet sample:",
-      walletInput.trim() || "- No wallet rows supplied.",
+      ...(includeWalletDetails
+        ? ["", "Wallet sample:", walletInput.trim() || "- No wallet rows supplied."]
+        : ["", "Wallet addresses were intentionally omitted from this email draft."]),
     ].join("\n")
   }
 
-  const findings = report.result.wallets
-    .slice(0, 12)
-    .map((wallet) => `- ${wallet.walletAddress}: ${wallet.status} / risk ${wallet.riskScore} (${wallet.reasons.slice(0, 3).join("; ")})`)
-    .join("\n")
+  const details = includeWalletDetails
+    ? [
+        "",
+        "First-pass engine findings:",
+        report.result.wallets
+          .slice(0, 12)
+          .map((wallet) => `- ${wallet.walletAddress}: ${wallet.status} / risk ${wallet.riskScore} (${wallet.reasons.slice(0, 3).join("; ")})`)
+          .join("\n") || "- No wallet rows supplied.",
+        "",
+        "Wallet sample:",
+        walletInput.trim() || "- No wallet rows supplied.",
+      ]
+    : [
+        "",
+        "Wallet addresses and individual wallet findings were intentionally omitted from this email draft.",
+      ]
 
   return [
     "Tri-Proof Guard Mini Wallet Risk Audit",
@@ -118,11 +130,9 @@ function buildMiniAuditBrief(report: MiniAuditResponse | null, walletInput: stri
     `${decisionLabel("rejected")}: ${report.result.rejectedCount}`,
     `Parse issues: ${report.parseSummary.issues.length}`,
     `Duplicates skipped: ${report.parseSummary.duplicates.length}`,
+    ...details,
     "",
-    "First-pass engine findings:",
-    findings || "- No wallet rows supplied.",
-    "",
-      "Note: This account-backed mini audit runs the Tri-Proof Guard decision engine immediately. Full Guard analysis adds account history persistence, queue processing, review workflow, exports and clean-list proof.",
+    "Note: This limited preview sends the supplied wallet list to the Tri-Proof Guard server-side decision engine. Full Guard analysis adds saved evidence, review workflow, exports and clean-list proof.",
   ].join("\n")
 }
 
@@ -140,12 +150,17 @@ export function MiniRiskAudit() {
   const [report, setReport] = useState<MiniAuditResponse | null>(null)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState("")
+  const [includeWalletDetailsInEmail, setIncludeWalletDetailsInEmail] = useState(false)
 
-  const brief = useMemo(() => buildMiniAuditBrief(report, walletInput), [report, walletInput])
+  const downloadableBrief = useMemo(() => buildMiniAuditBrief(report, walletInput, true), [report, walletInput])
+  const emailBrief = useMemo(
+    () => buildMiniAuditBrief(report, walletInput, includeWalletDetailsInEmail),
+    [includeWalletDetailsInEmail, report, walletInput]
+  )
   const mailto = useMemo(
     () =>
-      `mailto:info@triproofprotocol.com?subject=${encodeURIComponent("Mini Guard Engine Audit Review")}&body=${encodeURIComponent(brief)}`,
-    [brief]
+      `mailto:info@triproofprotocol.com?subject=${encodeURIComponent("Mini Guard Engine Audit Review")}&body=${encodeURIComponent(emailBrief)}`,
+    [emailBrief]
   )
   const wallets = useMemo(
     () =>
@@ -190,7 +205,7 @@ export function MiniRiskAudit() {
   }
 
   function downloadBrief() {
-    const blob = new Blob([brief], { type: "text/plain;charset=utf-8" })
+    const blob = new Blob([downloadableBrief], { type: "text/plain;charset=utf-8" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     link.href = url
@@ -237,7 +252,7 @@ export function MiniRiskAudit() {
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="grid gap-2 text-sm font-medium">
               Chain
-              <select value={chain} onChange={(event) => selectChain(event.target.value as Chain)} className={selectClass}>
+              <select data-testid="mini-audit-chain" value={chain} onChange={(event) => selectChain(event.target.value as Chain)} className={selectClass}>
                 {["Ethereum", "Base", "Arbitrum", "Optimism", "Polygon", "BNB Chain", "Solana"].map((item) => (
                   <option key={item} value={item}>{item}</option>
                 ))}
@@ -259,6 +274,7 @@ export function MiniRiskAudit() {
               {chain === "Solana" ? "Solana sample: base58 wallet addresses." : "EVM sample: 0x wallet addresses."}
             </span>
             <Textarea
+              data-testid="mini-audit-wallet-list"
               value={walletInput}
               onChange={(event) => setWalletInput(event.target.value)}
               rows={12}
@@ -410,25 +426,50 @@ export function MiniRiskAudit() {
               Next best action
             </CardTitle>
             <CardDescription>
-              Turn this engine preview into a defensible customer report with saved on-chain evidence, team review and exportable clean lists.
+              Turn this limited server-side preview into a defensible customer report with saved on-chain evidence, team review and exportable clean lists.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-3 sm:flex-row">
+          <CardContent className="grid gap-4">
+            <div className="rounded-lg border border-primary/20 bg-primary/[0.06] p-3 text-sm leading-6 text-muted-foreground">
+              <p className="font-medium text-foreground">Pilot audit for campaign teams</p>
+              <p className="mt-1">Selected teams can request a limited 1,000-5,000 wallet pilot. Share only public or anonymized wallet addresses; Tri-Proof never needs seed phrases, private keys, or wallet access.</p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Link href="/dashboard/new-analysis" className={`${buttonVariants()} glow-primary`}>
               Full Guard report
               <ArrowRight data-icon="inline-end" />
             </Link>
             <button type="button" onClick={downloadBrief} className={buttonVariants({ variant: "outline" })}>
               <Download data-icon="inline-start" />
-              Download brief
+              Download full brief
             </button>
-            <a href={mailto} className={buttonVariants({ variant: "outline" })}>
+            <a data-testid="mini-audit-email-review" href={mailto} className={buttonVariants({ variant: "outline" })}>
               <Mail data-icon="inline-start" />
               Email review
+            </a>
+            <a
+              href="mailto:sdemirbozan@triproofprotocol.com?subject=Tri-Proof%20Pilot%20Audit%20Request&body=Project%20name%3A%0AChain%3A%0ACampaign%20type%3A%0AWallet%20count%3A%0A%0APlease%20describe%20the%20campaign%20and%20do%20not%20include%20seed%20phrases%2C%20private%20keys%2C%20or%20wallet%20access%20details."
+              className={buttonVariants({ variant: "outline" })}
+            >
+              Request pilot audit
             </a>
             <Link href="/docs/trust" className={buttonVariants({ variant: "outline" })}>
               Methodology
             </Link>
+            </div>
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-background/40 p-3 text-sm text-muted-foreground">
+              <input
+                data-testid="mini-audit-include-details"
+                type="checkbox"
+                checked={includeWalletDetailsInEmail}
+                onChange={(event) => setIncludeWalletDetailsInEmail(event.target.checked)}
+                className="mt-1 size-4 accent-primary"
+              />
+              <span>
+                <span className="font-medium text-foreground">Include wallet addresses and individual findings in the email.</span>
+                <span className="mt-1 block text-xs leading-5">Leave this unchecked unless the recipient is authorized to receive the campaign data.</span>
+              </span>
+            </label>
           </CardContent>
         </Card>
       </section>

@@ -7,6 +7,19 @@ import { db } from "@/lib/db/prisma"
 import { subscriptionPlanFromDb, subscriptionPlans, type SubscriptionPlanId } from "@/lib/billing/plans"
 
 const monthlyDurationMs = 30 * 24 * 60 * 60 * 1000
+const e2eDatabaseUrl = "postgresql://postgres:postgres@127.0.0.1:1/tri_proof_guard?schema=public"
+
+function e2eFreeScanStatus() {
+  if (process.env.E2E_TEST_MODE !== "1" || process.env.DATABASE_URL !== e2eDatabaseUrl) return null
+  return {
+    plan: subscriptionPlans.free,
+    expiresAt: null,
+    status: "ACTIVE" as const,
+    isAdmin: false,
+    scanCount: 0,
+    dailyScanLimit: subscriptionPlans.free.dailyScanLimit,
+  }
+}
 
 export class SubscriptionLimitError extends Error {
   constructor(
@@ -71,6 +84,9 @@ export async function consumeDailyScan(user: { id: string; email?: string | null
 }
 
 export async function getDailyScanStatus(user: { id: string; email?: string | null }) {
+  const e2eStatus = e2eFreeScanStatus()
+  if (e2eStatus) return e2eStatus
+
   const entitlement = await getSubscriptionEntitlement(user)
   if (entitlement.isAdmin) {
     return { ...entitlement, scanCount: 0, dailyScanLimit: null as number | null }

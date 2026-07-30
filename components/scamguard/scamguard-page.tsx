@@ -256,6 +256,12 @@ const endpointByMode: Record<ScanMode, string> = {
   transaction: "/api/scamguard/scan-transaction",
 }
 
+const extensionRelease = {
+  filename: "scamguard-chrome-extension.zip",
+  sha256: "2871135930EA8F85EC2CFDCA919532CDBE9DF079C843B4EB4479F4719309E898",
+  version: "0.2.2",
+}
+
 const modeConfig = {
   url: {
     label: "URL",
@@ -752,9 +758,9 @@ export function ScamGuardPage({ access }: { access: ScamGuardAccess }) {
                     </p>
                   </div>
                   <div className="w-full rounded-md border border-white/10 bg-slate-950/65 p-4 lg:w-40">
-                    <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Safety score</p>
+                    <p data-testid="scamguard-safety-score" className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Safety score</p>
                     <div className="mt-2 flex items-end gap-2">
-                      <span className="text-4xl font-semibold text-white">{result ? safetyScore : "--"}</span>
+                      <span data-testid="scamguard-safety-score-value" className="text-4xl font-semibold text-white">{result ? safetyScore : "--"}</span>
                       <span className="pb-1 text-xs text-muted-foreground">/100</span>
                     </div>
                     <p className="mt-1 text-[11px] leading-4 text-muted-foreground">Higher means fewer risk signals.</p>
@@ -767,8 +773,8 @@ export function ScamGuardPage({ access }: { access: ScamGuardAccess }) {
                         style={{ width: `${result ? safetyScore : 0}%` }}
                       />
                     </div>
-                    <p className="mt-3 border-t border-white/10 pt-3 text-xs text-muted-foreground">
-                      Risk score <span className="font-medium text-slate-200">{result ? result.score : "--"}/100</span>
+                    <p data-testid="scamguard-risk-score" className="mt-3 border-t border-white/10 pt-3 text-xs text-muted-foreground">
+                      Risk score <span data-testid="scamguard-risk-score-value" className="font-medium text-slate-200">{result ? result.score : "--"}/100</span>
                     </p>
                   </div>
                 </div>
@@ -945,7 +951,7 @@ export function ScamGuardPage({ access }: { access: ScamGuardAccess }) {
           <Card className="glass-panel rounded-lg border-white/10">
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><PackageCheck className="text-primary" /> Install flow</CardTitle>
-              <CardDescription>Until the Chrome Web Store listing is ready, install the unpacked extension from the downloadable package.</CardDescription>
+              <CardDescription>This is a manual testing build. Chrome Web Store review is required before broad public distribution.</CardDescription>
             </CardHeader>
             <CardContent>
               <ol className="grid gap-3 text-sm text-muted-foreground">
@@ -964,6 +970,12 @@ export function ScamGuardPage({ access }: { access: ScamGuardAccess }) {
                   </li>
                 ))}
               </ol>
+              <div className="mt-4 rounded-lg border border-primary/20 bg-primary/[0.06] p-3 text-xs leading-5 text-muted-foreground">
+                <p className="font-medium text-foreground">Release verification</p>
+                <p className="mt-1">Version {extensionRelease.version} · {extensionRelease.filename}</p>
+                <p className="mt-1 break-all font-mono">SHA-256: {extensionRelease.sha256}</p>
+                <p className="mt-2">Verify the downloaded ZIP before unpacking it. Only download ScamGuard from official Tri-Proof links.</p>
+              </div>
             </CardContent>
           </Card>
 

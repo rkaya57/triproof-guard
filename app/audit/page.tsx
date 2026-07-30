@@ -9,7 +9,7 @@ import { buttonVariants } from "@/components/ui/button"
 export const metadata = {
   title: "Free Mini Wallet Risk Audit | Tri-Proof Guard",
   description:
-    "Paste a Web3 campaign wallet list and get a browser-only mini risk audit before running full Tri-Proof Guard analysis.",
+    "Paste a Web3 campaign wallet list and get a limited server-side Guard preview before running full Tri-Proof Guard analysis.",
 }
 
 export default async function AuditPage() {
@@ -48,7 +48,7 @@ export default async function AuditPage() {
       <footer className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-8 text-sm text-muted-foreground sm:px-8 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2">
           <ShieldCheck className="text-primary" />
-          <span>Mini audit is a browser-side preview. Full Guard analysis adds on-chain enrichment and exportable decision evidence.</span>
+          <span>Mini audit sends the wallet list to the server-side Guard engine for a limited preview. Full Guard analysis adds saved on-chain evidence and exportable decisions.</span>
         </div>
         <Link href="/dashboard/new-analysis" className="text-primary hover:underline">
           Run full analysis

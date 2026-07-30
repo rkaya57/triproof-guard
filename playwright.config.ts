@@ -27,6 +27,7 @@ export default defineConfig({
       DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:1/tri_proof_guard?schema=public",
       NEXTAUTH_SECRET: "e2e-only-session-secret-that-is-long-enough-for-local-tests",
       ACCESS_PASS_SIGNING_SECRET: "e2e-only-access-pass-secret-that-is-long-enough",
+      E2E_TEST_MODE: "1",
     },
   },
 })
