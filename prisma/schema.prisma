@@ -183,6 +183,8 @@ model User {
   reviewedAirdropSubmissions AirdropSubmission[]   @relation("AirdropSubmissionReviewer")
   scamGuardIntelEntries      ScamGuardIntelEntry[]
   reviewedScamGuardFeedback  ScamGuardFeedbackEvent[] @relation("ScamGuardFeedbackReviewer")
+  submittedThreatReports     CommunityThreatReport[] @relation("CommunityThreatReportReporter")
+  reviewedThreatReports      CommunityThreatReport[] @relation("CommunityThreatReportReviewer")
   createdAt                  DateTime              @default(now())
   updatedAt                  DateTime              @updatedAt
 }
@@ -781,6 +783,34 @@ model ScamGuardFeedbackEvent {
   @@index([status, createdAt])
   @@index([normalized, createdAt])
   @@index([reviewedById])
+}
+
+model CommunityThreatReport {
+  id                    String   @id @default(cuid())
+  reporterId            String
+  reporter              User     @relation("CommunityThreatReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  projectName           String
+  target                String   @db.Text
+  normalizedTarget      String
+  targetKind            String
+  chain                 String?
+  category              String
+  description           String   @db.Text
+  evidenceUrl           String?  @db.Text
+  evidenceNote          String?  @db.Text
+  status                String   @default("PENDING")
+  reviewerId            String?
+  reviewer              User?    @relation("CommunityThreatReportReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  reviewerNote          String?  @db.Text
+  promotedIntelEntryId  String?
+  publishedAt           DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([status, publishedAt])
+  @@index([reporterId, createdAt])
+  @@index([normalizedTarget, status])
+  @@index([reviewerId])
 }
 
 model ScamDnaCampaign {

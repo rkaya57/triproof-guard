@@ -1,6 +1,7 @@
 import Link from "next/link"
 
 import { ScamDnaConsole } from "@/components/admin/scam-dna-console"
+import { CommunityThreatReportsConsole } from "@/components/admin/community-threat-reports-console"
 import { ScamGuardFeedbackConsole } from "@/components/admin/scamguard-feedback-console"
 import { ScamGuardIntelConsole } from "@/components/admin/scamguard-intel-console"
 import { buttonVariants } from "@/components/ui/button"
@@ -37,6 +38,7 @@ export default async function ScamGuardAdminPage() {
       </section>
       <ScamGuardIntelConsole />
       <ScamGuardFeedbackConsole />
+      <CommunityThreatReportsConsole />
       <ScamDnaConsole />
     </div>
   )
