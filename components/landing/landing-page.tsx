@@ -329,7 +329,7 @@ export function LandingPage() {
 
           <div className="glass-panel premium-card animated-border data-scan relative min-h-[430px] overflow-hidden rounded-3xl p-5 reveal-up delay-200">
             <div className="mb-5 flex items-center justify-between gap-4">
-              <div><p className="text-sm font-medium">Jury Demo Console</p><p className="text-xs text-muted-foreground">Sybil analysis and pre-sign protection</p></div>
+              <div><p className="text-sm font-medium">Protection Intelligence Console</p><p className="text-xs text-muted-foreground">Sybil analysis and pre-sign protection</p></div>
               <Badge variant="secondary" className="gap-2 border-primary/30 text-primary"><span className="pulse-dot" /> Live product</Badge>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
