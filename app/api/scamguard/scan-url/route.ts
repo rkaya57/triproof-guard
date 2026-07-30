@@ -38,6 +38,9 @@ export async function POST(request: Request) {
       "Cache-Control": "no-store",
       "X-RateLimit-Remaining": String(rateLimit.remaining),
       "X-ScamGuard-Deep-Scan": String(access.deepScan),
+      "X-ScamGuard-Plan": access.plan.name,
+      "X-ScamGuard-Daily-Limit": String(access.plan.dailyScanLimit),
+      "X-ScamGuard-Scans-Used": String(access.scanCount),
     },
   })
 }

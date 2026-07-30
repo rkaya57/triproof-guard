@@ -45,6 +45,13 @@ type ScanMode = "url" | "wallet" | "token" | "transaction"
 type ScanChain = "solana" | "evm"
 type RiskLevel = "SAFE" | "CAUTION" | "HIGH_RISK" | "CRITICAL"
 
+type ScamGuardAccess = {
+  planName: string
+  dailyScanLimit: number | null
+  scanCount: number
+  isAdmin: boolean
+}
+
 type ScanResult = {
   id: string
   type: ScanMode
@@ -422,7 +429,7 @@ function findSolanaProvider() {
   return browser.solana ?? browser.backpack?.solana ?? null
 }
 
-export function ScamGuardPage() {
+export function ScamGuardPage({ access }: { access: ScamGuardAccess }) {
   const [mode, setMode] = useState<ScanMode>("url")
   const [chain, setChain] = useState<ScanChain>("solana")
   const [input, setInput] = useState(examples.url)
@@ -432,6 +439,12 @@ export function ScamGuardPage() {
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
   const [connectedWallet, setConnectedWallet] = useState<string | null>(null)
   const [walletMessage, setWalletMessage] = useState<string | null>(null)
+  const [scanUsage, setScanUsage] = useState({
+    planName: access.planName,
+    dailyScanLimit: access.dailyScanLimit,
+    scanCount: access.scanCount,
+    isAdmin: access.isAdmin,
+  })
 
   const securityScore = useMemo(() => {
     if (!result) return 100
@@ -460,7 +473,19 @@ export function ScamGuardPage() {
         }),
       })
       const body = await response.json().catch(() => ({}))
+      if (response.status === 401 && body.loginUrl) {
+        window.location.assign(body.loginUrl)
+        return
+      }
       if (!response.ok) throw new Error(body.error ?? "ScamGuard scan failed")
+      const scanCount = Number.parseInt(response.headers.get("X-ScamGuard-Scans-Used") ?? "", 10)
+      const dailyScanLimit = Number.parseInt(response.headers.get("X-ScamGuard-Daily-Limit") ?? "", 10)
+      setScanUsage((current) => ({
+        ...current,
+        planName: response.headers.get("X-ScamGuard-Plan") ?? current.planName,
+        scanCount: Number.isFinite(scanCount) ? scanCount : current.scanCount,
+        dailyScanLimit: Number.isFinite(dailyScanLimit) ? dailyScanLimit : current.dailyScanLimit,
+      }))
       setResult(body as ScanResult)
     } catch (err) {
       setError(err instanceof Error ? err.message : "ScamGuard scan failed")
@@ -691,6 +716,16 @@ export function ScamGuardPage() {
                   {loading ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Radar data-icon="inline-start" />}
                   Run ScamGuard scan
                 </Button>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span className="rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1.5">
+                    {scanUsage.isAdmin || scanUsage.dailyScanLimit === null
+                      ? `${scanUsage.planName} access`
+                      : `${scanUsage.planName}: ${Math.min(scanUsage.scanCount, scanUsage.dailyScanLimit)}/${scanUsage.dailyScanLimit} scans used today`}
+                  </span>
+                  {!scanUsage.isAdmin && scanUsage.dailyScanLimit !== null && scanUsage.scanCount >= scanUsage.dailyScanLimit && (
+                    <Link href="/pricing" className="font-medium text-primary hover:underline">Upgrade for more scans</Link>
+                  )}
+                </div>
                 {error && <span className="text-sm text-red-200">{error}</span>}
               </div>
 

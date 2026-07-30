@@ -13,6 +13,11 @@ export async function POST(request: Request) {
   if (access.error) return access.error
 
   return NextResponse.json(await scanScamGuard({ type: "wallet", value, chain: body?.chain }), {
-    headers: { "Cache-Control": "no-store" },
+    headers: {
+      "Cache-Control": "no-store",
+      "X-ScamGuard-Plan": access.plan.name,
+      "X-ScamGuard-Daily-Limit": String(access.plan.dailyScanLimit),
+      "X-ScamGuard-Scans-Used": String(access.scanCount),
+    },
   })
 }

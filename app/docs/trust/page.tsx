@@ -12,6 +12,7 @@ import {
 
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
+import { PublicTopNav } from "@/components/layout/public-top-nav"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 export const metadata = {
@@ -47,6 +48,7 @@ const safeguards = [
 export default function TrustDocsPage() {
   return (
     <main className="premium-page min-h-screen bg-background text-foreground">
+      <PublicTopNav />
       <section className="security-grid border-b border-border">
         <div className="mx-auto max-w-7xl px-5 py-8 sm:px-8 lg:py-12">
           <Link href="/docs" className={`${buttonVariants({ variant: "outline" })} mb-8`}>

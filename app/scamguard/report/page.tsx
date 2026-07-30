@@ -44,7 +44,8 @@ export default async function ScamGuardSharedReportPage({
             <CardTitle className="text-3xl">This shared report link is invalid or incomplete.</CardTitle>
             <CardDescription>Open the live scanner to run a fresh, evidence-backed check.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-wrap gap-3">
+            <Link href="/" className={buttonVariants({ variant: "outline" })}>Home</Link>
             <Link href="/scamguard" className={buttonVariants()}>
               Open ScamGuard <ArrowRight data-icon="inline-end" />
             </Link>
@@ -64,9 +65,12 @@ export default async function ScamGuardSharedReportPage({
             <h1 className="text-3xl font-semibold tracking-normal text-foreground sm:text-4xl">Decision report for {report.target}</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">This is a portable, privacy-preserving report snapshot. It excludes raw wallet payloads, wallet addresses, and query parameters.</p>
           </div>
-          <Link href="/scamguard" className={cn(buttonVariants({ variant: "outline" }), "shrink-0")}>
-            Run fresh scan <ExternalLink data-icon="inline-end" />
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/" className={cn(buttonVariants({ variant: "ghost" }), "shrink-0")}>Home</Link>
+            <Link href="/scamguard" className={cn(buttonVariants({ variant: "outline" }), "shrink-0")}>
+              Run fresh scan <ExternalLink data-icon="inline-end" />
+            </Link>
+          </div>
         </header>
 
         <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_220px]">

@@ -70,6 +70,26 @@ export async function consumeDailyScan(user: { id: string; email?: string | null
   return { ...entitlement, usage }
 }
 
+export async function getDailyScanStatus(user: { id: string; email?: string | null }) {
+  const entitlement = await getSubscriptionEntitlement(user)
+  if (entitlement.isAdmin) {
+    return { ...entitlement, scanCount: 0, dailyScanLimit: null as number | null }
+  }
+
+  const usage = await db.subscriptionUsage.findUnique({
+    where: {
+      userId_period_periodStart: {
+        userId: user.id,
+        period: "daily",
+        periodStart: startOfUtcDay(),
+      },
+    },
+    select: { scanCount: true },
+  })
+
+  return { ...entitlement, scanCount: usage?.scanCount ?? 0, dailyScanLimit: entitlement.plan.dailyScanLimit }
+}
+
 export async function consumeApiRequest(user: { id: string; email?: string | null }) {
   const entitlement = await getSubscriptionEntitlement(user)
   const plan = entitlement.plan

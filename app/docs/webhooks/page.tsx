@@ -3,6 +3,7 @@ import { ArrowRight, Code2, KeyRound, Webhook } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
+import { PublicTopNav } from "@/components/layout/public-top-nav"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 const createWebhook = `curl -X POST https://triproofprotocol.com/api/webhooks \\
@@ -35,6 +36,7 @@ export const metadata = {
 export default function WebhookDocsPage() {
   return (
     <main className="premium-page min-h-screen bg-background text-foreground">
+      <PublicTopNav />
       <section className="security-grid border-b border-border">
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
           <Badge variant="secondary" className="mb-5 border-primary/30 text-primary">V2.3 Webhook / SDK</Badge>

@@ -3,6 +3,7 @@ import { Activity, ArrowRight, Database, ServerCog, ShieldCheck } from "lucide-r
 
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
+import { PublicTopNav } from "@/components/layout/public-top-nav"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 const healthApi = `curl https://triproofprotocol.com/api/health`
@@ -18,6 +19,7 @@ export const metadata = {
 export default function ProductionDocsPage() {
   return (
     <main className="premium-page min-h-screen bg-background text-foreground">
+      <PublicTopNav />
       <section className="security-grid border-b border-border">
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
           <Badge variant="secondary" className="mb-5 border-primary/30 bg-primary/10 text-cyan-100">V2.5 Production Hardening</Badge>

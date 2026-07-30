@@ -3,6 +3,7 @@ import { ArrowRight, Clock, RefreshCcw, ServerCog } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
+import { PublicTopNav } from "@/components/layout/public-top-nav"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 const analysisWorker = `curl -X POST "https://triproofprotocol.com/api/worker/analysis-queue?maxBatches=5&timeBudgetMs=25000&recoverStale=true" \\
@@ -22,6 +23,7 @@ export const metadata = {
 export default function QueueDocsPage() {
   return (
     <main className="premium-page min-h-screen bg-background text-foreground">
+      <PublicTopNav />
       <section className="security-grid border-b border-border">
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
           <Badge variant="secondary" className="mb-5 border-primary/30 text-primary">Server-side Queue Worker</Badge>

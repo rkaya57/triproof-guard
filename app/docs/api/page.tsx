@@ -3,6 +3,7 @@ import { ArrowRight, Code2, KeyRound, ServerCog, ShieldAlert } from "lucide-reac
 
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
+import { PublicTopNav } from "@/components/layout/public-top-nav"
 import {
   Card,
   CardContent,
@@ -71,6 +72,7 @@ export const metadata = {
 export default function ApiDocsPage() {
   return (
     <main className="premium-page min-h-screen bg-background text-foreground">
+      <PublicTopNav />
       <section className="security-grid border-b border-border">
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
           <Badge variant="secondary" className="mb-5 border-primary/30 text-primary">V1.10 API Endpoint</Badge>

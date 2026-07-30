@@ -1,4 +1,5 @@
 import { ScamGuardPage } from "@/components/scamguard/scamguard-page"
+import { getDailyScanStatus } from "@/lib/billing/subscription"
 import { requirePageUser } from "@/lib/auth/page"
 
 export const dynamic = "force-dynamic"
@@ -11,7 +12,8 @@ export const metadata = {
 }
 
 export default async function Page() {
-  await requirePageUser("/scamguard")
+  const user = await requirePageUser("/scamguard")
+  const access = await getDailyScanStatus(user)
 
-  return <ScamGuardPage />
+  return <ScamGuardPage access={{ planName: access.plan.name, dailyScanLimit: access.dailyScanLimit, scanCount: access.scanCount, isAdmin: access.isAdmin }} />
 }
