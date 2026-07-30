@@ -6,6 +6,7 @@ import {
   attachAccessPassCookie,
 } from "@/lib/billing/access-pass"
 import { recordVerifiedSolanaPayment } from "@/lib/billing/credits"
+import { getBillingPlan } from "@/lib/billing/plans"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import {
   verifySolanaNativeSolTransfer,
@@ -16,12 +17,6 @@ import { verifySolPaymentQuote } from "@/lib/billing/sol-price-quote"
 
 export const runtime = "nodejs"
 
-const plans = {
-  starter: { amountUsdc: 29, walletCredits: 1000 },
-  growth: { amountUsdc: 99, walletCredits: 10000 },
-  pro: { amountUsdc: 249, walletCredits: 50000 },
-} as const
-
 const solanaNetwork = {
   label: "Solana",
   treasury: process.env.TRIPROOF_TREASURY_SOLANA_ADDRESS,
@@ -29,8 +24,6 @@ const solanaNetwork = {
     process.env.SOLANA_USDC_MINT ??
     "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
 } as const
-
-type PlanId = keyof typeof plans
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Verification failed."
@@ -62,14 +55,14 @@ export async function POST(request: Request) {
     quote?: string
   }
 
-  const planId = body.plan as PlanId
-  const plan = plans[planId]
+  const plan = getBillingPlan(body.plan)
+  const planId = plan?.id
   const txHash = String(body.txHash ?? "").trim()
   const reference = String(body.reference ?? "").trim()
   const currency = String(body.currency ?? "USDC").trim().toUpperCase()
   const quoteToken = String(body.quote ?? "").trim()
 
-  if (!plan) {
+  if (!plan || !planId) {
     return NextResponse.json({ error: "Invalid plan." }, { status: 400 })
   }
 

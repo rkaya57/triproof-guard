@@ -17,4 +17,5 @@ test("safePostAuthPath rejects redirects outside product routes", () => {
 
 test("loginPathFor encodes an internal return destination", () => {
   assert.equal(loginPathFor("/audit?campaign=summer"), "/login?next=%2Faudit%3Fcampaign%3Dsummer")
+  assert.equal(loginPathFor("/checkout?plan=growth"), "/login?next=%2Fcheckout%3Fplan%3Dgrowth")
 })

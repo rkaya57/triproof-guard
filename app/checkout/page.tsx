@@ -1,4 +1,6 @@
 import { CheckoutForm } from "@/components/checkout/checkout-form"
+import { requirePageUser } from "@/lib/auth/page"
+import { billingPlans, getBillingPlan, planForWalletCount } from "@/lib/billing/plans"
 import {
   Card,
   CardContent,
@@ -7,18 +9,6 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 
-const plans = {
-  starter: { id: "starter", name: "Starter", amount: "29", wallets: "1,000" },
-  growth: { id: "growth", name: "Growth", amount: "99", wallets: "10,000" },
-  pro: { id: "pro", name: "Pro", amount: "249", wallets: "50,000" },
-}
-
-function planFromWallets(wallets: number) {
-  if (wallets <= 1000) return "starter"
-  if (wallets <= 10000) return "growth"
-  return "pro"
-}
-
 export default async function Page({
   searchParams,
 }: {
@@ -26,11 +16,11 @@ export default async function Page({
 }) {
   const params = await searchParams
   const requestedWallets = Number.parseInt(params.requiredWallets ?? "0", 10)
-  const selectedPlan =
-    params.plan && params.plan in plans
-      ? params.plan
-      : planFromWallets(Number.isFinite(requestedWallets) ? requestedWallets : 0)
-  const plan = plans[selectedPlan as keyof typeof plans] ?? plans.starter
+  const selectedPlan = getBillingPlan(params.plan)?.id ?? planForWalletCount(
+    Number.isFinite(requestedWallets) ? requestedWallets : 0
+  )
+  const plan = billingPlans[selectedPlan]
+  await requirePageUser(`/checkout?plan=${encodeURIComponent(selectedPlan)}`)
 
   const networks = [
     {
@@ -54,14 +44,22 @@ export default async function Page({
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-lg border border-border bg-background/50 p-4">
                 <p className="text-xs text-muted-foreground">Plan amount</p>
-                <p className="mt-1 text-2xl font-semibold">{plan.amount} USDC or live SOL equivalent</p>
+                <p className="mt-1 text-2xl font-semibold">{plan.amountUsdc} USDC or live SOL equivalent</p>
               </div>
               <div className="rounded-lg border border-border bg-background/50 p-4">
                 <p className="text-xs text-muted-foreground">Wallet credits</p>
-                <p className="mt-1 text-2xl font-semibold">{plan.wallets}</p>
+                <p className="mt-1 text-2xl font-semibold">{plan.walletCredits.toLocaleString("en-US")}</p>
               </div>
             </div>
-            <CheckoutForm plan={plan} networks={networks} />
+            <CheckoutForm
+              plan={{
+                id: plan.id,
+                name: plan.name,
+                amount: String(plan.amountUsdc),
+                wallets: plan.walletCredits.toLocaleString("en-US"),
+              }}
+              networks={networks}
+            />
           </CardContent>
         </Card>
       </div>

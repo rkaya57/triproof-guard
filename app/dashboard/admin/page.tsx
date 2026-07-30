@@ -124,9 +124,9 @@ export default async function Page() {
         <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <Badge variant="secondary" className="mb-4 w-fit border-primary/40 bg-primary/10 text-cyan-100">Admin Command Center</Badge>
-            <h2 className="text-gradient text-3xl font-semibold sm:text-5xl">Tri-Proof operasyon merkezi</h2>
+            <h2 className="text-gradient text-3xl font-semibold sm:text-5xl">Tri-Proof operations center</h2>
             <p className="mt-3 max-w-3xl text-slate-300">
-              Admin: {admin.email}. Sistem sağlığı, analiz kuyruğu, ödeme akışı, provider limitleri, ScamGuard, blog ve issue takibi buradan yönetilir.
+              Admin: {admin.email}. Monitor system health, the analysis queue, checkout readiness, provider limits, ScamGuard intelligence, content, and product issues from one place.
             </p>
           </div>
           <div className={`rounded-2xl border p-5 text-right ${toneBorder(health?.tone ?? "neutral")}`}>
@@ -207,7 +207,7 @@ export default async function Page() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-white"><AlertTriangle className="text-yellow-300" /> Warning reasons</CardTitle>
             <CardDescription className="text-slate-300">
-              “Warning” durumunun sebebi burada açıklanır. Şu an görünen 8 uyarı, {activeQueue} aktif queue batch’i anlamına gelir.
+              Each warning includes its operational cause and a direct next action. There are currently {activeQueue} active queue batches.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
@@ -232,7 +232,7 @@ export default async function Page() {
         <Card className="glass-panel premium-card animated-border">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-white"><Layers3 className="text-primary" /> Queue breakdown</CardTitle>
-            <CardDescription className="text-slate-300">Background analysis batch durumları.</CardDescription>
+            <CardDescription className="text-slate-300">Background analysis batch status.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
             {[
@@ -267,7 +267,7 @@ export default async function Page() {
           [Gift, "Airdrop Review", "Approve contribution proofs and credit Season 0 task points.", "/dashboard/admin/airdrop"],
           [Bug, "Issue Tracker", "Track bugs, broken flows, visual issues and Codex tasks.", "/dashboard/admin/bugs"],
           [Activity, "Analysis Ops", "Review recent wallet analyses and failed jobs.", "/dashboard/admin/analyses"],
-          [CreditCard, "Payments", "USDC checkout configuration and manual payment notes.", "/dashboard/admin/payments"],
+          [CreditCard, "Payments", "Verify SOL and USDC checkout readiness without exposing secrets.", "/dashboard/admin/payments"],
           [FileText, "Blog Studio", "Create SEO-ready Web3 security articles with cover images.", "/dashboard/admin/blog"],
           [Wrench, "Maintenance", "Run health checks and operational follow-up tasks.", "/dashboard/admin/diagnostics"],
         ].map(([Icon, title, text, href], index) => (

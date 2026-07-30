@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { billingPlans } from "@/lib/billing/plans"
 
 const plans = [
   {
@@ -28,7 +29,7 @@ const plans = [
   },
   {
     name: "Starter",
-    price: "29 USDC",
+    price: `${billingPlans.starter.amountUsdc} USDC`,
     detail: "Small campaign audits and first paid customer reports.",
     cta: "Pay with USDC or SOL",
     href: "/checkout?plan=starter",
@@ -41,7 +42,7 @@ const plans = [
   },
   {
     name: "Growth",
-    price: "99 USDC",
+    price: `${billingPlans.growth.amountUsdc} USDC`,
     detail: "Recommended for airdrops, testnets and active reward campaigns.",
     cta: "Pay with USDC or SOL",
     href: "/checkout?plan=growth",
@@ -56,7 +57,7 @@ const plans = [
   },
   {
     name: "Pro",
-    price: "249 USDC",
+    price: `${billingPlans.pro.amountUsdc} USDC`,
     detail: "High-volume audits, repeat operations and partner support.",
     cta: "Pay with USDC or SOL",
     href: "/checkout?plan=pro",

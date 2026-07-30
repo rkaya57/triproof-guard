@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 
+import { getAdminUser } from "@/lib/auth/admin"
 import { solanaRpc } from "@/lib/onchain/providers/helius"
 
 export const runtime = "nodejs"
@@ -81,6 +82,10 @@ function csv(wallets: string[]) {
 }
 
 export async function GET(request: Request) {
+  if (!(await getAdminUser())) {
+    return NextResponse.json({ error: "Admin access required" }, { status: 403 })
+  }
+
   const url = new URL(request.url)
   const requestedLimit = Number.parseInt(url.searchParams.get("limit") ?? "50", 10)
   const limit = Math.max(1, Math.min(100, Number.isFinite(requestedLimit) ? requestedLimit : 50))
