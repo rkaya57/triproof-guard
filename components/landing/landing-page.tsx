@@ -58,8 +58,8 @@ const heroStats = [
 ]
 
 const consoleStats = [
-  ["4", "Scan types", "URL, wallet, token, tx"],
-  ["0", "Key access", "No custody design"],
+  ["2", "Protection engines", "Sybil + ScamGuard"],
+  ["1", "Credit per wallet", "Persistent analysis credit"],
   ["API", "Ready", "B2B integration"],
 ]
 
@@ -328,7 +328,7 @@ export function LandingPage() {
 
           <div className="glass-panel premium-card animated-border data-scan relative min-h-[430px] overflow-hidden rounded-3xl p-5 reveal-up delay-200">
             <div className="mb-5 flex items-center justify-between gap-4">
-              <div><p className="text-sm font-medium">Jury Demo Console</p><p className="text-xs text-muted-foreground">Solana security product preview</p></div>
+              <div><p className="text-sm font-medium">Jury Demo Console</p><p className="text-xs text-muted-foreground">Sybil analysis and pre-sign protection</p></div>
               <Badge variant="secondary" className="gap-2 border-primary/30 text-primary"><span className="pulse-dot" /> Live product</Badge>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -340,16 +340,16 @@ export function LandingPage() {
             </div>
             <div className="mt-5 overflow-hidden rounded-xl border border-border bg-background/50">
               <div className="grid grid-cols-[1fr_72px_86px_120px] border-b border-border bg-primary/5 px-4 py-3 text-[11px] uppercase tracking-wide text-muted-foreground">
-                <span>Surface</span><span>Score</span><span>Risk</span><span>Decision</span>
+                <span>Module</span><span>Signal</span><span>Mode</span><span>Output</span>
               </div>
               {[
-                ["app.grass.io", "0", "Safe", "Verified"],
-                ["claim.xyz", "72", "High", "Warn"],
-                ["wallet list", "42", "Medium", "Review"],
-                ["SPL mint", "18", "Low", "Check"],
-              ].map(([surface, score, risk, action], index) => (
-                <div key={surface} className="grid grid-cols-[1fr_72px_86px_120px] border-b border-border px-4 py-3 text-xs transition-colors last:border-b-0 hover:bg-primary/5" style={{ animationDelay: `${index * 0.08}s` }}>
-                  <span className="font-mono text-muted-foreground">{surface}</span><span>{score}</span><span>{risk}</span><span className="text-primary">{action}</span>
+                ["Sybil wallet list", "Graph", "Batch", "Review"],
+                ["ScamGuard URL", "Domain", "Live", "Protect"],
+                ["Transaction intent", "Decoded", "Pre-sign", "Warn"],
+                ["Telegram Guardian", "Group", "24h", "Monitor"],
+              ].map(([module, signal, mode, output], index) => (
+                <div key={module} className="grid grid-cols-[1fr_72px_86px_120px] border-b border-border px-4 py-3 text-xs transition-colors last:border-b-0 hover:bg-primary/5" style={{ animationDelay: `${index * 0.08}s` }}>
+                  <span className="font-mono text-muted-foreground">{module}</span><span>{signal}</span><span>{mode}</span><span className="text-primary">{output}</span>
                 </div>
               ))}
             </div>
@@ -624,15 +624,19 @@ export function LandingPage() {
       <section id="pricing" className="security-grid relative overflow-hidden border-y border-border bg-card/20">
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
         <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div><Badge variant="secondary" className="mb-4 w-fit gap-2 border-primary/30 text-primary"><WalletCards className="size-3.5" />ScamGuard access plans</Badge><h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Start free. Add deeper intelligence when your surface grows.</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">Paid plans are 30-day access passes with fixed USDC pricing or a live SOL equivalent. You renew manually; the product never creates automatic wallet transfers.</p></div>
+          <div><Badge variant="secondary" className="mb-4 w-fit gap-2 border-primary/30 text-primary"><WalletCards className="size-3.5" />ScamGuard access + Sybil analysis</Badge><h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Start free. Add protection access or wallet-analysis capacity as you grow.</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">ScamGuard plans are 30-day access passes. Sybil packs are separate one-time wallet credits. Every amount is fixed in USDC or shown as a live SOL equivalent before a wallet opens.</p></div>
           <Link href="/pricing" className={`${buttonVariants({ variant: "outline" })} hover-lift w-fit`}>Full pricing <ArrowRight data-icon="inline-end" /></Link>
         </div>
-        <div className="grid gap-5 md:grid-cols-4">
+        <div className="mb-8 grid gap-4 md:grid-cols-2">
+          <a href="#scamguard-access" className="group rounded-lg border border-primary/35 bg-primary/10 p-5 transition-colors hover:bg-primary/15"><p className="font-mono text-xs uppercase tracking-[0.16em] text-primary">Product 01</p><div className="mt-2 flex items-end justify-between gap-4"><div><p className="text-xl font-semibold">ScamGuard access</p><p className="mt-1 text-sm text-muted-foreground">Scanner, extension, bot, API, and Group Guardian.</p></div><span className="text-sm font-medium text-primary">$0 - $79</span></div></a>
+          <a href="#sybil-credits" className="group rounded-lg border border-primary/35 bg-primary/10 p-5 transition-colors hover:bg-primary/15"><p className="font-mono text-xs uppercase tracking-[0.16em] text-primary">Product 02</p><div className="mt-2 flex items-end justify-between gap-4"><div><p className="text-xl font-semibold">Sybil wallet credits</p><p className="mt-1 text-sm text-muted-foreground">One credit equals one campaign wallet analyzed.</p></div><span className="text-sm font-medium text-primary">$29 - $249</span></div></a>
+        </div>
+        <div id="scamguard-access" className="grid gap-5 scroll-mt-8 md:grid-cols-4">
           {plans.map((plan) => { const featured = "featured" in plan && plan.featured; return <Card key={plan.name} className={`glass-panel premium-card hover-lift relative overflow-hidden ${featured ? "border-primary/60 bg-primary/10 shadow-[0_0_36px_rgba(56,189,248,0.15)]" : ""}`}>
             {featured && <Badge className="absolute right-4 top-4 bg-primary text-primary-foreground">Most selected</Badge>}
             <CardHeader><CardTitle>{plan.name}</CardTitle><CardDescription>{plan.detail}</CardDescription></CardHeader><CardContent className="flex flex-col gap-5"><div><p className="text-gradient text-2xl font-semibold">{plan.price}</p><p className="mt-1 text-xs text-muted-foreground">{plan.credits}</p></div><div className="flex items-center justify-between gap-3 border-t border-border pt-4"><span className="flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck className="size-3.5 text-primary" />{plan.name === "Free" ? "No payment required" : "USDC or SOL"}</span><Link href={plan.href} className={`${buttonVariants({ variant: featured || plan.name === "Free" ? "default" : "outline" })} hover-lift`}>{plan.cta}<ArrowRight data-icon="inline-end" /></Link></div></CardContent></Card> })}
         </div>
-        <div className="mt-10 border-t border-border pt-8">
+        <div id="sybil-credits" className="mt-10 scroll-mt-8 border-t border-border pt-8">
           <div className="flex flex-col justify-between gap-3 md:flex-row md:items-end"><div><p className="font-mono text-xs uppercase tracking-[0.16em] text-primary">Sybil campaign credits</p><h3 className="mt-2 text-2xl font-semibold">One-time wallet analysis packs.</h3><p className="mt-2 max-w-2xl text-sm text-muted-foreground">One credit analyzes one campaign wallet. Credits persist until used; no subscription or automatic renewal.</p></div><Link href="/pricing" className={`${buttonVariants({ variant: "outline", size: "sm" })} w-fit`}>Compare packs <ArrowRight data-icon="inline-end" /></Link></div>
           <div className="mt-5 grid gap-4 md:grid-cols-3">{sybilCreditPacks.map((pack) => <div key={pack.id} className="rounded-lg border border-border bg-background/45 p-5"><p className="font-semibold">{pack.name}</p><p className="mt-2 text-2xl font-semibold text-primary">{pack.amountUsdc} USDC</p><p className="mt-1 text-xs text-muted-foreground">{pack.walletCredits.toLocaleString()} wallet credits</p><div className="mt-4 flex items-center justify-between border-t border-border pt-4"><span className="text-sm text-muted-foreground">{pack.perWallet} USDC / wallet</span><Link href={`/checkout?pack=${pack.id}`} className="text-sm font-medium text-primary hover:underline">Choose pack</Link></div></div>)}</div>
         </div>
