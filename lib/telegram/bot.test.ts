@@ -274,6 +274,29 @@ test("Group Guardian includes a repeated campaign escalation", async () => {
   assert.match(actions[0].payload.text, /appeared 3 times/)
 })
 
+test("Group Guardian offers a time-limited moderation action for repeated high-risk senders", async () => {
+  const update: TelegramUpdate = {
+    update_id: 71,
+    message: {
+      message_id: 171,
+      text: "claim here https://phantom-airdrop-claim.example/",
+      chat: { id: -100, type: "group", title: "Test group" },
+      from: { id: 55, first_name: "Repeated sender" },
+    },
+  }
+  const actions = await handleTelegramUpdate(update, {
+    publicBaseUrl: "https://triproofprotocol.com",
+    recordScan: async () => ({
+      eventId: "evt-guard-1",
+      occurrenceCount: 2,
+      repeatedCampaign: false,
+      senderBehavior: { recentPosts: 3, highRiskPosts: 2, repeatTargetPosts: 2, moderationRecommended: true },
+    }),
+  })
+  assert.match(actions[0].payload.text, /SENDER BEHAVIOR/)
+  assert.equal(actions[0].payload.reply_markup?.inline_keyboard[0][0].callback_data, "sg_mute:evt-guard-1")
+})
+
 test("Telegram history command renders persisted scan history", async () => {
   const update: TelegramUpdate = {
     update_id: 8,

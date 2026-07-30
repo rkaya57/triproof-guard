@@ -1,6 +1,7 @@
 import { findScamGuardIntelEntry } from "@/lib/scamguard/intelligence"
 import { findScamDnaMatch, persistScamDna, scamDnaSignal, type ScamDnaMetadata } from "@/lib/scamguard/scam-dna"
 import { inspectUrlSandbox } from "@/lib/scamguard/url-sandbox"
+import { inspectDomainAge } from "@/lib/scamguard/domain-age"
 
 export type ScamGuardScanType = "url" | "wallet" | "token" | "transaction"
 
@@ -80,6 +81,12 @@ export type ScamGuardScanResult = {
       tld?: string
       sourceUrl?: string
       features: string[]
+    }
+    domainAge?: {
+      status: "available" | "unavailable"
+      createdAt?: string
+      ageDays?: number
+      source: "rdap"
     }
     sandbox?: {
       status: "complete" | "blocked" | "failed" | "unsupported" | "disabled"
@@ -888,6 +895,7 @@ async function scanUrl(value: string, chain: ScamGuardChain, deepScan = false) {
   const path = url?.pathname.toLowerCase() ?? ""
   const tld = domain?.split(".").at(-1) ?? ""
   const reputation = strongestReputation(domainReputation(domain ?? undefined), await externalDomainReputation(domain ?? undefined))
+  const domainAge = deepScan ? await inspectDomainAge(domain ?? undefined) : { status: "unavailable" as const, source: "rdap" as const }
   const signals: ScamGuardSignal[] = []
   const brand = brandMentioned(text)
   const hasClaimLanguage = highRiskWords.some((word) => text.includes(word))
@@ -1060,6 +1068,14 @@ async function scanUrl(value: string, chain: ScamGuardChain, deepScan = false) {
         : `${domain}${path || "/"} looks like a campaign, season, quest, points, or app page. Treat it as unverified until the official project account links to it.`,
     })
   }
+  if (domainAge.status === "available" && (domainAge.ageDays ?? Number.MAX_SAFE_INTEGER) < 14 && !isOfficialDomain && !isVerifiedProjectDomain && (hasClaimLanguage || hasCampaignSurface)) {
+    signals.push({
+      code: "RECENT_DOMAIN_CAMPAIGN_SURFACE",
+      severity: "medium",
+      title: "Recently registered campaign domain",
+      detail: `${domain} was registered less than 14 days ago according to RDAP. New domains are not scams by themselves, but reward or claim flows deserve independent verification.`,
+    })
+  }
   if (seedPhraseWords.some((word) => text.includes(word))) {
     signals.push({
       code: "SECRET_MATERIAL_REQUEST",
@@ -1090,6 +1106,7 @@ async function scanUrl(value: string, chain: ScamGuardChain, deepScan = false) {
     rpcStatus: "not_applicable",
     domain: domain ?? undefined,
     domainIntelligence: domainIntel,
+    domainAge,
     reputation,
     sandbox: sandbox
       ? {

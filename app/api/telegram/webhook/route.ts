@@ -6,13 +6,14 @@ import {
   type TelegramBotContext,
   type TelegramUpdate,
 } from "@/lib/telegram/bot"
-import { isTelegramGroupAdmin, sendTelegramAction } from "@/lib/telegram/api"
+import { answerTelegramCallbackQuery, isTelegramGroupAdmin, muteTelegramMember, sendTelegramAction } from "@/lib/telegram/api"
 import {
   ensureTelegramGroup,
   getTelegramGroupSummary,
   getTelegramHistory,
   claimTelegramGroup,
   authorizeTelegramGuardianAdmin,
+  getTelegramModerationTarget,
   recordTelegramScan,
   updateTelegramGroupSettings,
 } from "@/lib/telegram/store"
@@ -56,6 +57,28 @@ export async function POST(request: Request) {
   }
 
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim()
+  const callback = update.callback_query
+  if (callback?.id && callback.data?.startsWith("sg_mute:")) {
+    if (!token || !callback.from?.id || !callback.message?.chat?.id) return NextResponse.json({ ok: false, error: "Telegram moderation is not configured." }, { status: 400 })
+    const target = await getTelegramModerationTarget(callback.data.slice("sg_mute:".length))
+    const isAdmin = await isTelegramGroupAdmin(token, callback.message.chat.id, callback.from.id)
+    if (!target || target.chatId !== callback.message.chat.id) {
+      await answerTelegramCallbackQuery(token, callback.id, "This moderation action is no longer available.", true)
+      return NextResponse.json({ ok: false, error: "Invalid moderation target" }, { status: 400 })
+    }
+    if (!isAdmin) {
+      await answerTelegramCallbackQuery(token, callback.id, "Only group administrators can mute a sender.", true)
+      return NextResponse.json({ ok: false, error: "Admin access required" }, { status: 403 })
+    }
+    try {
+      await muteTelegramMember(token, target.chatId, target.userId)
+      await answerTelegramCallbackQuery(token, callback.id, "Sender muted for one hour.")
+      return NextResponse.json({ ok: true, moderation: "muted_1h" })
+    } catch (error) {
+      await answerTelegramCallbackQuery(token, callback.id, "The bot needs permission to restrict members in this group.", true).catch(() => undefined)
+      return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Telegram moderation failed" }, { status: 500 })
+    }
+  }
   const message = update.message ?? update.edited_message
   const isGroup = message?.chat.type === "group" || message?.chat.type === "supergroup"
   let groupSettings: TelegramBotContext["groupSettings"]

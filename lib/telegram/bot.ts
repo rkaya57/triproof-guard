@@ -35,6 +35,12 @@ export type TelegramUpdate = {
   update_id: number
   message?: TelegramMessage
   edited_message?: TelegramMessage
+  callback_query?: {
+    id: string
+    data?: string
+    from?: { id: number }
+    message?: { chat: { id: number; type: TelegramChatType } }
+  }
 }
 
 export type TelegramSendMessage = {
@@ -45,6 +51,9 @@ export type TelegramSendMessage = {
     allow_sending_without_reply?: boolean
   }
   disable_web_page_preview?: boolean
+  reply_markup?: {
+    inline_keyboard: Array<Array<{ text: string; callback_data?: string; url?: string }>>
+  }
 }
 
 export type TelegramBotAction = {
@@ -103,8 +112,15 @@ export type TelegramBotContext = {
     source: "PRIVATE_COMMAND" | "GROUP_GUARDIAN"
     alerted: boolean
   }) => Promise<{
+    eventId?: string
     occurrenceCount: number
     repeatedCampaign: boolean
+    senderBehavior?: {
+      recentPosts: number
+      highRiskPosts: number
+      repeatTargetPosts: number
+      moderationRecommended: boolean
+    }
   }>
 }
 
@@ -276,6 +292,20 @@ function compactTarget(result: ScamGuardScanResult) {
   )
 }
 
+function transactionIntentLines(result: ScamGuardScanResult) {
+  const intent = result.metadata.decodedIntent
+  if (!intent || intent.category === "unknown") return []
+  const fields = [
+    `🧾 Wallet request: ${intent.category}${intent.method ? ` via ${intent.method}` : ""}`,
+    intent.recipient ? `→ Recipient: ${intent.recipient}` : undefined,
+    intent.spender ? `→ Spender: ${intent.spender}` : undefined,
+    intent.amount ? `→ Amount: ${intent.amount}` : undefined,
+    intent.assetChange ? `→ Expected change: ${intent.assetChange}` : undefined,
+    intent.warnings.length ? `→ Decoder notes: ${intent.warnings.slice(0, 2).join("; ")}` : undefined,
+  ]
+  return fields.filter((line): line is string => Boolean(line))
+}
+
 function sourceFromSignal(detail: string) {
   const domain = detail.match(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/i)?.[0]
   if (domain) return domain
@@ -369,6 +399,9 @@ export function formatTelegramScanReport(result: ScamGuardScanResult, context?: 
   const signals = strongestSignals(result)
   if (signals.length) lines.push(divider("evidence"), ...signals)
 
+  const intent = transactionIntentLines(result)
+  if (intent.length) lines.push(divider("wallet request"), ...intent)
+
   if (actions.length) lines.push(divider("recommended action"), ...actions.map((action) => `- ${action}`))
 
   const reportUrl = context?.publicBaseUrl ? `${context.publicBaseUrl.replace(/\/$/, "")}/scamguard` : null
@@ -395,7 +428,7 @@ async function formatTelegramPrivateScanReport(result: ScamGuardScanResult, cont
 
 function groupWarningText(
   result: ScamGuardScanResult,
-  campaign?: { occurrenceCount: number; repeatedCampaign: boolean }
+  campaign?: { occurrenceCount: number; repeatedCampaign: boolean; senderBehavior?: { recentPosts: number; highRiskPosts: number; repeatTargetPosts: number; moderationRecommended: boolean } }
 ) {
   if (isProgramOwnedWalletResult(result)) return accountTypeReportText(result)
 
@@ -417,6 +450,10 @@ function groupWarningText(
     campaign?.repeatedCampaign
       ? `The same target appeared ${campaign.occurrenceCount} times in this group during the active detection window. Group admins should review the posting accounts.`
       : undefined,
+    campaign?.senderBehavior?.moderationRecommended ? divider("sender behavior") : undefined,
+    campaign?.senderBehavior?.moderationRecommended
+      ? `This sender posted ${campaign.senderBehavior.highRiskPosts} high-risk item(s) or repeated the same target. An administrator review is recommended.`
+      : undefined,
     "",
     "🧭 Action: verify the source from an official channel before connecting a wallet or signing anything.",
   ]
@@ -425,7 +462,7 @@ function groupWarningText(
     .slice(0, 3900)
 }
 
-function simpleReply(message: TelegramMessage, text: string): TelegramBotAction {
+function simpleReply(message: TelegramMessage, text: string, replyMarkup?: TelegramSendMessage["reply_markup"]): TelegramBotAction {
   return {
     method: "sendMessage",
     payload: {
@@ -436,6 +473,7 @@ function simpleReply(message: TelegramMessage, text: string): TelegramBotAction 
         allow_sending_without_reply: true,
       },
       disable_web_page_preview: true,
+      reply_markup: replyMarkup,
     },
   }
 }
@@ -713,7 +751,13 @@ async function handleGroupGuardian(message: TelegramMessage, context: TelegramBo
       alerted,
     })
     if (alerted) {
-      actions.push(simpleReply(message, groupWarningText(result, campaign)))
+      const canOfferMute = Boolean(campaign.eventId && campaign.senderBehavior?.moderationRecommended && message.from?.id)
+      actions.push(simpleReply(message, groupWarningText(result, campaign), canOfferMute ? {
+        inline_keyboard: [[
+          { text: "Mute sender for 1 hour", callback_data: `sg_mute:${campaign.eventId}` },
+          { text: "Open scanner", url: `${context.publicBaseUrl?.replace(/\/$/, "") ?? "https://triproofprotocol.com"}/scamguard` },
+        ]],
+      } : undefined))
     }
   }
 

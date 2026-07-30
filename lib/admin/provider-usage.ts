@@ -3,7 +3,7 @@ import { db } from "@/lib/db/prisma"
 export type ProviderWarningLevel = "green" | "yellow" | "orange" | "red" | "unknown"
 
 export type AdminProviderUsage = {
-  provider: "helius" | "etherscan"
+  provider: "helius" | "etherscan" | "gemini"
   label: string
   configuredLimit: number
   limitWindow: "daily" | "monthly"
@@ -69,15 +69,16 @@ function percent(used: number, limit: number) {
   return Math.min(999, Math.round((used / limit) * 100))
 }
 
-function emptyProvider(provider: "helius" | "etherscan", note: string): AdminProviderUsage {
+function emptyProvider(provider: "helius" | "etherscan" | "gemini", note: string): AdminProviderUsage {
   const isHelius = provider === "helius"
+  const isGemini = provider === "gemini"
   const configuredLimit = isHelius
     ? envNumber("HELIUS_MONTHLY_CREDIT_LIMIT", 1_000_000)
-    : envNumber("ETHERSCAN_DAILY_CALL_LIMIT", 100_000)
+    : isGemini ? envNumber("GEMINI_DAILY_REQUEST_LIMIT", 1_000) : envNumber("ETHERSCAN_DAILY_CALL_LIMIT", 100_000)
 
   return {
     provider,
-    label: isHelius ? "Helius" : "Etherscan",
+    label: isHelius ? "Helius" : isGemini ? "Gemini" : "Etherscan",
     configuredLimit,
     limitWindow: isHelius ? "monthly" : "daily",
     limitUnit: isHelius ? "credits" : "requests",
@@ -93,11 +94,12 @@ function emptyProvider(provider: "helius" | "etherscan", note: string): AdminPro
   }
 }
 
-function buildProviderUsage(provider: "helius" | "etherscan", row?: ProviderUsageRow): AdminProviderUsage {
+function buildProviderUsage(provider: "helius" | "etherscan" | "gemini", row?: ProviderUsageRow): AdminProviderUsage {
   const isHelius = provider === "helius"
+  const isGemini = provider === "gemini"
   const configuredLimit = isHelius
     ? envNumber("HELIUS_MONTHLY_CREDIT_LIMIT", 1_000_000)
-    : envNumber("ETHERSCAN_DAILY_CALL_LIMIT", 100_000)
+    : isGemini ? envNumber("GEMINI_DAILY_REQUEST_LIMIT", 1_000) : envNumber("ETHERSCAN_DAILY_CALL_LIMIT", 100_000)
   const dailyRequests = toNumber(row?.dailyRequests)
   const monthlyEstimatedCredits = toNumber(row?.monthlyEstimatedCredits)
   const used = isHelius ? monthlyEstimatedCredits : dailyRequests
@@ -107,7 +109,7 @@ function buildProviderUsage(provider: "helius" | "etherscan", row?: ProviderUsag
 
   return {
     provider,
-    label: isHelius ? "Helius" : "Etherscan",
+    label: isHelius ? "Helius" : isGemini ? "Gemini" : "Etherscan",
     configuredLimit,
     limitWindow: isHelius ? "monthly" : "daily",
     limitUnit: isHelius ? "credits" : "requests",
@@ -121,7 +123,7 @@ function buildProviderUsage(provider: "helius" | "etherscan", row?: ProviderUsag
     rateLimitedLast24h,
     note: isHelius
       ? "Estimated monthly Helius credit usage from Tri-Proof enrichment jobs."
-      : "Estimated daily Etherscan request usage from Tri-Proof enrichment jobs.",
+      : isGemini ? "Telegram Gemini explanation requests, failures, and rate-limit events." : "Estimated daily Etherscan request usage from Tri-Proof enrichment jobs.",
   }
 }
 
@@ -136,18 +138,20 @@ export async function getAdminProviderUsage(): Promise<AdminProviderUsage[]> {
         COUNT(*) FILTER (WHERE "status" = 'failed' AND "createdAt" >= NOW() - INTERVAL '24 hours')::int AS "failedLast24h",
         COUNT(*) FILTER (WHERE "status" = 'rate_limited' AND "createdAt" >= NOW() - INTERVAL '24 hours')::int AS "rateLimitedLast24h"
       FROM "ProviderUsageLog"
-      WHERE "provider" IN ('helius', 'etherscan')
+      WHERE "provider" IN ('helius', 'etherscan', 'gemini')
       GROUP BY "provider"
     `
     const byProvider = new Map(rows.map((row) => [String(row.provider), row]))
     return [
       buildProviderUsage("helius", byProvider.get("helius")),
       buildProviderUsage("etherscan", byProvider.get("etherscan")),
+      buildProviderUsage("gemini", byProvider.get("gemini")),
     ]
   } catch {
     return [
       emptyProvider("helius", "ProviderUsageLog table is not ready yet. Apply the provider usage migration."),
       emptyProvider("etherscan", "ProviderUsageLog table is not ready yet. Apply the provider usage migration."),
+      emptyProvider("gemini", "ProviderUsageLog table is not ready yet. Apply the provider usage migration."),
     ]
   }
 }

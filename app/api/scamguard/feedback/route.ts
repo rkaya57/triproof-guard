@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { saveScamGuardFeedback, type ScamGuardFeedbackVerdict } from "@/lib/scamguard/feedback"
+import { scamGuardFeedbackRateLimit } from "@/lib/scamguard/feedback-rate-limit"
 
 export const runtime = "nodejs"
 
@@ -12,6 +13,9 @@ const verdicts = new Set<ScamGuardFeedbackVerdict>([
 ])
 
 export async function POST(request: Request) {
+  const identifier = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? request.headers.get("x-real-ip") ?? "anonymous"
+  const limit = scamGuardFeedbackRateLimit(identifier)
+  if (!limit.allowed) return NextResponse.json({ error: "Feedback rate limit reached. Try again later." }, { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } })
   const body = (await request.json().catch(() => null)) as {
     scanId?: string
     verdict?: ScamGuardFeedbackVerdict

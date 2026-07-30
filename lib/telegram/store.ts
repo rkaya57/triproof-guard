@@ -38,8 +38,15 @@ export type TelegramScanRecordInput = {
 }
 
 export type TelegramScanRecordResult = {
+  eventId?: string
   occurrenceCount: number
   repeatedCampaign: boolean
+  senderBehavior?: {
+    recentPosts: number
+    highRiskPosts: number
+    repeatTargetPosts: number
+    moderationRecommended: boolean
+  }
 }
 
 const riskRank: Record<string, number> = {
@@ -198,7 +205,7 @@ export async function recordTelegramScan(input: TelegramScanRecordInput): Promis
   const repeatAlertCutoff = new Date(now.getTime() - 6 * 60 * 60 * 1000)
 
   return db.$transaction(async (tx) => {
-    await tx.telegramScanEvent.create({
+    const event = await tx.telegramScanEvent.create({
       data: {
         groupId: group?.id,
         telegramUpdateId: String(input.updateId),
@@ -219,7 +226,7 @@ export async function recordTelegramScan(input: TelegramScanRecordInput): Promis
       },
     })
 
-    if (!group) return { occurrenceCount: 1, repeatedCampaign: false }
+    if (!group) return { eventId: event.id, occurrenceCount: 1, repeatedCampaign: false }
 
     const previous = await tx.telegramThreatCampaign.findUnique({
       where: { groupId_fingerprint: { groupId: group.id, fingerprint: targetHash } },
@@ -266,8 +273,29 @@ export async function recordTelegramScan(input: TelegramScanRecordInput): Promis
       },
     })
 
-    return { occurrenceCount, repeatedCampaign }
+    const senderBehavior = input.userId
+      ? await (async () => {
+          const senderWhere = { telegramChatId: chatId, telegramUserId: String(input.userId) }
+          const [recentPosts, highRiskPosts, repeatTargetPosts] = await Promise.all([
+            tx.telegramScanEvent.count({ where: { ...senderWhere, createdAt: { gte: new Date(now.getTime() - 60 * 60 * 1000) } } }),
+            tx.telegramScanEvent.count({ where: { ...senderWhere, riskLevel: { in: ["HIGH_RISK", "CRITICAL"] }, createdAt: { gte: campaignCutoff } } }),
+            tx.telegramScanEvent.count({ where: { ...senderWhere, targetHash, createdAt: { gte: campaignCutoff } } }),
+          ])
+          return { recentPosts, highRiskPosts, repeatTargetPosts, moderationRecommended: highRiskPosts >= 2 || repeatTargetPosts >= 2 || recentPosts >= 5 }
+        })()
+      : undefined
+
+    return { eventId: event.id, occurrenceCount, repeatedCampaign, senderBehavior }
   })
+}
+
+export async function getTelegramModerationTarget(eventId: string) {
+  const event = await db.telegramScanEvent.findUnique({
+    where: { id: eventId },
+    select: { telegramChatId: true, telegramUserId: true, riskLevel: true, alerted: true, createdAt: true, groupId: true },
+  })
+  if (!event?.groupId || !event.telegramUserId || !event.alerted || !["HIGH_RISK", "CRITICAL"].includes(event.riskLevel) || event.createdAt < new Date(Date.now() - 24 * 60 * 60 * 1000)) return null
+  return { chatId: Number(event.telegramChatId), userId: Number(event.telegramUserId) }
 }
 
 export async function getTelegramHistory(chatId: number, limit = 6) {

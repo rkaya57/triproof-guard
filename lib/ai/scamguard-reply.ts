@@ -1,4 +1,5 @@
 import type { ScamGuardScanResult } from "@/lib/scamguard/engine"
+import { recordProviderUsage } from "@/lib/onchain/provider-usage"
 
 export type ScamGuardAiReply = {
   source: "gemini" | "fallback"
@@ -105,16 +106,24 @@ export async function generateScamGuardAiReply(result: ScamGuardScanResult): Pro
         }),
         signal: AbortSignal.timeout(9_000),
       })
-      if (!response.ok) continue
+      if (!response.ok) {
+        void recordProviderUsage({ provider: "gemini", method: "scamguard_telegram_explanation", status: response.status === 429 ? "rate_limited" : "failed", errorMessage: `HTTP ${response.status}` })
+        continue
+      }
       receivedResponse = true
       const body = (await response.json()) as {
         candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
       }
       const text = body.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("\n") ?? ""
       const parsed = parseReply(text)
-      if (parsed) return { ...parsed, source: "gemini", model }
+      if (parsed) {
+        void recordProviderUsage({ provider: "gemini", method: "scamguard_telegram_explanation" })
+        return { ...parsed, source: "gemini", model }
+      }
+      void recordProviderUsage({ provider: "gemini", method: "scamguard_telegram_explanation", status: "failed", errorMessage: "Gemini returned an invalid structured reply." })
     } catch {
       // A deterministic explanation remains the security-safe fallback.
+      void recordProviderUsage({ provider: "gemini", method: "scamguard_telegram_explanation", status: "failed", errorMessage: "Gemini request timed out or failed." })
     }
   }
 
