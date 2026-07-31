@@ -188,7 +188,11 @@ function hydrateWallet(wallet: ParsedWallet): EnrichedWallet {
 }
 
 function isUserLikeAccount(wallet: EnrichedWallet) {
-  return !wallet.accountType || wallet.accountType === "system_user_wallet"
+  return (
+    !wallet.accountType ||
+    wallet.accountType === "system_user_wallet" ||
+    wallet.accountType === "historical_unresolved_account"
+  )
 }
 
 function hasEvidence(wallet: EnrichedWallet, entityType: EntityType) {
@@ -291,6 +295,15 @@ function statusFromSignals({
     }
   }
 
+  if (accountType === "historical_unresolved_account") {
+    return {
+      status: "manual_review",
+      recommendedAction: "manual_review",
+      statusExplanation:
+        "Gray Zone: confirmed transaction history exists, but the address has no current provider-readable account state. Historical activity is not treated as malicious or as sufficient proof of current reward eligibility.",
+    }
+  }
+
   if (accountType && accountType !== "system_user_wallet") {
     return {
       status: "rejected",
@@ -338,7 +351,7 @@ function statusFromSignals({
     }
   }
 
-  if (score <= config.approveMax && !hasClusterSignal) {
+  if (score <= config.approveMax && !hasClusterSignal && !hardSybilSignal) {
     return {
       status: "approved",
       recommendedAction: "approve",
@@ -610,7 +623,7 @@ function createClusters(
         ),
         evidenceFamilies,
         reasons: [
-          "V1.7 corroborated Sybil cohort: at least two independent relationship signals overlap",
+          "V1.8 corroborated Sybil cohort: at least two independent relationship signals overlap",
           ...evidenceFamilies.map((family) => familyReasons[family]),
           "Funding, timing, behavior, referral, campaign event, or participant evidence is never treated as conclusive in isolation.",
         ],
@@ -639,7 +652,7 @@ function cappedEvidenceContribution(
 ) {
   if (score <= cap) return score
   reasons.push(
-    `V1.7 evidence weighting: correlated ${family} signals were capped at ${cap} points to avoid double-counting.`
+    `V1.8 evidence weighting: correlated ${family} signals were capped at ${cap} points to avoid double-counting.`
   )
   return cap
 }
@@ -676,7 +689,7 @@ export function analyzeWallets(
   const { drafts, assigned, fundingGroups } = createClusters(enrichedWallets, graphContext)
 
   const walletResults: WalletRiskResult[] = enrichedWallets.map((wallet, index) => {
-    const reasons: string[] = [`V1.7 risk policy: ${config.label}`]
+    const reasons: string[] = [`V1.8 risk policy: ${config.label}`]
     const knownEntity = detectKnownEntity(wallet.walletAddress)
     const entityLabel = knownEntity?.label ?? wallet.knownEntityLabel ?? null
     const entityType: EntityType = knownEntity?.type ?? wallet.knownEntityType ?? (wallet.isContract ? "contract" : "user")
@@ -717,7 +730,11 @@ export function analyzeWallets(
     if (wallet.accountType) {
       reasons.push(`Solana account intelligence: ${wallet.accountType}`)
       if (wallet.ownerProgram) reasons.push(`Solana owner program: ${wallet.ownerProgram}`)
-      if (wallet.accountType !== "system_user_wallet") {
+      if (wallet.accountType === "historical_unresolved_account") {
+        reasons.push(
+          "V1.8 account-state uncertainty: confirmed historical activity exists, but current account state is unavailable"
+        )
+      } else if (wallet.accountType !== "system_user_wallet") {
         score = Math.max(score, wallet.accountType === "missing_or_closed_account" ? 45 : 75)
         reasons.push("V1.5 eligibility: not a normal end-user wallet")
       }
@@ -732,7 +749,7 @@ export function analyzeWallets(
       reasons.push("V1.5 No On-chain Data: no reliable provider-readable wallet history was available")
     }
 
-    if (wallet.walletAgeDays !== null) {
+    if (wallet.walletAgeDays !== null && !wallet.historyTruncated) {
       if (wallet.walletAgeDays < 7) {
         maturityEvidenceScore += 25
         reasons.push("On-chain evidence: wallet is younger than 7 days")
@@ -743,6 +760,10 @@ export function analyzeWallets(
         maturityEvidenceScore += 8
         reasons.push("On-chain evidence: wallet is younger than 90 days")
       }
+    } else if (wallet.walletAgeDays !== null && wallet.historyTruncated) {
+      reasons.push(
+        "V1.8 history confidence: observed wallet age is a lower bound and is not used as negative evidence"
+      )
     }
 
     if (wallet.txCount !== null) {
@@ -907,6 +928,7 @@ export function analyzeWallets(
 
       if (
         wallet.walletAgeDays !== null &&
+        !wallet.historyTruncated &&
         wallet.campaignActionsCount !== null &&
         wallet.txCount !== null &&
         wallet.walletAgeDays < 7 &&
@@ -923,8 +945,9 @@ export function analyzeWallets(
     score += cappedEvidenceContribution(networkEvidenceScore, 45, "relationship-graph", reasons)
 
     if (campaignOnlyPattern && (wallet.campaignOnlyRatio ?? 0) >= 0.8) {
-      score = Math.max(score, config.hardRejectMin)
-      reasons.push("V1.7 corroborated campaign pattern: high campaign-only concentration meets the policy escalation threshold")
+      reasons.push(
+        "V1.8 evidence boundary: concentrated campaign behavior remains review evidence until an independent relationship, referral, or cross-campaign signal corroborates it"
+      )
     }
 
     if (wallet.policyAction === "reject") score = Math.max(score, 95)
@@ -936,7 +959,6 @@ export function analyzeWallets(
 
     const hardSybilSignal =
       wallet.policyAction === "reject" ||
-      (campaignOnlyPattern && (wallet.campaignOnlyRatio ?? 0) >= 0.8) ||
       clusterSize >= config.clusterRejectSize ||
       (clusterSize >= 6 && clusterSimilarity >= 75) ||
       graphSignal.hardSignal

@@ -275,7 +275,7 @@ describe("risk engine fixture coverage", () => {
     assert.equal(result.graph.neutralServiceFunders, 1)
   })
 
-  it("rejects campaign-only farming behavior", () => {
+  it("keeps standalone campaign-only behavior in Gray Zone without independent corroboration", () => {
     const campaignOnly = wallet({
       walletAddress: "0x1000000000000000000000000000000000000004",
       txCount: 7,
@@ -293,11 +293,55 @@ describe("risk engine fixture coverage", () => {
 
     const analyzed = analyzeWallets([campaignOnly]).wallets[0]
 
-    assert.equal(analyzed.status, "rejected")
-    assert.ok(analyzed.riskScore >= 70)
-    assert.ok(["high", "critical"].includes(analyzed.riskLevel))
+    assert.equal(analyzed.status, "manual_review")
+    assert.ok(analyzed.riskScore >= 36)
+    assert.equal(analyzed.riskLevel, "medium")
     assert.ok(analyzed.reasons.some((reason) => reason.includes("campaign-only behavior pattern")))
     assert.ok(analyzed.reasons.some((reason) => reason.includes("bot-script probability")))
+    assert.ok(analyzed.reasons.some((reason) => reason.includes("evidence boundary")))
+  })
+
+  it("does not use a truncated history window as evidence that a wallet is young", () => {
+    const lowerBoundAge = wallet({
+      walletAddress: "0x1000000000000000000000000000000000000014",
+      walletAgeDays: 2,
+      historyTruncated: true,
+    })
+
+    const analyzed = analyzeWallets([lowerBoundAge]).wallets[0]
+
+    assert.equal(analyzed.status, "approved")
+    assert.ok(!analyzed.reasons.some((reason) => reason.includes("younger than 7 days")))
+    assert.ok(analyzed.reasons.some((reason) => reason.includes("lower bound")))
+  })
+
+  it("keeps historically active accounts with unresolved current state in Gray Zone", () => {
+    const historical = wallet({
+      walletAddress: "0x1000000000000000000000000000000000000015",
+      accountType: "historical_unresolved_account",
+      txCount: 14,
+      historyTruncated: false,
+    })
+
+    const analyzed = analyzeWallets([historical]).wallets[0]
+
+    assert.equal(analyzed.status, "manual_review")
+    assert.equal(analyzed.recommendedAction, "manual_review")
+    assert.ok(analyzed.statusExplanation.includes("confirmed transaction history exists"))
+    assert.ok(!analyzed.reasons.some((reason) => reason.includes("not a normal end-user")))
+  })
+
+  it("never auto-approves a hard graph signal even when its numeric score is low", () => {
+    const selfReferred = wallet({
+      walletAddress: "0x1000000000000000000000000000000000000016",
+      referrerAddress: "0x1000000000000000000000000000000000000016",
+    })
+
+    const analyzed = analyzeWallets([selfReferred]).wallets[0]
+
+    assert.equal(analyzed.status, "manual_review")
+    assert.equal(analyzed.recommendedAction, "manual_review")
+    assert.ok(analyzed.reasons.some((reason) => reason.includes("explicit self-referral")))
   })
 
   it("rejects known public entity wallets as non-participant accounts", () => {

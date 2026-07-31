@@ -235,7 +235,7 @@ export function NewAnalysisForm() {
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>New Analysis</CardTitle>
-          <CardDescription>Upload a wallet CSV and run real on-chain enrichment with V1.6 risk policy presets.</CardDescription>
+          <CardDescription>Upload a wallet CSV and run real on-chain enrichment with V1.8 risk policy presets.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="flex flex-col gap-6">

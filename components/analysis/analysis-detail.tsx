@@ -172,10 +172,24 @@ function policyStatusForWallet(
     wallet.reasons.some((reason) => reason.includes("No On-chain Data"))
   if (hasNoOnChainData) return policy === "conservative" ? "manual_review" : "rejected"
 
+  if (wallet.accountType === "historical_unresolved_account") return "manual_review"
   if (wallet.accountType && wallet.accountType !== "system_user_wallet") return "rejected"
   if (wallet.entityType !== "user") return "rejected"
 
   const score = wallet.riskScore
+  const hardSignal = wallet.reasons.some(
+    (reason) =>
+      reason.includes("known-bad source") ||
+      reason.includes("explicit self-referral") ||
+      reason.includes("circular funding/referral path")
+  )
+  const hardRejectMin = policy === "conservative" ? 80 : policy === "strict" ? 60 : 70
+  if (hardSignal) return score >= hardRejectMin ? "rejected" : "manual_review"
+  if (wallet.clusterId) {
+    const manualMax = policy === "conservative" ? 74 : policy === "strict" ? 49 : 59
+    if (score <= manualMax) return "manual_review"
+  }
+
   if (policy === "conservative") {
     if (score <= 35) return "approved"
     if (score <= 74) return "manual_review"

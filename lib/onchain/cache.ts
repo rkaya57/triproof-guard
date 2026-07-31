@@ -1,5 +1,8 @@
 import type { EnrichedWalletData } from "@/lib/onchain/enrichment-types"
-import { getOnChainConfig } from "@/lib/onchain/enrichment-types"
+import {
+  getOnChainConfig,
+  SOLANA_ENRICHMENT_SCHEMA_VERSION,
+} from "@/lib/onchain/enrichment-types"
 
 /**
  * Lightweight in-memory enrichment cache.
@@ -128,6 +131,12 @@ export async function hydrateEnrichmentCacheFromPersistentStore(chain: string, a
       if (restored.has(key) || getCachedEnrichment(row.chain, row.walletAddress)) return
 
       const raw = rawObject(row.rawData)
+      if (
+        row.chain === "Solana" &&
+        rawNumber(raw.enrichmentSchemaVersion) !== SOLANA_ENRICHMENT_SCHEMA_VERSION
+      ) {
+        return
+      }
       setCachedEnrichment({
         walletAddress: row.walletAddress,
         chain: row.chain,

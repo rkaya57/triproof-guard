@@ -1,4 +1,8 @@
-import type { EnrichedWalletData, EnrichWalletOptions } from "@/lib/onchain/enrichment-types"
+import {
+  SOLANA_ENRICHMENT_SCHEMA_VERSION,
+  type EnrichedWalletData,
+  type EnrichWalletOptions,
+} from "@/lib/onchain/enrichment-types"
 import type { OnChainProvider } from "@/lib/onchain/providers/provider"
 import { RateLimitError } from "@/lib/onchain/rate-limit"
 import { detectKnownEntity } from "@/lib/risk-engine/known-entities"
@@ -84,6 +88,9 @@ type ParsedTransaction = {
     err?: unknown
     preBalances?: number[]
     postBalances?: number[]
+    innerInstructions?: Array<{
+      instructions?: ParsedInstruction[]
+    }>
   } | null
   transaction?: {
     message?: {
@@ -99,6 +106,23 @@ type AccountClassification = {
   knownEntityLabel: string | null
   knownEntityType: string | null
   isContract: boolean
+}
+
+type ParsedTransactionSample = {
+  signature: string
+  transaction: ParsedTransaction
+}
+
+type TransactionSampleCoverage = {
+  samples: ParsedTransactionSample[]
+  requestedCount: number
+  resolvedCount: number
+  failedCount: number
+}
+
+type TokenAccountCoverage = {
+  accounts: ParsedTokenAccount[]
+  available: boolean
 }
 
 function positiveEnvNumber(name: string, fallback: number) {
@@ -342,7 +366,11 @@ function parsedAccountType(accountInfo: ParsedAccountInfoResult | null) {
   return null
 }
 
-function classifyAccount(address: string, accountInfo: ParsedAccountInfoResult | null): AccountClassification {
+function classifyAccount(
+  address: string,
+  accountInfo: ParsedAccountInfoResult | null,
+  hasHistoricalSignatures: boolean
+): AccountClassification {
   const known = detectKnownEntity(address)
   const value = accountInfo?.value ?? null
   const owner = value?.owner ?? null
@@ -360,7 +388,11 @@ function classifyAccount(address: string, accountInfo: ParsedAccountInfoResult |
 
   if (!value) {
     return {
-      accountType: "missing_or_closed_account",
+      // getAccountInfo only describes current account state. A system account can
+      // have confirmed history while no longer existing at the current slot.
+      accountType: hasHistoricalSignatures
+        ? "historical_unresolved_account"
+        : "missing_or_closed_account",
       ownerProgram: null,
       knownEntityLabel: null,
       knownEntityType: null,
@@ -417,8 +449,14 @@ function classifyAccount(address: string, accountInfo: ParsedAccountInfoResult |
   }
 }
 
+function allParsedInstructions(tx: ParsedTransaction | null) {
+  const topLevel = tx?.transaction?.message?.instructions ?? []
+  const inner = (tx?.meta?.innerInstructions ?? []).flatMap((group) => group.instructions ?? [])
+  return [...topLevel, ...inner]
+}
+
 function extractFundingEvidence(tx: ParsedTransaction | null, walletAddress: string) {
-  const instructions = tx?.transaction?.message?.instructions ?? []
+  const instructions = allParsedInstructions(tx)
 
   for (const instruction of instructions) {
     const info = instruction.parsed?.info ?? {}
@@ -472,12 +510,28 @@ function selectedSignatureSample(signatures: SignatureInfo[]) {
   return Array.from(map.values()).slice(0, sampleLimit)
 }
 
+async function getTokenAccountsForProgram(
+  address: string,
+  programId: string
+): Promise<TokenAccountCoverage> {
+  try {
+    const result = await solanaRpc<{ value?: ParsedTokenAccount[] }>("getTokenAccountsByOwner", [
+      address,
+      { programId },
+      { encoding: "jsonParsed", commitment: "confirmed" },
+    ])
+    return { accounts: result.value ?? [], available: true }
+  } catch {
+    return { accounts: [], available: false }
+  }
+}
+
 async function getSolanaTransactions(signatures: SignatureInfo[]) {
   const selected = selectedSignatureSample(signatures)
   const transactions = await Promise.all(
     selected.map(async (item) => {
       try {
-        return await solanaRpc<ParsedTransaction | null>("getTransaction", [
+        const transaction = await solanaRpc<ParsedTransaction | null>("getTransaction", [
           item.signature,
           {
             encoding: "jsonParsed",
@@ -485,13 +539,29 @@ async function getSolanaTransactions(signatures: SignatureInfo[]) {
             maxSupportedTransactionVersion: 0,
           },
         ])
+        return transaction ? { signature: item.signature, transaction } : null
       } catch {
         return null
       }
     })
   )
 
-  return transactions.filter(Boolean) as ParsedTransaction[]
+  const samples = transactions.filter(Boolean) as ParsedTransactionSample[]
+  return {
+    samples,
+    requestedCount: selected.length,
+    resolvedCount: samples.length,
+    failedCount: selected.length - samples.length,
+  } satisfies TransactionSampleCoverage
+}
+
+function isBehaviorSampleReliable(coverage: TransactionSampleCoverage) {
+  if (coverage.requestedCount === 0) return false
+  const minimumResolved = Math.min(3, coverage.requestedCount)
+  return (
+    coverage.resolvedCount >= minimumResolved &&
+    coverage.resolvedCount / coverage.requestedCount >= 0.6
+  )
 }
 
 function instructionProgramKey(instruction: ParsedInstruction) {
@@ -503,7 +573,7 @@ function buildBehaviorFingerprint(transactions: ParsedTransaction[]) {
   const instructionTypes = new Set<string>()
 
   transactions.forEach((tx) => {
-    tx.transaction?.message?.instructions?.forEach((instruction) => {
+    allParsedInstructions(tx).forEach((instruction) => {
       const program = instructionProgramKey(instruction)
       if (program) programs.add(program)
       if (instruction.parsed?.type) instructionTypes.add(`${program ?? "unknown"}:${instruction.parsed.type}`)
@@ -524,7 +594,7 @@ function campaignActionCount(transactions: ParsedTransaction[], campaignContract
   let count = 0
   transactions.forEach((tx) => {
     const accountKeys = new Set((tx.transaction?.message?.accountKeys ?? []).map(accountKeyToString))
-    const instructionHit = tx.transaction?.message?.instructions?.some((instruction) => {
+    const instructionHit = allParsedInstructions(tx).some((instruction) => {
       const program = instructionProgramKey(instruction)
       return Boolean(program && campaignSet.has(program))
     })
@@ -548,16 +618,14 @@ function behaviorDiversityScore({
   programCount,
   activeDays,
   counterparties,
-  tokenCount,
 }: {
   programCount: number
   activeDays: number
   counterparties: number
-  tokenCount: number
 }) {
   return Math.max(
     0,
-    Math.min(100, programCount * 12 + activeDays * 8 + counterparties * 6 + tokenCount * 5)
+    Math.min(100, programCount * 12 + activeDays * 8 + counterparties * 6)
   )
 }
 
@@ -568,6 +636,7 @@ function campaignOnlyRatio(actionCount: number | null, sampledTransactions: numb
 
 function botScriptScore({
   walletAgeDays,
+  walletAgeReliable,
   txCount,
   activeDays,
   programCount,
@@ -577,6 +646,7 @@ function botScriptScore({
   diversityScore,
 }: {
   walletAgeDays: number | null
+  walletAgeReliable: boolean
   txCount: number | null
   activeDays: number
   programCount: number
@@ -588,9 +658,11 @@ function botScriptScore({
   if (accountType !== "system_user_wallet") return 100
 
   let score = 0
-  if (walletAgeDays === null) score += 20
-  else if (walletAgeDays < 7) score += 25
-  else if (walletAgeDays < 30) score += 12
+  if (walletAgeReliable) {
+    if (walletAgeDays === null) score += 20
+    else if (walletAgeDays < 7) score += 25
+    else if (walletAgeDays < 30) score += 12
+  }
 
   if (txCount === null) score += 20
   else if (txCount <= 2) score += 25
@@ -620,6 +692,7 @@ function botScriptScore({
 
 function campaignQualityScore({
   walletAgeDays,
+  walletAgeReliable,
   txCount,
   programCount,
   tokenCount,
@@ -627,18 +700,21 @@ function campaignQualityScore({
   accountType,
 }: {
   walletAgeDays: number | null
+  walletAgeReliable: boolean
   txCount: number | null
   programCount: number
-  tokenCount: number
+  tokenCount: number | null
   fundingSource: string | null
   accountType: string
 }) {
   if (accountType !== "system_user_wallet") return 0
   let score = 100
-  if (walletAgeDays === null) score -= 30
-  else if (walletAgeDays < 7) score -= 35
-  else if (walletAgeDays < 30) score -= 20
-  else if (walletAgeDays < 90) score -= 10
+  if (walletAgeReliable) {
+    if (walletAgeDays === null) score -= 30
+    else if (walletAgeDays < 7) score -= 35
+    else if (walletAgeDays < 30) score -= 20
+    else if (walletAgeDays < 90) score -= 10
+  }
 
   if (txCount === null) score -= 30
   else if (txCount <= 2) score -= 30
@@ -648,7 +724,7 @@ function campaignQualityScore({
   if (programCount <= 1) score -= 15
   else if (programCount <= 3) score -= 8
 
-  if (tokenCount <= 0) score -= 8
+  if (tokenCount !== null && tokenCount <= 0) score -= 8
   if (!fundingSource) score -= 4
 
   return Math.max(0, Math.min(100, score))
@@ -678,14 +754,11 @@ export const heliusProvider: OnChainProvider = {
       throw new Error("Invalid Solana wallet address")
     }
 
-    const [balanceResult, history, tokenAccounts, accountInfo] = await Promise.all([
+    const [balanceResult, history, legacyTokenAccounts, token2022Accounts, accountInfo] = await Promise.all([
       solanaRpc<BalanceResult>("getBalance", [address, { commitment: "confirmed" }]),
       getSolanaSignatureHistory(address, Boolean(options?.deepHistory)),
-      solanaRpc<{ value?: ParsedTokenAccount[] }>("getTokenAccountsByOwner", [
-        address,
-        { programId: tokenProgramId },
-        { encoding: "jsonParsed", commitment: "confirmed" },
-      ]),
+      getTokenAccountsForProgram(address, tokenProgramId),
+      getTokenAccountsForProgram(address, token2022ProgramId),
       solanaRpc<ParsedAccountInfoResult>("getAccountInfo", [
         address,
         { encoding: "jsonParsed", commitment: "confirmed" },
@@ -702,12 +775,15 @@ export const heliusProvider: OnChainProvider = {
     const firstSeen = isoFromUnix(orderedByTime[0]?.blockTime)
     const lastSeen = isoFromUnix(orderedByTime[orderedByTime.length - 1]?.blockTime)
     const walletAgeDays = daysBetween(firstSeen)
-    const parsedTransactions = await getSolanaTransactions(signatures)
+    const transactionCoverage = await getSolanaTransactions(signatures)
+    const parsedTransactions = transactionCoverage.samples.map((sample) => sample.transaction)
+    const behaviorSampleReliable = isBehaviorSampleReliable(transactionCoverage)
     const oldestSignature = orderedByTime[0]?.signature
     const oldestTransaction = oldestSignature
-      ? parsedTransactions.find((tx) => tx.blockTime === orderedByTime[0]?.blockTime) ?? null
+      ? transactionCoverage.samples.find((sample) => sample.signature === oldestSignature)
+          ?.transaction ?? null
       : null
-    const classification = classifyAccount(address, accountInfo)
+    const classification = classifyAccount(address, accountInfo, signatures.length > 0)
     const behavior = buildBehaviorFingerprint(parsedTransactions)
 
     const counterparties = new Set<string>()
@@ -723,30 +799,41 @@ export const heliusProvider: OnChainProvider = {
       })
     })
 
-    const activeTokenAccounts = (tokenAccounts.value ?? []).filter((item) => {
-      const uiAmount = item.account?.data?.parsed?.info?.tokenAmount?.uiAmount
-      return typeof uiAmount === "number" && uiAmount > 0
-    }).length
+    const tokenAccounts = new Map<string, ParsedTokenAccount>()
+    ;[...legacyTokenAccounts.accounts, ...token2022Accounts.accounts].forEach(
+      (item, index) => tokenAccounts.set(item.pubkey ?? `unkeyed-${index}`, item)
+    )
+    const tokenAccountCoverageComplete =
+      legacyTokenAccounts.available && token2022Accounts.available
+    const activeTokenAccounts = tokenAccountCoverageComplete
+      ? Array.from(tokenAccounts.values()).filter((item) => {
+          const uiAmount = item.account?.data?.parsed?.info?.tokenAmount?.uiAmount
+          return typeof uiAmount === "number" && uiAmount > 0
+        }).length
+      : null
     const fundingEvidence = extractFundingEvidence(oldestTransaction, address)
     const fundingSource = fundingEvidence?.source ?? null
     const programCount = behavior.programs.length
-    const actionCount = campaignActionCount(parsedTransactions, options?.campaignContracts)
+    const actionCount = behaviorSampleReliable
+      ? campaignActionCount(parsedTransactions, options?.campaignContracts)
+      : null
     const activeDays = activeDayCount(signatures)
     const isUserWallet = classification.accountType === "system_user_wallet"
-    const diversityScore = isUserWallet
+    const walletAgeReliable = !history.historyTruncated
+    const diversityScore = isUserWallet && behaviorSampleReliable
       ? behaviorDiversityScore({
           programCount,
           activeDays,
           counterparties: counterparties.size,
-          tokenCount: activeTokenAccounts,
         })
       : null
-    const campaignRatio = isUserWallet
+    const campaignRatio = isUserWallet && behaviorSampleReliable
       ? campaignOnlyRatio(actionCount, parsedTransactions.length)
       : null
-    const scriptScore = isUserWallet
+    const scriptScore = isUserWallet && behaviorSampleReliable
       ? botScriptScore({
           walletAgeDays,
+          walletAgeReliable,
           txCount: signatures.length,
           activeDays,
           programCount,
@@ -756,9 +843,10 @@ export const heliusProvider: OnChainProvider = {
           diversityScore: diversityScore ?? 0,
         })
       : null
-    const qualityScore = isUserWallet
+    const qualityScore = isUserWallet && behaviorSampleReliable
       ? campaignQualityScore({
           walletAgeDays,
+          walletAgeReliable,
           txCount: signatures.length,
           programCount,
           tokenCount: activeTokenAccounts,
@@ -775,12 +863,12 @@ export const heliusProvider: OnChainProvider = {
       walletAgeDays,
       firstSeen,
       lastSeen,
-      totalVolume: Number(totalVolume.toFixed(6)),
+      totalVolume: behaviorSampleReliable ? Number(totalVolume.toFixed(6)) : null,
       nativeBalance: balanceLamports / lamportsPerSol,
       tokenCount: activeTokenAccounts,
-      contractsCount: programCount,
+      contractsCount: behaviorSampleReliable ? programCount : null,
       campaignActionsCount: actionCount,
-      uniqueCounterparties: counterparties.size,
+      uniqueCounterparties: behaviorSampleReliable ? counterparties.size : null,
       fundingSource,
       firstFundingAt: fundingEvidence?.observedAt ?? null,
       firstFundingAmount: fundingEvidence?.amount ?? null,
@@ -790,18 +878,30 @@ export const heliusProvider: OnChainProvider = {
       knownEntityType: classification.knownEntityType,
       accountType: classification.accountType,
       ownerProgram: classification.ownerProgram,
-      behaviorFingerprint: [...behavior.programs, ...behavior.instructionTypes].slice(0, 50),
+      behaviorFingerprint: behaviorSampleReliable
+        ? [...behavior.programs, ...behavior.instructionTypes].slice(0, 50)
+        : null,
       campaignQualityScore: qualityScore,
       campaignOnlyRatio: campaignRatio,
       behaviorDiversityScore: diversityScore,
       botScriptScore: scriptScore,
       rawData: {
+        enrichmentSchemaVersion: SOLANA_ENRICHMENT_SCHEMA_VERSION,
         sampledSignatures: signatures.length,
         sampledTransactions: parsedTransactions.length,
+        sampledTransactionsRequested: transactionCoverage.requestedCount,
+        sampledTransactionsResolved: transactionCoverage.resolvedCount,
+        sampledTransactionsFailed: transactionCoverage.failedCount,
+        transactionSampleCoverage:
+          transactionCoverage.requestedCount > 0
+            ? Number((transactionCoverage.resolvedCount / transactionCoverage.requestedCount).toFixed(3))
+            : 0,
+        behaviorSampleReliable,
         signatureSampleLimit: history.targetLimit,
         deepHistory: Boolean(options?.deepHistory),
         oldestSignature,
         historyTruncated: history.historyTruncated,
+        walletAgeIsLowerBound: history.historyTruncated,
         firstFundingAt: fundingEvidence?.observedAt ?? null,
         firstFundingAmount: fundingEvidence?.amount ?? null,
         accountType: classification.accountType,
@@ -809,6 +909,9 @@ export const heliusProvider: OnChainProvider = {
         behaviorProgramCount: behavior.programs.length,
         behaviorInstructionTypeCount: behavior.instructionTypes.length,
         activeDays,
+        tokenAccountCoverageComplete,
+        legacyTokenAccountsObserved: legacyTokenAccounts.accounts.length,
+        token2022TokenAccountsObserved: token2022Accounts.accounts.length,
         campaignOnlyRatio: campaignRatio,
         behaviorDiversityScore: diversityScore,
         botScriptScore: scriptScore,

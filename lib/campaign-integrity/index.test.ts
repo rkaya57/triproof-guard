@@ -55,7 +55,7 @@ describe("campaign integrity snapshot", () => {
       behaviorSimilarityScore: 82,
       suggestedAction: "manual_review",
       reasons: [
-        "V1.7 corroborated Sybil cohort: at least two independent relationship signals overlap",
+        "V1.8 corroborated Sybil cohort: at least two independent relationship signals overlap",
         "Campaign evidence: matching task type, points band, and completion time window",
         "Campaign evidence: matching privacy-preserving participant fingerprint",
       ],

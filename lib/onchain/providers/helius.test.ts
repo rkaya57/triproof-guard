@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { afterEach, describe, it } from "node:test"
 
 import { RateLimitError } from "@/lib/onchain/rate-limit"
-import { getSolanaRpcUrls, getSolanaSignatureHistory, solanaRpc } from "./helius"
+import { getSolanaRpcUrls, getSolanaSignatureHistory, heliusProvider, solanaRpc } from "./helius"
 
 const originalFetch = globalThis.fetch
 const originalRpcUrl = process.env.SOLANA_RPC_URL
@@ -11,6 +11,8 @@ const originalHeliusKey = process.env.HELIUS_API_KEY
 const originalAlchemyKey = process.env.ALCHEMY_API_KEY
 const originalSampleLimit = process.env.SOLANA_SIGNATURE_SAMPLE_LIMIT
 const originalDeepLimit = process.env.SOLANA_DEEP_HISTORY_LIMIT
+const originalTransactionLimit = process.env.SOLANA_TRANSACTION_SAMPLE_LIMIT
+const originalRpcInterval = process.env.SOLANA_RPC_MIN_INTERVAL_MS
 
 afterEach(() => {
   globalThis.fetch = originalFetch
@@ -26,6 +28,10 @@ afterEach(() => {
   else process.env.SOLANA_SIGNATURE_SAMPLE_LIMIT = originalSampleLimit
   if (originalDeepLimit === undefined) delete process.env.SOLANA_DEEP_HISTORY_LIMIT
   else process.env.SOLANA_DEEP_HISTORY_LIMIT = originalDeepLimit
+  if (originalTransactionLimit === undefined) delete process.env.SOLANA_TRANSACTION_SAMPLE_LIMIT
+  else process.env.SOLANA_TRANSACTION_SAMPLE_LIMIT = originalTransactionLimit
+  if (originalRpcInterval === undefined) delete process.env.SOLANA_RPC_MIN_INTERVAL_MS
+  else process.env.SOLANA_RPC_MIN_INTERVAL_MS = originalRpcInterval
 })
 
 describe("Solana RPC resilience", () => {
@@ -168,5 +174,119 @@ describe("Solana RPC resilience", () => {
     assert.equal(history.signatures.length, 3)
     assert.equal(history.historyTruncated, true)
     assert.equal((requests[0]?.params[1] as { limit: number }).limit, 3)
+  })
+
+  it("does not manufacture behavior risk when transaction details are unavailable", async () => {
+    process.env.SOLANA_RPC_URL = "https://coverage.rpc.example"
+    process.env.SOLANA_TRANSACTION_SAMPLE_LIMIT = "4"
+    process.env.SOLANA_RPC_MIN_INTERVAL_MS = "1"
+    delete process.env.SOLANA_RPC_FALLBACK_URLS
+    delete process.env.HELIUS_API_KEY
+    delete process.env.ALCHEMY_API_KEY
+
+    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body)) as { method: string; params: unknown[] }
+      let result: unknown
+
+      if (request.method === "getBalance") result = { value: 1_000_000_000 }
+      else if (request.method === "getSignaturesForAddress") {
+        result = [
+          { signature: "sig-4", blockTime: 400 },
+          { signature: "sig-3", blockTime: 300 },
+          { signature: "sig-2", blockTime: 200 },
+          { signature: "sig-1", blockTime: 100 },
+        ]
+      } else if (request.method === "getTokenAccountsByOwner") {
+        const filter = request.params[1] as { programId?: string }
+        if (filter.programId?.startsWith("TokenzQd")) {
+          return new Response(JSON.stringify({ error: { code: -32000, message: "unavailable" } }), {
+            status: 503,
+            headers: { "content-type": "application/json" },
+          })
+        }
+        result = { value: [] }
+      }
+      else if (request.method === "getAccountInfo") {
+        result = {
+          value: {
+            executable: false,
+            owner: "11111111111111111111111111111111",
+            lamports: 1_000_000_000,
+          },
+        }
+      } else if (request.method === "getTransaction") result = null
+      else throw new Error(`Unexpected RPC method: ${request.method}`)
+
+      return new Response(JSON.stringify({ result }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    }) as typeof fetch
+
+    const enriched = await heliusProvider.enrichWallet(
+      "22222222222222222222222222222222",
+      "Solana"
+    )
+    const rawData = enriched.rawData as Record<string, unknown>
+
+    assert.equal(enriched.accountType, "system_user_wallet")
+    assert.equal(enriched.tokenCount, null)
+    assert.equal(enriched.contractsCount, null)
+    assert.equal(enriched.uniqueCounterparties, null)
+    assert.equal(enriched.totalVolume, null)
+    assert.equal(enriched.behaviorDiversityScore, null)
+    assert.equal(enriched.botScriptScore, null)
+    assert.equal(enriched.campaignQualityScore, null)
+    assert.equal(rawData.behaviorSampleReliable, false)
+    assert.equal(rawData.sampledTransactionsRequested, 4)
+    assert.equal(rawData.sampledTransactionsResolved, 0)
+  })
+
+  it("distinguishes historical activity from a currently missing account and counts Token-2022", async () => {
+    process.env.SOLANA_RPC_URL = "https://historical.rpc.example"
+    process.env.SOLANA_TRANSACTION_SAMPLE_LIMIT = "1"
+    process.env.SOLANA_RPC_MIN_INTERVAL_MS = "1"
+    delete process.env.SOLANA_RPC_FALLBACK_URLS
+    delete process.env.HELIUS_API_KEY
+    delete process.env.ALCHEMY_API_KEY
+
+    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body)) as { method: string; params: unknown[] }
+      let result: unknown
+
+      if (request.method === "getBalance") result = { value: 0 }
+      else if (request.method === "getSignaturesForAddress") {
+        result = [{ signature: "historical-sig", blockTime: 100 }]
+      } else if (request.method === "getTokenAccountsByOwner") {
+        const filter = request.params[1] as { programId?: string }
+        result = filter.programId?.startsWith("TokenzQd")
+          ? {
+              value: [
+                {
+                  pubkey: "token-2022-account",
+                  account: { data: { parsed: { info: { tokenAmount: { uiAmount: 1 } } } } },
+                },
+              ],
+            }
+          : { value: [] }
+      } else if (request.method === "getAccountInfo") result = { value: null }
+      else if (request.method === "getTransaction") result = null
+      else throw new Error(`Unexpected RPC method: ${request.method}`)
+
+      return new Response(JSON.stringify({ result }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    }) as typeof fetch
+
+    const enriched = await heliusProvider.enrichWallet(
+      "33333333333333333333333333333333",
+      "Solana"
+    )
+
+    assert.equal(enriched.accountType, "historical_unresolved_account")
+    assert.equal(enriched.txCount, 1)
+    assert.equal(enriched.tokenCount, 1)
+    assert.equal(enriched.botScriptScore, null)
   })
 })

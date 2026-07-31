@@ -16,7 +16,11 @@ import { mergeEnrichment } from "@/lib/onchain/merge"
 import { parseCampaignContracts } from "@/lib/validators/wallet"
 import { deliverAnalysisCompletedWebhook } from "@/lib/webhooks/deliver"
 import type { AnalysisMode, EnrichmentMeta, ParsedWallet } from "@/types"
-import type { EnrichmentSummary, WalletEnrichmentResult } from "@/lib/onchain/enrichment-types"
+import {
+  SOLANA_ENRICHMENT_SCHEMA_VERSION,
+  type EnrichmentSummary,
+  type WalletEnrichmentResult,
+} from "@/lib/onchain/enrichment-types"
 
 const MAX_BATCH_RETRIES = Math.max(3, Number.parseInt(process.env.ANALYSIS_MAX_BATCH_RETRIES ?? "5", 10) || 5)
 
@@ -477,6 +481,8 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
           knownEntityType: wallet.entityType,
           enrichmentStatus: wallet.enrichmentStatus ?? "completed",
           rawData: {
+            enrichmentSchemaVersion:
+              wallet.chain === "Solana" ? SOLANA_ENRICHMENT_SCHEMA_VERSION : null,
             accountType: wallet.accountType ?? null,
             ownerProgram: wallet.ownerProgram ?? null,
             behaviorFingerprint: wallet.behaviorFingerprint ?? [],
