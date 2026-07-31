@@ -9,6 +9,8 @@ type WalletProvider = {
   publicKey?: { toString(): string }
   connect(): Promise<{ publicKey?: { toString(): string } } | void>
   signAndSendTransaction(transaction: TransactionInstance): Promise<{ signature?: string } | string>
+  isPhantom?: boolean
+  isSolflare?: boolean
 }
 
 type PublicKeyInstance = {
@@ -42,7 +44,16 @@ type ConnectionInstance = {
   confirmTransaction(
     strategy: { signature: string; blockhash: string; lastValidBlockHeight: number },
     commitment: "confirmed"
-  ): Promise<unknown>
+  ): Promise<{ value?: { err?: unknown } }>
+  getSignatureStatuses(
+    signatures: string[],
+    config: { searchTransactionHistory: boolean }
+  ): Promise<{
+    value?: Array<{
+      err?: unknown
+      confirmationStatus?: "processed" | "confirmed" | "finalized" | null
+    } | null>
+  }>
 }
 
 type SolanaWeb3 = {
@@ -59,12 +70,87 @@ type SolanaWeb3 = {
 type BrowserWindow = Window & {
   solana?: WalletProvider
   solflare?: WalletProvider
+  phantom?: { solana?: WalletProvider }
   solanaWeb3?: SolanaWeb3
 }
 
-function getWallet() {
-  const browserWindow = window as BrowserWindow
-  return browserWindow.solana ?? browserWindow.solflare ?? null
+type WalletProviderSources = Pick<BrowserWindow, "solana" | "solflare" | "phantom">
+
+function isWalletProvider(value: unknown): value is WalletProvider {
+  if (!value || typeof value !== "object") return false
+  const provider = value as Partial<WalletProvider>
+  return (
+    typeof provider.connect === "function" &&
+    typeof provider.signAndSendTransaction === "function"
+  )
+}
+
+export function findSolanaWalletProvider(sources: WalletProviderSources) {
+  const candidates = [
+    sources.solana,
+    sources.phantom?.solana,
+    sources.solflare,
+  ].filter(isWalletProvider)
+  const unique = Array.from(new Set(candidates))
+  return unique.find((provider) => provider.publicKey) ?? unique[0] ?? null
+}
+
+async function waitForWalletProvider(timeoutMs = 3_000) {
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < timeoutMs) {
+    const provider = findSolanaWalletProvider(window as BrowserWindow)
+    if (provider) return provider
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  return findSolanaWalletProvider(window as BrowserWindow)
+}
+
+function isBlockHeightExpiredError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "")
+  const normalized = message.toLowerCase()
+  return (
+    normalized.includes("block height exceeded") ||
+    normalized.includes("blockhash not found") ||
+    normalized.includes("transactionexpiredblockheightexceeded")
+  )
+}
+
+async function confirmSubmittedTransaction(
+  connection: ConnectionInstance,
+  signature: string,
+  latest: { blockhash: string; lastValidBlockHeight: number }
+) {
+  try {
+    const confirmation = await connection.confirmTransaction(
+      { signature, blockhash: latest.blockhash, lastValidBlockHeight: latest.lastValidBlockHeight },
+      "confirmed"
+    )
+    if (confirmation.value?.err) {
+      throw new Error(`Solana rejected the transaction: ${JSON.stringify(confirmation.value.err)}`)
+    }
+  } catch (error) {
+    const status = await connection
+      .getSignatureStatuses([signature], { searchTransactionHistory: true })
+      .then((response) => response.value?.[0] ?? null)
+      .catch(() => null)
+
+    if (
+      status &&
+      !status.err &&
+      (status.confirmationStatus === "confirmed" || status.confirmationStatus === "finalized")
+    ) {
+      return
+    }
+    if (status?.err) {
+      throw new Error(`Solana rejected the transaction: ${JSON.stringify(status.err)}`)
+    }
+    if (isBlockHeightExpiredError(error)) {
+      throw new Error(
+        "The wallet approval expired before the payment reached Solana. No payment was recorded. Click Pay again and approve the new request promptly."
+      )
+    }
+    throw error
+  }
 }
 
 async function loadSolanaWeb3() {
@@ -208,9 +294,12 @@ async function sendSolanaPayment({
     connection: ConnectionInstance
   }) => Promise<TransactionInstructionInstance[]>
 }) {
-  const wallet = getWallet()
+  const wallet = await waitForWalletProvider()
   if (!wallet) {
-    throw new Error("Phantom or Solflare extension was not found. Install or unlock a Solana wallet and try again.")
+    const frameHint = window.self !== window.top ? " Open the checkout in a normal browser tab." : ""
+    throw new Error(
+      `Phantom or Solflare was not detected. Enable the wallet extension for this HTTPS site, unlock it, reload the page, and try again.${frameHint}`
+    )
   }
 
   const web3 = await loadSolanaWeb3()
@@ -239,14 +328,21 @@ async function sendSolanaPayment({
   transaction.feePayer = owner
   transaction.recentBlockhash = latest.blockhash
 
-  const result = await wallet.signAndSendTransaction(transaction)
+  let result: { signature?: string } | string
+  try {
+    result = await wallet.signAndSendTransaction(transaction)
+  } catch (error) {
+    if (isBlockHeightExpiredError(error)) {
+      throw new Error(
+        "The wallet approval expired before submission. Reload the checkout and approve the new payment request promptly."
+      )
+    }
+    throw error
+  }
   const signature = typeof result === "string" ? result : result.signature
   if (!signature) throw new Error("Wallet did not return a transaction signature.")
 
-  await connection.confirmTransaction(
-    { signature, blockhash: latest.blockhash, lastValidBlockHeight: latest.lastValidBlockHeight },
-    "confirmed"
-  )
+  await confirmSubmittedTransaction(connection, signature, latest)
 
   return { signature }
 }
