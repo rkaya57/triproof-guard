@@ -8,7 +8,10 @@ import type {
   WalletRiskResult,
   WalletStatus,
 } from "@/types"
-import type { WalletGraphContext } from "@/lib/graph-intelligence"
+import {
+  normalizeGraphAddress,
+  type WalletGraphContext,
+} from "@/lib/graph-intelligence"
 import {
   analyzeWallets as analyzeWalletsLegacy,
   normalizeRiskPolicy,
@@ -67,6 +70,7 @@ export function riskPolicyThresholdSnapshot(policy: RiskPolicy) {
     automaticExclusionRequiresCorroboration: true,
     importedLabelsOverrideEngine: false,
     insufficientDataDecision: "manual_review",
+    conflictingPriorLabelsDecision: "manual_review",
   }
 }
 
@@ -77,6 +81,13 @@ type EvidenceFamily =
   | "referral"
   | "campaign_event"
   | "participant"
+
+type WalletDecision = {
+  status: WalletStatus
+  recommendedAction: SuggestedAction
+  statusExplanation: string
+  decisionReason: string
+}
 
 function clusterEvidenceFamilies(cluster: ClusterResult | null) {
   const families = new Set<EvidenceFamily>()
@@ -151,6 +162,43 @@ function contextOnlyReason(wallet: ParsedWallet) {
   return `Customer-provided context retained without overriding the engine decision${label ? ` (${label})` : ""}.`
 }
 
+function prepareCrossCampaignContext(context: CrossCampaignContext | null) {
+  if (!context) {
+    return {
+      context: null,
+      conflictKeys: new Set<string>(),
+    }
+  }
+
+  const conflictKeys = new Set<string>()
+  const walletSignals = Object.fromEntries(
+    Object.entries(context.walletSignals).map(([key, signal]) => {
+      const riskConfirmations =
+        signal.confirmedRiskCount + signal.reviewedRejectionCount
+      const hasConflict = riskConfirmations > 0 && signal.trustedUserCount > 0
+
+      if (hasConflict) conflictKeys.add(key)
+
+      return [
+        key,
+        hasConflict
+          ? {
+              ...signal,
+              // Preserve prior risk as capped context. A prior trusted label must
+              // not silently erase later confirmed-risk or rejection evidence.
+              trustedUserCount: 0,
+            }
+          : signal,
+      ]
+    })
+  )
+
+  return {
+    context: { walletSignals } satisfies CrossCampaignContext,
+    conflictKeys,
+  }
+}
+
 function decideWallet({
   wallet,
   cluster,
@@ -159,12 +207,7 @@ function decideWallet({
   wallet: WalletRiskResult
   cluster: ClusterResult | null
   riskPolicy: RiskPolicy
-}): {
-  status: WalletStatus
-  recommendedAction: SuggestedAction
-  statusExplanation: string
-  decisionReason: string
-} {
+}): WalletDecision {
   const policy = SAFETY_POLICY[riskPolicy]
   const hardEvidence = hasHardEvidence(wallet)
   const strongClusterEvidence = clusterHasAutomaticExclusionEvidence(cluster)
@@ -225,10 +268,7 @@ function decideWallet({
     }
   }
 
-  if (
-    hardEvidence &&
-    wallet.riskScore >= policy.hardRejectMin
-  ) {
+  if (hardEvidence && wallet.riskScore >= policy.hardRejectMin) {
     return {
       status: "rejected",
       recommendedAction: "reject",
@@ -238,10 +278,7 @@ function decideWallet({
     }
   }
 
-  if (
-    strongClusterEvidence &&
-    clusterSize >= policy.clusterRejectSize
-  ) {
+  if (strongClusterEvidence && clusterSize >= policy.clusterRejectSize) {
     return {
       status: "rejected",
       recommendedAction: "reject",
@@ -272,6 +309,20 @@ function decideWallet({
       ? `Gray Zone under ${policy.label} policy: the cohort is based on signals that can be common in legitimate campaigns. Referral, campaign timing, or similar participation evidence cannot trigger automatic exclusion without stronger corroboration.`
       : `Gray Zone under ${policy.label} policy: risk evidence requires human review but does not meet the automatic Sybil rejection standard.`,
     decisionReason: weakCluster ? "weak_cluster_evidence" : "manual_review",
+  }
+}
+
+function applyCrossCampaignConflict(
+  decision: WalletDecision,
+  hasConflict: boolean
+): WalletDecision {
+  if (!hasConflict || decision.status === "rejected") return decision
+  return {
+    status: "manual_review",
+    recommendedAction: "manual_review",
+    statusExplanation:
+      "Gray Zone: prior workspace reviews contain both trusted-user and confirmed-risk/rejection evidence. Conflicting historical labels cannot approve or reject the current wallet automatically.",
+    decisionReason: "cross_campaign_conflict",
   }
 }
 
@@ -319,13 +370,14 @@ export function analyzeWallets(
     ...wallet,
     policyAction: null,
   }))
+  const preparedCrossCampaign = prepareCrossCampaignContext(crossCampaignContext)
 
   const legacyResult = analyzeWalletsLegacy(
     sanitizedWallets,
     enrichment,
     normalizedPolicy,
     graphContext,
-    crossCampaignContext
+    preparedCrossCampaign.context
   )
   const clusterById = new Map(
     legacyResult.clusters.map((cluster) => [cluster.clusterLabel, cluster])
@@ -335,7 +387,16 @@ export function analyzeWallets(
     const walletKey = `${wallet.chain}:${wallet.walletAddress}`
     const context = customerContext.get(walletKey)
     const cluster = wallet.clusterId ? clusterById.get(wallet.clusterId) ?? null : null
-    const decision = decideWallet({ wallet, cluster, riskPolicy: normalizedPolicy })
+    const crossCampaignKey = normalizeGraphAddress(wallet.walletAddress, wallet.chain)
+    const baseDecision = decideWallet({
+      wallet,
+      cluster,
+      riskPolicy: normalizedPolicy,
+    })
+    const decision = applyCrossCampaignConflict(
+      baseDecision,
+      preparedCrossCampaign.conflictKeys.has(crossCampaignKey)
+    )
     const original = originalWalletByKey.get(walletKey)
     const customerReason = original ? contextOnlyReason(original) : null
     const reasons = [
@@ -344,6 +405,11 @@ export function analyzeWallets(
           !reason.startsWith("V1.4 reputation/policy signal:") &&
           !reason.startsWith("V1.4 policy reason:")
       ),
+      ...(preparedCrossCampaign.conflictKeys.has(crossCampaignKey)
+        ? [
+            "Cross-campaign conflict: prior trusted-user and confirmed-risk/reviewer-rejection labels coexist; manual review is required.",
+          ]
+        : []),
       `Decision category: ${decision.decisionReason}`,
       `Engine version: ${SYBIL_ENGINE_VERSION}`,
       `Ruleset version: ${SYBIL_RULESET_VERSION}`,
