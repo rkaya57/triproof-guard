@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client"
 
 import { normalizeChainAddress } from "@/lib/address-normalization"
 import {
-  ANALYSIS_WORKER_ID,
+  createAnalysisBatchLeaseToken,
   recoverStaleAnalysisBatches,
   startAnalysisBatchHeartbeat,
 } from "@/lib/analysis/batch-lease"
@@ -43,6 +43,7 @@ type BatchRow = {
   enrichmentResults: unknown | null
   enrichmentSummary: unknown | null
   retryCount: number
+  errorMessage: string | null
 }
 
 type BatchReadinessRow = {
@@ -265,7 +266,7 @@ export async function createAnalysisBatches(
 
 async function claimNextBatch(analysisId?: string) {
   await recoverStaleAnalysisBatches(analysisId)
-  const leaseLabel = `Worker lease: ${ANALYSIS_WORKER_ID}`
+  const leaseToken = createAnalysisBatchLeaseToken()
 
   const rows = analysisId
     ? await db.$queryRaw<BatchRow[]>`
@@ -285,7 +286,7 @@ async function claimNextBatch(analysisId?: string) {
             "startedAt" = NOW(),
             "updatedAt" = NOW(),
             "completedAt" = NULL,
-            "errorMessage" = ${leaseLabel}
+            "errorMessage" = ${leaseToken}
         FROM next_batch
         WHERE b."id" = next_batch."id"
           AND b."status" = 'pending'
@@ -307,7 +308,7 @@ async function claimNextBatch(analysisId?: string) {
             "startedAt" = NOW(),
             "updatedAt" = NOW(),
             "completedAt" = NULL,
-            "errorMessage" = ${leaseLabel}
+            "errorMessage" = ${leaseToken}
         FROM next_batch
         WHERE b."id" = next_batch."id"
           AND b."status" = 'pending'
@@ -720,7 +721,18 @@ async function processBatch(batch: BatchRow) {
   const analysis = await db.analysis.findUnique({ where: { id: batch.analysisId }, include: { project: true } })
   if (!analysis) return { processed: true, status: "failed", message: "Analysis not found." }
 
-  const stopHeartbeat = startAnalysisBatchHeartbeat(batch.id)
+  const leaseToken = batch.errorMessage
+  if (!leaseToken?.startsWith("Worker lease: ")) {
+    return {
+      processed: false,
+      status: "lease_missing",
+      analysisId: batch.analysisId,
+      batchId: batch.id,
+      message: "Analysis batch lease token is missing.",
+    }
+  }
+
+  const stopHeartbeat = startAnalysisBatchHeartbeat(batch.id, leaseToken)
   const wallets = parseJson<ParsedWallet[]>(batch.walletData, [])
   const mode = (analysis.analysisMode ?? "onchain") as AnalysisMode
   const campaignContracts = extractCampaignContracts(analysis.project.notes)
@@ -751,7 +763,7 @@ async function processBatch(batch: BatchRow) {
       const retrying = nextRetryCount < MAX_BATCH_RETRIES
       const message = `${unresolvedAddresses.length.toLocaleString()} wallet enrichment(s) remain unavailable after provider failover. Successful wallets were retained; only unresolved wallets will be retried.`
 
-      await db.$executeRaw`
+      const updated = await db.$executeRaw`
         UPDATE "AnalysisBatch"
         SET "status" = ${retrying ? "pending" : "failed"},
             "retryCount" = ${nextRetryCount},
@@ -764,8 +776,18 @@ async function processBatch(batch: BatchRow) {
             "completedAt" = CASE WHEN ${retrying} THEN NULL ELSE NOW() END
         WHERE "id" = ${batch.id}
           AND "status" = 'processing'
+          AND "errorMessage" = ${leaseToken}
       `
 
+      if (updated === 0) {
+        return {
+          processed: false,
+          status: "lease_lost",
+          analysisId: batch.analysisId,
+          batchId: batch.id,
+          message: "Analysis batch lease changed before retry results were committed.",
+        }
+      }
       if (!retrying) await finalizeAnalysisIfReady(batch.analysisId)
       return {
         processed: true,
@@ -776,7 +798,7 @@ async function processBatch(batch: BatchRow) {
       }
     }
 
-    await db.$executeRaw`
+    const updated = await db.$executeRaw`
       UPDATE "AnalysisBatch"
       SET "status" = 'completed',
           "processedCount" = ${previousResults.size},
@@ -788,7 +810,18 @@ async function processBatch(batch: BatchRow) {
           "errorMessage" = NULL
       WHERE "id" = ${batch.id}
         AND "status" = 'processing'
+        AND "errorMessage" = ${leaseToken}
     `
+
+    if (updated === 0) {
+      return {
+        processed: false,
+        status: "lease_lost",
+        analysisId: batch.analysisId,
+        batchId: batch.id,
+        message: "Analysis batch lease changed before completion was committed.",
+      }
+    }
 
     const completed = await finalizeAnalysisIfReady(batch.analysisId)
     return { processed: true, status: completed ? "completed" : "processed", analysisId: batch.analysisId, batchId: batch.id, message: completed ? "Analysis completed." : "Batch processed." }
@@ -797,7 +830,7 @@ async function processBatch(batch: BatchRow) {
     const retrying = nextRetryCount < MAX_BATCH_RETRIES
     const message = error instanceof Error ? error.message : "Unknown batch error"
 
-    await db.$executeRaw`
+    const updated = await db.$executeRaw`
       UPDATE "AnalysisBatch"
       SET "status" = ${retrying ? "pending" : "failed"},
           "retryCount" = ${nextRetryCount},
@@ -806,8 +839,18 @@ async function processBatch(batch: BatchRow) {
           "completedAt" = CASE WHEN ${retrying} THEN NULL ELSE NOW() END
       WHERE "id" = ${batch.id}
         AND "status" = 'processing'
+        AND "errorMessage" = ${leaseToken}
     `
 
+    if (updated === 0) {
+      return {
+        processed: false,
+        status: "lease_lost",
+        analysisId: batch.analysisId,
+        batchId: batch.id,
+        message: "Analysis batch lease changed before the failure state was committed.",
+      }
+    }
     if (!retrying) await finalizeAnalysisIfReady(batch.analysisId)
     return { processed: true, status: retrying ? "retrying" : "failed", analysisId: batch.analysisId, batchId: batch.id, message }
   } finally {
