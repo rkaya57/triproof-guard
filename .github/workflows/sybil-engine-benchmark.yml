@@ -7,6 +7,14 @@ on:
         description: Comma-separated wallet counts
         required: true
         default: "1000,10000,50000"
+  push:
+    branches:
+      - fix/sybil-engine-safety
+    paths:
+      - .github/workflows/sybil-engine-benchmark.yml
+      - scripts/benchmark-sybil-engine.ts
+      - lib/risk-engine.ts
+      - lib/graph-intelligence.ts
 
 permissions:
   contents: read
@@ -31,7 +39,7 @@ jobs:
 
       - name: Run benchmark
         env:
-          BENCHMARK_SIZES: ${{ inputs.sizes }}
+          BENCHMARK_SIZES: ${{ inputs.sizes || '1000,10000,50000' }}
         run: npm run benchmark:sybil | tee sybil-benchmark.jsonl
 
       - name: Upload benchmark output
