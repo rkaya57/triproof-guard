@@ -2,7 +2,6 @@ import type {
   AnalysisResult,
   ClusterResult,
   EnrichmentMeta,
-  EntityType,
   ParsedWallet,
   RiskPolicy,
   SuggestedAction,
@@ -20,6 +19,10 @@ import {
 
 export { normalizeRiskPolicy, riskPolicyFromNotes }
 export type { CrossCampaignContext, CrossCampaignWalletSignal }
+
+export const SYBIL_ENGINE_VERSION = "2.0.0"
+export const SYBIL_RULESET_VERSION = "2026-08-01"
+export const RISK_POLICY_VERSION = "2"
 
 type SafetyPolicy = {
   approveMax: number
@@ -51,6 +54,20 @@ const SAFETY_POLICY: Record<RiskPolicy, SafetyPolicy> = {
     clusterRejectSize: 6,
     label: "Strict",
   },
+}
+
+export function riskPolicyThresholdSnapshot(policy: RiskPolicy) {
+  const normalized = normalizeRiskPolicy(policy)
+  return {
+    engineVersion: SYBIL_ENGINE_VERSION,
+    rulesetVersion: SYBIL_RULESET_VERSION,
+    riskPolicyVersion: RISK_POLICY_VERSION,
+    policy: normalized,
+    ...SAFETY_POLICY[normalized],
+    automaticExclusionRequiresCorroboration: true,
+    importedLabelsOverrideEngine: false,
+    insufficientDataDecision: "manual_review",
+  }
 }
 
 type EvidenceFamily =
@@ -283,6 +300,9 @@ export function analyzeWallets(
   crossCampaignContext: CrossCampaignContext | null = null
 ): AnalysisResult {
   const normalizedPolicy = normalizeRiskPolicy(riskPolicy)
+  const originalWalletByKey = new Map(
+    wallets.map((wallet) => [`${wallet.chain}:${wallet.walletAddress}`, wallet])
+  )
   const customerContext = new Map(
     wallets.map((wallet) => [
       `${wallet.chain}:${wallet.walletAddress}`,
@@ -312,13 +332,11 @@ export function analyzeWallets(
   )
 
   const safeWallets = legacyResult.wallets.map((wallet) => {
-    const context = customerContext.get(`${wallet.chain}:${wallet.walletAddress}`)
+    const walletKey = `${wallet.chain}:${wallet.walletAddress}`
+    const context = customerContext.get(walletKey)
     const cluster = wallet.clusterId ? clusterById.get(wallet.clusterId) ?? null : null
     const decision = decideWallet({ wallet, cluster, riskPolicy: normalizedPolicy })
-    const original = wallets.find(
-      (candidate) =>
-        candidate.chain === wallet.chain && candidate.walletAddress === wallet.walletAddress
-    )
+    const original = originalWalletByKey.get(walletKey)
     const customerReason = original ? contextOnlyReason(original) : null
     const reasons = [
       ...wallet.reasons.filter(
@@ -327,6 +345,8 @@ export function analyzeWallets(
           !reason.startsWith("V1.4 policy reason:")
       ),
       `Decision category: ${decision.decisionReason}`,
+      `Engine version: ${SYBIL_ENGINE_VERSION}`,
+      `Ruleset version: ${SYBIL_RULESET_VERSION}`,
       ...(customerReason ? [customerReason] : []),
     ]
 
