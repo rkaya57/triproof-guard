@@ -31,6 +31,9 @@ function demoWallets(): ParsedWallet[] {
       totalVolume: healthy ? 95 + index * 1.7 : isLargeCluster ? 1 + (index % 8) : 8 + index * 0.3,
       contractsCount: healthy ? 8 + (index % 18) : isLargeCluster ? index % 2 : 2 + (index % 6),
       campaignActionsCount: healthy ? 1 + (index % 4) : 5 + (index % 8),
+      referrerAddress: isLargeCluster ? evmAddress(900001) : null,
+      referralCode: isMediumCluster ? "COMMUNITY-DEMO" : null,
+      referralTimestamp: isLargeCluster || isMediumCluster ? `2026-02-10T${String(8 + (index % 4)).padStart(2, "0")}:00:00.000Z` : null,
     })
   }
 
@@ -61,5 +64,6 @@ export function getDemoAnalysis(): AnalysisDetail {
     },
     wallets: result.wallets,
     clusters: result.clusters.slice(0, 8),
+    graph: result.graph,
   }
 }

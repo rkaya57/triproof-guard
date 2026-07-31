@@ -69,6 +69,7 @@ import {
 } from "@/components/ui/table"
 import { MetricCard } from "@/components/dashboard/metric-card"
 import { WalletGraphIntelligencePanel } from "@/components/analysis/wallet-graph-intelligence"
+import { CampaignIntegrityPanel } from "@/components/analysis/campaign-integrity-panel"
 import { AiDecisionBriefPanel } from "@/components/analysis/ai-decision-brief"
 import { useToast } from "@/components/ui/toast"
 import {
@@ -1330,11 +1331,11 @@ export function AnalysisDetail({
     <div className="flex flex-col gap-6">
       <ReportReadyExperience analysis={analysis} exportPath={exportPath} onShare={() => void shareReport()} />
       <DecisionCenterPanel analysis={analysis} exportPath={exportPath} />
-      <AiDecisionBriefPanel
+      {analysis.id !== "demo" && <AiDecisionBriefPanel
         analysisId={analysis.id}
         initialBrief={analysis.aiBrief}
         onBriefChange={handleAiBriefChange}
-      />
+      />}
 
       <div className="sticky top-0 z-20 hidden rounded-lg border border-border bg-background/90 p-3 shadow-lg backdrop-blur md:flex md:items-center md:justify-between">
         <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -1524,7 +1525,9 @@ export function AnalysisDetail({
         <ClusterGraphView analysis={analysis} />
       </div>
 
-      <WalletGraphIntelligencePanel analysisId={analysis.id} summary={analysis.graph} />
+      <CampaignIntegrityPanel graph={analysis.graph} totalWallets={analysis.totalWallets} />
+
+      {analysis.id !== "demo" && <WalletGraphIntelligencePanel analysisId={analysis.id} summary={analysis.graph} />}
 
       <ReviewOpsPanel analysis={analysis} />
 

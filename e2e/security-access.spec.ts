@@ -93,6 +93,17 @@ test.describe("security access boundaries", () => {
     await expect(emailReview).toHaveAttribute("href", new RegExp(evmAddress))
   })
 
+  test("renders Campaign Integrity referral intelligence in the authenticated demo", async ({ page }) => {
+    await registerWithBrowser(page, "/dashboard/demo")
+    await expect(page).toHaveURL(/\/dashboard\/demo$/)
+
+    await expect(page.getByText("Referral Abuse Intelligence", { exact: true })).toBeVisible()
+    await expect(page.getByText("Integrity score", { exact: true })).toBeVisible()
+    await expect(page.getByText("Priority referral cohorts", { exact: true })).toBeVisible()
+    await expect(page.getByText("Referral evidence", { exact: true })).toBeVisible()
+    await expect(page.getByText("Coordinated funding and referral cohort", { exact: true })).toHaveCount(2)
+  })
+
   test("renders separate safety and risk scores for a critical ScamGuard result", async ({ page }) => {
     await registerWithBrowser(page, "/scamguard")
     await expect(page).toHaveURL(/\/scamguard$/)
