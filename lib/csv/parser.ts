@@ -39,6 +39,14 @@ function toNumber(value: string | undefined) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function toBooleanOrNull(value: string | null) {
+  if (!value) return null
+  const normalized = value.trim().toLowerCase()
+  if (["true", "1", "yes"].includes(normalized)) return true
+  if (["false", "0", "no"].includes(normalized)) return false
+  return null
+}
+
 function textOrNull(value: string | undefined) {
   const trimmed = value?.trim()
   return trimmed ? trimmed : null
@@ -212,6 +220,9 @@ export function parseWalletCsv(csvText: string, selectedChain: string): CsvParse
       txCount: toNumber(row.tx_count),
       walletAgeDays: toNumber(row.wallet_age_days),
       fundingSource: textOrNull(row.funding_source),
+      firstFundingAt: firstText(row, ["first_funding_at", "funding_timestamp", "first_funded_at"]),
+      firstFundingAmount: toNumber(row.first_funding_amount ?? row.funding_amount),
+      historyTruncated: toBooleanOrNull(firstText(row, ["history_truncated", "sampled_history"])),
       firstSeen: textOrNull(row.first_seen),
       lastSeen: textOrNull(row.last_seen),
       totalVolume: toNumber(row.total_volume),
@@ -240,6 +251,13 @@ export function parseWalletCsv(csvText: string, selectedChain: string): CsvParse
     "tx_count",
     "wallet_age_days",
     "funding_source",
+    "first_funding_at",
+    "funding_timestamp",
+    "first_funded_at",
+    "first_funding_amount",
+    "funding_amount",
+    "history_truncated",
+    "sampled_history",
     "first_seen",
     "last_seen",
     "total_volume",

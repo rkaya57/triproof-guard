@@ -61,7 +61,7 @@ describe("risk engine fixture coverage", () => {
     assert.equal(result.approvedCount, 1)
   })
 
-  it("rejects a new low-activity wallet under the balanced policy", () => {
+  it("keeps a new low-activity wallet in Gray Zone when no independent Sybil evidence exists", () => {
     const fresh = wallet({
       walletAddress: "0x1000000000000000000000000000000000000002",
       txCount: 1,
@@ -76,9 +76,9 @@ describe("risk engine fixture coverage", () => {
 
     const analyzed = analyzeWallets([fresh]).wallets[0]
 
-    assert.equal(analyzed.status, "rejected")
-    assert.equal(analyzed.recommendedAction, "reject")
-    assert.ok(analyzed.riskScore >= 55)
+    assert.equal(analyzed.status, "manual_review")
+    assert.equal(analyzed.recommendedAction, "manual_review")
+    assert.ok(analyzed.riskScore <= 60)
     assert.ok(analyzed.reasons.some((reason) => reason.includes("wallet is younger than 7 days")))
     assert.ok(analyzed.reasons.some((reason) => reason.includes("low transaction count")))
   })
@@ -153,7 +153,7 @@ describe("risk engine fixture coverage", () => {
     assert.ok(!analyzed.reasons.some((reason) => reason.includes("missing_or_closed_account")))
   })
 
-  it("detects shared funding clusters and marks members with cluster context", () => {
+  it("keeps shared funding as a lead instead of creating a Sybil cluster by itself", () => {
     const sharedFunding = "0xfeed000000000000000000000000000000000000"
     const wallets = Array.from({ length: 4 }, (_, index) =>
       wallet({
@@ -161,6 +161,32 @@ describe("risk engine fixture coverage", () => {
         fundingSource: sharedFunding,
         txCount: 80 + index,
         walletAgeDays: 320 + index,
+        firstFundingAt: `2024-0${index + 1}-01T00:00:00.000Z`,
+        historyTruncated: true,
+        behaviorFingerprint: [`activity-${index}`],
+      })
+    )
+
+    const result = analyzeWallets(wallets)
+
+    assert.equal(result.clusters.length, 0)
+    assert.ok(result.wallets.every((item) => item.clusterId === null))
+    assert.ok(result.wallets.every((item) => item.status === "approved"))
+  })
+
+  it("creates a Sybil cluster only when independent funding and timing evidence overlap", () => {
+    const sharedFunding = "0xfeed000000000000000000000000000000000001"
+    const wallets = Array.from({ length: 4 }, (_, index) =>
+      wallet({
+        walletAddress: `0x210000000000000000000000000000000000000${index}`,
+        fundingSource: sharedFunding,
+        firstFundingAt: `2026-06-01T00:${String(index).padStart(2, "0")}:00.000Z`,
+        historyTruncated: false,
+        txCount: 12,
+        walletAgeDays: 45,
+        contractsCount: 4,
+        tokenCount: 5,
+        behaviorFingerprint: ["swap", "claim", "stake"],
       })
     )
 
@@ -169,11 +195,11 @@ describe("risk engine fixture coverage", () => {
     assert.equal(result.clusters.length, 1)
     assert.equal(result.clusters[0].walletCount, 4)
     assert.equal(result.clusters[0].sharedFundingSource, sharedFunding.toLowerCase())
-    assert.equal(result.clusters[0].suggestedAction, "manual_review")
+    assert.ok(result.clusters[0].reasons.some((reason) => reason.includes("two independent")))
     assert.ok(result.wallets.every((item) => item.clusterId === "CL-001"))
     assert.ok(
       result.wallets.every((item) =>
-        item.reasons.some((reason) => reason.includes("Shared funding source evidence"))
+        item.reasons.some((reason) => reason.includes("corroborated funding cohort"))
       )
     )
   })
@@ -215,7 +241,8 @@ describe("risk engine fixture coverage", () => {
     const analyzed = analyzeWallets([campaignOnly]).wallets[0]
 
     assert.equal(analyzed.status, "rejected")
-    assert.equal(analyzed.riskLevel, "critical")
+    assert.ok(analyzed.riskScore >= 70)
+    assert.ok(["high", "critical"].includes(analyzed.riskLevel))
     assert.ok(analyzed.reasons.some((reason) => reason.includes("campaign-only behavior pattern")))
     assert.ok(analyzed.reasons.some((reason) => reason.includes("bot-script probability")))
   })

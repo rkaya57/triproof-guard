@@ -4,6 +4,20 @@ import { describe, it } from "node:test"
 import { parseWalletCsv } from "@/lib/csv/parser"
 
 describe("wallet CSV referral fields", () => {
+  it("preserves optional first-funding evidence without inventing sampling metadata", () => {
+    const csv = [
+      "wallet_address,first_funding_at,first_funding_amount,history_truncated",
+      "0x0000000000000000000000000000000000000001,2026-07-01T10:00:00.000Z,1.25,true",
+      "0x0000000000000000000000000000000000000002,,,",
+    ].join("\n")
+    const result = parseWalletCsv(csv, "Ethereum")
+
+    assert.equal(result.wallets[0].firstFundingAt, "2026-07-01T10:00:00.000Z")
+    assert.equal(result.wallets[0].firstFundingAmount, 1.25)
+    assert.equal(result.wallets[0].historyTruncated, true)
+    assert.equal(result.wallets[1].historyTruncated, null)
+  })
+
   it("normalizes referral aliases into graph-ready fields", () => {
     const csv = [
       "wallet_address,referrer_wallet,invite_code,referred_at",

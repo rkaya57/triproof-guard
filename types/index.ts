@@ -67,6 +67,9 @@ export type ParsedWallet = {
   txCount: number | null
   walletAgeDays: number | null
   fundingSource: string | null
+  firstFundingAt?: string | null
+  firstFundingAmount?: number | null
+  historyTruncated?: boolean | null
   firstSeen: string | null
   lastSeen: string | null
   totalVolume: number | null

@@ -29,6 +29,10 @@ export type EnrichedWalletData = {
   campaignActionsCount: number | null
   uniqueCounterparties: number | null
   fundingSource: string | null
+  firstFundingAt?: string | null
+  firstFundingAmount?: number | null
+  /** True when the provider sampled a bounded history window rather than the full address history. */
+  historyTruncated?: boolean | null
   isContract: boolean | null
   knownEntityLabel: string | null
   knownEntityType: string | null

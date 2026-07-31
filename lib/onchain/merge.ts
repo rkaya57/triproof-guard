@@ -68,6 +68,11 @@ export function mergeEnrichment(
       txCount: pickNumber(wallet.txCount, data.txCount, apiWins),
       walletAgeDays: pickNumber(wallet.walletAgeDays, data.walletAgeDays, apiWins),
       fundingSource: pickString(wallet.fundingSource, data.fundingSource, apiWins),
+      firstFundingAt: pickString(wallet.firstFundingAt, data.firstFundingAt, apiWins),
+      firstFundingAmount: pickNumber(wallet.firstFundingAmount, data.firstFundingAmount, apiWins),
+      historyTruncated: apiWins
+        ? data.historyTruncated ?? wallet.historyTruncated ?? null
+        : wallet.historyTruncated ?? data.historyTruncated ?? null,
       firstSeen: pickString(wallet.firstSeen, data.firstSeen, apiWins),
       lastSeen,
       totalVolume: pickNumber(wallet.totalVolume, data.totalVolume, apiWins),

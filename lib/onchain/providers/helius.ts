@@ -334,7 +334,7 @@ function classifyAccount(address: string, accountInfo: ParsedAccountInfoResult |
   }
 }
 
-function extractFundingSource(tx: ParsedTransaction | null, walletAddress: string) {
+function extractFundingEvidence(tx: ParsedTransaction | null, walletAddress: string) {
   const instructions = tx?.transaction?.message?.instructions ?? []
 
   for (const instruction of instructions) {
@@ -351,7 +351,15 @@ function extractFundingSource(tx: ParsedTransaction | null, walletAddress: strin
       source &&
       source !== walletAddress
     ) {
-      return source
+      const lamports = Number(info.lamports ?? 0)
+      return {
+        source,
+        observedAt: isoFromUnix(tx?.blockTime),
+        amount:
+          Number.isFinite(lamports) && lamports > 0
+            ? Number((lamports / lamportsPerSol).toFixed(9))
+            : null,
+      }
     }
   }
 
@@ -634,35 +642,45 @@ export const heliusProvider: OnChainProvider = {
       const uiAmount = item.account?.data?.parsed?.info?.tokenAmount?.uiAmount
       return typeof uiAmount === "number" && uiAmount > 0
     }).length
-    const fundingSource = extractFundingSource(oldestTransaction, address)
+    const fundingEvidence = extractFundingEvidence(oldestTransaction, address)
+    const fundingSource = fundingEvidence?.source ?? null
     const programCount = behavior.programs.length
     const actionCount = campaignActionCount(parsedTransactions, options?.campaignContracts)
     const activeDays = activeDayCount(signatures)
-    const diversityScore = behaviorDiversityScore({
-      programCount,
-      activeDays,
-      counterparties: counterparties.size,
-      tokenCount: activeTokenAccounts,
-    })
-    const campaignRatio = campaignOnlyRatio(actionCount, parsedTransactions.length)
-    const scriptScore = botScriptScore({
-      walletAgeDays,
-      txCount: signatures.length,
-      activeDays,
-      programCount,
-      counterparties: counterparties.size,
-      campaignRatio,
-      accountType: classification.accountType,
-      diversityScore,
-    })
-    const qualityScore = campaignQualityScore({
-      walletAgeDays,
-      txCount: signatures.length,
-      programCount,
-      tokenCount: activeTokenAccounts,
-      fundingSource,
-      accountType: classification.accountType,
-    })
+    const isUserWallet = classification.accountType === "system_user_wallet"
+    const diversityScore = isUserWallet
+      ? behaviorDiversityScore({
+          programCount,
+          activeDays,
+          counterparties: counterparties.size,
+          tokenCount: activeTokenAccounts,
+        })
+      : null
+    const campaignRatio = isUserWallet
+      ? campaignOnlyRatio(actionCount, parsedTransactions.length)
+      : null
+    const scriptScore = isUserWallet
+      ? botScriptScore({
+          walletAgeDays,
+          txCount: signatures.length,
+          activeDays,
+          programCount,
+          counterparties: counterparties.size,
+          campaignRatio,
+          accountType: classification.accountType,
+          diversityScore: diversityScore ?? 0,
+        })
+      : null
+    const qualityScore = isUserWallet
+      ? campaignQualityScore({
+          walletAgeDays,
+          txCount: signatures.length,
+          programCount,
+          tokenCount: activeTokenAccounts,
+          fundingSource,
+          accountType: classification.accountType,
+        })
+      : null
 
     return {
       walletAddress: address,
@@ -679,6 +697,9 @@ export const heliusProvider: OnChainProvider = {
       campaignActionsCount: actionCount,
       uniqueCounterparties: counterparties.size,
       fundingSource,
+      firstFundingAt: fundingEvidence?.observedAt ?? null,
+      firstFundingAmount: fundingEvidence?.amount ?? null,
+      historyTruncated: signatures.length >= solanaSignatureSampleLimit,
       isContract: classification.isContract,
       knownEntityLabel: classification.knownEntityLabel,
       knownEntityType: classification.knownEntityType,
@@ -694,6 +715,9 @@ export const heliusProvider: OnChainProvider = {
         sampledTransactions: parsedTransactions.length,
         signatureSampleLimit: solanaSignatureSampleLimit,
         oldestSignature,
+        historyTruncated: signatures.length >= solanaSignatureSampleLimit,
+        firstFundingAt: fundingEvidence?.observedAt ?? null,
+        firstFundingAmount: fundingEvidence?.amount ?? null,
         accountType: classification.accountType,
         ownerProgram: classification.ownerProgram,
         behaviorProgramCount: behavior.programs.length,

@@ -299,17 +299,24 @@ export function buildWalletGraphIntelligence(
         confidence: wallet.enrichmentStatus === "completed" ? 88 : 78,
         isRiskBearing: !neutral || Boolean(knownBadLabel),
         componentId: null,
-        observedAt: wallet.firstSeen ?? null,
+        observedAt: wallet.firstFundingAt ?? wallet.firstSeen ?? null,
         transactionId: null,
-        amount: null,
+        amount: wallet.firstFundingAmount ?? null,
         evidence: [
           wallet.enrichmentStatus === "completed"
-            ? `First funding source observed by ${wallet.enrichmentProvider ?? "the on-chain provider"}`
+            ? `First funding transaction observed by ${wallet.enrichmentProvider ?? "the on-chain provider"}`
             : "Funding source supplied with campaign data",
+          ...(wallet.historyTruncated
+            ? ["Provider history is sampled; the funding observation may not be the wallet's original funding event"]
+            : []),
           ...(neutral ? [`Recognized ${entity?.type ?? "service"} source; shared funding is neutralized`] : []),
           ...(knownBadLabel ? [`Admin threat intelligence: ${knownBadLabel}`] : []),
         ],
-        metadata: { neutralService: neutral, knownBadFundingSource: Boolean(knownBadLabel) },
+        metadata: {
+          neutralService: neutral,
+          knownBadFundingSource: Boolean(knownBadLabel),
+          historyTruncated: wallet.historyTruncated ?? null,
+        },
       })
       if (knownBadLabel) {
         applySignal(
@@ -424,7 +431,11 @@ export function buildWalletGraphIntelligence(
     })
 
     const timestamps = walletKeys
-      .map((key) => parseTimestamp(walletsByKey.get(key)?.firstSeen))
+      .map((key) => {
+        const wallet = walletsByKey.get(key)
+        const observedAt = wallet?.firstFundingAt ?? (wallet?.historyTruncated ? null : wallet?.firstSeen)
+        return parseTimestamp(observedAt)
+      })
       .filter((value): value is number => value !== null)
     if (group.length >= 4 && timestamps.length >= Math.ceil(group.length * 0.7)) {
       const spreadHours = (Math.max(...timestamps) - Math.min(...timestamps)) / 3_600_000

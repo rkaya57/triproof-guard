@@ -34,7 +34,8 @@ describe("wallet referral and funding graph intelligence", () => {
       Array.from({ length: 5 }, (_, index) =>
         wallet(index + 1, {
           fundingSource: funder,
-          firstSeen: `2026-07-01T1${index}:00:00.000Z`,
+          firstFundingAt: `2026-07-01T1${index}:00:00.000Z`,
+          firstFundingAmount: 0.25,
           enrichmentStatus: "completed",
           enrichmentProvider: "alchemy",
         })
@@ -46,6 +47,27 @@ describe("wallet referral and funding graph intelligence", () => {
     const signal = graphSignalForWallet(result, address(1), "Ethereum")
     assert.equal(signal.riskDelta, 8)
     assert.match(signal.reasons[0] ?? "", /funded by one unknown source/i)
+    assert.equal(result.graph.edges[0]?.amount, 0.25)
+    assert.match(result.graph.edges[0]?.evidence[0] ?? "", /funding transaction/i)
+  })
+
+  it("does not infer a funding-time burst from sampled wallet history", () => {
+    const funder = address(901)
+    const result = buildWalletGraphIntelligence(
+      Array.from({ length: 5 }, (_, index) =>
+        wallet(index + 1, {
+          fundingSource: funder,
+          firstSeen: `2026-07-01T1${index}:00:00.000Z`,
+          historyTruncated: true,
+          enrichmentStatus: "completed",
+          enrichmentProvider: "helius",
+        })
+      )
+    )
+
+    assert.ok(!result.graph.findings.some((finding) => finding.code === "BURST_FUNDING"))
+    assert.equal(graphSignalForWallet(result, address(1), "Ethereum").riskDelta, 0)
+    assert.match(result.graph.edges[0]?.evidence.join(" ") ?? "", /history is sampled/i)
   })
 
   it("neutralizes a recognized exchange funding source", () => {
