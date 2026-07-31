@@ -19,9 +19,12 @@ export function chunk<T>(items: T[], size: number): T[][] {
 }
 
 export class RateLimitError extends Error {
-  constructor(message = "Provider rate limit reached") {
+  readonly retryAfterMs: number | null
+
+  constructor(message = "Provider rate limit reached", retryAfterMs: number | null = null) {
     super(message)
     this.name = "RateLimitError"
+    this.retryAfterMs = retryAfterMs
   }
 }
 

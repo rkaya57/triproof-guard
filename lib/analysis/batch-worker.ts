@@ -18,7 +18,7 @@ import { deliverAnalysisCompletedWebhook } from "@/lib/webhooks/deliver"
 import type { AnalysisMode, EnrichmentMeta, ParsedWallet } from "@/types"
 import type { EnrichmentSummary, WalletEnrichmentResult } from "@/lib/onchain/enrichment-types"
 
-const MAX_BATCH_RETRIES = 3
+const MAX_BATCH_RETRIES = Math.max(3, Number.parseInt(process.env.ANALYSIS_MAX_BATCH_RETRIES ?? "5", 10) || 5)
 
 type BatchRow = {
   id: string
@@ -99,6 +99,39 @@ function resultMap(entries: unknown) {
     if (entry?.address && entry?.result) map.set(entry.address, entry.result)
   })
   return map
+}
+
+function completedResultMap(entries: unknown) {
+  const completed = new Map<string, WalletEnrichmentResult>()
+  resultMap(entries).forEach((result, address) => {
+    if (result.status === "completed") completed.set(address, result)
+  })
+  return completed
+}
+
+function batchSummary(
+  current: EnrichmentSummary,
+  results: Map<string, WalletEnrichmentResult>,
+  previous: EnrichmentSummary | null,
+  unresolvedCount = 0
+): EnrichmentSummary {
+  const warnings = new Set([...(previous?.warnings ?? []), ...(current.warnings ?? [])])
+  const providers = new Set(
+    [...results.values()]
+      .filter((result) => result.status === "completed")
+      .map((result) => result.provider)
+      .filter(Boolean)
+  )
+  const completed = Array.from(results.values()).filter((result) => result.status === "completed").length
+
+  return {
+    ...current,
+    provider: Array.from(providers).join(",") || current.provider,
+    enrichedCount: completed,
+    failedCount: unresolvedCount,
+    cacheHits: (previous?.cacheHits ?? 0) + current.cacheHits,
+    warnings: Array.from(warnings),
+  }
 }
 
 function mergeSummary(mode: AnalysisMode, summaries: EnrichmentSummary[]): EnrichmentMeta | null {
@@ -600,23 +633,64 @@ async function processBatch(batch: BatchRow) {
   const mode = (analysis.analysisMode ?? "onchain") as AnalysisMode
   const campaignContracts = extractCampaignContracts(analysis.project.notes)
   const deepHistory = hasDeepHistoryEnabled(analysis.project.notes)
+  const previousSummary = parseJson<EnrichmentSummary | null>(batch.enrichmentSummary, null)
+  const previousResults = completedResultMap(batch.enrichmentResults)
+  const walletsToEnrich = wallets.filter((wallet) => !previousResults.has(wallet.walletAddress))
 
   try {
     await db.analysis.update({ where: { id: analysis.id }, data: { status: "enriching", enrichmentStatus: "processing" } })
     const { results, summary } = await enrichWallets({
-      addresses: wallets.map((wallet) => wallet.walletAddress),
+      addresses: walletsToEnrich.map((wallet) => wallet.walletAddress),
       chain: analysis.project.chain,
       mode,
       options: { campaignContracts, deepHistory },
     })
 
+    results.forEach((result, address) => {
+      if (result.status === "completed") previousResults.set(address, result)
+    })
+    const unresolvedAddresses = wallets
+      .map((wallet) => wallet.walletAddress)
+      .filter((address) => !previousResults.has(address))
+    const combinedSummary = batchSummary(summary, previousResults, previousSummary, unresolvedAddresses.length)
+
+    if (unresolvedAddresses.length > 0) {
+      const nextRetryCount = (batch.retryCount ?? 0) + 1
+      const retrying = nextRetryCount < MAX_BATCH_RETRIES
+      const message = `${unresolvedAddresses.length.toLocaleString()} wallet enrichment(s) remain unavailable after provider failover. Successful wallets were retained; only unresolved wallets will be retried.`
+
+      await db.$executeRaw`
+        UPDATE "AnalysisBatch"
+        SET "status" = ${retrying ? "pending" : "failed"},
+            "retryCount" = ${nextRetryCount},
+            "processedCount" = ${previousResults.size},
+            "failedCount" = ${unresolvedAddresses.length},
+            "enrichmentResults" = ${JSON.stringify(resultEntries(previousResults))}::jsonb,
+            "enrichmentSummary" = ${JSON.stringify(combinedSummary)}::jsonb,
+            "errorMessage" = ${message},
+            "updatedAt" = NOW(),
+            "completedAt" = CASE WHEN ${retrying} THEN NULL ELSE NOW() END
+        WHERE "id" = ${batch.id}
+          AND "status" = 'processing'
+      `
+
+      if (!retrying) await finalizeAnalysisIfReady(batch.analysisId)
+      return {
+        processed: true,
+        status: retrying ? "retrying" : "failed",
+        analysisId: batch.analysisId,
+        batchId: batch.id,
+        message,
+      }
+    }
+
     await db.$executeRaw`
       UPDATE "AnalysisBatch"
       SET "status" = 'completed',
-          "processedCount" = ${wallets.length},
-          "failedCount" = ${summary.failedCount},
-          "enrichmentResults" = ${JSON.stringify(resultEntries(results))}::jsonb,
-          "enrichmentSummary" = ${JSON.stringify(summary)}::jsonb,
+          "processedCount" = ${previousResults.size},
+          "failedCount" = 0,
+          "enrichmentResults" = ${JSON.stringify(resultEntries(previousResults))}::jsonb,
+          "enrichmentSummary" = ${JSON.stringify(combinedSummary)}::jsonb,
           "completedAt" = NOW(),
           "updatedAt" = NOW(),
           "errorMessage" = NULL

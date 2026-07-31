@@ -247,6 +247,8 @@ SOLANA_RPC_URL="https://your-solana-rpc"
 HELIUS_API_KEY="helius-key"
 # Optional comma-separated backup endpoints from a separate RPC provider.
 SOLANA_RPC_FALLBACK_URLS="https://your-secondary-solana-rpc"
+# When ALCHEMY_API_KEY is configured, its Solana endpoint is also used as a
+# server-side fallback after a rate limit or transient provider failure.
 ```
 
 ### EVM
@@ -293,9 +295,12 @@ ONCHAIN_REQUEST_DELAY_MS="500"
 ONCHAIN_CACHE_TTL_HOURS="24"
 SOLANA_RPC_MAX_CONCURRENCY="3"
 SOLANA_RPC_MIN_INTERVAL_MS="125"
+SOLANA_RPC_ENDPOINT_COOLDOWN_MS="15000"
+SOLANA_TRANSACTION_SAMPLE_LIMIT="12"
 SOLANA_SIGNATURE_SAMPLE_LIMIT="250"
 # Used only when the Deep Solana history option is selected for an analysis.
 SOLANA_DEEP_HISTORY_LIMIT="1000"
+ANALYSIS_MAX_BATCH_RETRIES="5"
 ```
 
 Provider calls run server-side only. Solana requests are globally rate-limited, retried with backoff, and can fail over to `SOLANA_RPC_FALLBACK_URLS`. API keys never reach the browser, and raw provider responses are not exposed in the UI.

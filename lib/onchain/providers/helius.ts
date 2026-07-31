@@ -19,6 +19,7 @@ const rpcQueue: RpcQueueJob<unknown>[] = []
 let activeRpcRequests = 0
 let nextRpcStartAt = 0
 let rpcQueueTimer: ReturnType<typeof setTimeout> | null = null
+const rpcEndpointCooldowns = new Map<string, number>()
 
 type RpcResponse<T> = {
   result?: T
@@ -117,20 +118,32 @@ function solanaHistoryLimits() {
 function configuredRpcUrls() {
   const explicit = process.env.SOLANA_RPC_URL?.trim()
   const heliusApiKey = process.env.HELIUS_API_KEY?.trim()
+  const alchemyApiKey = process.env.ALCHEMY_API_KEY?.trim()
   const fallbacks = (process.env.SOLANA_RPC_FALLBACK_URLS ?? "")
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean)
 
-  return Array.from(
-    new Set(
-      [
-        explicit,
-        heliusApiKey ? `https://mainnet.helius-rpc.com/?api-key=${heliusApiKey}` : null,
-        ...fallbacks,
-      ].filter((value): value is string => Boolean(value))
-    )
-  )
+  const urls = [
+    explicit,
+    heliusApiKey ? `https://mainnet.helius-rpc.com/?api-key=${heliusApiKey}` : null,
+    // Alchemy supports Solana JSON-RPC. Use an already-configured Alchemy key
+    // as a real fallback instead of leaving a campaign with partial evidence.
+    alchemyApiKey ? `https://solana-mainnet.g.alchemy.com/v2/${alchemyApiKey}` : null,
+    ...fallbacks,
+  ].filter((value): value is string => Boolean(value))
+
+  const unique = new Map<string, string>()
+  urls.forEach((value) => {
+    try {
+      const normalized = new URL(value).toString().replace(/\/$/, "")
+      if (!unique.has(normalized)) unique.set(normalized, value)
+    } catch {
+      if (!unique.has(value)) unique.set(value, value)
+    }
+  })
+
+  return Array.from(unique.values())
 }
 
 export function getSolanaRpcUrl() {
@@ -190,6 +203,28 @@ function isRateLimitResponse(response: Response, payload: RpcResponse<unknown> |
   )
 }
 
+function retryAfterMs(value: string | null) {
+  if (!value) return null
+  const seconds = Number(value)
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds * 1000)
+  const timestamp = Date.parse(value)
+  return Number.isFinite(timestamp) ? Math.max(0, timestamp - Date.now()) : null
+}
+
+function endpointCooldownRemainingMs(rpcUrl: string) {
+  const until = rpcEndpointCooldowns.get(rpcUrl)
+  if (!until) return 0
+  const remaining = until - Date.now()
+  if (remaining > 0) return remaining
+  rpcEndpointCooldowns.delete(rpcUrl)
+  return 0
+}
+
+function markEndpointCooldown(rpcUrl: string, delayMs: number | null) {
+  const fallback = positiveEnvNumber("SOLANA_RPC_ENDPOINT_COOLDOWN_MS", 15_000)
+  rpcEndpointCooldowns.set(rpcUrl, Date.now() + Math.max(fallback, delayMs ?? 0))
+}
+
 async function rpcRequest<T>(rpcUrl: string, method: string, params: unknown[]): Promise<T> {
   const response = await fetch(rpcUrl, {
     method: "POST",
@@ -214,7 +249,8 @@ async function rpcRequest<T>(rpcUrl: string, method: string, params: unknown[]):
   if (isRateLimitResponse(response, payload, body)) {
     const retryAfter = response.headers.get("retry-after")
     throw new RateLimitError(
-      `Solana RPC ${method} rate limited${retryAfter ? `; retry after ${retryAfter}s` : ""}`
+      `Solana RPC ${method} rate limited${retryAfter ? `; retry after ${retryAfter}s` : ""}`,
+      retryAfterMs(retryAfter)
     )
   }
 
@@ -231,12 +267,17 @@ export async function solanaRpc<T>(method: string, params: unknown[] = []): Prom
     throw new Error("HELIUS_API_KEY, SOLANA_RPC_URL, or SOLANA_RPC_FALLBACK_URLS is not configured")
   }
 
+  const readyUrls = rpcUrls.filter((rpcUrl) => endpointCooldownRemainingMs(rpcUrl) === 0)
+  const endpoints = readyUrls.length ? readyUrls : rpcUrls
   let lastError: unknown = null
-  for (const rpcUrl of rpcUrls) {
+  for (const rpcUrl of endpoints) {
     try {
       return await scheduleRpc(() => rpcRequest<T>(rpcUrl, method, params))
     } catch (error) {
       lastError = error
+      if (error instanceof RateLimitError) {
+        markEndpointCooldown(rpcUrl, error.retryAfterMs)
+      }
     }
   }
 
@@ -421,11 +462,14 @@ function estimateNativeVolume(tx: ParsedTransaction | null, walletAddress: strin
 }
 
 function selectedSignatureSample(signatures: SignatureInfo[]) {
+  const sampleLimit = Math.min(30, positiveEnvNumber("SOLANA_TRANSACTION_SAMPLE_LIMIT", 12))
+  const newestCount = Math.max(1, Math.ceil(sampleLimit * 2 / 3))
+  const oldestCount = Math.max(1, sampleLimit - newestCount)
   const map = new Map<string, SignatureInfo>()
-  ;[...signatures.slice(0, 20), ...signatures.slice(-10)].forEach((item) => {
+  ;[...signatures.slice(0, newestCount), ...signatures.slice(-oldestCount)].forEach((item) => {
     if (item.signature) map.set(item.signature, item)
   })
-  return Array.from(map.values()).slice(0, 30)
+  return Array.from(map.values()).slice(0, sampleLimit)
 }
 
 async function getSolanaTransactions(signatures: SignatureInfo[]) {
