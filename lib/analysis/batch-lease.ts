@@ -27,6 +27,10 @@ type RecoveredBatch = {
   status: string
 }
 
+export function createAnalysisBatchLeaseToken() {
+  return `Worker lease: ${ANALYSIS_WORKER_ID}:${crypto.randomUUID()}`
+}
+
 export async function recoverStaleAnalysisBatches(analysisId?: string) {
   const staleBefore = new Date(Date.now() - BATCH_LEASE_TIMEOUT_MS)
   const leaseMessage = `Recovered stale analysis worker lease after ${Math.round(
@@ -88,7 +92,10 @@ export async function recoverStaleAnalysisBatches(analysisId?: string) {
   }
 }
 
-export function startAnalysisBatchHeartbeat(batchId: string) {
+export function startAnalysisBatchHeartbeat(
+  batchId: string,
+  leaseToken: string
+) {
   let stopped = false
 
   const heartbeat = async () => {
@@ -99,6 +106,7 @@ export function startAnalysisBatchHeartbeat(batchId: string) {
         SET "updatedAt" = NOW()
         WHERE "id" = ${batchId}
           AND "status" = 'processing'
+          AND "errorMessage" = ${leaseToken}
       `
     } catch (error) {
       console.error("Analysis batch heartbeat failed", { batchId, error })
