@@ -1,9 +1,19 @@
 import { Prisma } from "@prisma/client"
 
+import { normalizeChainAddress } from "@/lib/address-normalization"
+import {
+  ANALYSIS_WORKER_ID,
+  recoverStaleAnalysisBatches,
+  startAnalysisBatchHeartbeat,
+} from "@/lib/analysis/batch-lease"
 import { db } from "@/lib/db/prisma"
 import {
   analyzeWallets,
   riskPolicyFromNotes,
+  riskPolicyThresholdSnapshot,
+  RISK_POLICY_VERSION,
+  SYBIL_ENGINE_VERSION,
+  SYBIL_RULESET_VERSION,
   type CrossCampaignContext,
 } from "@/lib/risk-engine"
 import {
@@ -45,6 +55,13 @@ type BatchReadinessRow = {
 
 type BatchWriteClient = Pick<Prisma.TransactionClient, "$executeRaw">
 
+type FundingIntelEntry = {
+  normalized: string
+  chain: string
+  verdict: "TRUSTED" | "KNOWN_BAD"
+  label: string
+}
+
 function toDate(value: string | null | undefined) {
   if (!value) return null
   const parsed = new Date(value)
@@ -66,9 +83,64 @@ function hasDeepHistoryEnabled(notes: string | null | undefined) {
 
 function intelChainMatches(entryChain: string, walletChain: string) {
   if (!entryChain) return true
+  const normalizedEntryChain = entryChain.trim().toLowerCase()
   const normalizedWalletChain = walletChain.trim().toLowerCase()
-  if (entryChain === normalizedWalletChain) return true
-  return entryChain === "evm" && normalizedWalletChain !== "solana"
+  if (normalizedEntryChain === normalizedWalletChain) return true
+  return normalizedEntryChain === "evm" && normalizedWalletChain !== "solana"
+}
+
+function normalizeIntelAddress(address: string, chain: string) {
+  const normalizedChain = chain.trim().toLowerCase()
+  if (normalizedChain === "solana") return normalizeChainAddress(address, "Solana")
+  if (normalizedChain === "evm" || address.trim().startsWith("0x")) {
+    return normalizeChainAddress(address, "Ethereum")
+  }
+  return address.trim()
+}
+
+function buildFundingIntelLookup(entries: FundingIntelEntry[]) {
+  const exact = new Map<string, FundingIntelEntry[]>()
+  const legacyFolded = new Map<string, FundingIntelEntry[]>()
+
+  entries.forEach((entry) => {
+    const exactKey = normalizeIntelAddress(entry.normalized, entry.chain)
+    exact.set(exactKey, [...(exact.get(exactKey) ?? []), entry])
+    const foldedKey = entry.normalized.trim().toLowerCase()
+    legacyFolded.set(foldedKey, [...(legacyFolded.get(foldedKey) ?? []), entry])
+  })
+
+  return { exact, legacyFolded }
+}
+
+function selectFundingIntel(
+  lookup: ReturnType<typeof buildFundingIntelLookup>,
+  fundingSource: string,
+  walletChain: string
+) {
+  const exactKey = normalizeChainAddress(fundingSource, walletChain)
+  const exactCandidates = (lookup.exact.get(exactKey) ?? []).filter((entry) =>
+    intelChainMatches(entry.chain, walletChain)
+  )
+  if (exactCandidates.length) return exactCandidates[0] ?? null
+
+  if (walletChain.trim().toLowerCase() !== "solana") {
+    return (
+      (lookup.legacyFolded.get(fundingSource.trim().toLowerCase()) ?? []).find((entry) =>
+        intelChainMatches(entry.chain, walletChain)
+      ) ?? null
+    )
+  }
+
+  const legacyCandidates = (lookup.legacyFolded.get(fundingSource.trim().toLowerCase()) ?? [])
+    .filter((entry) => intelChainMatches(entry.chain, walletChain))
+  const distinctStoredAddresses = new Set(
+    legacyCandidates.map((entry) => entry.normalized.trim())
+  )
+
+  // Legacy Solana intel may have been stored in lower case. Accept it only when
+  // the folded lookup is unambiguous; otherwise ignore it rather than trusting
+  // or blocking the wrong case-sensitive base58 address.
+  return distinctStoredAddresses.size === 1 ? legacyCandidates[0] ?? null : null
 }
 
 function chunkArray<T>(items: T[], size: number) {
@@ -192,6 +264,9 @@ export async function createAnalysisBatches(
 }
 
 async function claimNextBatch(analysisId?: string) {
+  await recoverStaleAnalysisBatches(analysisId)
+  const leaseLabel = `Worker lease: ${ANALYSIS_WORKER_ID}`
+
   const rows = analysisId
     ? await db.$queryRaw<BatchRow[]>`
         WITH next_batch AS (
@@ -210,7 +285,7 @@ async function claimNextBatch(analysisId?: string) {
             "startedAt" = NOW(),
             "updatedAt" = NOW(),
             "completedAt" = NULL,
-            "errorMessage" = NULL
+            "errorMessage" = ${leaseLabel}
         FROM next_batch
         WHERE b."id" = next_batch."id"
           AND b."status" = 'pending'
@@ -232,7 +307,7 @@ async function claimNextBatch(analysisId?: string) {
             "startedAt" = NOW(),
             "updatedAt" = NOW(),
             "completedAt" = NULL,
-            "errorMessage" = NULL
+            "errorMessage" = ${leaseLabel}
         FROM next_batch
         WHERE b."id" = next_batch."id"
           AND b."status" = 'pending'
@@ -301,6 +376,7 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
 
     const mode = (analysis.analysisMode ?? "onchain") as AnalysisMode
     const riskPolicy = riskPolicyFromNotes(analysis.project.notes)
+    const thresholdSnapshot = riskPolicyThresholdSnapshot(riskPolicy)
     const enrichmentMeta = mergeSummary(mode, summaries)
     const walletsForAnalysis = enrichmentResults.size
       ? mergeEnrichment(originalWallets, enrichmentResults, mode)
@@ -317,24 +393,18 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
         verdict: true,
         label: true,
       },
-    })
+    }) as FundingIntelEntry[]
     const graphContext: WalletGraphContext = {
       trustedFundingSources: {},
       knownBadFundingSources: {},
     }
-    const fundingIntelByAddress = new Map<string, typeof fundingIntel>()
-    fundingIntel.forEach((entry) => {
-      fundingIntelByAddress.set(entry.normalized, [
-        ...(fundingIntelByAddress.get(entry.normalized) ?? []),
-        entry,
-      ])
-    })
+    const fundingIntelLookup = buildFundingIntelLookup(fundingIntel)
     walletsForAnalysis.forEach((wallet) => {
       if (!wallet.fundingSource) return
-      const normalized = wallet.fundingSource.trim().toLowerCase()
-      const entry = (fundingIntelByAddress.get(normalized) ?? []).find(
-        (candidate) =>
-          intelChainMatches(candidate.chain, wallet.chain)
+      const entry = selectFundingIntel(
+        fundingIntelLookup,
+        wallet.fundingSource,
+        wallet.chain
       )
       if (!entry) return
       const key = fundingContextKey(wallet.fundingSource, wallet.chain)
@@ -483,6 +553,10 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
           rawData: {
             enrichmentSchemaVersion:
               wallet.chain === "Solana" ? SOLANA_ENRICHMENT_SCHEMA_VERSION : null,
+            engineVersion: SYBIL_ENGINE_VERSION,
+            rulesetVersion: SYBIL_RULESET_VERSION,
+            riskPolicyVersion: RISK_POLICY_VERSION,
+            thresholdSnapshot,
             accountType: wallet.accountType ?? null,
             ownerProgram: wallet.ownerProgram ?? null,
             behaviorFingerprint: wallet.behaviorFingerprint ?? [],
@@ -571,6 +645,13 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
       })
     }
 
+    const versionWarnings = [
+      `Sybil engine version: ${SYBIL_ENGINE_VERSION}`,
+      `Sybil ruleset version: ${SYBIL_RULESET_VERSION}`,
+      `Risk policy version: ${RISK_POLICY_VERSION}`,
+      `Risk threshold snapshot: ${JSON.stringify(thresholdSnapshot)}`,
+    ]
+
     await tx.analysis.update({
       where: { id: analysisId },
       data: {
@@ -587,7 +668,10 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
         failedEnrichmentCount: enrichmentMeta?.failedCount ?? 0,
         cacheHitCount: enrichmentMeta?.cacheHits ?? 0,
         usedMockFallback: enrichmentMeta?.usedMockFallback ?? false,
-        enrichmentWarnings: enrichmentMeta?.warnings ?? [],
+        enrichmentWarnings: [
+          ...(enrichmentMeta?.warnings ?? []),
+          ...versionWarnings,
+        ],
         enrichedAt: enrichmentMeta ? new Date() : null,
         completedAt: new Date(),
       },
@@ -606,6 +690,7 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
 }
 
 export async function finalizeReadyAnalyses(limit = 25) {
+  await recoverStaleAnalysisBatches()
   const rows = await db.$queryRaw<Array<{ id: string }>>`
     SELECT a."id"
     FROM "Analysis" a
@@ -635,6 +720,7 @@ async function processBatch(batch: BatchRow) {
   const analysis = await db.analysis.findUnique({ where: { id: batch.analysisId }, include: { project: true } })
   if (!analysis) return { processed: true, status: "failed", message: "Analysis not found." }
 
+  const stopHeartbeat = startAnalysisBatchHeartbeat(batch.id)
   const wallets = parseJson<ParsedWallet[]>(batch.walletData, [])
   const mode = (analysis.analysisMode ?? "onchain") as AnalysisMode
   const campaignContracts = extractCampaignContracts(analysis.project.notes)
@@ -724,6 +810,8 @@ async function processBatch(batch: BatchRow) {
 
     if (!retrying) await finalizeAnalysisIfReady(batch.analysisId)
     return { processed: true, status: retrying ? "retrying" : "failed", analysisId: batch.analysisId, batchId: batch.id, message }
+  } finally {
+    stopHeartbeat()
   }
 }
 
