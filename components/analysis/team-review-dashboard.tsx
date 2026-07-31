@@ -89,7 +89,9 @@ export function TeamReviewDashboard({ initialAnalysis }: { initialAnalysis: Anal
 
   const reviewSummary = analysis.teamReviewSummary ?? {
     reviewedWallets: analysis.wallets.filter((wallet) => wallet.teamReview).length,
-    pendingReview: analysis.wallets.filter((wallet) => !wallet.teamReview).length,
+    pendingReview: analysis.wallets.filter(
+      (wallet) => wallet.status === "manual_review" && !wallet.teamReview
+    ).length,
     approvedByTeam: analysis.wallets.filter((wallet) => wallet.teamReview?.finalStatus === "approved").length,
     grayZoneByTeam: analysis.wallets.filter((wallet) => wallet.teamReview?.finalStatus === "manual_review").length,
     rejectedByTeam: analysis.wallets.filter((wallet) => wallet.teamReview?.finalStatus === "rejected").length,

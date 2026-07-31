@@ -81,6 +81,7 @@ export async function POST(request: Request) {
       analysisMode: formData.get("analysisMode") ?? "onchain",
       riskPolicy: formData.get("riskPolicy") ?? "balanced",
       campaignContracts: formData.get("campaignContracts") ?? "",
+      deepHistory: formData.get("deepHistory") ?? false,
     })
 
     if (!parsedForm.success) {
@@ -151,6 +152,12 @@ export async function POST(request: Request) {
       warnings.push(`${campaignContracts.length.toLocaleString()} campaign address/program IDs will be used for campaign-action scoring.`)
     }
 
+    if (parsedForm.data.deepHistory) {
+      warnings.push(
+        "Deep Solana history is enabled. This analysis reads a larger signature window and may take longer."
+      )
+    }
+
     warnings.push(`Risk policy preset: ${parsedForm.data.riskPolicy}.`)
 
     const projectName =
@@ -160,6 +167,7 @@ export async function POST(request: Request) {
       parsedForm.data.notes || "",
       `TRIPROOF_RISK_POLICY=${parsedForm.data.riskPolicy}`,
       campaignContracts.length ? `TRIPROOF_CAMPAIGN_CONTRACTS=${campaignContracts.join(",")}` : "",
+      parsedForm.data.deepHistory ? "TRIPROOF_DEEP_HISTORY=true" : "",
       parsedCsv.mode === "basic"
         ? "Address-only CSV detected. Real on-chain enrichment required; no synthetic CSV-only data will be generated."
         : "Enriched CSV uploaded. Hybrid/On-chain mode will use real provider data where needed.",

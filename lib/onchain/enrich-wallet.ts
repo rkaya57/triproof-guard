@@ -125,7 +125,8 @@ export async function enrichWallets(
     await Promise.all(
       batch.map(async (address) => {
         const cached = getCachedEnrichment(chain, address)
-        if (cached && cached.provider !== "mock") {
+        const cacheIsDeepEnough = !options?.deepHistory || cached?.historyTruncated === false
+        if (cached && cached.provider !== "mock" && cacheIsDeepEnough) {
           cacheHits += 1
           enrichedCount += 1
           results.set(address, {
@@ -224,7 +225,8 @@ export async function enrichWallets(
           }
 
           const stale = getStaleCachedEnrichment(chain, address)
-          if (stale && stale.data.provider !== "mock") {
+          const staleCacheIsDeepEnough = !options?.deepHistory || stale?.data.historyTruncated === false
+          if (stale && stale.data.provider !== "mock" && staleCacheIsDeepEnough) {
             cacheHits += 1
             enrichedCount += 1
             usedProviders.add(stale.data.provider)

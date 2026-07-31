@@ -100,6 +100,10 @@ function rawStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : null
 }
 
+function rawBoolean(value: unknown) {
+  return typeof value === "boolean" ? value : null
+}
+
 export async function hydrateEnrichmentCacheFromPersistentStore(chain: string, addresses: string[]) {
   const config = getOnChainConfig()
   if (!config.persistentCacheEnabled || !addresses.length) return 0
@@ -139,6 +143,9 @@ export async function hydrateEnrichmentCacheFromPersistentStore(chain: string, a
         campaignActionsCount: row.campaignActionsCount,
         uniqueCounterparties: row.uniqueCounterparties,
         fundingSource: row.fundingSource,
+        firstFundingAt: rawString(raw.firstFundingAt),
+        firstFundingAmount: rawNumber(raw.firstFundingAmount),
+        historyTruncated: rawBoolean(raw.historyTruncated),
         isContract: row.isContract,
         knownEntityLabel: row.knownEntityLabel,
         knownEntityType: row.knownEntityType,

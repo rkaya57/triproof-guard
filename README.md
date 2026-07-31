@@ -107,6 +107,9 @@ The current product build includes a public landing page, ScamGuard scanner, Tel
 - Shared funding cluster detection
 - Persistent wallet, referral, and funding evidence graphs
 - Referral fan-out, self-referral, burst funding, circular path, and coordinated cohort detection
+- Corroborated task-timing and privacy-preserving participant-fingerprint cohorts
+- Workspace-scoped prior review context, capped and never treated as conclusive alone
+- Optional deep Solana signature history for final campaign audits
 - Known exchange/service funding neutralization to reduce false positives
 - Known entity handling for exchange, service, contract, and protocol accounts
 - Approved, Gray Zone, and rejected/not-eligible outputs
@@ -291,6 +294,8 @@ ONCHAIN_CACHE_TTL_HOURS="24"
 SOLANA_RPC_MAX_CONCURRENCY="3"
 SOLANA_RPC_MIN_INTERVAL_MS="125"
 SOLANA_SIGNATURE_SAMPLE_LIMIT="250"
+# Used only when the Deep Solana history option is selected for an analysis.
+SOLANA_DEEP_HISTORY_LIMIT="1000"
 ```
 
 Provider calls run server-side only. Solana requests are globally rate-limited, retried with backoff, and can fail over to `SOLANA_RPC_FALLBACK_URLS`. API keys never reach the browser, and raw provider responses are not exposed in the UI.
@@ -308,14 +313,22 @@ wallet_address
 Enriched:
 
 ```csv
-wallet_address,chain,tx_count,wallet_age_days,funding_source,first_seen,last_seen,total_volume,contracts_count,campaign_actions_count,referrer_address,referral_code,referral_timestamp
-0x123...,Base,12,45,0xabc...,2026-01-10,2026-02-12,102.5,5,8,0xreferrer...,SPRING-26,2026-01-10T09:30:00Z
+wallet_address,chain,tx_count,wallet_age_days,funding_source,first_seen,last_seen,total_volume,contracts_count,campaign_actions_count,referrer_address,referral_code,referral_timestamp,campaign_event_at,campaign_event_type,campaign_points,participant_fingerprint
+0x123...,Base,12,45,0xabc...,2026-01-10,2026-02-12,102.5,5,8,0xreferrer...,SPRING-26,2026-01-10T09:30:00Z,2026-01-10T09:32:00Z,swap,25,cb9a8ba5a3c75dfa8c1d0c6e7c1ec89f
 ```
 
 Referral columns are optional. Supported aliases include `referrer_wallet`,
 `referred_by`, `inviter_wallet`, `invite_code`, `ref_code`, `referred_at`, and
 `invited_at`. Invalid referrer addresses are ignored and reported without
 dropping the participant row.
+
+Campaign event columns are optional. `campaign_event_at` and
+`campaign_event_type` let Tri-Proof correlate task timing with on-chain and
+referral evidence. `campaign_points` is grouped into broad bands rather than
+used as an individual identity signal. `participant_fingerprint` accepts only
+a 32-128 character hexadecimal one-way hash; raw device, session, email, or
+personal identifiers are ignored. A campaign cohort is created only when two
+independent evidence families overlap.
 
 ## Wallet, Referral, and Funding Graph Intelligence
 

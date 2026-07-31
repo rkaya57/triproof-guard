@@ -3,6 +3,7 @@ import type {
   WalletGraphFinding,
   WalletGraphSeverity,
   WalletGraphSummary,
+  ClusterResult,
 } from "@/types"
 
 export type CampaignIntegrityHealth = "strong" | "review" | "at_risk" | "critical" | "unavailable"
@@ -25,6 +26,12 @@ export type CampaignIntegritySnapshot = {
   referralLinks: number
   affectedWalletCount: number
   priorityCohorts: CampaignIntegrityCohort[]
+  campaignEvidenceCohorts: Array<
+    Pick<
+      ClusterResult,
+      "clusterLabel" | "walletCount" | "behaviorSimilarityScore" | "sharedFundingSource" | "reasons"
+    >
+  >
   signals: CampaignIntegritySignal[]
   recommendations: string[]
 }
@@ -78,6 +85,12 @@ function isPriorityFinding(finding: WalletGraphFinding) {
   return finding.severity === "high" || finding.severity === "critical"
 }
 
+function hasCampaignCohortEvidence(cluster: ClusterResult) {
+  return cluster.reasons.some((reason) =>
+    /Campaign evidence:|participant fingerprint|Referral evidence:/i.test(reason)
+  )
+}
+
 function describeReferralSource(value: string | null, reasons: string[]) {
   if (!value) {
     return reasons.some((reason) => /funding and referral|funder and referrer/i.test(reason))
@@ -93,27 +106,39 @@ function describeReferralSource(value: string | null, reasons: string[]) {
 
 export function buildCampaignIntegritySnapshot(
   graph: WalletGraphSummary | null | undefined,
-  totalWallets: number
+  totalWallets: number,
+  clusters: ClusterResult[] = []
 ): CampaignIntegritySnapshot {
-  if (!graph || graph.referralLinks === 0) {
+  const campaignEvidenceCohorts = clusters
+    .filter(hasCampaignCohortEvidence)
+    .sort(
+      (left, right) =>
+        right.behaviorSimilarityScore - left.behaviorSimilarityScore ||
+        right.walletCount - left.walletCount
+    )
+    .slice(0, 4)
+
+  if ((!graph || graph.referralLinks === 0) && !campaignEvidenceCohorts.length) {
     return {
       available: false,
       score: null,
       health: "unavailable",
       label: labelForHealth("unavailable"),
-      summary: "Add referral fields to a campaign CSV to evaluate referral abuse alongside wallet and funding evidence.",
+      summary: "Add referral or campaign-event fields to evaluate campaign integrity alongside wallet and funding evidence.",
       referralLinks: graph?.referralLinks ?? 0,
       affectedWalletCount: 0,
       priorityCohorts: [],
+      campaignEvidenceCohorts: [],
       signals: [],
       recommendations: [
         "Include referrer_address or referral_code in the next campaign upload.",
         "Include referral_timestamp when available so reviewers can inspect campaign timing alongside the graph.",
+        "Include campaign_event_at and campaign_event_type to inspect task-timing cohorts without importing raw personal identifiers.",
       ],
     }
   }
 
-  const signals = graph.findings
+  const signals = (graph?.findings ?? [])
     .filter(isReferralFinding)
     .map((finding) => ({
       ...finding,
@@ -130,7 +155,7 @@ export function buildCampaignIntegritySnapshot(
     prioritySignals.flatMap((finding) => finding.walletAddresses)
   )
   const referralWallets = new Set(signals.flatMap((finding) => finding.walletAddresses))
-  const priorityCohorts = graph.components
+  const priorityCohorts = (graph?.components ?? [])
     .filter((component) => component.walletAddresses.some((address) => referralWallets.has(address)))
     .sort(
       (left, right) =>
@@ -151,7 +176,14 @@ export function buildCampaignIntegritySnapshot(
     16,
     priorityCohorts.filter((component) => component.riskScore >= 55).length * 4
   )
-  const score = clamp(100 - signalPenalty - impactPenalty - cohortPenalty, 0, 100)
+  const campaignCohortPenalty = Math.min(
+    24,
+    campaignEvidenceCohorts.reduce(
+      (total, cohort) => total + (cohort.behaviorSimilarityScore >= 80 ? 10 : 6),
+      0
+    )
+  )
+  const score = clamp(100 - signalPenalty - impactPenalty - cohortPenalty - campaignCohortPenalty, 0, 100)
   const health = healthForScore(score)
   const recommendations: string[] = []
 
@@ -164,27 +196,37 @@ export function buildCampaignIntegritySnapshot(
   if (prioritySignals.some((finding) => finding.code === "CIRCULAR_WALLET_PATH")) {
     recommendations.push("Escalate circular wallet paths for manual review before finalizing rewards.")
   }
+  if (campaignEvidenceCohorts.some((cohort) => cohort.reasons.some((reason) => /Campaign evidence:/i.test(reason)))) {
+    recommendations.push("Review matching task type, points band, and completion-time cohorts alongside on-chain funding or referral evidence.")
+  }
+  if (campaignEvidenceCohorts.some((cohort) => cohort.reasons.some((reason) => /participant fingerprint/i.test(reason)))) {
+    recommendations.push("Validate fingerprint consent and hashing at the campaign source; never upload raw device or personal identifiers.")
+  }
   if (!recommendations.length) {
     recommendations.push("Referral volume is informational unless corroborated by other campaign signals.")
     recommendations.push("Review the largest referral cohorts before finalizing reward eligibility.")
   }
 
-  const riskSummary = prioritySignals.length
+  const referralSummary = prioritySignals.length
     ? `${prioritySignals.length} corroborated referral signal${prioritySignals.length === 1 ? "" : "s"} affect ${affectedWallets.size} wallet${affectedWallets.size === 1 ? "" : "s"}.`
     : "No high-severity referral abuse signal was recorded."
+  const campaignSummary = campaignEvidenceCohorts.length
+    ? `${campaignEvidenceCohorts.length} corroborated campaign cohort${campaignEvidenceCohorts.length === 1 ? "" : "s"} require reviewer attention.`
+    : "No corroborated campaign-event cohort was recorded."
 
   return {
     available: true,
     score,
     health,
     label: labelForHealth(health),
-    summary: `${riskSummary} Referral volume by itself does not lower campaign integrity.`,
-    referralLinks: graph.referralLinks,
+    summary: `${referralSummary} ${campaignSummary} A single campaign signal never lowers integrity on its own.`,
+    referralLinks: graph?.referralLinks ?? 0,
     affectedWalletCount: affectedWallets.size,
     priorityCohorts: priorityCohorts.map((component) => ({
       ...component,
       dominantReferrer: describeReferralSource(component.dominantReferrer, component.reasons),
     })),
+    campaignEvidenceCohorts,
     signals: signals.slice(0, 5),
     recommendations: recommendations.slice(0, 3),
   }

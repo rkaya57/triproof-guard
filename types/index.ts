@@ -96,6 +96,11 @@ export type ParsedWallet = {
   referrerAddress?: string | null
   referralCode?: string | null
   referralTimestamp?: string | null
+  campaignEventAt?: string | null
+  campaignEventType?: string | null
+  campaignPoints?: number | null
+  /** One-way, campaign-supplied participant/session fingerprint. Raw identifiers are not accepted. */
+  participantFingerprint?: string | null
   enrichmentProvider?: string | null
   enrichmentStatus?: EnrichmentStatus | null
   sourceRow?: number
@@ -224,6 +229,9 @@ export type WalletRiskResult = {
   recommendedAction: SuggestedAction
   statusExplanation: string
   fundingSource: string | null
+  firstFundingAt?: string | null
+  firstFundingAmount?: number | null
+  historyTruncated?: boolean | null
   txCount: number | null
   walletAgeDays: number | null
   totalVolume: number | null

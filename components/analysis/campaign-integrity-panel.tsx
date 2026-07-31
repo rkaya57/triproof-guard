@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { buildCampaignIntegritySnapshot, type CampaignIntegrityHealth } from "@/lib/campaign-integrity"
 import { formatNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import type { WalletGraphSummary } from "@/types"
+import type { ClusterResult, WalletGraphSummary } from "@/types"
 
 const healthStyles: Record<CampaignIntegrityHealth, string> = {
   strong: "border-green-400/30 bg-green-400/10 text-green-200",
@@ -30,16 +30,16 @@ function styleForSeverity(severity: "info" | "caution" | "high" | "critical") {
   return healthStyles.critical
 }
 
-export function CampaignIntegrityPanel({ graph, totalWallets }: { graph: WalletGraphSummary | null | undefined; totalWallets: number }) {
-  const snapshot = buildCampaignIntegritySnapshot(graph, totalWallets)
+export function CampaignIntegrityPanel({ graph, totalWallets, clusters }: { graph: WalletGraphSummary | null | undefined; totalWallets: number; clusters: ClusterResult[] }) {
+  const snapshot = buildCampaignIntegritySnapshot(graph, totalWallets, clusters)
 
   return <Card className="glass-panel premium-card overflow-hidden">
     <CardHeader className="border-b border-border/70 bg-primary/[0.035]">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
         <div>
           <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-primary"><ShieldCheck className="size-4" /> Campaign Integrity</div>
-          <CardTitle>Referral Abuse Intelligence</CardTitle>
-          <CardDescription className="mt-2 max-w-3xl leading-6">Review referral patterns beside shared funding and wallet evidence. A large referral cohort is not abuse on its own; risk requires corroborating signals.</CardDescription>
+          <CardTitle>Campaign Integrity Intelligence</CardTitle>
+          <CardDescription className="mt-2 max-w-3xl leading-6">Review referral, task-timing, privacy-preserving participant, funding, and wallet evidence together. A single signal is never abuse on its own.</CardDescription>
         </div>
         <Badge variant="outline" className={cn("w-fit", healthStyles[snapshot.health])}>{snapshot.label}</Badge>
       </div>
@@ -54,6 +54,7 @@ export function CampaignIntegrityPanel({ graph, totalWallets }: { graph: WalletG
           <section aria-labelledby="referral-cohorts-title"><div className="mb-3 flex items-center justify-between gap-3"><h3 id="referral-cohorts-title" className="font-medium">Priority referral cohorts</h3><span className="text-xs text-muted-foreground">Highest graph risk first</span></div><div className="space-y-3">{snapshot.priorityCohorts.map((cohort) => <div key={cohort.componentId} className="rounded-lg border border-border bg-background/45 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-mono text-xs text-primary">{cohort.componentId}</p><p className="mt-1 text-sm font-medium">{cohort.dominantReferrer}</p></div><Badge variant="outline" className={styleForSeverity(cohort.severity)}>{cohort.riskScore}/100</Badge></div><p className="mt-3 text-sm text-muted-foreground">{formatNumber(cohort.walletAddresses.length)} linked wallet{cohort.walletAddresses.length === 1 ? "" : "s"} · {cohort.reasons.slice(0, 2).join(" · ") || "Graph evidence available"}</p></div>)}{!snapshot.priorityCohorts.length && <EmptyState text="No referrer-led cohort was recorded in this campaign graph." />}</div></section>
           <section aria-labelledby="referral-signals-title"><div className="mb-3 flex items-center justify-between gap-3"><h3 id="referral-signals-title" className="font-medium">Referral evidence</h3><span className="text-xs text-muted-foreground">Explainable, not automatic exclusion</span></div><div className="space-y-3">{snapshot.signals.map((signal) => <div key={`${signal.code}:${signal.nodeKey}`} className="rounded-lg border border-border bg-background/45 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{signal.title}</p><p className="mt-1 font-mono text-[11px] text-primary">{signal.code}</p></div><Badge variant="outline" className={styleForSeverity(signal.severity)}>{signal.severity}</Badge></div><p className="mt-3 text-sm leading-6 text-muted-foreground">{signal.description}</p><p className="mt-2 text-xs text-muted-foreground">{formatNumber(signal.affectedWalletCount)} linked wallet{signal.affectedWalletCount === 1 ? "" : "s"} · {formatNumber(signal.evidenceCount)} evidence observation{signal.evidenceCount === 1 ? "" : "s"}</p></div>)}{!snapshot.signals.length && <EmptyState text="Referral links were recorded, but no referral pattern needs special review yet." />}</div></section>
         </div>
+        {snapshot.campaignEvidenceCohorts.length > 0 && <section aria-labelledby="campaign-cohorts-title"><div className="mb-3 flex items-center justify-between gap-3"><h3 id="campaign-cohorts-title" className="font-medium">Corroborated campaign cohorts</h3><span className="text-xs text-muted-foreground">Two independent signal families required</span></div><div className="grid gap-3 lg:grid-cols-2">{snapshot.campaignEvidenceCohorts.map((cohort) => <div key={cohort.clusterLabel} className="rounded-lg border border-border bg-background/45 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-mono text-xs text-primary">{cohort.clusterLabel}</p><p className="mt-1 text-sm font-medium">{formatNumber(cohort.walletCount)} linked wallets</p></div><Badge variant="outline" className={cohort.behaviorSimilarityScore >= 80 ? healthStyles.at_risk : healthStyles.review}>{cohort.behaviorSimilarityScore}% similarity</Badge></div><p className="mt-3 text-sm text-muted-foreground">{cohort.reasons.slice(0, 2).join(" / ")}</p></div>)}</div></section>}
         <div className="rounded-lg border border-primary/20 bg-primary/5 p-4"><p className="text-xs font-medium uppercase tracking-[0.14em] text-primary">Recommended review path</p><ul className="mt-3 grid gap-2 text-sm leading-6 text-muted-foreground">{snapshot.recommendations.map((recommendation) => <li key={recommendation} className="flex gap-2"><CircleDot className="mt-1 size-3.5 shrink-0 text-primary" />{recommendation}</li>)}</ul></div>
       </>}
     </CardContent>

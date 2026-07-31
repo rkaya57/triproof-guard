@@ -1540,7 +1540,7 @@ export function AnalysisDetail({
         <ClusterGraphView analysis={analysis} />
       </div>
 
-      <CampaignIntegrityPanel graph={analysis.graph} totalWallets={analysis.totalWallets} />
+      <CampaignIntegrityPanel graph={analysis.graph} totalWallets={analysis.totalWallets} clusters={analysis.clusters} />
 
       {analysis.id !== "demo" && <WalletGraphIntelligencePanel analysisId={analysis.id} summary={analysis.graph} />}
 

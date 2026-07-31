@@ -1,8 +1,16 @@
 import { Prisma } from "@prisma/client"
 
 import { db } from "@/lib/db/prisma"
-import { analyzeWallets, riskPolicyFromNotes } from "@/lib/risk-engine"
-import { fundingContextKey, type WalletGraphContext } from "@/lib/graph-intelligence"
+import {
+  analyzeWallets,
+  riskPolicyFromNotes,
+  type CrossCampaignContext,
+} from "@/lib/risk-engine"
+import {
+  fundingContextKey,
+  normalizeGraphAddress,
+  type WalletGraphContext,
+} from "@/lib/graph-intelligence"
 import { enrichWallets } from "@/lib/onchain/enrich-wallet"
 import { mergeEnrichment } from "@/lib/onchain/merge"
 import { parseCampaignContracts } from "@/lib/validators/wallet"
@@ -46,6 +54,10 @@ function extractCampaignContracts(notes: string | null | undefined) {
     .find((value) => value.startsWith("TRIPROOF_CAMPAIGN_CONTRACTS="))
   if (!line) return []
   return parseCampaignContracts(line.replace("TRIPROOF_CAMPAIGN_CONTRACTS=", ""))
+}
+
+function hasDeepHistoryEnabled(notes: string | null | undefined) {
+  return /^TRIPROOF_DEEP_HISTORY=true$/m.test(notes ?? "")
 }
 
 function intelChainMatches(entryChain: string, walletChain: string) {
@@ -295,11 +307,75 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
         graphContext.knownBadFundingSources![key] = entry.label
       }
     })
+
+    const historicalWallets = await tx.walletAnalysis.findMany({
+      where: {
+        walletAddress: { in: walletsForAnalysis.map((wallet) => wallet.walletAddress) },
+        analysis: {
+          id: { not: analysisId },
+          project: { userId: analysis.project.userId },
+        },
+      },
+      select: {
+        analysisId: true,
+        walletAddress: true,
+        chain: true,
+        teamReviews: {
+          select: { finalStatus: true },
+        },
+        feedbackEvents: {
+          select: { label: true },
+        },
+      },
+    })
+    const crossCampaignSignals = new Map<string, {
+      analyses: Set<string>
+      confirmedRiskCount: number
+      reviewedRejectionCount: number
+      trustedUserCount: number
+    }>()
+    historicalWallets.forEach((historical) => {
+      const key = normalizeGraphAddress(historical.walletAddress, historical.chain)
+      const current = crossCampaignSignals.get(key) ?? {
+        analyses: new Set<string>(),
+        confirmedRiskCount: 0,
+        reviewedRejectionCount: 0,
+        trustedUserCount: 0,
+      }
+      current.analyses.add(historical.analysisId)
+      current.confirmedRiskCount += historical.feedbackEvents.filter(
+        (event) => event.label === "confirmed_risk"
+      ).length
+      current.trustedUserCount += historical.feedbackEvents.filter(
+        (event) => event.label === "trusted_user"
+      ).length
+      current.reviewedRejectionCount += historical.teamReviews.filter(
+        (review) => review.finalStatus === "rejected"
+      ).length
+      current.trustedUserCount += historical.teamReviews.filter(
+        (review) => review.finalStatus === "approved"
+      ).length
+      crossCampaignSignals.set(key, current)
+    })
+    const crossCampaignContext: CrossCampaignContext = {
+      walletSignals: Object.fromEntries(
+        Array.from(crossCampaignSignals.entries()).map(([key, value]) => [
+          key,
+          {
+            priorAnalyses: value.analyses.size,
+            confirmedRiskCount: value.confirmedRiskCount,
+            reviewedRejectionCount: value.reviewedRejectionCount,
+            trustedUserCount: value.trustedUserCount,
+          },
+        ])
+      ),
+    }
     const result = analyzeWallets(
       walletsForAnalysis,
       enrichmentMeta,
       riskPolicy,
-      graphContext
+      graphContext,
+      crossCampaignContext
     )
 
     await tx.analysis.update({ where: { id: analysisId }, data: { status: "analyzing" } })
@@ -379,6 +455,9 @@ export async function finalizeAnalysisIfReady(analysisId: string) {
             reputationLabel: wallet.reputationLabel ?? null,
             policyReason: wallet.policyReason ?? null,
             customerLabel: wallet.customerLabel ?? null,
+            firstFundingAt: wallet.firstFundingAt ?? null,
+            firstFundingAmount: wallet.firstFundingAmount ?? null,
+            historyTruncated: wallet.historyTruncated ?? null,
             riskPolicy,
           },
         })),
@@ -520,6 +599,7 @@ async function processBatch(batch: BatchRow) {
   const wallets = parseJson<ParsedWallet[]>(batch.walletData, [])
   const mode = (analysis.analysisMode ?? "onchain") as AnalysisMode
   const campaignContracts = extractCampaignContracts(analysis.project.notes)
+  const deepHistory = hasDeepHistoryEnabled(analysis.project.notes)
 
   try {
     await db.analysis.update({ where: { id: analysis.id }, data: { status: "enriching", enrichmentStatus: "processing" } })
@@ -527,7 +607,7 @@ async function processBatch(batch: BatchRow) {
       addresses: wallets.map((wallet) => wallet.walletAddress),
       chain: analysis.project.chain,
       mode,
-      options: { campaignContracts },
+      options: { campaignContracts, deepHistory },
     })
 
     await db.$executeRaw`

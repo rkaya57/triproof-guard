@@ -62,6 +62,10 @@ type EnrichedWallet = {
   referrerAddress: string | null
   referralCode: string | null
   referralTimestamp: string | null
+  campaignEventAt: string | null
+  campaignEventType: string | null
+  campaignPoints: number | null
+  participantFingerprint: string | null
   enrichmentProvider: string | null
   enrichmentStatus: EnrichmentStatus | null
 }
@@ -174,6 +178,10 @@ function hydrateWallet(wallet: ParsedWallet): EnrichedWallet {
     referrerAddress: wallet.referrerAddress ?? null,
     referralCode: wallet.referralCode ?? null,
     referralTimestamp: wallet.referralTimestamp ?? null,
+    campaignEventAt: wallet.campaignEventAt ?? null,
+    campaignEventType: wallet.campaignEventType ?? null,
+    campaignPoints: wallet.campaignPoints ?? null,
+    participantFingerprint: wallet.participantFingerprint ?? null,
     enrichmentProvider: wallet.enrichmentProvider ?? null,
     enrichmentStatus: wallet.enrichmentStatus ?? null,
   }
@@ -452,6 +460,8 @@ function createClusters(
   const temporalGroups = new Map<string, number[]>()
   const behaviorGroups = new Map<string, number[]>()
   const referralGroups = new Map<string, number[]>()
+  const campaignEventGroups = new Map<string, number[]>()
+  const participantFingerprintGroups = new Map<string, number[]>()
 
   wallets.forEach((wallet, index) => {
     if (
@@ -497,7 +507,26 @@ function createClusters(
     referralGroups.set(key, [...(referralGroups.get(key) ?? []), index])
   })
 
-  type CohortFamily = "funding" | "temporal" | "behavior" | "referral"
+  wallets.forEach((wallet, index) => {
+    if (!isUserLikeAccount(wallet) || !wallet.campaignEventAt || !wallet.campaignEventType) return
+    const bucketId = timeBucket(wallet.campaignEventAt, 1)
+    if (bucketId === null) return
+    const key = [
+      wallet.chain,
+      wallet.campaignEventType.trim().toLowerCase(),
+      bucketId,
+      bucket(wallet.campaignPoints ?? 0, 10),
+    ].join(":")
+    campaignEventGroups.set(key, [...(campaignEventGroups.get(key) ?? []), index])
+  })
+
+  wallets.forEach((wallet, index) => {
+    if (!isUserLikeAccount(wallet) || !wallet.participantFingerprint) return
+    const key = `${wallet.chain}:${wallet.participantFingerprint}`
+    participantFingerprintGroups.set(key, [...(participantFingerprintGroups.get(key) ?? []), index])
+  })
+
+  type CohortFamily = "funding" | "temporal" | "behavior" | "referral" | "campaign_event" | "participant"
   type Cohort = {
     family: CohortFamily
     indexes: number[]
@@ -516,6 +545,12 @@ function createClusters(
     ...Array.from(referralGroups.values())
       .filter((indexes) => indexes.length >= 3)
       .map((indexes) => ({ family: "referral" as const, indexes, fundingSource: null })),
+    ...Array.from(campaignEventGroups.values())
+      .filter((indexes) => indexes.length >= 3)
+      .map((indexes) => ({ family: "campaign_event" as const, indexes, fundingSource: null })),
+    ...Array.from(participantFingerprintGroups.values())
+      .filter((indexes) => indexes.length >= 3)
+      .map((indexes) => ({ family: "participant" as const, indexes, fundingSource: null })),
   ]
 
   const candidateMap = new Map<string, {
@@ -549,6 +584,8 @@ function createClusters(
     temporal: "Temporal evidence: tightly aligned first funding or first observed activity window",
     behavior: "Behavior evidence: similar activity shape and sampled program/instruction fingerprint",
     referral: "Referral evidence: shared referrer wallet or campaign referral code",
+    campaign_event: "Campaign evidence: matching task type, points band, and completion time window",
+    participant: "Campaign evidence: matching privacy-preserving participant fingerprint",
   }
   const assigned = new Map<number, string>()
   const drafts: ClusterDraft[] = []
@@ -575,12 +612,23 @@ function createClusters(
         reasons: [
           "V1.7 corroborated Sybil cohort: at least two independent relationship signals overlap",
           ...evidenceFamilies.map((family) => familyReasons[family]),
-          "Shared funding, timing, behavior, or referral evidence is never treated as conclusive in isolation.",
+          "Funding, timing, behavior, referral, campaign event, or participant evidence is never treated as conclusive in isolation.",
         ],
       })
     })
 
   return { drafts, assigned, fundingGroups }
+}
+
+export type CrossCampaignWalletSignal = {
+  priorAnalyses: number
+  confirmedRiskCount: number
+  reviewedRejectionCount: number
+  trustedUserCount: number
+}
+
+export type CrossCampaignContext = {
+  walletSignals: Record<string, CrossCampaignWalletSignal>
 }
 
 function cappedEvidenceContribution(
@@ -619,7 +667,8 @@ export function analyzeWallets(
   wallets: ParsedWallet[],
   enrichment: EnrichmentMeta | null = null,
   riskPolicy: RiskPolicy = "balanced",
-  graphContext: WalletGraphContext | null = null
+  graphContext: WalletGraphContext | null = null,
+  crossCampaignContext: CrossCampaignContext | null = null
 ): AnalysisResult {
   const config = POLICY_CONFIG[riskPolicy]
   const enrichedWallets = wallets.map(hydrateWallet)
@@ -645,6 +694,9 @@ export function analyzeWallets(
       wallet.walletAddress,
       wallet.chain
     )
+    const crossCampaignSignal = crossCampaignContext?.walletSignals[
+      normalizeGraphAddress(wallet.walletAddress, wallet.chain)
+    ]
     const clusterId = assigned.get(index) ?? null
     const cluster = clusterId ? drafts.find((item) => item.clusterLabel === clusterId) ?? null : null
     const clusterSize = cluster?.walletIndexes.length ?? 0
@@ -790,6 +842,28 @@ export function analyzeWallets(
       reasons.push(`Cluster evidence: part of suspicious cluster ${clusterId}`)
     }
 
+    if (crossCampaignSignal) {
+      const hasTrustedHistory = crossCampaignSignal.trustedUserCount > 0
+      const riskConfirmations =
+        crossCampaignSignal.confirmedRiskCount + crossCampaignSignal.reviewedRejectionCount
+
+      if (riskConfirmations > 0 && !hasTrustedHistory) {
+        const contribution = Math.min(
+          30,
+          10 * crossCampaignSignal.confirmedRiskCount +
+            5 * crossCampaignSignal.reviewedRejectionCount
+        )
+        networkEvidenceScore += contribution
+        reasons.push(
+          `Cross-campaign evidence: ${riskConfirmations} prior confirmed-risk or reviewer-rejection signal(s) from this workspace`
+        )
+      } else if (hasTrustedHistory) {
+        reasons.push(
+          `Cross-campaign context: ${crossCampaignSignal.trustedUserCount} prior trusted-user signal(s) retained without lowering current campaign scrutiny`
+        )
+      }
+    }
+
     if (wallet.contractsCount !== null) {
       if (wallet.contractsCount <= 1) {
         behaviorEvidenceScore += 15
@@ -899,6 +973,9 @@ export function analyzeWallets(
       recommendedAction: decision.recommendedAction,
       statusExplanation: decision.statusExplanation,
       fundingSource: wallet.fundingSource,
+      firstFundingAt: wallet.firstFundingAt,
+      firstFundingAmount: wallet.firstFundingAmount,
+      historyTruncated: wallet.historyTruncated,
       txCount: wallet.txCount,
       walletAgeDays: wallet.walletAgeDays,
       totalVolume: wallet.totalVolume,

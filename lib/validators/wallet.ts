@@ -50,6 +50,10 @@ export const newAnalysisSchema = z.object({
     z.enum(riskPolicies as [RiskPolicy, ...RiskPolicy[]])
   ),
   campaignContracts: z.string().trim().max(5000).optional().or(z.literal("")),
+  deepHistory: z.preprocess(
+    (value) => value === "true" || value === "on",
+    z.boolean()
+  ),
 })
 
 const evmWalletRegex = /^0x[a-fA-F0-9]{40}$/

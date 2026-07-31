@@ -5,6 +5,8 @@ import { buildScamGuardReplyFallback } from "@/lib/ai/scamguard-reply"
 import type { ScamGuardScanResult } from "@/lib/scamguard/engine"
 
 const result: ScamGuardScanResult = {
+  id: "scan-test",
+  scannedAt: "2026-07-31T00:00:00.000Z",
   type: "url",
   riskLevel: "HIGH_RISK",
   score: 18,
@@ -13,7 +15,7 @@ const result: ScamGuardScanResult = {
   explanation: "A known scam pattern was found.",
   signals: [],
   actions: ["Close the page."],
-  metadata: { chain: "solana" },
+  metadata: { chain: "solana", rpcStatus: "not_applicable" },
 }
 
 test("ScamGuard AI fallback preserves the security decision", () => {

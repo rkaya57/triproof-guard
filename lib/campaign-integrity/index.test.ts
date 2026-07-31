@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
 import { buildCampaignIntegritySnapshot } from "@/lib/campaign-integrity"
-import type { WalletGraphSummary } from "@/types"
+import type { ClusterResult, WalletGraphSummary } from "@/types"
 
 function graph(overrides: Partial<WalletGraphSummary> = {}): WalletGraphSummary {
   return {
@@ -44,5 +44,28 @@ describe("campaign integrity snapshot", () => {
     assert.equal(result.priorityCohorts.length, 1)
     assert.equal(result.priorityCohorts[0]?.dominantReferrer, "Funding + referral overlap")
     assert.ok(result.recommendations.some((item) => /self-referral/i.test(item)))
+  })
+
+  it("surfaces corroborated campaign event cohorts without requiring referral CSV fields", () => {
+    const clusters: ClusterResult[] = [{
+      clusterLabel: "CL-017",
+      walletCount: 4,
+      averageRiskScore: 62,
+      sharedFundingSource: null,
+      behaviorSimilarityScore: 82,
+      suggestedAction: "manual_review",
+      reasons: [
+        "V1.7 corroborated Sybil cohort: at least two independent relationship signals overlap",
+        "Campaign evidence: matching task type, points band, and completion time window",
+        "Campaign evidence: matching privacy-preserving participant fingerprint",
+      ],
+      walletAddresses: ["wallet-1", "wallet-2", "wallet-3", "wallet-4"],
+    }]
+    const result = buildCampaignIntegritySnapshot(graph({ referralLinks: 0, findings: [] }), 100, clusters)
+
+    assert.equal(result.available, true)
+    assert.equal(result.campaignEvidenceCohorts.length, 1)
+    assert.ok((result.score ?? 100) < 100)
+    assert.ok(result.recommendations.some((item) => /fingerprint consent/i.test(item)))
   })
 })

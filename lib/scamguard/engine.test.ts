@@ -175,7 +175,7 @@ test("ScamGuard decodes limited EVM approvals without escalating to critical", a
       params: [
         {
           to: "0x3333333333333333333333333333333333333333",
-          data: `0x095ea7b3${evmAddressWord(spender)}${evmWord(1n)}`,
+          data: `0x095ea7b3${evmAddressWord(spender)}${evmWord(BigInt(1))}`,
         },
       ],
     }),
@@ -200,7 +200,7 @@ test("ScamGuard includes verified source context without hiding approval risk", 
       params: [
         {
           to: "0x3333333333333333333333333333333333333333",
-          data: `0x095ea7b3${evmAddressWord(spender)}${evmWord(1n)}`,
+          data: `0x095ea7b3${evmAddressWord(spender)}${evmWord(BigInt(1))}`,
         },
       ],
     }),
@@ -223,7 +223,7 @@ test("ScamGuard escalates transaction source redirect flows", async () => {
       params: [
         {
           to: "0x3333333333333333333333333333333333333333",
-          data: `0x095ea7b3${evmAddressWord(spender)}${evmWord(1n)}`,
+          data: `0x095ea7b3${evmAddressWord(spender)}${evmWord(BigInt(1))}`,
         },
       ],
     }),
@@ -325,7 +325,7 @@ test("ScamGuard escalates unlimited EVM approvals", async () => {
       params: [
         {
           to: "0x3333333333333333333333333333333333333333",
-          data: `0x095ea7b3${evmAddressWord(spender)}${evmWord((1n << 256n) - 1n)}`,
+          data: `0x095ea7b3${evmAddressWord(spender)}${evmWord((BigInt(1) << BigInt(256)) - BigInt(1))}`,
         },
       ],
     }),
@@ -347,7 +347,7 @@ test("ScamGuard escalates approvals to known bad EVM counterparties", async () =
       params: [
         {
           to: "0x3333333333333333333333333333333333333333",
-          data: `0x095ea7b3${evmAddressWord(spender)}${evmWord(10n)}`,
+          data: `0x095ea7b3${evmAddressWord(spender)}${evmWord(BigInt(10))}`,
         },
       ],
     }),

@@ -82,6 +82,13 @@ const enrichedColumns = new Set([
   "customer_label",
   "entity_label",
   "entity_type",
+  "referrer_address",
+  "referral_code",
+  "referral_timestamp",
+  "campaign_event_at",
+  "campaign_event_type",
+  "campaign_points",
+  "participant_fingerprint",
 ])
 
 const enrichableChains = new Set([
@@ -118,10 +125,10 @@ async function buildCsvPreview(file: File): Promise<CsvPreview> {
   return { name: file.name, size: formatFileSize(file.size), rowCount: dataRows.length, columns, mode, invalidCount }
 }
 
-const sampleCsv = `wallet_address,policy_action,reputation_label,policy_reason
-4V1C76x5SpQhYpZ3EnfHWxyaFmQy6GzwR8NhBpaALsPR,,,
-7Zb1bJ6Qn3z2XxgR7K4pGv6fW8cY5mT9nL2sA3dE4fG,manual_review,needs_review,Project team wants a human check
-9xQeWvG816bUx9EPfvhkgqJQ3Z9H6uZq1JtV7mYz3Kk,reject,policy_reject,Imported from project review list
+const sampleCsv = `wallet_address,referrer_address,referral_timestamp,campaign_event_at,campaign_event_type,campaign_points,participant_fingerprint
+4V1C76x5SpQhYpZ3EnfHWxyaFmQy6GzwR8NhBpaALsPR,,2026-07-31T10:00:00Z,2026-07-31T10:05:00Z,swap,25,
+7Zb1bJ6Qn3z2XxgR7K4pGv6fW8cY5mT9nL2sA3dE4fG,4V1C76x5SpQhYpZ3EnfHWxyaFmQy6GzwR8NhBpaALsPR,2026-07-31T10:01:00Z,2026-07-31T10:05:30Z,swap,25,cb9a8ba5a3c75dfa8c1d0c6e7c1ec89f
+9xQeWvG816bUx9EPfvhkgqJQ3Z9H6uZq1JtV7mYz3Kk,4V1C76x5SpQhYpZ3EnfHWxyaFmQy6GzwR8NhBpaALsPR,2026-07-31T10:02:00Z,2026-07-31T10:06:00Z,swap,25,cb9a8ba5a3c75dfa8c1d0c6e7c1ec89f
 `
 
 function downloadSampleCsv() {
@@ -240,11 +247,12 @@ export function NewAnalysisForm() {
               </div>
               <Field><FieldLabel htmlFor="analysisMode">Analysis mode</FieldLabel><select id="analysisMode" name="analysisMode" className={selectClass} value={analysisMode} onChange={(event) => setAnalysisMode(event.target.value as AnalysisMode)}><option value="onchain">On-Chain Enrichment</option><option value="hybrid">Hybrid</option></select><FieldDescription>{modeDescriptions[analysisMode]}</FieldDescription></Field>
               <Field><FieldLabel htmlFor="riskPolicy">Risk policy preset</FieldLabel><select id="riskPolicy" name="riskPolicy" className={selectClass} value={riskPolicy} onChange={(event) => setRiskPolicy(event.target.value as RiskPolicy)}><option value="conservative">Conservative</option><option value="balanced">Balanced</option><option value="strict">Strict</option></select><FieldDescription>{riskPolicyDescriptions[riskPolicy]}</FieldDescription></Field>
+              {chain === "Solana" && <Field><label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-background/45 p-3"><input type="checkbox" name="deepHistory" value="true" className="mt-1 size-4 accent-primary" /><span><span className="block text-sm font-medium">Use deeper Solana history</span><span className="mt-1 block text-xs text-muted-foreground">Fetch a larger signature window for stronger first-funding, timing, and activity evidence. Use this for final campaign audits; it can take longer and consume more RPC capacity.</span></span></label></Field>}
               <Alert><FileUp /><AlertDescription>Every new analysis uses real on-chain data. Temporary provider access issues are retried and kept in Gray Zone; they never become automatic wallet-risk or eligibility decisions.{!chainSupportsEnrichment && ` ${chain} is not supported yet.`}</AlertDescription></Alert>
               <Field>
                 <FieldLabel>Wallet CSV</FieldLabel>
                 <label onDragOver={(event) => { event.preventDefault(); setIsDragging(true) }} onDragLeave={() => setIsDragging(false)} onDrop={onDrop} className={cn("flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border bg-background/50 p-8 text-center transition hover:border-primary/60 hover:bg-primary/5", isDragging && "border-primary bg-primary/5")}>
-                  <UploadCloud className="mb-3 size-8 text-primary" /><span className="font-medium">Drop your CSV here or click to upload</span><span className="mt-1 text-sm text-muted-foreground">Required column: wallet_address, address, or wallet</span><span className="mt-1 max-w-xl text-xs text-muted-foreground">Optional policy columns: policy_action, reputation_label, policy_reason, entity_label, entity_type. Graph intelligence columns: referrer_address, referral_code, referral_timestamp.</span><input type="file" accept=".csv,text/csv" className="hidden" onChange={onFileChange} />
+                  <UploadCloud className="mb-3 size-8 text-primary" /><span className="font-medium">Drop your CSV here or click to upload</span><span className="mt-1 text-sm text-muted-foreground">Required column: wallet_address, address, or wallet</span><span className="mt-1 max-w-xl text-xs text-muted-foreground">Optional campaign columns: referrer_address, referral_code, referral_timestamp, campaign_event_at, campaign_event_type, campaign_points, participant_fingerprint. Fingerprints must be one-way hexadecimal hashes; raw device or personal IDs are rejected.</span><input type="file" accept=".csv,text/csv" className="hidden" onChange={onFileChange} />
                 </label>
                 <div className="mt-3 flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={downloadSampleCsv}><Download data-icon="inline-start" /> Download sample CSV</Button></div>
               </Field>

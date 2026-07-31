@@ -68,6 +68,8 @@ export type EnrichmentSummary = {
 export type EnrichWalletOptions = {
   /** Optional campaign contract addresses to count campaign interactions. */
   campaignContracts?: string[]
+  /** Follow paginated Solana history for higher-confidence first-funding evidence. */
+  deepHistory?: boolean
   /** Per-wallet abort signal hook (queue-ready, unused in MVP). */
   signal?: AbortSignal
 }

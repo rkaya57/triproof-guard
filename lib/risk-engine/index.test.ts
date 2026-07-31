@@ -204,6 +204,59 @@ describe("risk engine fixture coverage", () => {
     )
   })
 
+  it("correlates campaign events with referral evidence without treating either signal as conclusive alone", () => {
+    const referrer = "0x0000000000000000000000000000000000000abc"
+    const wallets = Array.from({ length: 4 }, (_, index) =>
+      wallet({
+        walletAddress: `0x${(9000 + index).toString(16).padStart(40, "0")}`,
+        fundingSource: `0x${(9100 + index).toString(16).padStart(40, "0")}`,
+        referrerAddress: referrer,
+        referralTimestamp: `2026-07-01T10:0${index}:00.000Z`,
+        campaignEventAt: `2026-07-02T11:0${index}:00.000Z`,
+        campaignEventType: "swap",
+        campaignPoints: 25,
+        txCount: 18,
+        walletAgeDays: 50,
+        contractsCount: 5,
+        tokenCount: 4,
+        behaviorFingerprint: ["swap", "stake"],
+      })
+    )
+
+    const result = analyzeWallets(wallets)
+
+    assert.equal(result.clusters.length, 1)
+    assert.ok(result.clusters[0].reasons.some((reason) => reason.includes("Referral evidence")))
+    assert.ok(result.clusters[0].reasons.some((reason) => reason.includes("Campaign evidence")))
+  })
+
+  it("uses confirmed prior workspace feedback as capped context, not a standalone decision", () => {
+    const target = wallet({
+      walletAddress: "0x0000000000000000000000000000000000000c01",
+    })
+    const baseline = analyzeWallets([target]).wallets[0]
+    const withHistory = analyzeWallets(
+      [target],
+      null,
+      "balanced",
+      null,
+      {
+        walletSignals: {
+          [target.walletAddress.toLowerCase()]: {
+            priorAnalyses: 2,
+            confirmedRiskCount: 2,
+            reviewedRejectionCount: 1,
+            trustedUserCount: 0,
+          },
+        },
+      }
+    ).wallets[0]
+
+    assert.ok(withHistory.riskScore > baseline.riskScore)
+    assert.ok(withHistory.riskScore - baseline.riskScore <= 30)
+    assert.ok(withHistory.reasons.some((reason) => reason.includes("Cross-campaign evidence")))
+  })
+
   it("does not create a suspicious cluster from a known exchange funding source", () => {
     const exchangeFunding = "0x28c6c06298d514db089934071355e5743bf21d60"
     const wallets = Array.from({ length: 8 }, (_, index) =>

@@ -28,7 +28,13 @@ export async function GET(
   try {
     const analysis = await db.analysis.findFirst({
       where: { id, project: { userId: user.id } },
-      select: { id: true, totalWallets: true },
+      select: {
+        id: true,
+        wallets: {
+          where: { status: "manual_review" },
+          select: { walletAddress: true },
+        },
+      },
     })
     if (!analysis) return NextResponse.json({ error: "Analysis not found" }, { status: 404 })
 
@@ -50,11 +56,16 @@ export async function GET(
       labels.map((label) => [label, events.filter((event) => event.label === label).length])
     )
 
+    const reviewedWalletAddresses = new Set(reviews.map((review) => review.walletAddress))
+    const pendingReview = analysis.wallets.filter(
+      (wallet) => !reviewedWalletAddresses.has(wallet.walletAddress)
+    ).length
+
     return NextResponse.json({
       analysisId: id,
       teamReview: {
         reviewedWallets: reviews.length,
-        pendingReview: Math.max(analysis.totalWallets - reviews.length, 0),
+        pendingReview,
         approvedByTeam: reviews.filter((review) => review.finalStatus === "approved").length,
         grayZoneByTeam: reviews.filter((review) => review.finalStatus === "manual_review").length,
         rejectedByTeam: reviews.filter((review) => review.finalStatus === "rejected").length,

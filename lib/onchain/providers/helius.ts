@@ -8,7 +8,6 @@ const tokenProgramId = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 const token2022ProgramId = "TokenzQdBNbLqP5VEhdkAS6EPF1SMH1dbKqP6Xk6mN"
 const systemProgramId = "11111111111111111111111111111111"
 const solanaWalletRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
-const solanaSignatureSampleLimit = positiveEnvNumber("SOLANA_SIGNATURE_SAMPLE_LIMIT", 250)
 
 type RpcQueueJob<T> = {
   run: () => Promise<T>
@@ -104,6 +103,15 @@ type AccountClassification = {
 function positiveEnvNumber(name: string, fallback: number) {
   const value = Number(process.env[name])
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback
+}
+
+function solanaHistoryLimits() {
+  const sampleLimit = Math.min(1_000, positiveEnvNumber("SOLANA_SIGNATURE_SAMPLE_LIMIT", 250))
+  const deepLimit = Math.min(
+    5_000,
+    Math.max(sampleLimit, positiveEnvNumber("SOLANA_DEEP_HISTORY_LIMIT", 1_000))
+  )
+  return { sampleLimit, deepLimit }
 }
 
 function configuredRpcUrls() {
@@ -233,6 +241,40 @@ export async function solanaRpc<T>(method: string, params: unknown[] = []): Prom
   }
 
   throw lastError ?? new Error(`Solana RPC ${method} failed`)
+}
+
+export async function getSolanaSignatureHistory(address: string, deepHistory: boolean) {
+  const limits = solanaHistoryLimits()
+  const targetLimit = deepHistory ? limits.deepLimit : limits.sampleLimit
+  const pageSize = Math.min(1_000, targetLimit)
+  const signatures: SignatureInfo[] = []
+  const seen = new Set<string>()
+  let before: string | undefined
+
+  while (signatures.length < targetLimit) {
+    const remaining = targetLimit - signatures.length
+    const page = await solanaRpc<SignatureInfo[]>("getSignaturesForAddress", [
+      address,
+      {
+        limit: Math.min(pageSize, remaining),
+        commitment: "confirmed",
+        ...(before ? { before } : {}),
+      },
+    ])
+
+    page.forEach((signature) => {
+      if (signature.signature && !seen.has(signature.signature)) {
+        seen.add(signature.signature)
+        signatures.push(signature)
+      }
+    })
+
+    const last = page[page.length - 1]
+    if (page.length === 0 || page.length < Math.min(pageSize, remaining) || !last?.signature) break
+    before = last.signature
+  }
+
+  return { signatures, historyTruncated: signatures.length >= targetLimit, targetLimit }
 }
 
 function isoFromUnix(blockTime?: number | null) {
@@ -592,12 +634,9 @@ export const heliusProvider: OnChainProvider = {
       throw new Error("Invalid Solana wallet address")
     }
 
-    const [balanceResult, signatures, tokenAccounts, accountInfo] = await Promise.all([
+    const [balanceResult, history, tokenAccounts, accountInfo] = await Promise.all([
       solanaRpc<BalanceResult>("getBalance", [address, { commitment: "confirmed" }]),
-      solanaRpc<SignatureInfo[]>("getSignaturesForAddress", [
-        address,
-        { limit: solanaSignatureSampleLimit, commitment: "confirmed" },
-      ]),
+      getSolanaSignatureHistory(address, Boolean(options?.deepHistory)),
       solanaRpc<{ value?: ParsedTokenAccount[] }>("getTokenAccountsByOwner", [
         address,
         { programId: tokenProgramId },
@@ -608,6 +647,8 @@ export const heliusProvider: OnChainProvider = {
         { encoding: "jsonParsed", commitment: "confirmed" },
       ]),
     ])
+
+    const signatures = history.signatures
 
     const balanceLamports = Number(balanceResult.value ?? 0)
     const orderedByTime = [...signatures]
@@ -699,7 +740,7 @@ export const heliusProvider: OnChainProvider = {
       fundingSource,
       firstFundingAt: fundingEvidence?.observedAt ?? null,
       firstFundingAmount: fundingEvidence?.amount ?? null,
-      historyTruncated: signatures.length >= solanaSignatureSampleLimit,
+      historyTruncated: history.historyTruncated,
       isContract: classification.isContract,
       knownEntityLabel: classification.knownEntityLabel,
       knownEntityType: classification.knownEntityType,
@@ -713,9 +754,10 @@ export const heliusProvider: OnChainProvider = {
       rawData: {
         sampledSignatures: signatures.length,
         sampledTransactions: parsedTransactions.length,
-        signatureSampleLimit: solanaSignatureSampleLimit,
+        signatureSampleLimit: history.targetLimit,
+        deepHistory: Boolean(options?.deepHistory),
         oldestSignature,
-        historyTruncated: signatures.length >= solanaSignatureSampleLimit,
+        historyTruncated: history.historyTruncated,
         firstFundingAt: fundingEvidence?.observedAt ?? null,
         firstFundingAmount: fundingEvidence?.amount ?? null,
         accountType: classification.accountType,

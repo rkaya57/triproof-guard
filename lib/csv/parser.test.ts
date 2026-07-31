@@ -46,4 +46,22 @@ describe("wallet CSV referral fields", () => {
     assert.equal(result.wallets[0].referrerAddress, null)
     assert.match(result.issues[0]?.issue ?? "", /referrer address ignored/i)
   })
+
+  it("accepts campaign events and a one-way participant fingerprint without accepting raw identifiers", () => {
+    const csv = [
+      "wallet_address,task_completed_at,task_type,points,device_hash",
+      "0x0000000000000000000000000000000000000001,2026-07-01T10:00:00.000Z,swap,25,cb9a8ba5a3c75dfa8c1d0c6e7c1ec89f",
+      "0x0000000000000000000000000000000000000002,not-a-date,claim,10,raw-device-id",
+    ].join("\n")
+    const result = parseWalletCsv(csv, "Ethereum")
+
+    assert.equal(result.wallets[0].campaignEventAt, "2026-07-01T10:00:00.000Z")
+    assert.equal(result.wallets[0].campaignEventType, "swap")
+    assert.equal(result.wallets[0].campaignPoints, 25)
+    assert.equal(result.wallets[0].participantFingerprint, "cb9a8ba5a3c75dfa8c1d0c6e7c1ec89f")
+    assert.equal(result.wallets[1].campaignEventAt, null)
+    assert.equal(result.wallets[1].participantFingerprint, null)
+    assert.ok(result.issues.some((issue) => /timestamp ignored/i.test(issue.issue)))
+    assert.ok(result.issues.some((issue) => /fingerprint ignored/i.test(issue.issue)))
+  })
 })

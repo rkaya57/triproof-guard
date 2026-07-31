@@ -276,7 +276,9 @@ export function serializeAnalysis(analysis: DbAnalysis): AnalysisDetail {
     },
     teamReviewSummary: {
       reviewedWallets,
-      pendingReview: Math.max(analysis.totalWallets - reviewedWallets, 0),
+      pendingReview: wallets.filter(
+        (wallet) => wallet.status === "manual_review" && !wallet.teamReview
+      ).length,
       approvedByTeam: (analysis.teamReviews ?? []).filter((review) => review.finalStatus === "approved").length,
       grayZoneByTeam: (analysis.teamReviews ?? []).filter((review) => review.finalStatus === "manual_review").length,
       rejectedByTeam: (analysis.teamReviews ?? []).filter((review) => review.finalStatus === "rejected").length,

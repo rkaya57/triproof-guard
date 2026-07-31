@@ -47,6 +47,20 @@ function toBooleanOrNull(value: string | null) {
   return null
 }
 
+function toIsoTimestamp(value: string | null) {
+  if (!value) return null
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
+}
+
+function toParticipantFingerprint(value: string | null) {
+  if (!value) return null
+  const normalized = value.trim().toLowerCase()
+  // Raw IP addresses, device IDs, emails, and free-form identifiers are not
+  // accepted. Campaigns may supply only an already-derived one-way hash.
+  return /^[a-f0-9]{32,128}$/.test(normalized) ? normalized : null
+}
+
 function textOrNull(value: string | undefined) {
   const trimmed = value?.trim()
   return trimmed ? trimmed : null
@@ -214,6 +228,36 @@ export function parseWalletCsv(csvText: string, selectedChain: string): CsvParse
       })
     }
 
+    const rawCampaignEventAt = firstText(row, [
+      "campaign_event_at",
+      "task_completed_at",
+      "event_timestamp",
+      "activity_timestamp",
+    ])
+    const campaignEventAt = toIsoTimestamp(rawCampaignEventAt)
+    if (rawCampaignEventAt && !campaignEventAt) {
+      issues.push({
+        row: rowNumber,
+        walletAddress: normalizedAddress,
+        issue: "Invalid campaign event timestamp ignored",
+      })
+    }
+
+    const rawParticipantFingerprint = firstText(row, [
+      "participant_fingerprint",
+      "device_hash",
+      "session_hash",
+      "identity_hash",
+    ])
+    const participantFingerprint = toParticipantFingerprint(rawParticipantFingerprint)
+    if (rawParticipantFingerprint && !participantFingerprint) {
+      issues.push({
+        row: rowNumber,
+        walletAddress: normalizedAddress,
+        issue: "Participant fingerprint ignored: only a 32-128 character hexadecimal hash is accepted",
+      })
+    }
+
     wallets.push({
       walletAddress: normalizedAddress,
       chain: rowChain,
@@ -242,6 +286,15 @@ export function parseWalletCsv(csvText: string, selectedChain: string): CsvParse
         "invited_at",
         "referral_created_at",
       ]),
+      campaignEventAt,
+      campaignEventType: firstText(row, [
+        "campaign_event_type",
+        "task_type",
+        "event_type",
+        "activity_type",
+      ]),
+      campaignPoints: toNumber(row.campaign_points ?? row.points ?? row.reward_points),
+      participantFingerprint,
       sourceRow: rowNumber,
     })
   })
@@ -283,6 +336,22 @@ export function parseWalletCsv(csvText: string, selectedChain: string): CsvParse
     "referral_timestamp",
     "referred_at",
     "invited_at",
+    "referral_created_at",
+    "campaign_event_at",
+    "task_completed_at",
+    "event_timestamp",
+    "activity_timestamp",
+    "campaign_event_type",
+    "task_type",
+    "event_type",
+    "activity_type",
+    "campaign_points",
+    "points",
+    "reward_points",
+    "participant_fingerprint",
+    "device_hash",
+    "session_hash",
+    "identity_hash",
   ]
 
   return {
