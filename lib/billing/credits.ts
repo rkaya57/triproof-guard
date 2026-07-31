@@ -5,6 +5,16 @@ import { subscriptionPlanFromDb } from "@/lib/billing/plans"
 
 export type BillingGate =
   | {
+      source: "admin_unlimited"
+      userId: string
+      walletCount: number
+      usedWallets: number
+      remainingFreeWallets: number
+      creditsToDeduct: 0
+      balanceBefore: number
+      balanceAfter: number
+    }
+  | {
       source: "free_trial"
       userId: string
       walletCount: number
@@ -223,12 +233,29 @@ export async function prepareAnalysisBillingGate(
     userId,
     walletCount,
     freeTrialWalletLimit,
+    isAdmin = false,
   }: {
     userId: string
     walletCount: number
     freeTrialWalletLimit: number
+    isAdmin?: boolean
   }
 ): Promise<BillingGate> {
+  // Admin access is an explicit billing bypass. Do this before subscription and
+  // credit checks so a stale or limited subscription can never redirect an admin.
+  if (isAdmin) {
+    return {
+      source: "admin_unlimited",
+      userId,
+      walletCount,
+      usedWallets: 0,
+      remainingFreeWallets: Number.MAX_SAFE_INTEGER,
+      creditsToDeduct: 0,
+      balanceBefore: 0,
+      balanceAfter: 0,
+    }
+  }
+
   await lockBillingAccount(tx, userId)
 
   const usedWallets = await usedWalletCount(tx, userId)

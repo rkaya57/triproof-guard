@@ -153,7 +153,6 @@ export async function POST(request: Request) {
   if (auth.error) return auth.error
 
   const isAdmin = isAdminEmail(auth.user.email)
-  const effectiveFreeTrialWalletLimit = isAdmin ? Number.MAX_SAFE_INTEGER : freeTrialWalletLimit
 
   let body: Record<string, unknown>
   try {
@@ -206,7 +205,8 @@ export async function POST(request: Request) {
       const billingGate = await prepareAnalysisBillingGate(tx, {
         userId: auth.user.id,
         walletCount: wallets.length,
-        freeTrialWalletLimit: effectiveFreeTrialWalletLimit,
+        freeTrialWalletLimit,
+        isAdmin,
       })
 
       const project = await tx.project.create({
@@ -239,7 +239,7 @@ export async function POST(request: Request) {
           chain,
           campaignType,
           riskPolicy,
-          freeTrialWalletLimit: effectiveFreeTrialWalletLimit,
+          freeTrialWalletLimit,
           remainingFreeWallets: billingGate.remainingFreeWallets,
         },
       })
@@ -262,7 +262,7 @@ export async function POST(request: Request) {
       walletCount: wallets.length,
       batchCount: created.batchCount,
       billing: {
-        source: isAdmin ? "admin_unlimited" : created.billingGate.source,
+        source: created.billingGate.source,
         creditsDeducted: created.billingGate.creditsToDeduct,
         creditBalance: created.billingGate.balanceAfter,
         remainingFreeWallets: created.billingGate.remainingFreeWallets,

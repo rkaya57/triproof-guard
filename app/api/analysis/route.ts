@@ -70,9 +70,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const effectiveFreeTrialWalletLimit = isAdminEmail(user.email)
-      ? Number.MAX_SAFE_INTEGER
-      : freeTrialWalletLimit
+    const isAdmin = isAdminEmail(user.email)
 
     const formData = await request.formData()
     const parsedForm = newAnalysisSchema.safeParse({
@@ -173,7 +171,8 @@ export async function POST(request: Request) {
       const billingGate = await prepareAnalysisBillingGate(tx, {
         userId: user.id,
         walletCount: parsedCsv.wallets.length,
-        freeTrialWalletLimit: effectiveFreeTrialWalletLimit,
+        freeTrialWalletLimit,
+        isAdmin,
       })
 
       const project = await tx.project.create({
@@ -201,12 +200,12 @@ export async function POST(request: Request) {
         gate: billingGate,
         analysisId: analysis.id,
         metadata: {
-          source: isAdminEmail(user.email) ? "admin_dashboard_analysis" : "dashboard_analysis",
+          source: isAdmin ? "admin_dashboard_analysis" : "dashboard_analysis",
           walletCount: parsedCsv.wallets.length,
           fileName: file.name,
           chain: parsedForm.data.chain,
           campaignType: parsedForm.data.campaignType,
-          freeTrialWalletLimit: effectiveFreeTrialWalletLimit,
+          freeTrialWalletLimit,
           remainingFreeWallets: billingGate.remainingFreeWallets,
         },
       })
@@ -228,7 +227,7 @@ export async function POST(request: Request) {
       status: "processing",
       batchCount: created.batchCount,
       billing: {
-        source: isAdminEmail(user.email) ? "admin_unlimited" : created.billingGate.source,
+        source: created.billingGate.source,
         creditsDeducted: created.billingGate.creditsToDeduct,
         creditBalance: created.billingGate.balanceAfter,
         remainingFreeWallets: created.billingGate.remainingFreeWallets,
