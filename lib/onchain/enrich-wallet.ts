@@ -35,19 +35,20 @@ function providerKey(chain: string, provider: OnChainProvider) {
   return `${chain}:${provider.id}`
 }
 
-function isProviderCoolingDown(chain: string, provider: OnChainProvider) {
+function providerCooldownRemainingMs(chain: string, provider: OnChainProvider) {
   const until = providerCooldowns.get(providerKey(chain, provider))
-  if (!until) return false
-  if (Date.now() <= until) return true
+  if (!until) return 0
+  const remaining = until - Date.now()
+  if (remaining > 0) return remaining
   providerCooldowns.delete(providerKey(chain, provider))
-  return false
+  return 0
 }
 
 function markProviderCooldown(chain: string, provider: OnChainProvider, durationMs: number) {
   providerCooldowns.set(providerKey(chain, provider), Date.now() + durationMs)
 }
 
-function noDataResult(address: string, chain: string, provider: string, error: unknown): WalletEnrichmentResult {
+function providerUnavailableResult(address: string, chain: string, provider: string, error: unknown): WalletEnrichmentResult {
   return {
     data: {
       walletAddress: address,
@@ -67,13 +68,17 @@ function noDataResult(address: string, chain: string, provider: string, error: u
       isContract: null,
       knownEntityLabel: null,
       knownEntityType: null,
-      accountType: "missing_or_closed_account",
+      // A provider outage says nothing about the address itself. Leaving this
+      // null prevents the risk engine from treating a transient RPC error as a
+      // closed account or a bot signal.
+      accountType: null,
       ownerProgram: null,
       behaviorFingerprint: null,
       campaignQualityScore: null,
       campaignOnlyRatio: null,
       behaviorDiversityScore: null,
       botScriptScore: null,
+      rawData: { enrichmentFailure: "provider_unavailable" },
     },
     status: "failed",
     provider,
@@ -138,10 +143,21 @@ export async function enrichWallets(
         let lastError: unknown = null
 
         try {
-          for (const provider of providers) {
-            if (isProviderCoolingDown(chain, provider)) {
-              warnings.add(`${provider.id} is cooling down after a recent rate limit; trying the next configured provider.`)
-              continue
+          for (let providerIndex = 0; providerIndex < providers.length; providerIndex += 1) {
+            const provider = providers[providerIndex]
+            const cooldownMs = providerCooldownRemainingMs(chain, provider)
+            if (cooldownMs > 0) {
+              const fallbackIsReady = providers
+                .slice(providerIndex + 1)
+                .some((candidate) => providerCooldownRemainingMs(chain, candidate) === 0)
+
+              if (fallbackIsReady) {
+                warnings.add(`${provider.id} is cooling down after a recent rate limit; trying the next configured provider.`)
+                continue
+              }
+
+              warnings.add(`${provider.id} rate limit cooldown is active; waiting before retrying instead of marking wallets unavailable.`)
+              await sleep(cooldownMs)
             }
 
             attemptedProviders.push(provider.id)
@@ -227,10 +243,13 @@ export async function enrichWallets(
         } catch (error) {
           failedCount += 1
           warnings.add(
-            "Some wallets have no reliable on-chain history or provider-readable account data. They were marked as No On-chain Data; no mock data was used."
+            "Some wallet enrichments could not be completed after provider retries. They require a retry and were not treated as missing, closed, risky, or automatically ineligible wallets."
           )
           usedProviders.add(attemptedProviders.join(",") || providerIds)
-          results.set(address, noDataResult(address, chain, attemptedProviders.join(",") || providerIds, error))
+          results.set(
+            address,
+            providerUnavailableResult(address, chain, attemptedProviders.join(",") || providerIds, error)
+          )
         }
       })
     )

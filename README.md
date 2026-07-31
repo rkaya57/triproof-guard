@@ -242,6 +242,8 @@ Use either a direct Solana RPC URL or a Helius API key:
 ```env
 SOLANA_RPC_URL="https://your-solana-rpc"
 HELIUS_API_KEY="helius-key"
+# Optional comma-separated backup endpoints from a separate RPC provider.
+SOLANA_RPC_FALLBACK_URLS="https://your-secondary-solana-rpc"
 ```
 
 ### EVM
@@ -283,12 +285,15 @@ Runtime controls:
 ```env
 ONCHAIN_ENRICHMENT_ENABLED="true"
 ONCHAIN_MAX_WALLETS_PER_ANALYSIS="100"
-ONCHAIN_BATCH_SIZE="10"
+ONCHAIN_BATCH_SIZE="4"
 ONCHAIN_REQUEST_DELAY_MS="500"
 ONCHAIN_CACHE_TTL_HOURS="24"
+SOLANA_RPC_MAX_CONCURRENCY="3"
+SOLANA_RPC_MIN_INTERVAL_MS="125"
+SOLANA_SIGNATURE_SAMPLE_LIMIT="250"
 ```
 
-Provider calls run server-side only. API keys never reach the browser, and raw provider responses are not exposed in the UI.
+Provider calls run server-side only. Solana requests are globally rate-limited, retried with backoff, and can fail over to `SOLANA_RPC_FALLBACK_URLS`. API keys never reach the browser, and raw provider responses are not exposed in the UI.
 
 ## CSV Formats
 

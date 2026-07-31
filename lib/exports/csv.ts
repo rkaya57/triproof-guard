@@ -12,7 +12,6 @@ function escapeCsv(value: unknown) {
 
 function hasNoOnChainData(wallet: WalletRiskResult) {
   return (
-    wallet.enrichmentStatus === "failed" ||
     wallet.accountType === "missing_or_closed_account" ||
     wallet.reasons.some((reason) => reason.includes("No On-chain Data"))
   )

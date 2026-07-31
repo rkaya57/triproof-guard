@@ -203,7 +203,9 @@ export function getOnChainConfig(): OnChainConfig {
     enabled: (process.env.ONCHAIN_ENRICHMENT_ENABLED ?? "true") !== "false",
     providerPriority: priority.length ? priority : ["helius", "etherscan", "alchemy", "blockscout", "mock"],
     maxWalletsPerAnalysis: envWalletCap("ONCHAIN_MAX_WALLETS_PER_ANALYSIS", null),
-    batchSize: envNumber("ONCHAIN_BATCH_SIZE", 25),
+    // A Solana wallet expansion fans out into multiple RPC calls. Keep wallet
+    // concurrency low; the RPC adapter adds a second global request limit.
+    batchSize: envNumber("ONCHAIN_BATCH_SIZE", 4),
     requestDelayMs: envNumber("ONCHAIN_REQUEST_DELAY_MS", 250),
     cacheTtlHours,
     staleCacheTtlHours: envNumber("ONCHAIN_STALE_CACHE_TTL_HOURS", cacheTtlHours * 7),

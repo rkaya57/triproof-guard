@@ -1,5 +1,6 @@
 import type { EnrichedWalletData, EnrichWalletOptions } from "@/lib/onchain/enrichment-types"
 import type { OnChainProvider } from "@/lib/onchain/providers/provider"
+import { RateLimitError } from "@/lib/onchain/rate-limit"
 import { detectKnownEntity } from "@/lib/risk-engine/known-entities"
 
 const lamportsPerSol = 1_000_000_000
@@ -7,11 +8,22 @@ const tokenProgramId = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 const token2022ProgramId = "TokenzQdBNbLqP5VEhdkAS6EPF1SMH1dbKqP6Xk6mN"
 const systemProgramId = "11111111111111111111111111111111"
 const solanaWalletRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
-const solanaSignatureSampleLimit = 1000
+const solanaSignatureSampleLimit = positiveEnvNumber("SOLANA_SIGNATURE_SAMPLE_LIMIT", 250)
+
+type RpcQueueJob<T> = {
+  run: () => Promise<T>
+  resolve: (value: T) => void
+  reject: (error: unknown) => void
+}
+
+const rpcQueue: RpcQueueJob<unknown>[] = []
+let activeRpcRequests = 0
+let nextRpcStartAt = 0
+let rpcQueueTimer: ReturnType<typeof setTimeout> | null = null
 
 type RpcResponse<T> = {
   result?: T
-  error?: { message?: string }
+  error?: { code?: number; message?: string }
 }
 
 type BalanceResult = {
@@ -89,22 +101,88 @@ type AccountClassification = {
   isContract: boolean
 }
 
-export function getSolanaRpcUrl() {
-  const explicit = process.env.SOLANA_RPC_URL?.trim()
-  if (explicit) return explicit
-
-  const apiKey = process.env.HELIUS_API_KEY?.trim()
-  if (apiKey) return `https://mainnet.helius-rpc.com/?api-key=${apiKey}`
-
-  return null
+function positiveEnvNumber(name: string, fallback: number) {
+  const value = Number(process.env[name])
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback
 }
 
-export async function solanaRpc<T>(method: string, params: unknown[] = []): Promise<T> {
-  const rpcUrl = getSolanaRpcUrl()
-  if (!rpcUrl) {
-    throw new Error("HELIUS_API_KEY or SOLANA_RPC_URL is not configured")
+function configuredRpcUrls() {
+  const explicit = process.env.SOLANA_RPC_URL?.trim()
+  const heliusApiKey = process.env.HELIUS_API_KEY?.trim()
+  const fallbacks = (process.env.SOLANA_RPC_FALLBACK_URLS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+
+  return Array.from(
+    new Set(
+      [
+        explicit,
+        heliusApiKey ? `https://mainnet.helius-rpc.com/?api-key=${heliusApiKey}` : null,
+        ...fallbacks,
+      ].filter((value): value is string => Boolean(value))
+    )
+  )
+}
+
+export function getSolanaRpcUrl() {
+  return configuredRpcUrls()[0] ?? null
+}
+
+export function getSolanaRpcUrls() {
+  return configuredRpcUrls()
+}
+
+function drainRpcQueue() {
+  if (rpcQueueTimer) {
+    clearTimeout(rpcQueueTimer)
+    rpcQueueTimer = null
   }
 
+  const concurrency = positiveEnvNumber("SOLANA_RPC_MAX_CONCURRENCY", 3)
+  const minIntervalMs = positiveEnvNumber("SOLANA_RPC_MIN_INTERVAL_MS", 125)
+
+  while (activeRpcRequests < concurrency && rpcQueue.length) {
+    const waitMs = Math.max(0, nextRpcStartAt - Date.now())
+    if (waitMs > 0) {
+      rpcQueueTimer = setTimeout(drainRpcQueue, waitMs)
+      return
+    }
+
+    const job = rpcQueue.shift()
+    if (!job) return
+
+    activeRpcRequests += 1
+    nextRpcStartAt = Date.now() + minIntervalMs
+    void job
+      .run()
+      .then(job.resolve, job.reject)
+      .finally(() => {
+        activeRpcRequests -= 1
+        drainRpcQueue()
+      })
+  }
+}
+
+function scheduleRpc<T>(run: () => Promise<T>) {
+  return new Promise<T>((resolve, reject) => {
+    rpcQueue.push({
+      run: run as () => Promise<unknown>,
+      resolve: resolve as (value: unknown) => void,
+      reject,
+    })
+    drainRpcQueue()
+  })
+}
+
+function isRateLimitResponse(response: Response, payload: RpcResponse<unknown> | null, body: string) {
+  if (response.status === 429 || payload?.error?.code === -32005) return true
+  return /rate limit|too many requests|request limit|429/i.test(
+    `${payload?.error?.message ?? ""} ${body}`
+  )
+}
+
+async function rpcRequest<T>(rpcUrl: string, method: string, params: unknown[]): Promise<T> {
   const response = await fetch(rpcUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -117,13 +195,44 @@ export async function solanaRpc<T>(method: string, params: unknown[] = []): Prom
     cache: "no-store",
   })
 
-  const payload = (await response.json()) as RpcResponse<T>
+  const body = await response.text()
+  let payload: RpcResponse<T> | null = null
+  try {
+    payload = JSON.parse(body) as RpcResponse<T>
+  } catch {
+    payload = null
+  }
 
-  if (!response.ok || payload.error) {
-    throw new Error(payload.error?.message ?? `Solana RPC ${method} failed`)
+  if (isRateLimitResponse(response, payload, body)) {
+    const retryAfter = response.headers.get("retry-after")
+    throw new RateLimitError(
+      `Solana RPC ${method} rate limited${retryAfter ? `; retry after ${retryAfter}s` : ""}`
+    )
+  }
+
+  if (!response.ok || payload?.error || !payload) {
+    throw new Error(payload?.error?.message ?? `Solana RPC ${method} failed with HTTP ${response.status}`)
   }
 
   return payload.result as T
+}
+
+export async function solanaRpc<T>(method: string, params: unknown[] = []): Promise<T> {
+  const rpcUrls = getSolanaRpcUrls()
+  if (!rpcUrls.length) {
+    throw new Error("HELIUS_API_KEY, SOLANA_RPC_URL, or SOLANA_RPC_FALLBACK_URLS is not configured")
+  }
+
+  let lastError: unknown = null
+  for (const rpcUrl of rpcUrls) {
+    try {
+      return await scheduleRpc(() => rpcRequest<T>(rpcUrl, method, params))
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  throw lastError ?? new Error(`Solana RPC ${method} failed`)
 }
 
 function isoFromUnix(blockTime?: number | null) {

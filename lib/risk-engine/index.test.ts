@@ -117,6 +117,42 @@ describe("risk engine fixture coverage", () => {
     assert.ok(analyzed.reasons.some((reason) => reason.includes("No On-chain Data")))
   })
 
+  it("keeps provider failures in Gray Zone instead of misclassifying them as closed or risky wallets", () => {
+    const providerUnavailable = wallet({
+      walletAddress: "0x1000000000000000000000000000000000000006",
+      txCount: null,
+      walletAgeDays: null,
+      fundingSource: null,
+      firstSeen: null,
+      lastSeen: null,
+      totalVolume: null,
+      contractsCount: null,
+      campaignActionsCount: null,
+      nativeBalance: null,
+      tokenCount: null,
+      uniqueCounterparties: null,
+      lastActiveDaysAgo: null,
+      isContract: null,
+      accountType: null,
+      behaviorFingerprint: null,
+      campaignQualityScore: null,
+      campaignOnlyRatio: null,
+      behaviorDiversityScore: null,
+      botScriptScore: null,
+      enrichmentProvider: "helius",
+      enrichmentStatus: "failed",
+    })
+
+    const analyzed = analyzeWallets([providerUnavailable]).wallets[0]
+
+    assert.equal(analyzed.status, "manual_review")
+    assert.equal(analyzed.recommendedAction, "manual_review")
+    assert.equal(analyzed.riskScore, 0)
+    assert.ok(analyzed.statusExplanation.includes("provider access was temporarily unavailable"))
+    assert.ok(analyzed.reasons.some((reason) => reason.includes("provider access unavailable")))
+    assert.ok(!analyzed.reasons.some((reason) => reason.includes("missing_or_closed_account")))
+  })
+
   it("detects shared funding clusters and marks members with cluster context", () => {
     const sharedFunding = "0xfeed000000000000000000000000000000000000"
     const wallets = Array.from({ length: 4 }, (_, index) =>

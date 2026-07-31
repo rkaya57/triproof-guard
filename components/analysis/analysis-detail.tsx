@@ -160,7 +160,22 @@ function hasSharedFundingSignal(wallet: Pick<WalletRiskResult, "reasons">) {
   return wallet.reasons.some((reason) => reason.startsWith("Shared funding source"))
 }
 
-function policyStatusForScore(score: number, policy: "conservative" | "balanced" | "strict"): WalletStatus {
+function policyStatusForWallet(
+  wallet: WalletRiskResult,
+  policy: "conservative" | "balanced" | "strict"
+): WalletStatus {
+  // Provider failures are operationally unresolved, not wallet-risk evidence.
+  if (wallet.enrichmentStatus === "failed") return "manual_review"
+
+  const hasNoOnChainData =
+    wallet.accountType === "missing_or_closed_account" ||
+    wallet.reasons.some((reason) => reason.includes("No On-chain Data"))
+  if (hasNoOnChainData) return policy === "conservative" ? "manual_review" : "rejected"
+
+  if (wallet.accountType && wallet.accountType !== "system_user_wallet") return "rejected"
+  if (wallet.entityType !== "user") return "rejected"
+
+  const score = wallet.riskScore
   if (policy === "conservative") {
     if (score <= 35) return "approved"
     if (score <= 74) return "manual_review"
@@ -179,7 +194,7 @@ function policyStatusForScore(score: number, policy: "conservative" | "balanced"
 function getPolicyScenario(wallets: WalletRiskResult[], policy: "conservative" | "balanced" | "strict") {
   const counts = wallets.reduce(
     (summary, wallet) => {
-      const status = policyStatusForScore(wallet.riskScore, policy)
+      const status = policyStatusForWallet(wallet, policy)
       summary[status] += 1
       return summary
     },
@@ -506,7 +521,7 @@ function DecisionCenterPanel({ analysis, exportPath }: { analysis: AnalysisDetai
           <div className="rounded-lg border border-primary/20 bg-background/45 p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Provider coverage</p>
             <p className="mt-1 text-2xl font-semibold text-primary">{coverageRate}%</p>
-            <p className="mt-2 text-sm text-muted-foreground">{formatNumber(enrichedCount)} enriched, {formatNumber(failedCount)} failed via {provider}.</p>
+            <p className="mt-2 text-sm text-muted-foreground">{formatNumber(enrichedCount)} provider responses, {formatNumber(failedCount)} require retry via {provider}.</p>
           </div>
           <div className="rounded-lg border border-red-400/25 bg-red-400/10 p-4">
             <p className="text-xs uppercase tracking-wide text-red-200">Risk contained</p>
@@ -561,7 +576,7 @@ function PolicySimulator({ analysis }: { analysis: AnalysisDetailType }) {
           Campaign Policy Simulator
         </CardTitle>
         <CardDescription>
-          Preview how stricter or looser thresholds change the operational decision list before distribution.
+          Preview how stricter or looser thresholds change the decision list while keeping provider outages in Gray Zone and non-user accounts excluded.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 md:grid-cols-3">
@@ -1552,15 +1567,15 @@ export function AnalysisDetail({
               icon={Landmark}
             />
             <MetricCard
-              title="Enriched wallets"
+              title="Provider responses"
               value={formatNumber(analysis.enrichment.enrichedCount)}
-              description="Wallets with on-chain data."
+              description="Wallets with a completed provider response."
               icon={CheckCircle2}
             />
             <MetricCard
-              title="No On-chain Data"
+              title="Enrichment retry required"
               value={formatNumber(analysis.enrichment.failedCount)}
-              description="No reliable on-chain history found."
+              description="Temporary provider access issue; not a wallet-risk finding."
               icon={AlertTriangle}
             />
             <MetricCard

@@ -220,6 +220,7 @@ function statusFromSignals({
   fundingGroupSize,
   entityType,
   evidenceAvailable,
+  providerUnavailable,
   accountType,
   hardSybilSignal,
   riskPolicy,
@@ -231,6 +232,7 @@ function statusFromSignals({
   fundingGroupSize: number
   entityType: EntityType
   evidenceAvailable: boolean
+  providerUnavailable: boolean
   accountType: string | null
   hardSybilSignal: boolean
   riskPolicy: RiskPolicy
@@ -239,6 +241,15 @@ function statusFromSignals({
   const contextualSignals = explainContextualSignals(clusterId, fundingGroupSize)
   const hasClusterSignal = Boolean(clusterId)
   const hasSharedFundingSignal = fundingGroupSize >= 5
+
+  if (providerUnavailable) {
+    return {
+      status: "manual_review",
+      recommendedAction: "manual_review",
+      statusExplanation:
+        "Gray Zone: on-chain provider access was temporarily unavailable. This is not a wallet-risk finding; retry enrichment before making an eligibility decision.",
+    }
+  }
 
   if (!evidenceAvailable) {
     if (config.noDataAction === "manual_review") {
@@ -596,7 +607,11 @@ export function analyzeWallets(
       }
     }
 
-    if (!evidenceAvailable && !entityLabel) {
+    const providerUnavailable = wallet.enrichmentStatus === "failed"
+
+    if (providerUnavailable) {
+      reasons.push("V1.5 provider access unavailable: retry on-chain enrichment before assigning wallet risk")
+    } else if (!evidenceAvailable && !entityLabel) {
       score = Math.max(score, 45)
       reasons.push("V1.5 No On-chain Data: no reliable provider-readable wallet history was available")
     }
@@ -794,6 +809,7 @@ export function analyzeWallets(
       fundingGroupSize,
       entityType,
       evidenceAvailable,
+      providerUnavailable,
       accountType: wallet.accountType,
       hardSybilSignal,
       riskPolicy,
