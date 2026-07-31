@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import type { Prisma } from "@prisma/client"
 
+import { parseApiWalletRows } from "@/lib/api/analysis-wallet-input"
 import { getV1ApiUser, apiError } from "@/lib/api/v1-auth"
 import { isAdminEmail } from "@/lib/auth/admin"
 import { createAnalysisBatches } from "@/lib/analysis/batch-worker"
@@ -17,13 +18,11 @@ import { getOnChainConfig, isEnrichableChain } from "@/lib/onchain/enrichment-ty
 import { getOnChainProvider } from "@/lib/onchain/provider-router"
 import {
   campaignTypes,
-  isValidWalletAddress,
-  normalizeWalletAddress,
   parseCampaignContracts,
   supportedChains,
   riskPolicies,
 } from "@/lib/validators/wallet"
-import type { AnalysisMode, CampaignType, Chain, ParsedWallet, RiskPolicy } from "@/types"
+import type { AnalysisMode, CampaignType, Chain, RiskPolicy } from "@/types"
 
 export const runtime = "nodejs"
 
@@ -73,81 +72,6 @@ function normalizeRiskPolicy(value: unknown): RiskPolicy {
   return riskPolicies.includes(value as RiskPolicy) ? (value as RiskPolicy) : "balanced"
 }
 
-function walletRows(input: unknown, chain: Chain): { wallets: ParsedWallet[]; issues: string[] } {
-  const values = Array.isArray(input) ? input : []
-  const seen = new Set<string>()
-  const wallets: ParsedWallet[] = []
-  const issues: string[] = []
-
-  values.forEach((item, index) => {
-    const row = typeof item === "object" && item !== null
-      ? (item as Record<string, unknown>)
-      : null
-    const rawAddress = typeof item === "string" ? item : typeof item === "object" && item !== null ? String((item as { wallet?: unknown; walletAddress?: unknown; address?: unknown }).wallet ?? (item as { walletAddress?: unknown }).walletAddress ?? (item as { address?: unknown }).address ?? "") : ""
-    const policyAction = typeof item === "object" && item !== null ? String((item as { policyAction?: unknown; policy_action?: unknown }).policyAction ?? (item as { policy_action?: unknown }).policy_action ?? "") : ""
-    const reputationLabel = typeof item === "object" && item !== null ? String((item as { reputationLabel?: unknown; reputation_label?: unknown }).reputationLabel ?? (item as { reputation_label?: unknown }).reputation_label ?? "") : ""
-    const policyReason = typeof item === "object" && item !== null ? String((item as { policyReason?: unknown; policy_reason?: unknown }).policyReason ?? (item as { policy_reason?: unknown }).policy_reason ?? "") : ""
-    const rawReferrer = String(
-      row?.referrerAddress ??
-      row?.referrer_address ??
-      row?.referrerWallet ??
-      row?.referredBy ??
-      ""
-    ).trim()
-    const referralCode = String(
-      row?.referralCode ?? row?.referral_code ?? row?.inviteCode ?? ""
-    ).trim()
-    const referralTimestamp = String(
-      row?.referralTimestamp ?? row?.referral_timestamp ?? row?.referredAt ?? ""
-    ).trim()
-
-    if (!rawAddress.trim()) {
-      issues.push(`wallets[${index}] is missing an address`)
-      return
-    }
-
-    if (!isValidWalletAddress(rawAddress, chain)) {
-      issues.push(`wallets[${index}] is not a valid ${chain} address`)
-      return
-    }
-
-    const normalized = normalizeWalletAddress(rawAddress, chain)
-    const referrerAddress =
-      rawReferrer && isValidWalletAddress(rawReferrer, chain)
-        ? normalizeWalletAddress(rawReferrer, chain)
-        : null
-    if (rawReferrer && !referrerAddress) {
-      issues.push(`wallets[${index}] has an invalid ${chain} referrer address; referral link ignored`)
-    }
-    const key = `${chain}:${normalized}`
-    if (seen.has(key)) return
-    seen.add(key)
-
-    wallets.push({
-      walletAddress: normalized,
-      chain,
-      txCount: null,
-      walletAgeDays: null,
-      fundingSource: null,
-      firstSeen: null,
-      lastSeen: null,
-      totalVolume: null,
-      contractsCount: null,
-      campaignActionsCount: null,
-      policyAction: policyAction === "approve" || policyAction === "manual_review" || policyAction === "reject" ? policyAction : null,
-      reputationLabel: reputationLabel.trim() || null,
-      policyReason: policyReason.trim() || null,
-      customerLabel: reputationLabel.trim() || null,
-      referrerAddress,
-      referralCode: referralCode || null,
-      referralTimestamp: referralTimestamp || null,
-      sourceRow: index + 1,
-    })
-  })
-
-  return { wallets, issues }
-}
-
 export async function POST(request: Request) {
   const auth = await getV1ApiUser(request)
   if (auth.error) return auth.error
@@ -169,7 +93,7 @@ export async function POST(request: Request) {
   const campaignType = normalizeCampaignType(body.campaignType)
   const analysisMode = normalizeAnalysisMode(body.analysisMode)
   const riskPolicy = normalizeRiskPolicy(body.riskPolicy)
-  const { wallets, issues } = walletRows(body.wallets, chain)
+  const { wallets, issues } = parseApiWalletRows(body.wallets, chain)
 
   if (!wallets.length) {
     return apiError("No valid wallets supplied", 400, { issues })
