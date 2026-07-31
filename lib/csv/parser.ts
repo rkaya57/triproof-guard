@@ -1,6 +1,6 @@
 import Papa from "papaparse"
 
-import type { CsvIssue, CsvParseResult, EntityType, ParsedWallet, PolicyAction } from "@/types"
+import type { CsvIssue, CsvParseResult, EntityType, ParsedWallet } from "@/types"
 import {
   isValidWalletAddress,
   normalizeHeader,
@@ -14,11 +14,8 @@ const walletKeys = ["wallet_address", "wallet", "address"]
 function getWalletAddress(row: RawCsvRow) {
   for (const key of walletKeys) {
     const value = row[key]?.trim()
-    if (value) {
-      return value
-    }
+    if (value) return value
   }
-
   return ""
 }
 
@@ -31,10 +28,7 @@ function firstText(row: RawCsvRow, keys: string[]) {
 }
 
 function toNumber(value: string | undefined) {
-  if (value == null || value.trim() === "") {
-    return null
-  }
-
+  if (value == null || value.trim() === "") return null
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
 }
@@ -64,71 +58,6 @@ function toParticipantFingerprint(value: string | null) {
 function textOrNull(value: string | undefined) {
   const trimmed = value?.trim()
   return trimmed ? trimmed : null
-}
-
-function normalizePolicyAction(value: string | null): PolicyAction {
-  if (!value) return null
-  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, "_")
-
-  if (
-    [
-      "approve",
-      "approved",
-      "allow",
-      "allowlist",
-      "whitelist",
-      "trusted",
-      "trusted_user",
-      "verified",
-      "verified_user",
-      "confirmed_human",
-      "false_positive",
-      "safe",
-    ].includes(normalized)
-  ) {
-    return "approve"
-  }
-
-  if (
-    [
-      "reject",
-      "rejected",
-      "deny",
-      "denylist",
-      "block",
-      "blocked",
-      "blocklist",
-      "blacklist",
-      "known_sybil",
-      "confirmed_sybil",
-      "bot",
-      "farmer",
-      "farm",
-      "not_eligible",
-      "exclude",
-      "excluded",
-    ].includes(normalized)
-  ) {
-    return "reject"
-  }
-
-  if (
-    [
-      "manual",
-      "manual_review",
-      "review",
-      "needs_review",
-      "suspicious",
-      "watchlist",
-      "gray",
-      "grey",
-      "uncertain",
-    ].includes(normalized)
-  ) {
-    return "manual_review"
-  }
-
-  return null
 }
 
 function normalizeEntityType(value: string | null): EntityType | null {
@@ -193,7 +122,6 @@ export function parseWalletCsv(csvText: string, selectedChain: string): CsvParse
       })
       return
     }
-
     seen.add(duplicateKey)
 
     const reputationLabel = firstText(row, [
@@ -201,10 +129,16 @@ export function parseWalletCsv(csvText: string, selectedChain: string): CsvParse
       "reputation",
       "review_label",
       "customer_label",
-      "label",
     ])
-    const explicitPolicy = firstText(row, ["policy_action", "policy", "decision", "action", "status_override"])
-    const policyAction = normalizePolicyAction(explicitPolicy ?? reputationLabel)
+    const importedPolicyLabel = firstText(row, [
+      "policy_action",
+      "policy",
+      "decision",
+      "action",
+      "status_override",
+    ])
+    const genericLabel = firstText(row, ["label"])
+    const customerLabel = reputationLabel ?? importedPolicyLabel ?? genericLabel
     const entityLabel = firstText(row, ["entity_label", "known_entity", "entity", "wallet_label"])
     const entityType = normalizeEntityType(firstText(row, ["entity_type", "known_entity_type"]))
     const policyReason = firstText(row, ["policy_reason", "reason", "note", "notes", "review_note"])
@@ -258,6 +192,14 @@ export function parseWalletCsv(csvText: string, selectedChain: string): CsvParse
       })
     }
 
+    if (importedPolicyLabel) {
+      issues.push({
+        row: rowNumber,
+        walletAddress: normalizedAddress,
+        issue: "Imported policy/decision value retained as customer context; it does not override the Tri-Proof engine decision",
+      })
+    }
+
     wallets.push({
       walletAddress: normalizedAddress,
       chain: rowChain,
@@ -274,10 +216,10 @@ export function parseWalletCsv(csvText: string, selectedChain: string): CsvParse
       campaignActionsCount: toNumber(row.campaign_actions_count),
       knownEntityLabel: entityLabel,
       knownEntityType: entityType,
-      policyAction,
-      reputationLabel,
+      policyAction: null,
+      reputationLabel: reputationLabel ?? importedPolicyLabel,
       policyReason,
-      customerLabel: firstText(row, ["customer_label", "review_label", "label"]),
+      customerLabel,
       referrerAddress,
       referralCode: firstText(row, ["referral_code", "invite_code", "ref_code"]),
       referralTimestamp: firstText(row, [
