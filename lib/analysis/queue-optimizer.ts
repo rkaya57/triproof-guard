@@ -1,4 +1,5 @@
 import { db } from "@/lib/db/prisma"
+import { acquireAnalysisWorkerLock } from "@/lib/analysis/analysis-worker-lock"
 import { recoverStaleAnalysisBatches } from "@/lib/analysis/batch-lease"
 import {
   finalizeReadyAnalyses,
@@ -7,9 +8,18 @@ import {
   processNextAnalysisBatch,
 } from "@/lib/analysis/batch-worker"
 
-const DEFAULT_STALE_MINUTES = Number.parseInt(process.env.ANALYSIS_BATCH_STALE_MINUTES ?? "15", 10)
-const DEFAULT_MAX_BATCHES = Number.parseInt(process.env.WORKER_MAX_BATCHES ?? "25", 10)
-const DEFAULT_TIME_BUDGET_MS = Number.parseInt(process.env.WORKER_TIME_BUDGET_MS ?? "240000", 10)
+const DEFAULT_STALE_MINUTES = Number.parseInt(
+  process.env.ANALYSIS_BATCH_STALE_MINUTES ?? "15",
+  10
+)
+const DEFAULT_MAX_BATCHES = Number.parseInt(
+  process.env.WORKER_MAX_BATCHES ?? "25",
+  10
+)
+const DEFAULT_TIME_BUDGET_MS = Number.parseInt(
+  process.env.WORKER_TIME_BUDGET_MS ?? "240000",
+  10
+)
 
 type QueueStatusRow = {
   total: number
@@ -143,19 +153,17 @@ export async function getAnalysisQueueStatus({
   return normalizeStatus(rows[0])
 }
 
-export async function processAnalysisQueue({
+async function processQueueLocked({
   analysisId,
-  maxBatches = DEFAULT_MAX_BATCHES,
-  timeBudgetMs = DEFAULT_TIME_BUDGET_MS,
-  recoverStale = true,
+  limit,
+  budget,
+  recoverStale,
 }: {
   analysisId?: string | null
-  maxBatches?: number
-  timeBudgetMs?: number
-  recoverStale?: boolean
-} = {}) {
-  const limit = safeMaxBatches(maxBatches)
-  const budget = safeTimeBudgetMs(timeBudgetMs)
+  limit: number
+  budget: number
+  recoverStale: boolean
+}) {
   const startedAt = Date.now()
   const recovered = recoverStale
     ? await recoverStaleAnalysisBatches(analysisId ?? undefined)
@@ -177,13 +185,11 @@ export async function processAnalysisQueue({
     ? { checked: 0, finalized: 0 }
     : await finalizeReadyAnalyses(limit)
 
-  if (analysisId) {
-    await finalizeAnalysisIfReady(analysisId)
-  }
-
+  if (analysisId) await finalizeAnalysisIfReady(analysisId)
   const queue = await getAnalysisQueueStatus({ analysisId })
 
   return {
+    workerLockAcquired: true,
     recoveredStaleBatches: recovered,
     processedBatches: results.filter((result) => result.processed).length,
     maxBatches: limit,
@@ -192,5 +198,57 @@ export async function processAnalysisQueue({
     finalizedReadyAnalyses,
     results,
     queue,
+  }
+}
+
+export async function processAnalysisQueue({
+  analysisId,
+  maxBatches = DEFAULT_MAX_BATCHES,
+  timeBudgetMs = DEFAULT_TIME_BUDGET_MS,
+  recoverStale = true,
+}: {
+  analysisId?: string | null
+  maxBatches?: number
+  timeBudgetMs?: number
+  recoverStale?: boolean
+} = {}) {
+  const limit = safeMaxBatches(maxBatches)
+  const budget = safeTimeBudgetMs(timeBudgetMs)
+
+  if (!analysisId) {
+    return processQueueLocked({
+      analysisId,
+      limit,
+      budget,
+      recoverStale,
+    })
+  }
+
+  const workerLock = await acquireAnalysisWorkerLock(analysisId)
+  if (!workerLock.acquired) {
+    return {
+      workerLockAcquired: false,
+      recoveredStaleBatches: { recovered: 0, failed: 0 },
+      processedBatches: 0,
+      maxBatches: limit,
+      timeBudgetMs: budget,
+      elapsedMs: 0,
+      finalizedReadyAnalyses: { checked: 0, finalized: 0 },
+      results: [],
+      queue: await getAnalysisQueueStatus({ analysisId }),
+      message:
+        "Another worker already owns this analysis. The duplicate invocation exited without claiming an additional batch.",
+    }
+  }
+
+  try {
+    return await processQueueLocked({
+      analysisId,
+      limit,
+      budget,
+      recoverStale,
+    })
+  } finally {
+    await workerLock.release()
   }
 }
