@@ -27,10 +27,14 @@ type MultipleAccountsResult = {
 }
 
 type AccountKey = string | { pubkey?: string }
+
 type ParsedInstruction = {
   program?: string
   programId?: string
-  parsed?: { type?: string; info?: Record<string, unknown> }
+  parsed?: {
+    type?: string
+    info?: Record<string, unknown>
+  }
 }
 
 type FullTransaction = {
@@ -55,20 +59,20 @@ type AddressTransactionsResult = {
   paginationToken?: string | null
 }
 
-type BulkOutput = {
-  results: Map<string, WalletEnrichmentResult>
-  warnings: string[]
-  requestCount: number
-  rateLimitCount: number
-}
-
-type Capacity = {
+export type HeliusBulkCapacity = {
   targetRps: number
   concurrency: number
   oldestLimit: number
   newestLimit: number
   requestsPerWallet: number
   accountBatchSize: number
+}
+
+type BulkOutput = {
+  results: Map<string, WalletEnrichmentResult>
+  warnings: string[]
+  requestCount: number
+  rateLimitCount: number
 }
 
 class HeliusCapabilityError extends Error {
@@ -85,34 +89,53 @@ function envInt(name: string, fallback: number, min: number, max: number) {
     : fallback
 }
 
-function targetRps() {
+function configuredRps() {
   const explicit = Number.parseInt(process.env.HELIUS_BULK_RPC_RPS ?? "", 10)
-  if (Number.isFinite(explicit) && explicit > 0) return Math.min(1_000, explicit)
-  const plan = (process.env.HELIUS_PLAN ?? "free").trim().toLowerCase()
-  if (plan === "professional" || plan === "pro") return 400
-  if (plan === "business") return 160
-  if (plan === "developer") return 40
-  return 8
+  if (Number.isFinite(explicit) && explicit > 0) {
+    return Math.min(1_000, explicit)
+  }
+
+  switch ((process.env.HELIUS_PLAN ?? "free").trim().toLowerCase()) {
+    case "professional":
+    case "pro":
+      return 400
+    case "business":
+      return 160
+    case "developer":
+      return 40
+    default:
+      return 8
+  }
 }
 
-function heliusRpcUrl(): string | null {
+function optionalEndpoint() {
   const explicit = process.env.SOLANA_RPC_URL?.trim()
   if (explicit && /helius/i.test(explicit)) return explicit
   const key = process.env.HELIUS_API_KEY?.trim()
   return key ? `https://mainnet.helius-rpc.com/?api-key=${key}` : null
 }
 
-export function isHeliusBulkConfigured() {
-  return heliusRpcUrl() !== null
+function requiredEndpoint(): string {
+  const endpoint = optionalEndpoint()
+  if (!endpoint) {
+    throw new HeliusCapabilityError(
+      "HELIUS_API_KEY or a Helius SOLANA_RPC_URL is required for high-volume Solana analysis."
+    )
+  }
+  return endpoint
 }
 
-export function heliusBulkCapacity(): Capacity {
-  const rps = targetRps()
+export function isHeliusBulkConfigured() {
+  return optionalEndpoint() !== null
+}
+
+export function heliusBulkCapacity(): HeliusBulkCapacity {
+  const targetRps = configuredRps()
   return {
-    targetRps: rps,
+    targetRps,
     concurrency: envInt(
       "HELIUS_BULK_CONCURRENCY",
-      Math.min(96, Math.max(8, Math.ceil(rps / 2))),
+      Math.min(96, Math.max(8, Math.ceil(targetRps / 2))),
       1,
       256
     ),
@@ -130,22 +153,26 @@ function sleep(ms: number) {
 function retryAfterMs(value: string | null) {
   if (!value) return null
   const seconds = Number(value)
-  if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds * 1_000)
-  const time = Date.parse(value)
-  return Number.isFinite(time) ? Math.max(0, time - Date.now()) : null
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.ceil(seconds * 1_000)
+  }
+  const timestamp = Date.parse(value)
+  return Number.isFinite(timestamp)
+    ? Math.max(0, timestamp - Date.now())
+    : null
 }
 
-class StartGate {
+class RequestStartGate {
   private tail = Promise.resolve()
-  private nextAt = 0
+  private nextStartAt = 0
 
   constructor(private readonly intervalMs: number) {}
 
   wait() {
     const next = this.tail.then(async () => {
-      const delay = Math.max(0, this.nextAt - Date.now())
-      if (delay) await sleep(delay)
-      this.nextAt = Date.now() + this.intervalMs
+      const delay = Math.max(0, this.nextStartAt - Date.now())
+      if (delay > 0) await sleep(delay)
+      this.nextStartAt = Date.now() + this.intervalMs
     })
     this.tail = next.catch(() => undefined)
     return next
@@ -156,39 +183,55 @@ function keyString(key: AccountKey) {
   return typeof key === "string" ? key : key.pubkey ?? ""
 }
 
-function instructions(tx: FullTransaction) {
+function allInstructions(transaction: FullTransaction) {
   return [
-    ...(tx.transaction?.message?.instructions ?? []),
-    ...(tx.meta?.innerInstructions ?? []).flatMap((group) => group.instructions ?? []),
+    ...(transaction.transaction?.message?.instructions ?? []),
+    ...(transaction.meta?.innerInstructions ?? []).flatMap(
+      (group) => group.instructions ?? []
+    ),
   ]
 }
 
-function signature(tx: FullTransaction) {
-  return tx.signature ?? tx.transaction?.signatures?.[0] ?? ""
+function transactionSignature(transaction: FullTransaction) {
+  return (
+    transaction.signature ??
+    transaction.transaction?.signatures?.[0] ??
+    ""
+  )
 }
 
-function uniqueTransactions(values: FullTransaction[]) {
-  const map = new Map<string, FullTransaction>()
-  values.forEach((tx, index) => {
-    const id = signature(tx) || `unknown-${tx.blockTime ?? ""}-${index}`
-    if (!map.has(id)) map.set(id, tx)
+function uniqueTransactions(transactions: FullTransaction[]) {
+  const unique = new Map<string, FullTransaction>()
+  transactions.forEach((transaction, index) => {
+    const key =
+      transactionSignature(transaction) ||
+      `unknown-${transaction.blockTime ?? ""}-${index}`
+    if (!unique.has(key)) unique.set(key, transaction)
   })
-  return Array.from(map.values())
+  return Array.from(unique.values())
 }
 
-function classify(address: string, account: AccountValue, hasHistory: boolean) {
-  const known = detectKnownEntity(address)
+function classifyAccount(
+  address: string,
+  account: AccountValue,
+  hasHistory: boolean
+) {
+  const knownEntity = detectKnownEntity(address)
   const owner = account?.owner ?? null
-  if (known) {
+
+  if (knownEntity) {
     return {
       accountType:
-        known.type === "protocol" ? "known_protocol_or_program" : `known_${known.type}`,
+        knownEntity.type === "protocol"
+          ? "known_protocol_or_program"
+          : `known_${knownEntity.type}`,
       ownerProgram: owner,
-      knownEntityLabel: known.label,
-      knownEntityType: known.type,
+      knownEntityLabel: knownEntity.label,
+      knownEntityType: knownEntity.type,
       isContract: Boolean(account?.executable),
     }
   }
+
   if (!account) {
     return {
       accountType: hasHistory
@@ -200,6 +243,7 @@ function classify(address: string, account: AccountValue, hasHistory: boolean) {
       isContract: false,
     }
   }
+
   if (account.executable) {
     return {
       accountType: "executable_program_account",
@@ -209,6 +253,7 @@ function classify(address: string, account: AccountValue, hasHistory: boolean) {
       isContract: true,
     }
   }
+
   if (owner === TOKEN_PROGRAM_ID || owner === TOKEN_2022_PROGRAM_ID) {
     return {
       accountType: "spl_token_account_or_mint",
@@ -218,6 +263,7 @@ function classify(address: string, account: AccountValue, hasHistory: boolean) {
       isContract: false,
     }
   }
+
   if (owner && owner !== SYSTEM_PROGRAM_ID) {
     return {
       accountType: "program_owned_account",
@@ -227,6 +273,7 @@ function classify(address: string, account: AccountValue, hasHistory: boolean) {
       isContract: false,
     }
   }
+
   return {
     accountType: "system_user_wallet",
     ownerProgram: owner,
@@ -236,8 +283,8 @@ function classify(address: string, account: AccountValue, hasHistory: boolean) {
   }
 }
 
-function fundingFromTransaction(tx: FullTransaction, wallet: string) {
-  for (const instruction of instructions(tx)) {
+function fundingEvidence(transaction: FullTransaction, wallet: string) {
+  for (const instruction of allInstructions(transaction)) {
     const info = instruction.parsed?.info ?? {}
     const destination = String(info.destination ?? info.to ?? "")
     const source = String(info.source ?? info.from ?? "")
@@ -251,8 +298,8 @@ function fundingFromTransaction(tx: FullTransaction, wallet: string) {
       const lamports = Number(info.lamports ?? 0)
       return {
         source,
-        observedAt: tx.blockTime
-          ? new Date(tx.blockTime * 1_000).toISOString()
+        observedAt: transaction.blockTime
+          ? new Date(transaction.blockTime * 1_000).toISOString()
           : null,
         amount:
           Number.isFinite(lamports) && lamports > 0
@@ -262,48 +309,57 @@ function fundingFromTransaction(tx: FullTransaction, wallet: string) {
     }
   }
 
-  const keys = tx.transaction?.message?.accountKeys ?? []
-  const pre = tx.meta?.preBalances ?? []
-  const post = tx.meta?.postBalances ?? []
-  const walletIndex = keys.findIndex((item) => keyString(item) === wallet)
+  const keys = transaction.transaction?.message?.accountKeys ?? []
+  const preBalances = transaction.meta?.preBalances ?? []
+  const postBalances = transaction.meta?.postBalances ?? []
+  const walletIndex = keys.findIndex((key) => keyString(key) === wallet)
   if (walletIndex < 0) return null
-  const walletDelta = (post[walletIndex] ?? 0) - (pre[walletIndex] ?? 0)
+
+  const walletDelta =
+    (postBalances[walletIndex] ?? 0) - (preBalances[walletIndex] ?? 0)
   if (walletDelta <= 0) return null
 
   let sourceIndex = -1
-  let negativeDelta = 0
-  for (let index = 0; index < Math.min(pre.length, post.length); index += 1) {
+  let largestNegativeDelta = 0
+  for (
+    let index = 0;
+    index < Math.min(preBalances.length, postBalances.length);
+    index += 1
+  ) {
     if (index === walletIndex) continue
-    const delta = (post[index] ?? 0) - (pre[index] ?? 0)
-    if (delta < negativeDelta) {
-      negativeDelta = delta
+    const delta = (postBalances[index] ?? 0) - (preBalances[index] ?? 0)
+    if (delta < largestNegativeDelta) {
+      largestNegativeDelta = delta
       sourceIndex = index
     }
   }
+
   const source = sourceIndex >= 0 ? keyString(keys[sourceIndex] ?? "") : ""
   return source && source !== wallet
     ? {
         source,
-        observedAt: tx.blockTime
-          ? new Date(tx.blockTime * 1_000).toISOString()
+        observedAt: transaction.blockTime
+          ? new Date(transaction.blockTime * 1_000).toISOString()
           : null,
         amount: Number((walletDelta / LAMPORTS_PER_SOL).toFixed(9)),
       }
     : null
 }
 
-function nativeVolume(tx: FullTransaction, wallet: string) {
-  const keys = tx.transaction?.message?.accountKeys ?? []
-  const index = keys.findIndex((item) => keyString(item) === wallet)
-  if (index < 0) return 0
-  const pre = tx.meta?.preBalances?.[index]
-  const post = tx.meta?.postBalances?.[index]
-  return typeof pre === "number" && typeof post === "number"
-    ? Math.abs(post - pre) / LAMPORTS_PER_SOL
-    : 0
+function sampledNativeVolume(transaction: FullTransaction, wallet: string) {
+  const keys = transaction.transaction?.message?.accountKeys ?? []
+  const walletIndex = keys.findIndex((key) => keyString(key) === wallet)
+  if (walletIndex < 0) return 0
+
+  const preBalance = transaction.meta?.preBalances?.[walletIndex]
+  const postBalance = transaction.meta?.postBalances?.[walletIndex]
+  if (typeof preBalance !== "number" || typeof postBalance !== "number") {
+    return 0
+  }
+  return Math.abs(postBalance - preBalance) / LAMPORTS_PER_SOL
 }
 
-function buildData({
+function buildEnrichedData({
   address,
   account,
   oldest,
@@ -316,12 +372,18 @@ function buildData({
   oldest: AddressTransactionsResult
   newest: AddressTransactionsResult
   options?: EnrichWalletOptions
-  capacity: Capacity
+  capacity: HeliusBulkCapacity
 }): EnrichedWalletData {
-  const txs = uniqueTransactions([...(oldest.data ?? []), ...(newest.data ?? [])])
-  const chronological = txs
-    .filter((tx) => typeof tx.blockTime === "number")
-    .sort((left, right) => Number(left.blockTime) - Number(right.blockTime))
+  const transactions = uniqueTransactions([
+    ...(oldest.data ?? []),
+    ...(newest.data ?? []),
+  ])
+  const chronological = transactions
+    .filter((transaction) => typeof transaction.blockTime === "number")
+    .sort(
+      (left, right) => Number(left.blockTime) - Number(right.blockTime)
+    )
+
   const first = chronological[0]
   const last = chronological[chronological.length - 1]
   const firstSeen = first?.blockTime
@@ -336,25 +398,36 @@ function buildData({
       (oldest.data?.length ?? 0) >= capacity.oldestLimit ||
       (newest.data?.length ?? 0) >= capacity.newestLimit
   )
-  const classification = classify(address, account, txs.length > 0)
+
+  const classification = classifyAccount(
+    address,
+    account,
+    transactions.length > 0
+  )
   const programs = new Set<string>()
   const instructionTypes = new Set<string>()
   const counterparties = new Set<string>()
   const activeDays = new Set<string>()
-  const campaignSet = new Set(
-    (options?.campaignContracts ?? []).map((item) => item.trim()).filter(Boolean)
+  const campaignContracts = new Set(
+    (options?.campaignContracts ?? [])
+      .map((contract) => contract.trim())
+      .filter(Boolean)
   )
-  let sampledVolume = 0
+
+  let totalVolume = 0
   let campaignActions = 0
 
-  txs.forEach((tx) => {
-    sampledVolume += nativeVolume(tx, address)
-    if (tx.blockTime) {
-      activeDays.add(new Date(tx.blockTime * 1_000).toISOString().slice(0, 10))
+  transactions.forEach((transaction) => {
+    totalVolume += sampledNativeVolume(transaction, address)
+    if (transaction.blockTime) {
+      activeDays.add(
+        new Date(transaction.blockTime * 1_000).toISOString().slice(0, 10)
+      )
     }
-    const keys = tx.transaction?.message?.accountKeys ?? []
-    keys.forEach((item) => {
-      const value = keyString(item)
+
+    const keys = transaction.transaction?.message?.accountKeys ?? []
+    keys.forEach((key) => {
+      const value = keyString(key)
       if (
         value &&
         value !== address &&
@@ -365,51 +438,67 @@ function buildData({
         counterparties.add(value)
       }
     })
-    let campaignHit = Array.from(campaignSet).some((candidate) =>
-      keys.some((item) => keyString(item) === candidate)
+
+    let campaignHit = Array.from(campaignContracts).some((contract) =>
+      keys.some((key) => keyString(key) === contract)
     )
-    instructions(tx).forEach((instruction) => {
+    allInstructions(transaction).forEach((instruction) => {
       const program = instruction.programId ?? instruction.program
       if (program) programs.add(program)
       if (instruction.parsed?.type) {
-        instructionTypes.add(`${program ?? "unknown"}:${instruction.parsed.type}`)
+        instructionTypes.add(
+          `${program ?? "unknown"}:${instruction.parsed.type}`
+        )
       }
-      if (program && campaignSet.has(program)) campaignHit = true
+      if (program && campaignContracts.has(program)) campaignHit = true
     })
     if (campaignHit) campaignActions += 1
   })
 
-  let funding: ReturnType<typeof fundingFromTransaction> = null
-  for (const tx of chronological) {
-    funding = fundingFromTransaction(tx, address)
+  let funding: ReturnType<typeof fundingEvidence> = null
+  for (const transaction of chronological) {
+    funding = fundingEvidence(transaction, address)
     if (funding) break
   }
 
-  const behaviorReliable = txs.length >= 3
-  const diversity = behaviorReliable
-    ? Math.min(100, programs.size * 12 + activeDays.size * 8 + counterparties.size * 6)
+  const behaviorSampleReliable = transactions.length >= 3
+  const behaviorDiversityScore = behaviorSampleReliable
+    ? Math.min(
+        100,
+        programs.size * 12 + activeDays.size * 8 + counterparties.size * 6
+      )
     : null
-  const campaignRatio =
-    behaviorReliable && campaignSet.size
-      ? Number(Math.min(1, campaignActions / txs.length).toFixed(3))
+  const campaignOnlyRatio =
+    behaviorSampleReliable && campaignContracts.size > 0
+      ? Number(
+          Math.min(1, campaignActions / transactions.length).toFixed(3)
+        )
       : null
 
   return {
     walletAddress: address,
     chain: "Solana",
     provider: "helius-bulk",
-    txCount: historyTruncated ? null : txs.length,
+    txCount: historyTruncated ? null : transactions.length,
     walletAgeDays: firstSeen
-      ? Math.max(0, Math.floor((Date.now() - Date.parse(firstSeen)) / 86_400_000))
+      ? Math.max(
+          0,
+          Math.floor((Date.now() - Date.parse(firstSeen)) / 86_400_000)
+        )
       : null,
     firstSeen,
     lastSeen,
-    totalVolume: behaviorReliable ? Number(sampledVolume.toFixed(6)) : null,
+    totalVolume: behaviorSampleReliable
+      ? Number(totalVolume.toFixed(6))
+      : null,
     nativeBalance: Number(account?.lamports ?? 0) / LAMPORTS_PER_SOL,
     tokenCount: null,
-    contractsCount: behaviorReliable ? programs.size : null,
-    campaignActionsCount: campaignSet.size ? campaignActions : null,
-    uniqueCounterparties: behaviorReliable ? counterparties.size : null,
+    contractsCount: behaviorSampleReliable ? programs.size : null,
+    campaignActionsCount:
+      campaignContracts.size > 0 ? campaignActions : null,
+    uniqueCounterparties: behaviorSampleReliable
+      ? counterparties.size
+      : null,
     fundingSource: funding?.source ?? null,
     firstFundingAt: funding?.observedAt ?? null,
     firstFundingAmount: funding?.amount ?? null,
@@ -419,27 +508,30 @@ function buildData({
     knownEntityType: classification.knownEntityType,
     accountType: classification.accountType,
     ownerProgram: classification.ownerProgram,
-    behaviorFingerprint: behaviorReliable
-      ? [...Array.from(programs).sort(), ...Array.from(instructionTypes).sort()].slice(0, 50)
+    behaviorFingerprint: behaviorSampleReliable
+      ? [
+          ...Array.from(programs).sort(),
+          ...Array.from(instructionTypes).sort(),
+        ].slice(0, 50)
       : null,
     campaignQualityScore: null,
-    campaignOnlyRatio: campaignRatio,
-    behaviorDiversityScore: diversity,
+    campaignOnlyRatio,
+    behaviorDiversityScore,
     botScriptScore: null,
     rawData: {
       enrichmentSchemaVersion: 3,
       profile: "high_volume_screening",
-      observedTransactionLowerBound: txs.length,
+      observedTransactionLowerBound: transactions.length,
       exactTransactionCountAvailable: !historyTruncated,
       oldestTransactionsRequested: capacity.oldestLimit,
       oldestTransactionsResolved: oldest.data?.length ?? 0,
       newestTransactionsRequested: capacity.newestLimit,
       newestTransactionsResolved: newest.data?.length ?? 0,
       historyTruncated,
-      behaviorSampleReliable: behaviorReliable,
+      behaviorSampleReliable,
       activeDaysObserved: activeDays.size,
       programCountObserved: programs.size,
-      participantTokenCountSkipped: true,
+      tokenAccountExpansionDeferred: true,
     },
   }
 }
@@ -451,17 +543,24 @@ async function mapConcurrent<T>(
 ) {
   let cursor = 0
   await Promise.all(
-    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-      while (true) {
-        const index = cursor++
-        if (index >= items.length) return
-        await handler(items[index] as T, index)
+    Array.from(
+      { length: Math.min(concurrency, items.length) },
+      async () => {
+        while (true) {
+          const index = cursor
+          cursor += 1
+          if (index >= items.length) return
+          await handler(items[index] as T, index)
+        }
       }
-    })
+    )
   )
 }
 
-function failedResult(address: string, error: unknown): WalletEnrichmentResult {
+function failedResult(
+  address: string,
+  error: unknown
+): WalletEnrichmentResult {
   return {
     data: {
       walletAddress: address,
@@ -509,16 +608,14 @@ export async function enrichSolanaWalletsBulk({
   options?: EnrichWalletOptions
   onProgress?: (processed: number, total: number) => void
 }): Promise<BulkOutput> {
-  const endpoint = heliusRpcUrl()
-  if (!endpoint) {
-    throw new HeliusCapabilityError(
-      "HELIUS_API_KEY or a Helius SOLANA_RPC_URL is required for high-volume Solana analysis."
-    )
-  }
-
-  const unique = Array.from(new Set(addresses.map((item) => item.trim()).filter(Boolean)))
+  const endpoint = requiredEndpoint()
+  const uniqueAddresses = Array.from(
+    new Set(addresses.map((address) => address.trim()).filter(Boolean))
+  )
   const capacity = heliusBulkCapacity()
-  const gate = new StartGate(Math.ceil(1_000 / capacity.targetRps))
+  const requestGate = new RequestStartGate(
+    Math.ceil(1_000 / capacity.targetRps)
+  )
   const warnings = new Set<string>()
   let requestCount = 0
   let rateLimitCount = 0
@@ -528,13 +625,19 @@ export async function enrichSolanaWalletsBulk({
     let lastError: unknown = null
 
     for (let attempt = 1; attempt <= 5; attempt += 1) {
-      await gate.wait()
+      await requestGate.wait()
       requestCount += 1
       const controller = new AbortController()
       const timeout = setTimeout(
         () => controller.abort(),
-        envInt("HELIUS_BULK_REQUEST_TIMEOUT_MS", 30_000, 5_000, 120_000)
+        envInt(
+          "HELIUS_BULK_REQUEST_TIMEOUT_MS",
+          30_000,
+          5_000,
+          120_000
+        )
       )
+
       try {
         const response = await fetch(endpoint, {
           method: "POST",
@@ -555,14 +658,23 @@ export async function enrichSolanaWalletsBulk({
         } catch {
           body = null
         }
+
         const rateLimited =
           response.status === 429 ||
           body?.error?.code === -32005 ||
-          /rate limit|too many requests|max calls/i.test(body?.error?.message ?? text)
+          /rate limit|too many requests|max calls/i.test(
+            body?.error?.message ?? text
+          )
 
-        if (response.ok && body && !body.error && body.result !== undefined) {
+        if (
+          response.ok &&
+          body &&
+          !body.error &&
+          body.result !== undefined
+        ) {
           return body.result
         }
+
         if (
           method === "getTransactionsForAddress" &&
           (response.status === 401 ||
@@ -570,61 +682,87 @@ export async function enrichSolanaWalletsBulk({
             /not available|upgrade|plan/i.test(text))
         ) {
           throw new HeliusCapabilityError(
-            "The Helius account cannot use getTransactionsForAddress. Enable a paid Helius plan with this RPC before running a 50,000-wallet analysis."
+            "The configured Helius account cannot use getTransactionsForAddress. Enable a paid Helius plan with this RPC before running a 50,000-wallet analysis."
           )
         }
+
         if (!RETRYABLE_HTTP.has(response.status) && !rateLimited) {
           throw new HeliusCapabilityError(
             `Helius ${method} returned non-retryable HTTP ${response.status}: ${text.slice(0, 240)}`
           )
         }
+
         if (rateLimited) rateLimitCount += 1
         const error = new Error(
-          body?.error?.message ?? `Helius ${method} failed with HTTP ${response.status}`
+          body?.error?.message ??
+            `Helius ${method} failed with HTTP ${response.status}`
         ) as Error & { retryAfterMs?: number | null }
-        error.retryAfterMs = retryAfterMs(response.headers.get("retry-after"))
+        error.retryAfterMs = retryAfterMs(
+          response.headers.get("retry-after")
+        )
         throw error
       } catch (error) {
         if (error instanceof HeliusCapabilityError) throw error
         lastError = error
         if (attempt === 5) break
-        const retryAfter = (error as Error & { retryAfterMs?: number | null }).retryAfterMs
+
+        const retryAfter = (
+          error as Error & { retryAfterMs?: number | null }
+        ).retryAfterMs
         const jitter = 0.75 + Math.random() * 0.5
-        await sleep(Math.max(retryAfter ?? 0, Math.round(delayMs * jitter)))
+        await sleep(
+          Math.max(
+            retryAfter ?? 0,
+            Math.round(delayMs * jitter)
+          )
+        )
         delayMs = Math.min(delayMs * 2, 30_000)
       } finally {
         clearTimeout(timeout)
       }
     }
+
     throw lastError ?? new Error(`Helius ${method} failed after retries`)
   }
 
-  if (unique.length) {
-    await rpc<AddressTransactionsResult>("getTransactionsForAddress", [
-      unique[0],
-      {
-        transactionDetails: "full",
-        sortOrder: "desc",
-        commitment: "confirmed",
-        limit: 1,
-        encoding: "jsonParsed",
-        maxSupportedTransactionVersion: 0,
-        filters: { status: "succeeded", tokenAccounts: "balanceChanged" },
-      },
-    ])
+  if (uniqueAddresses.length > 0) {
+    await rpc<AddressTransactionsResult>(
+      "getTransactionsForAddress",
+      [
+        uniqueAddresses[0],
+        {
+          transactionDetails: "full",
+          sortOrder: "desc",
+          commitment: "confirmed",
+          limit: 1,
+          encoding: "jsonParsed",
+          maxSupportedTransactionVersion: 0,
+        },
+      ]
+    )
   }
 
   const accounts = new Map<string, AccountValue>()
-  for (let index = 0; index < unique.length; index += 100) {
-    const group = unique.slice(index, index + 100)
-    const response = await rpc<MultipleAccountsResult>("getMultipleAccounts", [
-      group,
-      {
-        encoding: "base64",
-        commitment: "confirmed",
-        dataSlice: { offset: 0, length: 0 },
-      },
-    ])
+  for (
+    let index = 0;
+    index < uniqueAddresses.length;
+    index += capacity.accountBatchSize
+  ) {
+    const group = uniqueAddresses.slice(
+      index,
+      index + capacity.accountBatchSize
+    )
+    const response = await rpc<MultipleAccountsResult>(
+      "getMultipleAccounts",
+      [
+        group,
+        {
+          encoding: "base64",
+          commitment: "confirmed",
+          dataSlice: { offset: 0, length: 0 },
+        },
+      ]
+    )
     group.forEach((address, itemIndex) => {
       accounts.set(address, response.value?.[itemIndex] ?? null)
     })
@@ -632,52 +770,71 @@ export async function enrichSolanaWalletsBulk({
 
   const results = new Map<string, WalletEnrichmentResult>()
   let processed = 0
-  await mapConcurrent(unique, capacity.concurrency, async (address) => {
-    try {
-      const common = {
-        transactionDetails: "full",
-        commitment: "confirmed",
-        encoding: "jsonParsed",
-        maxSupportedTransactionVersion: 0,
-        filters: { status: "succeeded", tokenAccounts: "balanceChanged" },
-      }
-      const [oldest, newest] = await Promise.all([
-        rpc<AddressTransactionsResult>("getTransactionsForAddress", [
-          address,
-          { ...common, sortOrder: "asc", limit: capacity.oldestLimit },
-        ]),
-        rpc<AddressTransactionsResult>("getTransactionsForAddress", [
-          address,
-          { ...common, sortOrder: "desc", limit: capacity.newestLimit },
-        ]),
-      ])
-      const data = buildData({
-        address,
-        account: accounts.get(address) ?? null,
-        oldest,
-        newest,
-        options,
-        capacity,
-      })
-      results.set(address, {
-        data,
-        status: "completed",
-        provider: "helius-bulk",
-        fromCache: false,
-        errorMessage: null,
-      })
-    } catch (error) {
-      warnings.add(
-        "At least one wallet failed after five provider attempts and must be retried; no decision was made from partial data."
-      )
-      results.set(address, failedResult(address, error))
-    } finally {
-      processed += 1
-      onProgress?.(processed, unique.length)
-    }
-  })
 
-  if (rateLimitCount) {
+  await mapConcurrent(
+    uniqueAddresses,
+    capacity.concurrency,
+    async (address) => {
+      try {
+        const commonOptions = {
+          transactionDetails: "full",
+          commitment: "confirmed",
+          encoding: "jsonParsed",
+          maxSupportedTransactionVersion: 0,
+        }
+        const [oldest, newest] = await Promise.all([
+          rpc<AddressTransactionsResult>(
+            "getTransactionsForAddress",
+            [
+              address,
+              {
+                ...commonOptions,
+                sortOrder: "asc",
+                limit: capacity.oldestLimit,
+              },
+            ]
+          ),
+          rpc<AddressTransactionsResult>(
+            "getTransactionsForAddress",
+            [
+              address,
+              {
+                ...commonOptions,
+                sortOrder: "desc",
+                limit: capacity.newestLimit,
+              },
+            ]
+          ),
+        ])
+
+        const data = buildEnrichedData({
+          address,
+          account: accounts.get(address) ?? null,
+          oldest,
+          newest,
+          options,
+          capacity,
+        })
+        results.set(address, {
+          data,
+          status: "completed",
+          provider: "helius-bulk",
+          fromCache: false,
+          errorMessage: null,
+        })
+      } catch (error) {
+        warnings.add(
+          "At least one wallet failed after five provider attempts and must be retried; no decision was made from partial data."
+        )
+        results.set(address, failedResult(address, error))
+      } finally {
+        processed += 1
+        onProgress?.(processed, uniqueAddresses.length)
+      }
+    }
+  )
+
+  if (rateLimitCount > 0) {
     warnings.add(
       `${rateLimitCount.toLocaleString()} Helius rate-limit response(s) were recovered with exponential backoff and jitter.`
     )
