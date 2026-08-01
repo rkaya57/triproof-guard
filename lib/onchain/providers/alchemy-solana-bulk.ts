@@ -59,6 +59,8 @@ type AddressTransactionsResult = {
   paginationToken?: string | null
 }
 
+type SignatureHistoryResult = Array<{ signature?: string }> 
+
 type HybridOutput = {
   results: Map<string, WalletEnrichmentResult>
   warnings: string[]
@@ -478,6 +480,7 @@ function buildData({
   account,
   transactions,
   oldest,
+  historicalSignatureObserved,
   historyTruncated,
   options,
   provider,
@@ -486,6 +489,7 @@ function buildData({
   account: AccountValue
   transactions: FullTransaction[]
   oldest: FullTransaction[]
+  historicalSignatureObserved: boolean
   historyTruncated: boolean
   options?: EnrichWalletOptions
   provider: string
@@ -503,7 +507,11 @@ function buildData({
   const walletAgeDays = firstSeen
     ? Math.max(0, Math.floor((Date.now() - Date.parse(firstSeen)) / 86_400_000))
     : null
-  const classification = classifyAccount(address, account, unique.length > 0)
+  const classification = classifyAccount(
+    address,
+    account,
+    unique.length > 0 || historicalSignatureObserved
+  )
   const programs = new Set<string>()
   const instructionTypes = new Set<string>()
   const counterparties = new Set<string>()
@@ -623,6 +631,7 @@ function buildData({
       historyProvider: "alchemy",
       stateProvider: provider.includes("helius") ? "helius" : "alchemy",
       observedTransactions: unique.length,
+      historicalSignatureObserved,
       historyTruncated,
       exactTransactionCountAvailable: !historyTruncated,
       tokenAccountExpansionDeferred: true,
@@ -727,6 +736,21 @@ async function fetchWalletHistory({
     historyTruncated: Boolean(paginationToken),
     historyClientId,
   }
+}
+
+async function confirmHistoricalSignature({
+  address,
+  clients,
+}: {
+  address: string
+  clients: RpcClient[]
+}) {
+  const response = await requestWithFallback<SignatureHistoryResult>(
+    clients,
+    "getSignaturesForAddress",
+    [address, { limit: 1, commitment: "confirmed" }]
+  )
+  return (response.result ?? []).some((entry) => Boolean(entry.signature))
 }
 
 function failedResult(address: string, error: unknown): WalletEnrichmentResult {
@@ -840,12 +864,30 @@ export async function enrichSolanaWalletsAlchemyHybrid({
         historyClients,
         deepHistory: Boolean(options?.deepHistory),
       })
+      const account = accounts.get(address) ?? null
+      let historicalSignatureObserved = false
+
+      // A closed Solana account can still have real on-chain history. Alchemy's
+      // enhanced history endpoint can return an empty sample for that case, so
+      // confirm one standard RPC signature before treating it as no-data.
+      if (!account && history.transactions.length === 0 && history.oldest.length === 0) {
+        historicalSignatureObserved = await confirmHistoricalSignature({
+          address,
+          clients: [stateClient, alchemyClient],
+        })
+        if (historicalSignatureObserved) {
+          warnings.add(
+            "Historical signatures were confirmed for at least one closed account; those wallets remain in Gray Zone instead of being auto-excluded."
+          )
+        }
+      }
       const provider = `${history.historyClientId}+${stateClient.id}-state`
       const data = buildData({
         address,
-        account: accounts.get(address) ?? null,
+        account,
         transactions: history.transactions,
         oldest: history.oldest,
+        historicalSignatureObserved,
         historyTruncated: history.historyTruncated,
         options,
         provider,

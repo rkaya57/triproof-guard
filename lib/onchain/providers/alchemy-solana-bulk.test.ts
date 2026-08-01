@@ -266,4 +266,60 @@ describe("Alchemy-first Solana enrichment", () => {
     assert.ok(historyAttempts >= 3)
     assert.ok(output.rateLimitCount >= 1)
   })
+
+  it("keeps a closed account with confirmed signature history out of automatic rejection", async () => {
+    process.env.ALCHEMY_API_KEY = "alchemy-test-key"
+    process.env.HELIUS_API_KEY = "helius-test-key"
+    delete process.env.SOLANA_RPC_URL
+    process.env.ALCHEMY_SOLANA_HISTORY_RPS = "10"
+    process.env.HELIUS_STATE_RPS = "9"
+    process.env.ALCHEMY_SOLANA_WALLET_CONCURRENCY = "1"
+
+    const wallet = "ClosedHistory1111111111111111111111111111111"
+
+    globalThis.fetch = (async (
+      input: string | URL | Request,
+      init?: RequestInit
+    ) => {
+      const url = String(input)
+      const body = JSON.parse(String(init?.body)) as {
+        method: string
+      }
+
+      if (body.method === "getMultipleAccounts") {
+        return new Response(
+          JSON.stringify({ result: { value: [null] } }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      }
+
+      if (body.method === "getTransactionsForAddress") {
+        assert.match(url, /alchemy/)
+        return new Response(
+          JSON.stringify({ result: { data: [], paginationToken: null } }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      }
+
+      assert.equal(body.method, "getSignaturesForAddress")
+      assert.match(url, /helius-rpc/)
+      return new Response(
+        JSON.stringify({ result: [{ signature: "confirmed-history" }] }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    }) as typeof fetch
+
+    const output = await enrichSolanaWalletsAlchemyHybrid({
+      addresses: [wallet],
+      options: { deepHistory: false },
+    })
+    const result = output.results.get(wallet)
+
+    assert.equal(result?.status, "completed")
+    assert.equal(result?.data.accountType, "historical_unresolved_account")
+    assert.equal(result?.data.rawData?.historicalSignatureObserved, true)
+    assert.ok(
+      output.warnings.some((warning) => warning.includes("Historical signatures were confirmed"))
+    )
+  })
 })
