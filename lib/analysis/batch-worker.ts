@@ -740,6 +740,47 @@ async function processBatch(batch: BatchRow) {
   const previousSummary = parseJson<EnrichmentSummary | null>(batch.enrichmentSummary, null)
   const previousResults = completedResultMap(batch.enrichmentResults)
   const walletsToEnrich = wallets.filter((wallet) => !previousResults.has(wallet.walletAddress))
+  const initialCompletedCount = previousResults.size
+  let lastReportedProgress = initialCompletedCount
+  let lastProgressSavedAt = 0
+  let progressPersistence = Promise.resolve()
+
+  // Larger Solana batches can take minutes. Persist throttled progress so the
+  // customer sees real work advancing without turning every RPC response into
+  // a database write. The lease predicate prevents an expired worker from
+  // overwriting a newer worker's checkpoint.
+  function reportProgress(processed: number, total: number) {
+    const completed = Math.min(wallets.length, initialCompletedCount + processed)
+    const now = Date.now()
+    const reachedBatchEnd = processed >= total
+    if (
+      completed <= lastReportedProgress ||
+      (!reachedBatchEnd && completed - lastReportedProgress < 10 && now - lastProgressSavedAt < 5_000)
+    ) {
+      return
+    }
+
+    lastReportedProgress = completed
+    lastProgressSavedAt = now
+    progressPersistence = progressPersistence
+      .then(async () => {
+        await db.$executeRaw`
+          UPDATE "AnalysisBatch"
+          SET "processedCount" = GREATEST("processedCount", ${completed}),
+              "updatedAt" = NOW()
+          WHERE "id" = ${batch.id}
+            AND "status" = 'processing'
+            AND "errorMessage" = ${leaseToken}
+        `
+      })
+      .catch((error) => {
+        console.error("Analysis batch progress checkpoint failed", {
+          analysisId: batch.analysisId,
+          batchId: batch.id,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+  }
 
   try {
     await db.analysis.update({ where: { id: analysis.id }, data: { status: "enriching", enrichmentStatus: "processing" } })
@@ -748,7 +789,9 @@ async function processBatch(batch: BatchRow) {
       chain: analysis.project.chain,
       mode,
       options: { campaignContracts, deepHistory },
+      onProgress: reportProgress,
     })
+    await progressPersistence
 
     results.forEach((result, address) => {
       if (result.status === "completed") previousResults.set(address, result)

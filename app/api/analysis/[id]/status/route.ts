@@ -79,6 +79,24 @@ export async function GET(
       : analysis.status === "completed"
         ? 100
         : 0
+    const elapsedSeconds = Math.max(1, Math.floor((Date.now() - analysis.createdAt.getTime()) / 1_000))
+    const canEstimateRemaining =
+      analysis.status !== "completed" &&
+      batchStatus.processedWalletCount >= 10 &&
+      elapsedSeconds >= 10 &&
+      batchStatus.processedWalletCount < totalWallets
+    const estimatedRemainingSeconds = canEstimateRemaining
+      ? Math.max(
+          1,
+          Math.ceil(
+            ((totalWallets - batchStatus.processedWalletCount) * elapsedSeconds) /
+              batchStatus.processedWalletCount
+          )
+        )
+      : null
+    const estimatedCompletionAt = estimatedRemainingSeconds
+      ? new Date(Date.now() + estimatedRemainingSeconds * 1_000).toISOString()
+      : null
 
     if (
       analysis.status !== "completed" &&
@@ -105,6 +123,8 @@ export async function GET(
       totalWallets,
       processedWalletCount: batchStatus.processedWalletCount,
       progressPercent,
+      estimatedRemainingSeconds,
+      estimatedCompletionAt,
       pendingBatchCount: batchStatus.pendingBatchCount,
       enrichedWalletCount: analysis.enrichedWalletCount,
       failedEnrichmentCount: analysis.failedEnrichmentCount || batchStatus.failedWalletCount,

@@ -19,6 +19,15 @@ export type AnalysisProcessingStatus = {
   processingBatchCount: number
   failedBatchCount: number
   failedEnrichmentCount: number
+  estimatedRemainingSeconds: number | null
+  estimatedCompletionAt: string | null
+}
+
+function formatRemaining(seconds: number | null | undefined) {
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 1) return "Calculating"
+  if (seconds < 60) return `About ${Math.ceil(seconds)} sec`
+  const minutes = Math.ceil(seconds / 60)
+  return `About ${minutes} min`
 }
 
 export function AnalysisProcessing({
@@ -119,7 +128,7 @@ export function AnalysisProcessing({
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div className="rounded-lg border border-border bg-muted/20 p-3">
             <p className="text-xs text-muted-foreground">Wallets</p>
             <p className="text-lg font-semibold">
@@ -140,10 +149,14 @@ export function AnalysisProcessing({
             <p className="text-xs text-muted-foreground">Failed</p>
             <p className="text-lg font-semibold">{status.failedBatchCount ?? 0}</p>
           </div>
+          <div className="rounded-lg border border-border bg-muted/20 p-3">
+            <p className="text-xs text-muted-foreground">Estimated remaining</p>
+            <p className="text-lg font-semibold">{formatRemaining(status.estimatedRemainingSeconds)}</p>
+          </div>
         </div>
 
         <p className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-primary">
-          Background worker is processing queued batches. You can close this page and return later.
+          Progress is saved as the active batch runs. You can close this page and return later without losing the analysis.
         </p>
         {error && <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
 

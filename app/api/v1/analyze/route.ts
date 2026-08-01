@@ -121,6 +121,7 @@ export async function POST(request: Request) {
   const capacity = highVolumeCapacityReport({
     chain,
     walletCount: wallets.length,
+    deepHistory: false,
   })
   if (chain === "Solana" && wallets.length >= 1_000 && !capacity.configured) {
     return apiError(
@@ -133,6 +134,7 @@ export async function POST(request: Request) {
     chain,
     walletCount: wallets.length,
     fallback: config.batchSize,
+    deepHistory: false,
   })
 
   const projectName = String(body.projectName ?? `${chain} ${campaignType} API Wallet Audit`).trim().slice(0, 120)

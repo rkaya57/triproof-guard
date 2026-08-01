@@ -67,6 +67,13 @@ type HybridOutput = {
   rateLimitCount: number
 }
 
+export type AlchemySolanaHistoryCapacity = {
+  historyRequestsPerSecond: number
+  walletConcurrency: number
+  screeningRequestsPerWallet: number
+  accountBatchSize: number
+}
+
 type RpcClient = {
   id: string
   endpoint: string
@@ -124,6 +131,20 @@ function heliusEndpoint() {
 
 export function isAlchemySolanaHistoryConfigured() {
   return alchemyEndpoint() !== null
+}
+
+/**
+ * Exposes bounded screening capacity to queue planning and user-facing status.
+ * Deep-history pagination is deliberately excluded: its cost depends on the
+ * individual wallet's real transaction count.
+ */
+export function alchemySolanaHistoryCapacity(): AlchemySolanaHistoryCapacity {
+  return {
+    historyRequestsPerSecond: envInt("ALCHEMY_SOLANA_HISTORY_RPS", 5, 1, 10),
+    walletConcurrency: envInt("ALCHEMY_SOLANA_WALLET_CONCURRENCY", 4, 1, 8),
+    screeningRequestsPerWallet: 2,
+    accountBatchSize: 100,
+  }
 }
 
 function createRpcClient({
@@ -759,7 +780,8 @@ export async function enrichSolanaWalletsAlchemyHybrid({
   const alchemy = alchemyEndpoint()
   if (!alchemy) throw new Error("ALCHEMY_API_KEY is required for Solana history enrichment")
 
-  const alchemyRps = envInt("ALCHEMY_SOLANA_HISTORY_RPS", 5, 1, 10)
+  const capacity = alchemySolanaHistoryCapacity()
+  const alchemyRps = capacity.historyRequestsPerSecond
   const alchemyClient = createRpcClient({
     id: "alchemy",
     endpoint: alchemy,
@@ -808,7 +830,7 @@ export async function enrichSolanaWalletsAlchemyHybrid({
   }
 
   const results = new Map<string, WalletEnrichmentResult>()
-  const concurrency = envInt("ALCHEMY_SOLANA_WALLET_CONCURRENCY", 4, 1, 8)
+  const concurrency = capacity.walletConcurrency
   let processed = 0
 
   await mapConcurrent(uniqueAddresses, concurrency, async (address) => {

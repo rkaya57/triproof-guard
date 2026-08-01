@@ -11,6 +11,10 @@ import { getOnChainProvider } from "@/lib/onchain/provider-router"
 import { createAnalysisBatches } from "@/lib/analysis/batch-worker"
 import { dispatchAnalysisWorker } from "@/lib/analysis/worker-dispatch"
 import {
+  analysisWalletBatchSize,
+  highVolumeCapacityReport,
+} from "@/lib/analysis/high-volume"
+import {
   commitAnalysisCreditDebit,
   isBillingCreditError,
   prepareAnalysisBillingGate,
@@ -142,6 +146,18 @@ export async function POST(request: Request) {
       )
     }
 
+    const capacity = highVolumeCapacityReport({
+      chain: parsedForm.data.chain,
+      walletCount: parsedCsv.wallets.length,
+      deepHistory: parsedForm.data.deepHistory,
+    })
+    const walletBatchSize = analysisWalletBatchSize({
+      chain: parsedForm.data.chain,
+      walletCount: parsedCsv.wallets.length,
+      fallback: config.batchSize,
+      deepHistory: parsedForm.data.deepHistory,
+    })
+
     if (parsedCsv.mode === "basic") {
       warnings.push(
         "Address-only CSV detected. Real on-chain enrichment will be used; CSV-only/basic scoring is disabled."
@@ -154,7 +170,13 @@ export async function POST(request: Request) {
 
     if (parsedForm.data.deepHistory) {
       warnings.push(
-        "Deep Solana history is enabled. This analysis reads a larger signature window and may take longer."
+        "Deep Solana history is enabled. It is a final-audit mode: batches are intentionally smaller because each wallet may require paginated history."
+      )
+    }
+
+    if (capacity.estimatedProviderMinutes !== null) {
+      warnings.push(
+        `Screening profile: ${capacity.profile}. Estimated provider time before cache hits: about ${capacity.estimatedProviderMinutes} minute(s).`
       )
     }
 
@@ -168,6 +190,8 @@ export async function POST(request: Request) {
       `TRIPROOF_RISK_POLICY=${parsedForm.data.riskPolicy}`,
       campaignContracts.length ? `TRIPROOF_CAMPAIGN_CONTRACTS=${campaignContracts.join(",")}` : "",
       parsedForm.data.deepHistory ? "TRIPROOF_DEEP_HISTORY=true" : "",
+      `TRIPROOF_ANALYSIS_BATCH_SIZE=${walletBatchSize}`,
+      `TRIPROOF_CAPACITY_PROFILE=${capacity.profile}`,
       parsedCsv.mode === "basic"
         ? "Address-only CSV detected. Real on-chain enrichment required; no synthetic CSV-only data will be generated."
         : "Enriched CSV uploaded. Hybrid/On-chain mode will use real provider data where needed.",
@@ -213,6 +237,8 @@ export async function POST(request: Request) {
           fileName: file.name,
           chain: parsedForm.data.chain,
           campaignType: parsedForm.data.campaignType,
+          capacity,
+          walletBatchSize,
           freeTrialWalletLimit,
           remainingFreeWallets: billingGate.remainingFreeWallets,
         },
@@ -221,7 +247,7 @@ export async function POST(request: Request) {
       const batchCount = await createAnalysisBatches(
         analysis.id,
         parsedCsv.wallets,
-        config.batchSize,
+        walletBatchSize,
         tx
       )
 
@@ -234,6 +260,8 @@ export async function POST(request: Request) {
       analysisId: created.analysis.id,
       status: "processing",
       batchCount: created.batchCount,
+      walletBatchSize,
+      capacity,
       billing: {
         source: created.billingGate.source,
         creditsDeducted: created.billingGate.creditsToDeduct,
@@ -248,7 +276,7 @@ export async function POST(request: Request) {
         issues: parsedCsv.issues,
         duplicates: parsedCsv.duplicates,
         warnings,
-        note: `Real on-chain analysis queued in ${created.batchCount.toLocaleString()} batches using ${selection.provider.id}. Risk policy: ${parsedForm.data.riskPolicy}. No CSV-only or mock wallet history will be used.`,
+        note: `Real on-chain analysis queued in ${created.batchCount.toLocaleString()} batches using ${capacity.provider ?? selection.provider.id}. Risk policy: ${parsedForm.data.riskPolicy}. No CSV-only or mock wallet history will be used.`,
       },
     })
   } catch (error) {
