@@ -15,7 +15,7 @@ import {
   SYBIL_RULESET_VERSION,
   type CrossCampaignContext,
   type CrossCampaignWalletSignal,
-} from "@/lib/risk-engine"
+} from "../risk-engine"
 import { analyzeWalletsScalable } from "@/lib/risk-engine/scalable"
 
 export {
