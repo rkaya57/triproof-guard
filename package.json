@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/vercel-migrate-deploy.mjs && prisma generate && next build",
+    "build": "node scripts/vercel-provider-smoke.mjs && node scripts/vercel-migrate-deploy.mjs && prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "extension:validate": "node scripts/validate-chrome-extension.mjs",
