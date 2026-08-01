@@ -1,11 +1,15 @@
 import { detectKnownEntity } from "@/lib/risk-engine/known-entities"
 import { isValidWalletAddress } from "@/lib/validators/wallet"
 
+// Canonical mainnet program IDs. Raydium and Orca values are taken from their
+// official program-address references. Environment configuration may replace
+// this list without changing code.
 const DEFAULT_PROGRAMS = [
   "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoiH5QNyVTaV4",
   "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
-  "whirLbMiicVdio4qvUfM5KAg6CtZAmYZPccVYkF4Ni",
-  "675kPX9MHTjS2zt1qFR1NYBUu1j1h1M9WWmoJsSt",
+  "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C",
+  "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+  "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
 ]
 
 const RETRYABLE_HTTP = new Set([408, 429, 500, 502, 503, 504])
