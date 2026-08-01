@@ -8,7 +8,7 @@ import { isDatabaseConnectionError } from "@/lib/db/errors"
 export const runtime = "nodejs"
 
 const staleBatchMinutes = Math.min(
-  120,
+  3,
   Math.max(1, Number.parseInt(process.env.ANALYSIS_BATCH_STALE_MINUTES ?? "3", 10))
 )
 
@@ -53,8 +53,7 @@ export async function GET(
         COUNT(*) FILTER (WHERE "status" = 'processing')::int AS "processingBatchCount",
         COUNT(*) FILTER (
           WHERE "status" = 'processing'
-            AND "startedAt" IS NOT NULL
-            AND "startedAt" < NOW() - (${staleBatchMinutes} * INTERVAL '1 minute')
+            AND "updatedAt" < NOW() - (${staleBatchMinutes} * INTERVAL '1 minute')
         )::int AS "staleProcessingBatchCount",
         COALESCE(SUM("processedCount"), 0)::int AS "processedWalletCount",
         COALESCE(SUM("failedCount"), 0)::int AS "failedWalletCount"

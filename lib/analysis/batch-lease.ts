@@ -10,9 +10,14 @@ const MAX_BATCH_RETRIES = Math.max(
   3,
   Number.parseInt(process.env.ANALYSIS_MAX_BATCH_RETRIES ?? "5", 10) || 5
 )
-const BATCH_LEASE_TIMEOUT_MS = Math.max(
-  60_000,
-  Number.parseInt(process.env.ANALYSIS_BATCH_LEASE_TIMEOUT_MS ?? "180000", 10) || 180_000
+// Keep recovery inside the serverless runtime envelope. A live worker refreshes
+// its lease, while a terminated worker can be retried without a long deadlock.
+const BATCH_LEASE_TIMEOUT_MS = Math.min(
+  180_000,
+  Math.max(
+    60_000,
+    Number.parseInt(process.env.ANALYSIS_BATCH_LEASE_TIMEOUT_MS ?? "180000", 10) || 180_000
+  )
 )
 const BATCH_HEARTBEAT_MS = Math.max(
   15_000,

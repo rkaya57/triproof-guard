@@ -33,8 +33,10 @@ type QueueStatusRow = {
 }
 
 function safeStaleMinutes(value = DEFAULT_STALE_MINUTES) {
-  if (!Number.isFinite(value)) return 15
-  return Math.min(120, Math.max(1, value))
+  if (!Number.isFinite(value)) return DEFAULT_STALE_MINUTES
+  // The lease heartbeat distinguishes live work from a terminated invocation.
+  // Never leave an abandoned serverless batch blocked for longer than 3 minutes.
+  return Math.min(3, Math.max(1, value))
 }
 
 function safeMaxBatches(value = DEFAULT_MAX_BATCHES) {
