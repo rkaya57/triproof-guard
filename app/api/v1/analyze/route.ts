@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server"
 import type { Prisma } from "@prisma/client"
 
+import { parseApiWalletRows } from "@/lib/api/analysis-wallet-input"
 import { getV1ApiUser, apiError } from "@/lib/api/v1-auth"
 import { isAdminEmail } from "@/lib/auth/admin"
 import { createAnalysisBatches } from "@/lib/analysis/batch-worker"
+import {
+  analysisWalletBatchSize,
+  highVolumeCapacityReport,
+} from "@/lib/analysis/high-volume"
 import { dispatchAnalysisWorker } from "@/lib/analysis/worker-dispatch"
 import {
   commitAnalysisCreditDebit,
@@ -17,15 +22,14 @@ import { getOnChainConfig, isEnrichableChain } from "@/lib/onchain/enrichment-ty
 import { getOnChainProvider } from "@/lib/onchain/provider-router"
 import {
   campaignTypes,
-  isValidWalletAddress,
-  normalizeWalletAddress,
   parseCampaignContracts,
   supportedChains,
   riskPolicies,
 } from "@/lib/validators/wallet"
-import type { AnalysisMode, CampaignType, Chain, ParsedWallet, RiskPolicy } from "@/types"
+import type { AnalysisMode, CampaignType, Chain, RiskPolicy } from "@/types"
 
 export const runtime = "nodejs"
+export const maxDuration = 300
 
 const freeTrialWalletLimit = Number.parseInt(process.env.FREE_TRIAL_WALLET_LIMIT ?? "100", 10)
 const apiWalletLimit = Number.parseInt(process.env.TRIPROOF_API_MAX_WALLETS ?? "50000", 10)
@@ -73,81 +77,6 @@ function normalizeRiskPolicy(value: unknown): RiskPolicy {
   return riskPolicies.includes(value as RiskPolicy) ? (value as RiskPolicy) : "balanced"
 }
 
-function walletRows(input: unknown, chain: Chain): { wallets: ParsedWallet[]; issues: string[] } {
-  const values = Array.isArray(input) ? input : []
-  const seen = new Set<string>()
-  const wallets: ParsedWallet[] = []
-  const issues: string[] = []
-
-  values.forEach((item, index) => {
-    const row = typeof item === "object" && item !== null
-      ? (item as Record<string, unknown>)
-      : null
-    const rawAddress = typeof item === "string" ? item : typeof item === "object" && item !== null ? String((item as { wallet?: unknown; walletAddress?: unknown; address?: unknown }).wallet ?? (item as { walletAddress?: unknown }).walletAddress ?? (item as { address?: unknown }).address ?? "") : ""
-    const policyAction = typeof item === "object" && item !== null ? String((item as { policyAction?: unknown; policy_action?: unknown }).policyAction ?? (item as { policy_action?: unknown }).policy_action ?? "") : ""
-    const reputationLabel = typeof item === "object" && item !== null ? String((item as { reputationLabel?: unknown; reputation_label?: unknown }).reputationLabel ?? (item as { reputation_label?: unknown }).reputation_label ?? "") : ""
-    const policyReason = typeof item === "object" && item !== null ? String((item as { policyReason?: unknown; policy_reason?: unknown }).policyReason ?? (item as { policy_reason?: unknown }).policy_reason ?? "") : ""
-    const rawReferrer = String(
-      row?.referrerAddress ??
-      row?.referrer_address ??
-      row?.referrerWallet ??
-      row?.referredBy ??
-      ""
-    ).trim()
-    const referralCode = String(
-      row?.referralCode ?? row?.referral_code ?? row?.inviteCode ?? ""
-    ).trim()
-    const referralTimestamp = String(
-      row?.referralTimestamp ?? row?.referral_timestamp ?? row?.referredAt ?? ""
-    ).trim()
-
-    if (!rawAddress.trim()) {
-      issues.push(`wallets[${index}] is missing an address`)
-      return
-    }
-
-    if (!isValidWalletAddress(rawAddress, chain)) {
-      issues.push(`wallets[${index}] is not a valid ${chain} address`)
-      return
-    }
-
-    const normalized = normalizeWalletAddress(rawAddress, chain)
-    const referrerAddress =
-      rawReferrer && isValidWalletAddress(rawReferrer, chain)
-        ? normalizeWalletAddress(rawReferrer, chain)
-        : null
-    if (rawReferrer && !referrerAddress) {
-      issues.push(`wallets[${index}] has an invalid ${chain} referrer address; referral link ignored`)
-    }
-    const key = `${chain}:${normalized}`
-    if (seen.has(key)) return
-    seen.add(key)
-
-    wallets.push({
-      walletAddress: normalized,
-      chain,
-      txCount: null,
-      walletAgeDays: null,
-      fundingSource: null,
-      firstSeen: null,
-      lastSeen: null,
-      totalVolume: null,
-      contractsCount: null,
-      campaignActionsCount: null,
-      policyAction: policyAction === "approve" || policyAction === "manual_review" || policyAction === "reject" ? policyAction : null,
-      reputationLabel: reputationLabel.trim() || null,
-      policyReason: policyReason.trim() || null,
-      customerLabel: reputationLabel.trim() || null,
-      referrerAddress,
-      referralCode: referralCode || null,
-      referralTimestamp: referralTimestamp || null,
-      sourceRow: index + 1,
-    })
-  })
-
-  return { wallets, issues }
-}
-
 export async function POST(request: Request) {
   const auth = await getV1ApiUser(request)
   if (auth.error) return auth.error
@@ -169,7 +98,7 @@ export async function POST(request: Request) {
   const campaignType = normalizeCampaignType(body.campaignType)
   const analysisMode = normalizeAnalysisMode(body.analysisMode)
   const riskPolicy = normalizeRiskPolicy(body.riskPolicy)
-  const { wallets, issues } = walletRows(body.wallets, chain)
+  const { wallets, issues } = parseApiWalletRows(body.wallets, chain)
 
   if (!wallets.length) {
     return apiError("No valid wallets supplied", 400, { issues })
@@ -189,6 +118,23 @@ export async function POST(request: Request) {
     return apiError(`No real on-chain provider is configured for ${chain}`, 400)
   }
 
+  const capacity = highVolumeCapacityReport({
+    chain,
+    walletCount: wallets.length,
+  })
+  if (chain === "Solana" && wallets.length >= 1_000 && !capacity.configured) {
+    return apiError(
+      "High-volume Solana analysis requires HELIUS_API_KEY or a Helius SOLANA_RPC_URL. Mock or public RPC data is not accepted.",
+      503,
+      { capacity }
+    )
+  }
+  const walletBatchSize = analysisWalletBatchSize({
+    chain,
+    walletCount: wallets.length,
+    fallback: config.batchSize,
+  })
+
   const projectName = String(body.projectName ?? `${chain} ${campaignType} API Wallet Audit`).trim().slice(0, 120)
   const notesInput = typeof body.notes === "string" ? body.notes : ""
   const campaignContractsInput = Array.isArray(body.campaignContracts) ? body.campaignContracts.join("\n") : typeof body.campaignContracts === "string" ? body.campaignContracts : ""
@@ -197,6 +143,8 @@ export async function POST(request: Request) {
     notesInput,
     "TRIPROOF_API_SOURCE=v1",
     `TRIPROOF_RISK_POLICY=${riskPolicy}`,
+    `TRIPROOF_ANALYSIS_BATCH_SIZE=${walletBatchSize}`,
+    `TRIPROOF_CAPACITY_PROFILE=${capacity.profile}`,
     campaignContracts.length ? `TRIPROOF_CAMPAIGN_CONTRACTS=${campaignContracts.join(",")}` : "",
   ].filter(Boolean).join("\n")
 
@@ -227,6 +175,11 @@ export async function POST(request: Request) {
           csvFileName: "api-v1-json-upload.json",
           analysisMode,
           enrichmentStatus: "pending",
+          enrichmentWarnings: [
+            `Capacity profile: ${capacity.profile}`,
+            `Analysis batch size: ${walletBatchSize}`,
+            `Estimated provider requests: ${capacity.estimatedRequests}`,
+          ],
         },
       })
 
@@ -239,6 +192,8 @@ export async function POST(request: Request) {
           chain,
           campaignType,
           riskPolicy,
+          capacity,
+          walletBatchSize,
           freeTrialWalletLimit,
           remainingFreeWallets: billingGate.remainingFreeWallets,
         },
@@ -247,7 +202,7 @@ export async function POST(request: Request) {
       const batchCount = await createAnalysisBatches(
         analysis.id,
         wallets,
-        config.batchSize,
+        walletBatchSize,
         tx
       )
 
@@ -261,6 +216,8 @@ export async function POST(request: Request) {
       status: "processing",
       walletCount: wallets.length,
       batchCount: created.batchCount,
+      walletBatchSize,
+      capacity,
       billing: {
         source: created.billingGate.source,
         creditsDeducted: created.billingGate.creditsToDeduct,
@@ -271,7 +228,7 @@ export async function POST(request: Request) {
       campaignType,
       analysisMode,
       riskPolicy,
-      provider: selection.provider.id,
+      provider: capacity.provider ?? selection.provider.id,
       issues,
       decisionLegend: decisionLegendForApi(),
       statusUrl: `/api/v1/analysis/${created.analysis.id}`,

@@ -1,0 +1,80 @@
+name: Helius real-data smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/sybil-engine-safety
+    paths:
+      - .github/workflows/helius-real-smoke.yml
+      - scripts/test-helius-real-smoke.ts
+      - lib/onchain/providers/helius-bulk.ts
+      - lib/onchain/enrich-wallet.ts
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/helius-real-smoke.yml
+      - scripts/test-helius-real-smoke.ts
+      - lib/onchain/providers/helius-bulk.ts
+      - lib/onchain/enrich-wallet.ts
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      HELIUS_API_KEY: ${{ secrets.HELIUS_API_KEY }}
+      HELIUS_PLAN: ${{ vars.HELIUS_PLAN || 'developer' }}
+      HELIUS_BULK_RPC_RPS: ${{ vars.HELIUS_BULK_RPC_RPS || '30' }}
+      HELIUS_BULK_CONCURRENCY: ${{ vars.HELIUS_BULK_CONCURRENCY || '12' }}
+      HELIUS_BULK_OLDEST_TX_LIMIT: "4"
+      HELIUS_BULK_NEWEST_TX_LIMIT: "8"
+      NODE_OPTIONS: --max-old-space-size=2048
+
+    steps:
+      - name: Check Helius secret availability
+        id: capability
+        shell: bash
+        run: |
+          if [ -n "$HELIUS_API_KEY" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "HELIUS_API_KEY is not configured in GitHub. Repository smoke is skipped; the Vercel production build gate remains authoritative."
+          fi
+
+      - name: Checkout
+        if: steps.capability.outputs.configured == 'true'
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        if: steps.capability.outputs.configured == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.capability.outputs.configured == 'true'
+        run: npm ci
+
+      - name: Run real-data provider smoke
+        if: steps.capability.outputs.configured == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx scripts/test-helius-real-smoke.ts | tee helius-real-smoke.jsonl
+
+      - name: Upload provider metrics
+        if: always() && steps.capability.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: helius-real-smoke
+          path: helius-real-smoke.jsonl
+          if-no-files-found: ignore
+          retention-days: 30

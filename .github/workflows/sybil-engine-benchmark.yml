@@ -1,0 +1,68 @@
+name: Sybil engine benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      sizes:
+        description: Comma-separated wallet counts
+        required: true
+        default: "1000,10000,50000"
+  push:
+    branches:
+      - fix/sybil-engine-safety
+    paths:
+      - .github/workflows/sybil-engine-benchmark.yml
+      - scripts/benchmark-sybil-engine.ts
+      - lib/risk-engine.ts
+      - lib/risk-engine/dispatcher.ts
+      - lib/risk-engine/scalable.ts
+      - lib/graph-intelligence.ts
+      - lib/graph-intelligence/dispatcher.ts
+      - lib/graph-intelligence/scalable.ts
+      - tsconfig.json
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/sybil-engine-benchmark.yml
+      - scripts/benchmark-sybil-engine.ts
+      - lib/risk-engine.ts
+      - lib/risk-engine/dispatcher.ts
+      - lib/risk-engine/scalable.ts
+      - lib/graph-intelligence.ts
+      - lib/graph-intelligence/dispatcher.ts
+      - lib/graph-intelligence/scalable.ts
+      - tsconfig.json
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run benchmark
+        env:
+          BENCHMARK_SIZES: ${{ inputs.sizes || '1000,10000,50000' }}
+        run: npm run benchmark:sybil | tee sybil-benchmark.jsonl
+
+      - name: Upload benchmark output
+        uses: actions/upload-artifact@v4
+        with:
+          name: sybil-engine-benchmark
+          path: sybil-benchmark.jsonl
+          retention-days: 30

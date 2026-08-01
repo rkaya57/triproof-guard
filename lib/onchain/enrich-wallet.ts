@@ -12,6 +12,10 @@ import {
   setCachedEnrichment,
 } from "@/lib/onchain/cache"
 import { getOnChainProviders } from "@/lib/onchain/provider-router"
+import {
+  enrichSolanaWalletsBulk,
+  isHeliusBulkConfigured,
+} from "@/lib/onchain/providers/helius-bulk"
 import type { OnChainProvider } from "@/lib/onchain/providers/provider"
 import { recordProviderUsage } from "@/lib/onchain/provider-usage"
 import { chunk, RateLimitError, sleep, withRetry } from "@/lib/onchain/rate-limit"
@@ -68,9 +72,6 @@ function providerUnavailableResult(address: string, chain: string, provider: str
       isContract: null,
       knownEntityLabel: null,
       knownEntityType: null,
-      // A provider outage says nothing about the address itself. Leaving this
-      // null prevents the risk engine from treating a transient RPC error as a
-      // closed account or a bot signal.
       accountType: null,
       ownerProgram: null,
       behaviorFingerprint: null,
@@ -87,6 +88,11 @@ function providerUnavailableResult(address: string, chain: string, provider: str
   }
 }
 
+function positiveInteger(name: string, fallback: number) {
+  const parsed = Number.parseInt(process.env[name] ?? "", 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
 export async function enrichWallets(
   input: EnrichWalletsInput
 ): Promise<EnrichWalletsOutput> {
@@ -99,7 +105,7 @@ export async function enrichWallets(
 
   if (!providers.length) {
     throw new Error(
-      `No real on-chain provider is configured for ${chain}. Add ETHERSCAN_API_KEY or ALCHEMY_API_KEY before running on-chain analysis.`
+      `No real on-chain provider is configured for ${chain}. Add ETHERSCAN_API_KEY, ALCHEMY_API_KEY, or HELIUS_API_KEY before running on-chain analysis.`
     )
   }
 
@@ -116,30 +122,81 @@ export async function enrichWallets(
     warnings.add(`${restoredCacheHits.toLocaleString()} wallet enrichment record(s) were restored from persistent cache.`)
   }
 
-  const batches = chunk(uniqueAddresses, config.batchSize)
-  let processed = 0
+  const pendingAddresses: string[] = []
+  uniqueAddresses.forEach((address) => {
+    const cached = getCachedEnrichment(chain, address)
+    const cacheIsDeepEnough = !options?.deepHistory || cached?.historyTruncated === false
+    if (cached && cached.provider !== "mock" && cacheIsDeepEnough) {
+      cacheHits += 1
+      enrichedCount += 1
+      usedProviders.add(cached.provider)
+      results.set(address, {
+        data: cached,
+        status: "completed",
+        provider: cached.provider,
+        fromCache: true,
+        errorMessage: null,
+      })
+    } else {
+      pendingAddresses.push(address)
+    }
+  })
+
+  const bulkThreshold = positiveInteger("HELIUS_BULK_MIN_WALLETS", 25)
+  const useSolanaBulk =
+    chain === "Solana" &&
+    !options?.deepHistory &&
+    pendingAddresses.length >= bulkThreshold &&
+    isHeliusBulkConfigured()
+
+  if (useSolanaBulk) {
+    const bulk = await enrichSolanaWalletsBulk({
+      addresses: pendingAddresses,
+      options,
+      onProgress: (processed, total) => {
+        onProgress?.(cacheHits + processed, cacheHits + total)
+      },
+    })
+
+    bulk.warnings.forEach((warning) => warnings.add(warning))
+    warnings.add(
+      `High-volume Solana screening used ${bulk.requestCount.toLocaleString()} real Helius RPC request(s); expensive token-account expansion was deferred to deep review.`
+    )
+
+    bulk.results.forEach((result, address) => {
+      results.set(address, result)
+      usedProviders.add(result.provider)
+      if (result.status === "completed") {
+        enrichedCount += 1
+        setCachedEnrichment(result.data)
+      } else {
+        failedCount += 1
+      }
+    })
+
+    return {
+      results,
+      summary: {
+        mode,
+        provider: Array.from(usedProviders).filter(Boolean).join(",") || "helius-bulk",
+        enrichedCount,
+        failedCount,
+        skippedCount: 0,
+        cacheHits,
+        warnings: Array.from(warnings),
+        usedMockFallback: false,
+      },
+    }
+  }
+
+  const batches = chunk(pendingAddresses, config.batchSize)
+  let processed = cacheHits
 
   for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
     const batch = batches[batchIndex]
 
     await Promise.all(
       batch.map(async (address) => {
-        const cached = getCachedEnrichment(chain, address)
-        const cacheIsDeepEnough = !options?.deepHistory || cached?.historyTruncated === false
-        if (cached && cached.provider !== "mock" && cacheIsDeepEnough) {
-          cacheHits += 1
-          enrichedCount += 1
-          results.set(address, {
-            data: cached,
-            status: "completed",
-            provider: cached.provider,
-            fromCache: true,
-            errorMessage: null,
-          })
-          usedProviders.add(cached.provider)
-          return
-        }
-
         const attemptedProviders: string[] = []
         let lastError: unknown = null
 

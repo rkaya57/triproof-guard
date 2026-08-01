@@ -47,6 +47,10 @@ export const db =
   new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
+    transactionOptions: {
+      maxWait: envNumber("DATABASE_TRANSACTION_MAX_WAIT_MS", 30_000),
+      timeout: envNumber("DATABASE_TRANSACTION_TIMEOUT_MS", 280_000),
+    },
   })
 
 if (process.env.NODE_ENV !== "production") {

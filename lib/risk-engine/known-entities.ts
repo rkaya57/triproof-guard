@@ -160,10 +160,13 @@ const reviewOnlyEntityTypes = new Set<EntityType>([
 ])
 
 export function normalizeEntityAddress(walletAddress: string) {
-  return walletAddress.trim().toLowerCase()
+  const trimmed = walletAddress.trim()
+  return trimmed.startsWith("0x") ? trimmed.toLowerCase() : trimmed
 }
 
 export function detectKnownEntity(walletAddress: string) {
+  // EVM addresses are case-insensitive. Solana base58 addresses are not, so
+  // non-EVM identifiers are matched exactly instead of being lower-cased.
   return KNOWN_ENTITIES[normalizeEntityAddress(walletAddress)] ?? null
 }
 
