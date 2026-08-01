@@ -14,6 +14,7 @@ on:
       - .github/workflows/finalizer-50k.yml
       - scripts/test-finalizer-50k.ts
       - lib/analysis/batch-worker.ts
+      - lib/db/prisma.ts
       - lib/risk-engine.ts
       - lib/risk-engine/**
       - lib/graph-intelligence.ts
@@ -29,6 +30,7 @@ on:
       - .github/workflows/finalizer-50k.yml
       - scripts/test-finalizer-50k.ts
       - lib/analysis/batch-worker.ts
+      - lib/db/prisma.ts
       - lib/risk-engine.ts
       - lib/risk-engine/**
       - lib/graph-intelligence.ts
@@ -63,6 +65,8 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/triproof_test?schema=public
+      DATABASE_TRANSACTION_MAX_WAIT_MS: "30000"
+      DATABASE_TRANSACTION_TIMEOUT_MS: "280000"
       NODE_ENV: test
       SYBIL_SCALABLE_ENGINE_THRESHOLD: "10000"
       FINALIZER_TEST_WALLETS: ${{ inputs.wallets || '50000' }}
@@ -86,7 +90,10 @@ jobs:
         run: npx prisma db push --force-reset
 
       - name: Run 50K finalizer integration
-        run: node --import tsx scripts/test-finalizer-50k.ts | tee finalizer-50k.jsonl
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx scripts/test-finalizer-50k.ts | tee finalizer-50k.jsonl
 
       - name: Upload integration metrics
         if: always()
