@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { performance } from "node:perf_hooks"
 
+import { collectActiveSolanaWallets } from "@/lib/onchain/providers/helius-active-wallets"
 import { enrichSolanaWalletsBulk } from "@/lib/onchain/providers/helius-bulk"
 
 const addresses = [
@@ -23,12 +24,22 @@ const addresses = [
   "2WfH8xTWY6qYmUpFYJX5UB2LwhrHwWg3E2Q9c7Js7sDZ",
   "2wT8pPwAqrU4Q6pGvJ6fBhdWv1nJ5DnNn7Vx3S9DgL7A",
   "38fjVvs7PY19ARMwn3e8idwsgzJFYzng8CEpf3YLxDXF",
-  "3a6DavUcSV7wjJAqF39X98zYjGQQLJNejpvnwE1cQcWo"
+  "3a6DavUcSV7wjJAqF39X98zYjGQQLJNejpvnwE1cQcWo",
 ]
 
 async function main() {
   assert.ok(process.env.HELIUS_API_KEY || process.env.SOLANA_RPC_URL)
   const startedAt = performance.now()
+
+  const collection = await collectActiveSolanaWallets({
+    targetCount: 100,
+    maxPagesPerProgram: 20,
+  })
+  assert.equal(collection.addresses.length, 100)
+  assert.equal(new Set(collection.addresses).size, 100)
+  assert.ok(collection.transactions > 0)
+  assert.ok(collection.pages > 0)
+
   const output = await enrichSolanaWalletsBulk({ addresses })
   const values = Array.from(output.results.values())
   const completed = values.filter((result) => result.status === "completed")
@@ -50,7 +61,10 @@ async function main() {
     `Expected at least 95% completion, received ${(completionRate * 100).toFixed(2)}%`
   )
   assert.equal(withAccountState, completed.length)
-  assert.ok(withHistory > 0, "Expected at least one wallet with real transaction history")
+  assert.ok(
+    withHistory > 0,
+    "Expected at least one wallet with real transaction history"
+  )
   assert.ok(
     completed.every((result) => result.provider === "helius-bulk"),
     "Expected all completed records to come from the real Helius bulk provider"
@@ -58,19 +72,31 @@ async function main() {
 
   console.log(
     JSON.stringify({
-      supplied: addresses.length,
-      completed: completed.length,
-      failed: failed.length,
-      completionRate: Number((completionRate * 100).toFixed(2)),
-      withAccountState,
-      withHistory,
-      withFunding: completed.filter(
-        (result) => result.data.fundingSource !== null
-      ).length,
-      requestCount: output.requestCount,
-      rateLimitCount: output.rateLimitCount,
+      collection: {
+        target: 100,
+        collected: collection.addresses.length,
+        pages: collection.pages,
+        transactions: collection.transactions,
+        requests: collection.requests,
+        rateLimits: collection.rateLimits,
+        elapsedMs: collection.elapsedMs,
+        sources: collection.programs,
+      },
+      enrichment: {
+        supplied: addresses.length,
+        completed: completed.length,
+        failed: failed.length,
+        completionRate: Number((completionRate * 100).toFixed(2)),
+        withAccountState,
+        withHistory,
+        withFunding: completed.filter(
+          (result) => result.data.fundingSource !== null
+        ).length,
+        requestCount: output.requestCount,
+        rateLimitCount: output.rateLimitCount,
+        warnings: output.warnings,
+      },
       elapsedMs: Number((performance.now() - startedAt).toFixed(1)),
-      warnings: output.warnings,
     })
   )
 }
