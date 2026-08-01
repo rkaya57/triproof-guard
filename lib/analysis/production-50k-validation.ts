@@ -36,6 +36,15 @@ function disabled() {
   return process.env.TRIPROOF_DISABLE_50K_VALIDATION === "true"
 }
 
+function lastWarning(value: unknown) {
+  if (!Array.isArray(value)) return null
+  for (let index = value.length - 1; index >= 0; index -= 1) {
+    const warning = value[index]
+    if (typeof warning === "string" && warning.trim()) return warning
+  }
+  return null
+}
+
 async function latestValidation() {
   return db.analysis.findFirst({
     where: { project: { name: PROJECT_NAME } },
@@ -78,7 +87,7 @@ function existingState(
       analysisId: analysis.id,
       totalWallets: analysis.totalWallets,
       message:
-        analysis.enrichmentWarnings.at(-1) ??
+        lastWarning(analysis.enrichmentWarnings) ??
         "The previous collection attempt failed and requires an operator review.",
     }
   }
