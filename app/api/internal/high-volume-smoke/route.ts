@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
-import { db } from "@/lib/db/prisma"
 import { enrichSolanaWalletsBulk } from "@/lib/onchain/providers/helius-bulk"
+import { isValidWalletAddress } from "@/lib/validators/wallet"
 
 export const runtime = "nodejs"
 export const maxDuration = 300
@@ -18,53 +18,49 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Confirmation required" }, { status: 403 })
   }
 
-  const requested = Number.parseInt(url.searchParams.get("count") ?? "100", 10)
-  const count = Math.min(500, Math.max(1, Number.isFinite(requested) ? requested : 100))
-  const rows = await db.$queryRaw<Array<{ walletAddress: string }>>`
-    SELECT DISTINCT wa."walletAddress"
-    FROM "WalletAnalysis" wa
-    WHERE wa."chain" = 'Solana'
-      AND length(wa."walletAddress") BETWEEN 32 AND 44
-      AND wa."walletAddress" <> '11111111111111111111111111111111'
-    ORDER BY wa."walletAddress"
-    LIMIT ${count}
-  `
+  const addresses = Array.from(
+    new Set(
+      (url.searchParams.get("addresses") ?? "")
+        .split(",")
+        .map((address) => address.trim())
+        .filter((address) => isValidWalletAddress(address, "Solana"))
+    )
+  ).slice(0, 100)
+
+  if (!addresses.length) {
+    return NextResponse.json(
+      { error: "Provide one to 100 valid Solana addresses" },
+      { status: 400 }
+    )
+  }
 
   const startedAt = Date.now()
-  const output = await enrichSolanaWalletsBulk({
-    addresses: rows.map((row) => row.walletAddress),
-  })
+  const output = await enrichSolanaWalletsBulk({ addresses })
   const results = Array.from(output.results.values())
   const accountTypes = results.reduce<Record<string, number>>((summary, result) => {
     const key = result.data.accountType ?? "unknown"
     summary[key] = (summary[key] ?? 0) + 1
     return summary
   }, {})
-  const providers = Array.from(new Set(results.map((result) => result.provider)))
   const completed = results.filter((result) => result.status === "completed").length
   const failed = results.length - completed
-  const withHistory = results.filter(
-    (result) =>
-      result.data.firstSeen !== null ||
-      (result.data.txCount !== null && result.data.txCount > 0)
-  ).length
-  const withFunding = results.filter(
-    (result) => result.data.fundingSource !== null
-  ).length
 
   return NextResponse.json({
-    source: "preview-database-distinct-solana-wallets",
-    requested: count,
-    discovered: rows.length,
+    source: "caller-supplied-real-solana-addresses",
+    supplied: addresses.length,
     completed,
     failed,
-    completionRate: rows.length
-      ? Number(((completed / rows.length) * 100).toFixed(2))
-      : 0,
-    withHistory,
-    withFunding,
+    completionRate: Number(((completed / addresses.length) * 100).toFixed(2)),
+    withHistory: results.filter(
+      (result) =>
+        result.data.firstSeen !== null ||
+        (result.data.txCount !== null && result.data.txCount > 0)
+    ).length,
+    withFunding: results.filter(
+      (result) => result.data.fundingSource !== null
+    ).length,
     accountTypes,
-    providers,
+    providers: Array.from(new Set(results.map((result) => result.provider))),
     requestCount: output.requestCount,
     rateLimitCount: output.rateLimitCount,
     warnings: output.warnings,
