@@ -33,7 +33,14 @@ const reasonCodeMap: Array<[RegExp, string]> = [
   [/campaign-only|campaign-action|activity concentration/i, "CAMPAIGN_ONLY_ACTIVITY"],
   [/bot-script|bot script/i, "BOT_PATTERN"],
   [/policy override|policy signal|allowlist/i, "POLICY_OVERRIDE"],
-  [/program|contract|non-user|account intelligence/i, "NON_USER_ACCOUNT"],
+  [
+    /not a normal end-user wallet|program-owned solana account|executable program account|spl token account or mint/i,
+    "NON_USER_ACCOUNT",
+  ],
+  [
+    /account intelligence: (system_user_wallet|historical_unresolved_account|missing_or_closed_account)/i,
+    "ACCOUNT_STATE",
+  ],
   [/diversity|counterparties|interaction/i, "LOW_DIVERSITY"],
 ]
 
