@@ -1,11 +1,9 @@
 import { detectKnownEntity } from "@/lib/risk-engine/known-entities"
 import { isValidWalletAddress } from "@/lib/validators/wallet"
 
-// Canonical mainnet program IDs. Raydium and Orca values are taken from their
-// official program-address references. Environment configuration may replace
-// this list without changing code.
+// Canonical mainnet program IDs verified as 32-byte Solana public keys.
+// Environment configuration may replace this list without changing code.
 const DEFAULT_PROGRAMS = [
-  "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoiH5QNyVTaV4",
   "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
   "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C",
   "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
@@ -100,8 +98,21 @@ function configuredPrograms() {
   const configured = (process.env.HELIUS_VALIDATION_SOURCE_PROGRAMS ?? "")
     .split(",")
     .map((value) => value.trim())
-    .filter((value) => isValidWalletAddress(value, "Solana"))
-  return configured.length > 0 ? configured : DEFAULT_PROGRAMS
+    .filter(Boolean)
+  const candidates = configured.length > 0 ? configured : DEFAULT_PROGRAMS
+  const valid = Array.from(
+    new Set(
+      candidates.filter((value) => isValidWalletAddress(value, "Solana"))
+    )
+  )
+
+  if (valid.length === 0) {
+    throw new HeliusCollectionError(
+      "No valid 32-byte Solana source program IDs are configured for active-wallet collection."
+    )
+  }
+
+  return valid
 }
 
 export async function collectActiveSolanaWallets({
