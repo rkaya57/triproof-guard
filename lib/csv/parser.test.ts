@@ -64,4 +64,26 @@ describe("wallet CSV referral fields", () => {
     assert.ok(result.issues.some((issue) => /timestamp ignored/i.test(issue.issue)))
     assert.ok(result.issues.some((issue) => /fingerprint ignored/i.test(issue.issue)))
   })
+
+  it("accepts solana_address as the wallet column", () => {
+    const csv = [
+      "no,solana_address,label_type,label_subtype,address_name,project_name,source_row,source_url",
+      "1,11111111111111111111111111111111,system,program,Solana System Program,Solana,1,https://example.com",
+    ].join("\n")
+    const result = parseWalletCsv(csv, "Solana")
+
+    assert.equal(result.wallets.length, 1)
+    assert.equal(
+      result.wallets[0]?.walletAddress,
+      "11111111111111111111111111111111"
+    )
+    assert.equal(result.issues.length, 0)
+  })
+
+  it("reports a clear error when no supported wallet column exists", () => {
+    const result = parseWalletCsv("name,value\nexample,1", "Solana")
+
+    assert.equal(result.wallets.length, 0)
+    assert.match(result.issues[0]?.issue ?? "", /solana_address/i)
+  })
 })
