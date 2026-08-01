@@ -13,6 +13,10 @@ import {
 } from "@/lib/onchain/cache"
 import { getOnChainProviders } from "@/lib/onchain/provider-router"
 import {
+  enrichSolanaWalletsAlchemyHybrid,
+  isAlchemySolanaHistoryConfigured,
+} from "@/lib/onchain/providers/alchemy-solana-bulk"
+import {
   enrichSolanaWalletsBulk,
   isHeliusBulkConfigured,
 } from "@/lib/onchain/providers/helius-bulk"
@@ -48,11 +52,20 @@ function providerCooldownRemainingMs(chain: string, provider: OnChainProvider) {
   return 0
 }
 
-function markProviderCooldown(chain: string, provider: OnChainProvider, durationMs: number) {
+function markProviderCooldown(
+  chain: string,
+  provider: OnChainProvider,
+  durationMs: number
+) {
   providerCooldowns.set(providerKey(chain, provider), Date.now() + durationMs)
 }
 
-function providerUnavailableResult(address: string, chain: string, provider: string, error: unknown): WalletEnrichmentResult {
+function providerUnavailableResult(
+  address: string,
+  chain: string,
+  provider: string,
+  error: unknown
+): WalletEnrichmentResult {
   return {
     data: {
       walletAddress: address,
@@ -84,7 +97,10 @@ function providerUnavailableResult(address: string, chain: string, provider: str
     status: "failed",
     provider,
     fromCache: false,
-    errorMessage: error instanceof Error ? error.message : "No reliable on-chain data available.",
+    errorMessage:
+      error instanceof Error
+        ? error.message
+        : "No reliable on-chain data available.",
   }
 }
 
@@ -93,43 +109,88 @@ function positiveInteger(name: string, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
+function summarizeProviderResults({
+  results,
+  mode,
+  cacheHits,
+  warnings,
+  fallbackProvider,
+}: {
+  results: Map<string, WalletEnrichmentResult>
+  mode: AnalysisMode
+  cacheHits: number
+  warnings: Set<string>
+  fallbackProvider: string
+}): EnrichmentSummary {
+  const providers = new Set<string>()
+  let enrichedCount = cacheHits
+  let failedCount = 0
+
+  results.forEach((result) => {
+    providers.add(result.provider)
+    if (result.fromCache) return
+    if (result.status === "completed") enrichedCount += 1
+    else failedCount += 1
+  })
+
+  return {
+    mode,
+    provider:
+      Array.from(providers).filter(Boolean).join(",") || fallbackProvider,
+    enrichedCount,
+    failedCount,
+    skippedCount: 0,
+    cacheHits,
+    warnings: Array.from(warnings),
+    usedMockFallback: false,
+  }
+}
+
 export async function enrichWallets(
   input: EnrichWalletsInput
 ): Promise<EnrichWalletsOutput> {
   const { addresses, chain, mode, options, onProgress } = input
   const config = getOnChainConfig()
   const providers = getOnChainProviders(chain)
-    .filter((selection) => !selection.usedMockFallback && selection.provider.id !== "mock")
+    .filter(
+      (selection) =>
+        !selection.usedMockFallback && selection.provider.id !== "mock"
+    )
     .map((selection) => selection.provider)
   const providerIds = providers.map((provider) => provider.id).join(",")
 
-  if (!providers.length) {
+  const hasAlchemySolana =
+    chain === "Solana" && isAlchemySolanaHistoryConfigured()
+  if (!providers.length && !hasAlchemySolana) {
     throw new Error(
       `No real on-chain provider is configured for ${chain}. Add ETHERSCAN_API_KEY, ALCHEMY_API_KEY, or HELIUS_API_KEY before running on-chain analysis.`
     )
   }
 
-  const uniqueAddresses = Array.from(new Set(addresses.map((address) => address.trim()).filter(Boolean)))
+  const uniqueAddresses = Array.from(
+    new Set(addresses.map((address) => address.trim()).filter(Boolean))
+  )
   const results = new Map<string, WalletEnrichmentResult>()
   const warnings = new Set<string>()
-  const usedProviders = new Set<string>()
-  let enrichedCount = 0
-  let failedCount = 0
   let cacheHits = 0
 
-  const restoredCacheHits = await hydrateEnrichmentCacheFromPersistentStore(chain, uniqueAddresses)
+  const restoredCacheHits = await hydrateEnrichmentCacheFromPersistentStore(
+    chain,
+    uniqueAddresses
+  )
   if (restoredCacheHits > 0) {
-    warnings.add(`${restoredCacheHits.toLocaleString()} wallet enrichment record(s) were restored from persistent cache.`)
+    warnings.add(
+      `${restoredCacheHits.toLocaleString()} wallet enrichment record(s) were restored from persistent cache.`
+    )
   }
 
   const pendingAddresses: string[] = []
   uniqueAddresses.forEach((address) => {
     const cached = getCachedEnrichment(chain, address)
-    const cacheIsDeepEnough = !options?.deepHistory || cached?.historyTruncated === false
+    const cacheIsDeepEnough =
+      !options?.deepHistory || cached?.historyTruncated === false
     if (cached && cached.provider !== "mock" && cacheIsDeepEnough) {
       cacheHits += 1
-      enrichedCount += 1
-      usedProviders.add(cached.provider)
       results.set(address, {
         data: cached,
         status: "completed",
@@ -142,14 +203,50 @@ export async function enrichWallets(
     }
   })
 
+  if (hasAlchemySolana && pendingAddresses.length > 0) {
+    try {
+      const hybrid = await enrichSolanaWalletsAlchemyHybrid({
+        addresses: pendingAddresses,
+        options,
+        onProgress: (processed, total) => {
+          onProgress?.(cacheHits + processed, cacheHits + total)
+        },
+      })
+
+      hybrid.warnings.forEach((warning) => warnings.add(warning))
+      warnings.add(
+        `Alchemy-first Solana history used ${hybrid.alchemyRequestCount.toLocaleString()} request(s); batched account state used ${hybrid.stateRequestCount.toLocaleString()} request(s).`
+      )
+      hybrid.results.forEach((result, address) => {
+        results.set(address, result)
+        if (result.status === "completed") setCachedEnrichment(result.data)
+      })
+
+      return {
+        results,
+        summary: summarizeProviderResults({
+          results,
+          mode,
+          cacheHits,
+          warnings,
+          fallbackProvider: "alchemy-solana-history",
+        }),
+      }
+    } catch (error) {
+      warnings.add(
+        `Alchemy-first Solana enrichment could not initialize; falling back to the standard provider path: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+  }
+
   const bulkThreshold = positiveInteger("HELIUS_BULK_MIN_WALLETS", 25)
-  const useSolanaBulk =
+  const useHeliusScreening =
     chain === "Solana" &&
     !options?.deepHistory &&
     pendingAddresses.length >= bulkThreshold &&
     isHeliusBulkConfigured()
 
-  if (useSolanaBulk) {
+  if (useHeliusScreening) {
     const bulk = await enrichSolanaWalletsBulk({
       addresses: pendingAddresses,
       options,
@@ -160,32 +257,22 @@ export async function enrichWallets(
 
     bulk.warnings.forEach((warning) => warnings.add(warning))
     warnings.add(
-      `High-volume Solana screening used ${bulk.requestCount.toLocaleString()} real Helius RPC request(s); expensive token-account expansion was deferred to deep review.`
+      `High-volume Solana screening used ${bulk.requestCount.toLocaleString()} real Helius RPC request(s).`
     )
-
     bulk.results.forEach((result, address) => {
       results.set(address, result)
-      usedProviders.add(result.provider)
-      if (result.status === "completed") {
-        enrichedCount += 1
-        setCachedEnrichment(result.data)
-      } else {
-        failedCount += 1
-      }
+      if (result.status === "completed") setCachedEnrichment(result.data)
     })
 
     return {
       results,
-      summary: {
+      summary: summarizeProviderResults({
+        results,
         mode,
-        provider: Array.from(usedProviders).filter(Boolean).join(",") || "helius-bulk",
-        enrichedCount,
-        failedCount,
-        skippedCount: 0,
         cacheHits,
-        warnings: Array.from(warnings),
-        usedMockFallback: false,
-      },
+        warnings,
+        fallbackProvider: "helius-bulk",
+      }),
     }
   }
 
@@ -201,20 +288,31 @@ export async function enrichWallets(
         let lastError: unknown = null
 
         try {
-          for (let providerIndex = 0; providerIndex < providers.length; providerIndex += 1) {
+          for (
+            let providerIndex = 0;
+            providerIndex < providers.length;
+            providerIndex += 1
+          ) {
             const provider = providers[providerIndex]
             const cooldownMs = providerCooldownRemainingMs(chain, provider)
             if (cooldownMs > 0) {
               const fallbackIsReady = providers
                 .slice(providerIndex + 1)
-                .some((candidate) => providerCooldownRemainingMs(chain, candidate) === 0)
+                .some(
+                  (candidate) =>
+                    providerCooldownRemainingMs(chain, candidate) === 0
+                )
 
               if (fallbackIsReady) {
-                warnings.add(`${provider.id} is cooling down after a recent rate limit; trying the next configured provider.`)
+                warnings.add(
+                  `${provider.id} is cooling down after a recent rate limit; trying the next configured provider.`
+                )
                 continue
               }
 
-              warnings.add(`${provider.id} rate limit cooldown is active; waiting before retrying instead of marking wallets unavailable.`)
+              warnings.add(
+                `${provider.id} rate limit cooldown is active; waiting before retrying instead of marking wallets unavailable.`
+              )
               await sleep(cooldownMs)
             }
 
@@ -228,14 +326,18 @@ export async function enrichWallets(
                   baseDelayMs: config.requestDelayMs,
                   onRetry: (_, error) => {
                     if (error instanceof RateLimitError) {
-                      warnings.add(`${provider.id} rate limit reached. Retrying with backoff.`)
+                      warnings.add(
+                        `${provider.id} rate limit reached. Retrying with backoff.`
+                      )
                     }
                   },
                 }
               )
 
               if (data.provider === "mock") {
-                throw new Error("Mock provider data is not allowed in production analysis.")
+                throw new Error(
+                  "Mock provider data is not allowed in production analysis."
+                )
               }
 
               await recordProviderUsage({
@@ -246,8 +348,6 @@ export async function enrichWallets(
               })
 
               setCachedEnrichment(data)
-              enrichedCount += 1
-              usedProviders.add(data.provider)
               results.set(address, {
                 data,
                 status: "completed",
@@ -261,7 +361,6 @@ export async function enrichWallets(
                   `${data.provider} enriched at least one wallet after fallback from ${attemptedProviders.slice(0, -1).join(", ")}.`
                 )
               }
-
               return
             } catch (error) {
               lastError = error
@@ -269,25 +368,40 @@ export async function enrichWallets(
                 provider: provider.id,
                 chain,
                 method: "wallet_enrichment",
-                status: error instanceof RateLimitError ? "rate_limited" : "failed",
-                errorMessage: error instanceof Error ? error.message : String(error),
+                status:
+                  error instanceof RateLimitError ? "rate_limited" : "failed",
+                errorMessage:
+                  error instanceof Error ? error.message : String(error),
               })
               if (error instanceof RateLimitError) {
-                markProviderCooldown(chain, provider, config.providerCooldownMs)
-                warnings.add(`${provider.id} rate limit persisted; trying the next configured provider.`)
+                markProviderCooldown(
+                  chain,
+                  provider,
+                  config.providerCooldownMs
+                )
+                warnings.add(
+                  `${provider.id} rate limit persisted; trying the next configured provider.`
+                )
               } else {
-                warnings.add(`${provider.id} could not enrich at least one wallet; trying the next configured provider if available.`)
+                warnings.add(
+                  `${provider.id} could not enrich at least one wallet; trying the next configured provider if available.`
+                )
               }
             }
           }
 
           const stale = getStaleCachedEnrichment(chain, address)
-          const staleCacheIsDeepEnough = !options?.deepHistory || stale?.data.historyTruncated === false
-          if (stale && stale.data.provider !== "mock" && staleCacheIsDeepEnough) {
+          const staleCacheIsDeepEnough =
+            !options?.deepHistory || stale?.data.historyTruncated === false
+          if (
+            stale &&
+            stale.data.provider !== "mock" &&
+            staleCacheIsDeepEnough
+          ) {
             cacheHits += 1
-            enrichedCount += 1
-            usedProviders.add(stale.data.provider)
-            warnings.add("Stale cached enrichment was used for at least one wallet because live providers were unavailable.")
+            warnings.add(
+              "Stale cached enrichment was used for at least one wallet because live providers were unavailable."
+            )
             results.set(address, {
               data: stale.data,
               status: "completed",
@@ -298,16 +412,21 @@ export async function enrichWallets(
             return
           }
 
-          throw lastError ?? new Error("No configured provider could enrich this wallet.")
-        } catch (error) {
-          failedCount += 1
-          warnings.add(
-            "Some wallet enrichments could not be completed after provider retries. They require a retry and were not treated as missing, closed, risky, or automatically ineligible wallets."
+          throw lastError ?? new Error(
+            "No configured provider could enrich this wallet."
           )
-          usedProviders.add(attemptedProviders.join(",") || providerIds)
+        } catch (error) {
+          warnings.add(
+            "Some wallet enrichments could not be completed after provider retries. They remain retryable and were not treated as risky or automatically ineligible."
+          )
           results.set(
             address,
-            providerUnavailableResult(address, chain, attemptedProviders.join(",") || providerIds, error)
+            providerUnavailableResult(
+              address,
+              chain,
+              attemptedProviders.join(",") || providerIds,
+              error
+            )
           )
         }
       })
@@ -321,16 +440,14 @@ export async function enrichWallets(
     }
   }
 
-  const summary: EnrichmentSummary = {
-    mode,
-    provider: Array.from(usedProviders).filter(Boolean).join(",") || providerIds,
-    enrichedCount,
-    failedCount,
-    skippedCount: 0,
-    cacheHits,
-    warnings: Array.from(warnings),
-    usedMockFallback: false,
+  return {
+    results,
+    summary: summarizeProviderResults({
+      results,
+      mode,
+      cacheHits,
+      warnings,
+      fallbackProvider: providerIds,
+    }),
   }
-
-  return { results, summary }
 }
