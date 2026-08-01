@@ -1,4 +1,5 @@
 import { Client } from "pg"
+import { databaseConnectionUrl } from "@/lib/db/connection-url"
 
 export type AnalysisWorkerLock = {
   acquired: boolean
@@ -12,10 +13,12 @@ function lockName(analysisId: string) {
 export async function acquireAnalysisWorkerLock(
   analysisId: string
 ): Promise<AnalysisWorkerLock> {
-  const connectionString = process.env.DATABASE_URL?.trim()
-  if (!connectionString) {
+  const rawConnectionString = process.env.DATABASE_URL?.trim()
+  if (!rawConnectionString) {
     throw new Error("DATABASE_URL is required for distributed analysis locking")
   }
+
+  const connectionString = databaseConnectionUrl(rawConnectionString)
 
   const client = new Client({
     connectionString,

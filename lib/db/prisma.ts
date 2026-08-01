@@ -1,24 +1,6 @@
 import { PrismaClient } from "@prisma/client"
 import { PrismaPg } from "@prisma/adapter-pg"
-
-function normalizeDatabaseUrl(rawUrl: string) {
-  if (process.env.NODE_ENV !== "production") return rawUrl
-
-  try {
-    const url = new URL(rawUrl)
-
-    // Supabase pooler/direct URLs can expose a self-signed certificate chain in
-    // Vercel's Node runtime. pg-connection-string treats sslmode=require as
-    // strict verification, so force no-verify for this hosted deployment.
-    url.searchParams.delete("sslmode")
-    url.searchParams.delete("uselibpqcompat")
-    url.searchParams.set("sslmode", "no-verify")
-
-    return url.toString()
-  } catch {
-    return rawUrl
-  }
-}
+import { databaseConnectionUrl } from "@/lib/db/connection-url"
 
 function envNumber(name: string, fallback: number) {
   const raw = process.env[name]
@@ -27,7 +9,7 @@ function envNumber(name: string, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
-const connectionString = normalizeDatabaseUrl(
+const connectionString = databaseConnectionUrl(
   process.env.DATABASE_URL ??
     "postgresql://postgres:postgres@localhost:5432/tri_proof_guard?schema=public"
 )
