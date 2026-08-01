@@ -4,13 +4,14 @@ import { isDatabaseConnectionError } from "@/lib/db/errors"
 import {
   getAnalysisQueueStatus,
   processAnalysisQueue,
-  recoverStaleAnalysisBatches,
 } from "@/lib/analysis/queue-optimizer"
+import { recoverStaleAnalysisBatches } from "@/lib/analysis/batch-lease"
 import { dispatchAnalysisWorkerContinuation } from "@/lib/analysis/worker-dispatch"
 import { finalizeReadyAnalyses } from "@/lib/analysis/batch-worker"
 import { boundedNumber, isWorkerAuthorized, workerUnauthorized } from "@/lib/worker/auth"
 
 export const runtime = "nodejs"
+export const maxDuration = 300
 
 function booleanParam(value: string | null, fallback: boolean) {
   if (value === null) return fallback
@@ -22,8 +23,8 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url)
   const analysisId = url.searchParams.get("analysisId")
-  const maxBatches = boundedNumber(url.searchParams.get("maxBatches"), 8, 1, 25)
-  const timeBudgetMs = boundedNumber(url.searchParams.get("timeBudgetMs"), 45000, 1000, 50000)
+  const maxBatches = boundedNumber(url.searchParams.get("maxBatches"), 25, 1, 50)
+  const timeBudgetMs = boundedNumber(url.searchParams.get("timeBudgetMs"), 240000, 1000, 280000)
 
   try {
     const result = await processAnalysisQueue({
@@ -54,14 +55,14 @@ export async function POST(request: Request) {
 
   const url = new URL(request.url)
   const analysisId = url.searchParams.get("analysisId")
-  const maxBatches = boundedNumber(url.searchParams.get("maxBatches"), 5, 1, 25)
-  const timeBudgetMs = boundedNumber(url.searchParams.get("timeBudgetMs"), 25000, 1000, 50000)
+  const maxBatches = boundedNumber(url.searchParams.get("maxBatches"), 25, 1, 50)
+  const timeBudgetMs = boundedNumber(url.searchParams.get("timeBudgetMs"), 240000, 1000, 280000)
   const recoverStale = booleanParam(url.searchParams.get("recoverStale"), true)
   const recoverOnly = booleanParam(url.searchParams.get("recoverOnly"), false)
 
   try {
     if (recoverOnly) {
-      const recovered = await recoverStaleAnalysisBatches({ analysisId })
+      const recovered = await recoverStaleAnalysisBatches(analysisId ?? undefined)
       const finalizedReadyAnalyses = analysisId
         ? { checked: 0, finalized: 0 }
         : await finalizeReadyAnalyses(maxBatches)
