@@ -1,4 +1,5 @@
 import { db } from "@/lib/db/prisma"
+import { recoverStaleAnalysisBatches } from "@/lib/analysis/batch-lease"
 import {
   finalizeReadyAnalyses,
   finalizeAnalysisIfReady,
@@ -6,10 +7,9 @@ import {
   processNextAnalysisBatch,
 } from "@/lib/analysis/batch-worker"
 
-const MAX_BATCH_RETRIES = 3
 const DEFAULT_STALE_MINUTES = Number.parseInt(process.env.ANALYSIS_BATCH_STALE_MINUTES ?? "15", 10)
-const DEFAULT_MAX_BATCHES = Number.parseInt(process.env.WORKER_MAX_BATCHES ?? "5", 10)
-const DEFAULT_TIME_BUDGET_MS = Number.parseInt(process.env.WORKER_TIME_BUDGET_MS ?? "25000", 10)
+const DEFAULT_MAX_BATCHES = Number.parseInt(process.env.WORKER_MAX_BATCHES ?? "25", 10)
+const DEFAULT_TIME_BUDGET_MS = Number.parseInt(process.env.WORKER_TIME_BUDGET_MS ?? "240000", 10)
 
 type QueueStatusRow = {
   total: number
@@ -28,13 +28,13 @@ function safeStaleMinutes(value = DEFAULT_STALE_MINUTES) {
 }
 
 function safeMaxBatches(value = DEFAULT_MAX_BATCHES) {
-  if (!Number.isFinite(value)) return 5
-  return Math.min(25, Math.max(1, value))
+  if (!Number.isFinite(value)) return 25
+  return Math.min(50, Math.max(1, value))
 }
 
 function safeTimeBudgetMs(value = DEFAULT_TIME_BUDGET_MS) {
-  if (!Number.isFinite(value)) return 25000
-  return Math.min(50000, Math.max(1000, value))
+  if (!Number.isFinite(value)) return 240000
+  return Math.min(280000, Math.max(1000, value))
 }
 
 function normalizeStatus(row: QueueStatusRow | undefined) {
@@ -71,11 +71,10 @@ export async function getAnalysisQueueStatus({
         COUNT(*) FILTER (WHERE b."status" = 'failed')::int AS failed,
         COUNT(*) FILTER (
           WHERE b."status" = 'processing'
-            AND b."startedAt" IS NOT NULL
-            AND b."startedAt" < NOW() - (${minutes} * INTERVAL '1 minute')
+            AND b."updatedAt" < NOW() - (${minutes} * INTERVAL '1 minute')
         )::int AS "staleProcessing",
         MIN(b."createdAt") FILTER (WHERE b."status" = 'pending') AS "oldestPendingAt",
-        MIN(b."startedAt") FILTER (WHERE b."status" = 'processing') AS "oldestProcessingAt"
+        MIN(b."updatedAt") FILTER (WHERE b."status" = 'processing') AS "oldestProcessingAt"
       FROM "AnalysisBatch" b
       JOIN "Analysis" a ON a."id" = b."analysisId"
       JOIN "Project" p ON p."id" = a."projectId"
@@ -94,11 +93,10 @@ export async function getAnalysisQueueStatus({
         COUNT(*) FILTER (WHERE "status" = 'failed')::int AS failed,
         COUNT(*) FILTER (
           WHERE "status" = 'processing'
-            AND "startedAt" IS NOT NULL
-            AND "startedAt" < NOW() - (${minutes} * INTERVAL '1 minute')
+            AND "updatedAt" < NOW() - (${minutes} * INTERVAL '1 minute')
         )::int AS "staleProcessing",
         MIN("createdAt") FILTER (WHERE "status" = 'pending') AS "oldestPendingAt",
-        MIN("startedAt") FILTER (WHERE "status" = 'processing') AS "oldestProcessingAt"
+        MIN("updatedAt") FILTER (WHERE "status" = 'processing') AS "oldestProcessingAt"
       FROM "AnalysisBatch"
       WHERE "analysisId" = ${analysisId}
     `
@@ -115,11 +113,10 @@ export async function getAnalysisQueueStatus({
         COUNT(*) FILTER (WHERE b."status" = 'failed')::int AS failed,
         COUNT(*) FILTER (
           WHERE b."status" = 'processing'
-            AND b."startedAt" IS NOT NULL
-            AND b."startedAt" < NOW() - (${minutes} * INTERVAL '1 minute')
+            AND b."updatedAt" < NOW() - (${minutes} * INTERVAL '1 minute')
         )::int AS "staleProcessing",
         MIN(b."createdAt") FILTER (WHERE b."status" = 'pending') AS "oldestPendingAt",
-        MIN(b."startedAt") FILTER (WHERE b."status" = 'processing') AS "oldestProcessingAt"
+        MIN(b."updatedAt") FILTER (WHERE b."status" = 'processing') AS "oldestProcessingAt"
       FROM "AnalysisBatch" b
       JOIN "Analysis" a ON a."id" = b."analysisId"
       JOIN "Project" p ON p."id" = a."projectId"
@@ -137,65 +134,13 @@ export async function getAnalysisQueueStatus({
       COUNT(*) FILTER (WHERE "status" = 'failed')::int AS failed,
       COUNT(*) FILTER (
         WHERE "status" = 'processing'
-          AND "startedAt" IS NOT NULL
-          AND "startedAt" < NOW() - (${minutes} * INTERVAL '1 minute')
+          AND "updatedAt" < NOW() - (${minutes} * INTERVAL '1 minute')
       )::int AS "staleProcessing",
       MIN("createdAt") FILTER (WHERE "status" = 'pending') AS "oldestPendingAt",
-      MIN("startedAt") FILTER (WHERE "status" = 'processing') AS "oldestProcessingAt"
+      MIN("updatedAt") FILTER (WHERE "status" = 'processing') AS "oldestProcessingAt"
     FROM "AnalysisBatch"
   `
   return normalizeStatus(rows[0])
-}
-
-export async function recoverStaleAnalysisBatches({
-  analysisId,
-  staleMinutes = DEFAULT_STALE_MINUTES,
-}: {
-  analysisId?: string | null
-  staleMinutes?: number
-} = {}) {
-  const minutes = safeStaleMinutes(staleMinutes)
-
-  if (analysisId) {
-    return db.$executeRaw`
-      UPDATE "AnalysisBatch"
-      SET
-        "status" = CASE
-          WHEN COALESCE("retryCount", 0) + 1 >= ${MAX_BATCH_RETRIES} THEN 'failed'
-          ELSE 'pending'
-        END,
-        "retryCount" = COALESCE("retryCount", 0) + 1,
-        "errorMessage" = 'V2.4 recovered stale processing batch',
-        "completedAt" = CASE
-          WHEN COALESCE("retryCount", 0) + 1 >= ${MAX_BATCH_RETRIES} THEN NOW()
-          ELSE NULL
-        END,
-        "updatedAt" = NOW()
-      WHERE "analysisId" = ${analysisId}
-        AND "status" = 'processing'
-        AND "startedAt" IS NOT NULL
-        AND "startedAt" < NOW() - (${minutes} * INTERVAL '1 minute')
-    `
-  }
-
-  return db.$executeRaw`
-    UPDATE "AnalysisBatch"
-    SET
-      "status" = CASE
-        WHEN COALESCE("retryCount", 0) + 1 >= ${MAX_BATCH_RETRIES} THEN 'failed'
-        ELSE 'pending'
-      END,
-      "retryCount" = COALESCE("retryCount", 0) + 1,
-      "errorMessage" = 'V2.4 recovered stale processing batch',
-      "completedAt" = CASE
-        WHEN COALESCE("retryCount", 0) + 1 >= ${MAX_BATCH_RETRIES} THEN NOW()
-        ELSE NULL
-      END,
-      "updatedAt" = NOW()
-    WHERE "status" = 'processing'
-      AND "startedAt" IS NOT NULL
-      AND "startedAt" < NOW() - (${minutes} * INTERVAL '1 minute')
-  `
 }
 
 export async function processAnalysisQueue({
@@ -213,8 +158,8 @@ export async function processAnalysisQueue({
   const budget = safeTimeBudgetMs(timeBudgetMs)
   const startedAt = Date.now()
   const recovered = recoverStale
-    ? await recoverStaleAnalysisBatches({ analysisId })
-    : 0
+    ? await recoverStaleAnalysisBatches(analysisId ?? undefined)
+    : { recovered: 0, failed: 0 }
   const results = []
 
   for (let index = 0; index < limit; index += 1) {
@@ -228,7 +173,9 @@ export async function processAnalysisQueue({
     if (!result.processed) break
   }
 
-  const finalizedReadyAnalyses = analysisId ? { checked: 0, finalized: 0 } : await finalizeReadyAnalyses(limit)
+  const finalizedReadyAnalyses = analysisId
+    ? { checked: 0, finalized: 0 }
+    : await finalizeReadyAnalyses(limit)
 
   if (analysisId) {
     await finalizeAnalysisIfReady(analysisId)
