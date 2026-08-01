@@ -35,7 +35,7 @@ describe("API campaign wallet input", () => {
   })
 
   it("preserves Solana case and rejects raw participant identifiers", () => {
-    const address = "AbCdEfGhijkLMNopQRstuVWxyz123456789ABCDEFG"
+    const address = "FAVSpnZsNWKTnPmn4qPttZjT6MiWyCQjUVzDuf6pLcTB"
     const { wallets, issues } = parseApiWalletRows(
       [
         {
@@ -48,6 +48,10 @@ describe("API campaign wallet input", () => {
 
     assert.equal(wallets[0]?.walletAddress, address)
     assert.equal(wallets[0]?.participantFingerprint, null)
-    assert.ok(issues.some((issue) => issue.includes("invalid participant fingerprint")))
+    assert.ok(
+      issues.some((issue) =>
+        issue.includes("invalid participant fingerprint")
+      )
+    )
   })
 })
