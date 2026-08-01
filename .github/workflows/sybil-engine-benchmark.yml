@@ -14,6 +14,8 @@ on:
       - .github/workflows/sybil-engine-benchmark.yml
       - scripts/benchmark-sybil-engine.ts
       - lib/risk-engine.ts
+      - lib/risk-engine/dispatcher.ts
+      - lib/risk-engine/scalable.ts
       - lib/graph-intelligence.ts
   pull_request:
     branches:
@@ -22,6 +24,8 @@ on:
       - .github/workflows/sybil-engine-benchmark.yml
       - scripts/benchmark-sybil-engine.ts
       - lib/risk-engine.ts
+      - lib/risk-engine/dispatcher.ts
+      - lib/risk-engine/scalable.ts
       - lib/graph-intelligence.ts
 
 permissions:
@@ -39,7 +43,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
