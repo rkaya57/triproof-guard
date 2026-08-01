@@ -19,6 +19,7 @@
       }
     ],
     "paths": {
+      "@/lib/risk-engine": ["./lib/risk-engine/dispatcher.ts"],
       "@/*": ["./*"]
     }
   },
