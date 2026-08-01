@@ -1,0 +1,96 @@
+name: 50K finalizer integration
+
+on:
+  workflow_dispatch:
+    inputs:
+      wallets:
+        description: Wallet count
+        required: true
+        default: "50000"
+  push:
+    branches:
+      - fix/sybil-engine-safety
+    paths:
+      - .github/workflows/finalizer-50k.yml
+      - scripts/test-finalizer-50k.ts
+      - lib/analysis/batch-worker.ts
+      - lib/risk-engine.ts
+      - lib/risk-engine/**
+      - lib/graph-intelligence.ts
+      - lib/graph-intelligence/**
+      - prisma/**
+      - package.json
+      - package-lock.json
+      - tsconfig.json
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/finalizer-50k.yml
+      - scripts/test-finalizer-50k.ts
+      - lib/analysis/batch-worker.ts
+      - lib/risk-engine.ts
+      - lib/risk-engine/**
+      - lib/graph-intelligence.ts
+      - lib/graph-intelligence/**
+      - prisma/**
+      - package.json
+      - package-lock.json
+      - tsconfig.json
+
+permissions:
+  contents: read
+
+jobs:
+  finalizer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: triproof_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d triproof_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/triproof_test?schema=public
+      NODE_ENV: test
+      SYBIL_SCALABLE_ENGINE_THRESHOLD: "10000"
+      FINALIZER_TEST_WALLETS: ${{ inputs.wallets || '50000' }}
+      FINALIZER_TEST_BATCH_SIZE: "250"
+      NODE_OPTIONS: --max-old-space-size=4096
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply database migrations
+        run: npx prisma migrate deploy
+
+      - name: Run 50K finalizer integration
+        run: node --import tsx scripts/test-finalizer-50k.ts | tee finalizer-50k.jsonl
+
+      - name: Upload integration metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: finalizer-50k
+          path: finalizer-50k.jsonl
+          retention-days: 30
