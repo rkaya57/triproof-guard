@@ -17,6 +17,9 @@ on:
       - lib/risk-engine/dispatcher.ts
       - lib/risk-engine/scalable.ts
       - lib/graph-intelligence.ts
+      - lib/graph-intelligence/dispatcher.ts
+      - lib/graph-intelligence/scalable.ts
+      - tsconfig.json
   pull_request:
     branches:
       - main
@@ -27,6 +30,9 @@ on:
       - lib/risk-engine/dispatcher.ts
       - lib/risk-engine/scalable.ts
       - lib/graph-intelligence.ts
+      - lib/graph-intelligence/dispatcher.ts
+      - lib/graph-intelligence/scalable.ts
+      - tsconfig.json
 
 permissions:
   contents: read
