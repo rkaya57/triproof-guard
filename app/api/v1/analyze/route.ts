@@ -5,6 +5,10 @@ import { parseApiWalletRows } from "@/lib/api/analysis-wallet-input"
 import { getV1ApiUser, apiError } from "@/lib/api/v1-auth"
 import { isAdminEmail } from "@/lib/auth/admin"
 import { createAnalysisBatches } from "@/lib/analysis/batch-worker"
+import {
+  analysisWalletBatchSize,
+  highVolumeCapacityReport,
+} from "@/lib/analysis/high-volume"
 import { dispatchAnalysisWorker } from "@/lib/analysis/worker-dispatch"
 import {
   commitAnalysisCreditDebit,
@@ -25,6 +29,7 @@ import {
 import type { AnalysisMode, CampaignType, Chain, RiskPolicy } from "@/types"
 
 export const runtime = "nodejs"
+export const maxDuration = 300
 
 const freeTrialWalletLimit = Number.parseInt(process.env.FREE_TRIAL_WALLET_LIMIT ?? "100", 10)
 const apiWalletLimit = Number.parseInt(process.env.TRIPROOF_API_MAX_WALLETS ?? "50000", 10)
@@ -113,6 +118,23 @@ export async function POST(request: Request) {
     return apiError(`No real on-chain provider is configured for ${chain}`, 400)
   }
 
+  const capacity = highVolumeCapacityReport({
+    chain,
+    walletCount: wallets.length,
+  })
+  if (chain === "Solana" && wallets.length >= 1_000 && !capacity.configured) {
+    return apiError(
+      "High-volume Solana analysis requires HELIUS_API_KEY or a Helius SOLANA_RPC_URL. Mock or public RPC data is not accepted.",
+      503,
+      { capacity }
+    )
+  }
+  const walletBatchSize = analysisWalletBatchSize({
+    chain,
+    walletCount: wallets.length,
+    fallback: config.batchSize,
+  })
+
   const projectName = String(body.projectName ?? `${chain} ${campaignType} API Wallet Audit`).trim().slice(0, 120)
   const notesInput = typeof body.notes === "string" ? body.notes : ""
   const campaignContractsInput = Array.isArray(body.campaignContracts) ? body.campaignContracts.join("\n") : typeof body.campaignContracts === "string" ? body.campaignContracts : ""
@@ -121,6 +143,8 @@ export async function POST(request: Request) {
     notesInput,
     "TRIPROOF_API_SOURCE=v1",
     `TRIPROOF_RISK_POLICY=${riskPolicy}`,
+    `TRIPROOF_ANALYSIS_BATCH_SIZE=${walletBatchSize}`,
+    `TRIPROOF_CAPACITY_PROFILE=${capacity.profile}`,
     campaignContracts.length ? `TRIPROOF_CAMPAIGN_CONTRACTS=${campaignContracts.join(",")}` : "",
   ].filter(Boolean).join("\n")
 
@@ -151,6 +175,11 @@ export async function POST(request: Request) {
           csvFileName: "api-v1-json-upload.json",
           analysisMode,
           enrichmentStatus: "pending",
+          enrichmentWarnings: [
+            `Capacity profile: ${capacity.profile}`,
+            `Analysis batch size: ${walletBatchSize}`,
+            `Estimated provider requests: ${capacity.estimatedRequests}`,
+          ],
         },
       })
 
@@ -163,6 +192,8 @@ export async function POST(request: Request) {
           chain,
           campaignType,
           riskPolicy,
+          capacity,
+          walletBatchSize,
           freeTrialWalletLimit,
           remainingFreeWallets: billingGate.remainingFreeWallets,
         },
@@ -171,7 +202,7 @@ export async function POST(request: Request) {
       const batchCount = await createAnalysisBatches(
         analysis.id,
         wallets,
-        config.batchSize,
+        walletBatchSize,
         tx
       )
 
@@ -185,6 +216,8 @@ export async function POST(request: Request) {
       status: "processing",
       walletCount: wallets.length,
       batchCount: created.batchCount,
+      walletBatchSize,
+      capacity,
       billing: {
         source: created.billingGate.source,
         creditsDeducted: created.billingGate.creditsToDeduct,
@@ -195,7 +228,7 @@ export async function POST(request: Request) {
       campaignType,
       analysisMode,
       riskPolicy,
-      provider: selection.provider.id,
+      provider: capacity.provider ?? selection.provider.id,
       issues,
       decisionLegend: decisionLegendForApi(),
       statusUrl: `/api/v1/analysis/${created.analysis.id}`,
