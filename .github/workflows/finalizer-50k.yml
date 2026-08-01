@@ -83,7 +83,7 @@ jobs:
         run: npm ci
 
       - name: Initialize current database schema
-        run: npx prisma db push --force-reset --skip-generate
+        run: npx prisma db push --force-reset
 
       - name: Run 50K finalizer integration
         run: node --import tsx scripts/test-finalizer-50k.ts | tee finalizer-50k.jsonl
