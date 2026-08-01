@@ -9,7 +9,15 @@ import {
 
 type RawCsvRow = Record<string, string | undefined>
 
-const walletKeys = ["wallet_address", "wallet", "address"]
+const walletKeys = [
+  "wallet_address",
+  "wallet",
+  "address",
+  "solana_address",
+  "public_address",
+  "wallet_pubkey",
+  "pubkey",
+]
 
 function getWalletAddress(row: RawCsvRow) {
   for (const key of walletKeys) {
@@ -85,7 +93,13 @@ export function parseWalletCsv(csvText: string, selectedChain: string): CsvParse
   if (!headers.some((header) => walletKeys.includes(header))) {
     return {
       wallets,
-      issues: [{ row: 1, issue: "Missing required wallet_address column" }],
+      issues: [
+        {
+          row: 1,
+          issue:
+            "Missing wallet column. Use wallet_address, wallet, address, solana_address, public_address, wallet_pubkey, or pubkey.",
+        },
+      ],
       duplicates,
       mode: "basic",
       headers,
