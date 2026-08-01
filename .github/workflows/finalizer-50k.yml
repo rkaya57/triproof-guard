@@ -82,15 +82,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Apply database migrations
-        run: npx prisma migrate deploy
+      - name: Initialize current database schema
+        run: npx prisma db push --force-reset --skip-generate
 
       - name: Run 50K finalizer integration
         run: node --import tsx scripts/test-finalizer-50k.ts | tee finalizer-50k.jsonl
 
       - name: Upload integration metrics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: finalizer-50k
           path: finalizer-50k.jsonl
+          if-no-files-found: ignore
           retention-days: 30
