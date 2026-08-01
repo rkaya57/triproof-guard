@@ -18,8 +18,9 @@ import {
 export const runtime = "nodejs"
 export const maxDuration = 300
 
+const WORKER_RUNTIME_PROFILE = "50k-real-v1"
 const HARD_FUNCTION_BUDGET_MS = 280_000
-const RESPONSE_RESERVE_MS = 10_000
+const RESPONSE_RESERVE_MS = 12_000
 
 function booleanParam(value: string | null, fallback: boolean) {
   if (value === null) return fallback
@@ -70,6 +71,7 @@ export async function GET(request: Request) {
       return NextResponse.json({
         ok: true,
         source: "get",
+        runtimeProfile: WORKER_RUNTIME_PROFILE,
         analysisId,
         validation,
         processedBatches: 0,
@@ -97,6 +99,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ok: true,
       source: "get",
+      runtimeProfile: WORKER_RUNTIME_PROFILE,
       analysisId,
       validation,
       ...result,
@@ -151,6 +154,7 @@ export async function POST(request: Request) {
         analysisId: requestedAnalysisId,
       })
       return NextResponse.json({
+        runtimeProfile: WORKER_RUNTIME_PROFILE,
         recoveredStaleBatches: recovered,
         finalizedReadyAnalyses,
         queue,
@@ -173,6 +177,7 @@ export async function POST(request: Request) {
       const queue = await getAnalysisQueueStatus({ analysisId })
       return NextResponse.json({
         ok: true,
+        runtimeProfile: WORKER_RUNTIME_PROFILE,
         analysisId,
         validation,
         processedBatches: 0,
@@ -199,6 +204,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
+      runtimeProfile: WORKER_RUNTIME_PROFILE,
       analysisId,
       validation,
       ...result,
