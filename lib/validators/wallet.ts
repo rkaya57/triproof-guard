@@ -58,6 +58,37 @@ export const newAnalysisSchema = z.object({
 
 const evmWalletRegex = /^0x[a-fA-F0-9]{40}$/
 const solanaWalletRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
+const base58Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+const base58Values = new Map(
+  Array.from(base58Alphabet, (character, index) => [character, BigInt(index)])
+)
+
+export function isValidSolanaAddress(address: string) {
+  const value = address.trim()
+  if (!solanaWalletRegex.test(value)) return false
+
+  let decoded = 0n
+  for (const character of value) {
+    const digit = base58Values.get(character)
+    if (digit === undefined) return false
+    decoded = decoded * 58n + digit
+  }
+
+  let decodedBytes = 0
+  for (let cursor = decoded; cursor > 0n; cursor >>= 8n) {
+    decodedBytes += 1
+  }
+
+  let leadingZeroBytes = 0
+  while (
+    leadingZeroBytes < value.length &&
+    value[leadingZeroBytes] === "1"
+  ) {
+    leadingZeroBytes += 1
+  }
+
+  return leadingZeroBytes + decodedBytes === 32
+}
 
 /** Parse campaign addresses/program IDs supplied by the user. */
 export function parseCampaignContracts(input: string | null | undefined): string[] {
@@ -67,7 +98,7 @@ export function parseCampaignContracts(input: string | null | undefined): string
       input
         .split(/[\n,;\s]+/)
         .map((value) => value.trim())
-        .filter((value) => evmWalletRegex.test(value) || solanaWalletRegex.test(value))
+        .filter((value) => evmWalletRegex.test(value) || isValidSolanaAddress(value))
     )
   )
 }
@@ -85,11 +116,11 @@ export function isValidWalletAddress(address: string, chain: string) {
   const value = address.trim()
 
   if (chain === "Solana") {
-    return solanaWalletRegex.test(value)
+    return isValidSolanaAddress(value)
   }
 
   if (chain === "Other") {
-    return evmWalletRegex.test(value) || solanaWalletRegex.test(value)
+    return evmWalletRegex.test(value) || isValidSolanaAddress(value)
   }
 
   return evmWalletRegex.test(value)
