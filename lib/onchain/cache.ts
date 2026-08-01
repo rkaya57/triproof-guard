@@ -3,18 +3,7 @@ import {
   getOnChainConfig,
   SOLANA_ENRICHMENT_SCHEMA_VERSION,
 } from "@/lib/onchain/enrichment-types"
-
-/**
- * Lightweight in-memory enrichment cache.
- *
- * Keyed by `${chain}:${lowercased address}`. Entries expire after the
- * configured TTL (ONCHAIN_CACHE_TTL_HOURS). This avoids repeat API calls for
- * the same wallet within a short window — important for cost and speed.
- *
- * For a persistent cache the same interface is satisfied by reading recent
- * `WalletEnrichment` rows from the database; this module is the queue-ready
- * default so things work even without a DB connection.
- */
+import { normalizeChainAddress } from "@/lib/address-normalization"
 
 type CacheEntry = {
   data: EnrichedWalletData
@@ -30,7 +19,7 @@ export type CacheHit = {
 const store = new Map<string, CacheEntry>()
 
 function cacheKey(chain: string, address: string) {
-  return `${chain}:${address.trim().toLowerCase()}`
+  return `${chain.trim().toLowerCase()}:${normalizeChainAddress(address, chain)}`
 }
 
 function ttlMs() {
@@ -100,20 +89,32 @@ function rawString(value: unknown) {
 }
 
 function rawStringArray(value: unknown) {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : null
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : null
 }
 
 function rawBoolean(value: unknown) {
   return typeof value === "boolean" ? value : null
 }
 
-export async function hydrateEnrichmentCacheFromPersistentStore(chain: string, addresses: string[]) {
+function compatibleSolanaSchema(raw: Record<string, unknown>) {
+  const version = rawNumber(raw.enrichmentSchemaVersion)
+  return version !== null && version >= SOLANA_ENRICHMENT_SCHEMA_VERSION
+}
+
+export async function hydrateEnrichmentCacheFromPersistentStore(
+  chain: string,
+  addresses: string[]
+) {
   const config = getOnChainConfig()
   if (!config.persistentCacheEnabled || !addresses.length) return 0
 
   try {
     const { db } = await import("@/lib/db/prisma")
-    const uniqueAddresses = Array.from(new Set(addresses.map((address) => address.trim()).filter(Boolean)))
+    const uniqueAddresses = Array.from(
+      new Set(addresses.map((address) => address.trim()).filter(Boolean))
+    )
     const rows = await db.walletEnrichment.findMany({
       where: {
         chain,
@@ -122,7 +123,7 @@ export async function hydrateEnrichmentCacheFromPersistentStore(chain: string, a
         NOT: { provider: "mock" },
       },
       orderBy: [{ walletAddress: "asc" }, { updatedAt: "desc" }],
-      take: Math.min(uniqueAddresses.length * 5, 500),
+      take: Math.min(uniqueAddresses.length * 5, 5_000),
     })
     const restored = new Set<string>()
 
@@ -131,12 +132,8 @@ export async function hydrateEnrichmentCacheFromPersistentStore(chain: string, a
       if (restored.has(key) || getCachedEnrichment(row.chain, row.walletAddress)) return
 
       const raw = rawObject(row.rawData)
-      if (
-        row.chain === "Solana" &&
-        rawNumber(raw.enrichmentSchemaVersion) !== SOLANA_ENRICHMENT_SCHEMA_VERSION
-      ) {
-        return
-      }
+      if (row.chain === "Solana" && !compatibleSolanaSchema(raw)) return
+
       setCachedEnrichment({
         walletAddress: row.walletAddress,
         chain: row.chain,
