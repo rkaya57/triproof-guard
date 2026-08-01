@@ -20,6 +20,7 @@
     ],
     "paths": {
       "@/lib/risk-engine": ["./lib/risk-engine/dispatcher.ts"],
+      "@/lib/graph-intelligence": ["./lib/graph-intelligence/dispatcher.ts"],
       "@/*": ["./*"]
     }
   },
