@@ -1,7 +1,8 @@
-import type {
-  EnrichedWalletData,
-  EnrichWalletOptions,
-  WalletEnrichmentResult,
+import {
+  SOLANA_ENRICHMENT_SCHEMA_VERSION,
+  type EnrichedWalletData,
+  type EnrichWalletOptions,
+  type WalletEnrichmentResult,
 } from "@/lib/onchain/enrichment-types"
 import { detectKnownEntity } from "@/lib/risk-engine/known-entities"
 
@@ -519,7 +520,7 @@ function buildEnrichedData({
     behaviorDiversityScore,
     botScriptScore: null,
     rawData: {
-      enrichmentSchemaVersion: 3,
+      enrichmentSchemaVersion: SOLANA_ENRICHMENT_SCHEMA_VERSION,
       profile: "high_volume_screening",
       observedTransactionLowerBound: transactions.length,
       exactTransactionCountAvailable: !historyTruncated,

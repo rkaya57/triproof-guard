@@ -1,7 +1,8 @@
-import type {
-  EnrichedWalletData,
-  EnrichWalletOptions,
-  WalletEnrichmentResult,
+import {
+  SOLANA_ENRICHMENT_SCHEMA_VERSION,
+  type EnrichedWalletData,
+  type EnrichWalletOptions,
+  type WalletEnrichmentResult,
 } from "@/lib/onchain/enrichment-types"
 import { detectKnownEntity } from "@/lib/risk-engine/known-entities"
 
@@ -626,7 +627,7 @@ function buildData({
     behaviorDiversityScore: diversityScore,
     botScriptScore: scriptScore,
     rawData: {
-      enrichmentSchemaVersion: 4,
+      enrichmentSchemaVersion: SOLANA_ENRICHMENT_SCHEMA_VERSION,
       profile: options?.deepHistory ? "alchemy_deep_history" : "alchemy_campaign_screening",
       historyProvider: "alchemy",
       stateProvider: provider.includes("helius") ? "helius" : "alchemy",

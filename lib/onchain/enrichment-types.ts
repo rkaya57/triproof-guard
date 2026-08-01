@@ -8,7 +8,7 @@
 export type AnalysisMode = "csv_only" | "onchain" | "hybrid"
 
 /** Increment when Solana-derived fields or their confidence semantics change. */
-export const SOLANA_ENRICHMENT_SCHEMA_VERSION = 2
+export const SOLANA_ENRICHMENT_SCHEMA_VERSION = 5
 
 export type EnrichmentStatus =
   | "pending"
