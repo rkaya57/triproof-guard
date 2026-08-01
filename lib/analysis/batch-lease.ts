@@ -12,7 +12,7 @@ const MAX_BATCH_RETRIES = Math.max(
 )
 const BATCH_LEASE_TIMEOUT_MS = Math.max(
   60_000,
-  Number.parseInt(process.env.ANALYSIS_BATCH_LEASE_TIMEOUT_MS ?? "900000", 10) || 900_000
+  Number.parseInt(process.env.ANALYSIS_BATCH_LEASE_TIMEOUT_MS ?? "180000", 10) || 180_000
 )
 const BATCH_HEARTBEAT_MS = Math.max(
   15_000,

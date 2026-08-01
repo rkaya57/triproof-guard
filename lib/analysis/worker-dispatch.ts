@@ -2,9 +2,13 @@ import { after } from "next/server"
 
 import { processAnalysisQueue } from "@/lib/analysis/queue-optimizer"
 
-const DEFAULT_BOOTSTRAP_BATCHES = Number.parseInt(process.env.WORKER_BOOTSTRAP_MAX_BATCHES ?? "25", 10)
+// A Solana screening batch can spend roughly two minutes on real RPC history.
+// Keep each serverless invocation below the platform timeout, then continue in
+// a fresh invocation through the queue endpoint.
+const MAX_BATCHES_PER_INVOCATION = 2
+const DEFAULT_BOOTSTRAP_BATCHES = Number.parseInt(process.env.WORKER_BOOTSTRAP_MAX_BATCHES ?? "2", 10)
 const DEFAULT_BOOTSTRAP_TIME_BUDGET_MS = Number.parseInt(process.env.WORKER_BOOTSTRAP_TIME_BUDGET_MS ?? "240000", 10)
-const CONTINUATION_BATCHES = Number.parseInt(process.env.WORKER_CONTINUATION_MAX_BATCHES ?? "25", 10)
+const CONTINUATION_BATCHES = Number.parseInt(process.env.WORKER_CONTINUATION_MAX_BATCHES ?? "2", 10)
 const CONTINUATION_TIME_BUDGET_MS = Number.parseInt(process.env.WORKER_CONTINUATION_TIME_BUDGET_MS ?? "240000", 10)
 
 type QueueSnapshot = {
@@ -50,7 +54,12 @@ async function requestWorkerContinuation({
   analysisId: string
   reason: string
 }) {
-  const maxBatches = safeNumber(CONTINUATION_BATCHES, 25, 1, 50)
+  const maxBatches = safeNumber(
+    CONTINUATION_BATCHES,
+    MAX_BATCHES_PER_INVOCATION,
+    1,
+    MAX_BATCHES_PER_INVOCATION
+  )
   const timeBudgetMs = safeNumber(CONTINUATION_TIME_BUDGET_MS, 240_000, 1_000, 280_000)
   const url = new URL("/api/worker/analysis-queue", siteOrigin())
   url.searchParams.set("analysisId", analysisId)
@@ -102,7 +111,12 @@ export function dispatchAnalysisWorker({
   analysisId: string
   reason: string
 }) {
-  const maxBatches = safeNumber(DEFAULT_BOOTSTRAP_BATCHES, 25, 1, 50)
+  const maxBatches = safeNumber(
+    DEFAULT_BOOTSTRAP_BATCHES,
+    MAX_BATCHES_PER_INVOCATION,
+    1,
+    MAX_BATCHES_PER_INVOCATION
+  )
   const timeBudgetMs = safeNumber(DEFAULT_BOOTSTRAP_TIME_BUDGET_MS, 240_000, 1_000, 280_000)
 
   after(async () => {

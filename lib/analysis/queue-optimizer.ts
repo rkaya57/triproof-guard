@@ -9,7 +9,7 @@ import {
 } from "@/lib/analysis/batch-worker"
 
 const DEFAULT_STALE_MINUTES = Number.parseInt(
-  process.env.ANALYSIS_BATCH_STALE_MINUTES ?? "15",
+  process.env.ANALYSIS_BATCH_STALE_MINUTES ?? "3",
   10
 )
 const DEFAULT_MAX_BATCHES = Number.parseInt(

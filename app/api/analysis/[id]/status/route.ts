@@ -9,7 +9,7 @@ export const runtime = "nodejs"
 
 const staleBatchMinutes = Math.min(
   120,
-  Math.max(1, Number.parseInt(process.env.ANALYSIS_BATCH_STALE_MINUTES ?? "15", 10))
+  Math.max(1, Number.parseInt(process.env.ANALYSIS_BATCH_STALE_MINUTES ?? "3", 10))
 )
 
 type BatchStatusRow = {

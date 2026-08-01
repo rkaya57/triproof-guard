@@ -21,6 +21,7 @@ export const maxDuration = 300
 const WORKER_RUNTIME_PROFILE = "50k-real-v1"
 const HARD_FUNCTION_BUDGET_MS = 280_000
 const RESPONSE_RESERVE_MS = 12_000
+const MAX_BATCHES_PER_INVOCATION = 2
 
 function booleanParam(value: string | null, fallback: boolean) {
   if (value === null) return fallback
@@ -45,9 +46,9 @@ export async function GET(request: Request) {
   const requestedAnalysisId = url.searchParams.get("analysisId")
   const maxBatches = boundedNumber(
     url.searchParams.get("maxBatches"),
-    25,
+    MAX_BATCHES_PER_INVOCATION,
     1,
-    50
+    MAX_BATCHES_PER_INVOCATION
   )
   const requestedBudget = boundedNumber(
     url.searchParams.get("timeBudgetMs"),
@@ -123,9 +124,9 @@ export async function POST(request: Request) {
   const requestedAnalysisId = url.searchParams.get("analysisId")
   const maxBatches = boundedNumber(
     url.searchParams.get("maxBatches"),
-    25,
+    MAX_BATCHES_PER_INVOCATION,
     1,
-    50
+    MAX_BATCHES_PER_INVOCATION
   )
   const requestedBudget = boundedNumber(
     url.searchParams.get("timeBudgetMs"),
