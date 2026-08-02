@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import { getV1ApiUser } from "@/lib/api/v1-auth"
 import { scanScamGuard, type ScamGuardChain, type ScamGuardScanType } from "@/lib/scamguard/engine"
+import { enforceTeamPolicies } from "@/lib/team-policy/store"
 
 export const runtime = "nodejs"
 export const maxDuration = 20
@@ -36,9 +37,11 @@ export async function POST(request: Request) {
     sourceUrl: body?.sourceUrl,
     deepScan: type === "url",
   })
+  const policy = await enforceTeamPolicies({ userId: auth.user.id, result, target: value, source: "api_v1" })
   return NextResponse.json(
     {
       ...result,
+      teamPolicy: policy,
       account: {
         userId: auth.user.id,
         email: auth.user.email,

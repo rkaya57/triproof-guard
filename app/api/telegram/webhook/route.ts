@@ -17,6 +17,7 @@ import {
   recordTelegramScan,
   updateTelegramGroupSettings,
 } from "@/lib/telegram/store"
+import { enforceTelegramGroupPolicies } from "@/lib/team-policy/store"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -141,6 +142,7 @@ export async function POST(request: Request) {
           domain: result.metadata.domain,
           alerted,
         }),
+      applyTeamPolicy: ({ candidate, result, chatId }) => enforceTelegramGroupPolicies(chatId, result, candidate.value),
     })
   } catch (error) {
     console.error("Telegram update handling failed", error)

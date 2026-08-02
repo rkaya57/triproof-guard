@@ -1,5 +1,6 @@
 import { scanScamGuard, type ScamGuardChain, type ScamGuardRiskLevel, type ScamGuardScanResult, type ScamGuardScanType } from "@/lib/scamguard/engine"
 import { generateScamGuardAiReply } from "@/lib/ai/scamguard-reply"
+import { TeamPolicyAction } from "@prisma/client"
 
 export type TelegramChatType = "private" | "group" | "supergroup" | "channel" | string
 
@@ -122,6 +123,7 @@ export type TelegramBotContext = {
       moderationRecommended: boolean
     }
   }>
+  applyTeamPolicy?: (input: { candidate: ScanCandidate; result: ScamGuardScanResult; chatId: number }) => Promise<{ action: TeamPolicyAction; matched: Array<{ policyName: string; reason: string }> }>
 }
 
 type ScanCandidate = {
@@ -742,7 +744,8 @@ async function handleGroupGuardian(message: TelegramMessage, context: TelegramBo
   for (const url of urls) {
     const candidate: ScanCandidate = { type: "url", value: url, chain: "unknown" }
     const result = await scanCandidate(candidate)
-    const alerted = levelMeetsThreshold(result.riskLevel, threshold)
+    const policy = context.applyTeamPolicy ? await context.applyTeamPolicy({ candidate, result, chatId: message.chat.id }) : { action: TeamPolicyAction.ALLOW, matched: [] }
+    const alerted = policy.action !== TeamPolicyAction.ALLOW || levelMeetsThreshold(result.riskLevel, threshold)
     const campaign = await recordScanSafely(context, {
       message,
       candidate,
@@ -752,7 +755,8 @@ async function handleGroupGuardian(message: TelegramMessage, context: TelegramBo
     })
     if (alerted) {
       const canOfferMute = Boolean(campaign.eventId && campaign.senderBehavior?.moderationRecommended && message.from?.id)
-      actions.push(simpleReply(message, groupWarningText(result, campaign), canOfferMute ? {
+      const policyNotice = policy.action === TeamPolicyAction.ALLOW ? "" : `\n\nTEAM POLICY: ${policy.action}\n${policy.matched.slice(0, 2).map((item) => `${item.policyName}: ${item.reason}`).join("\n")}`
+      actions.push(simpleReply(message, `${groupWarningText(result, campaign)}${policyNotice}`, canOfferMute ? {
         inline_keyboard: [[
           { text: "Mute sender for 1 hour", callback_data: `sg_mute:${campaign.eventId}` },
           { text: "Open scanner", url: `${context.publicBaseUrl?.replace(/\/$/, "") ?? "https://triproofprotocol.com"}/scamguard` },

@@ -162,6 +162,20 @@ enum TelegramScanSource {
   GROUP_GUARDIAN
 }
 
+enum TeamPolicyAction {
+  ALLOW
+  REVIEW
+  BLOCK
+}
+
+enum TeamPolicyRuleType {
+  DOMAIN_ALLOWLIST
+  DOMAIN_BLOCK
+  EVM_SPENDER_BLOCK
+  UNLIMITED_APPROVAL_BLOCK
+  SOLANA_AUTHORITY_CHANGE_BLOCK
+}
+
 model User {
   id                         String                @id @default(cuid())
   name                       String
@@ -185,8 +199,57 @@ model User {
   reviewedScamGuardFeedback  ScamGuardFeedbackEvent[] @relation("ScamGuardFeedbackReviewer")
   submittedThreatReports     CommunityThreatReport[] @relation("CommunityThreatReportReporter")
   reviewedThreatReports      CommunityThreatReport[] @relation("CommunityThreatReportReviewer")
+  teamSecurityPolicies       TeamSecurityPolicy[]
+  teamPolicyViolations       TeamPolicyViolation[]
   createdAt                  DateTime              @default(now())
   updatedAt                  DateTime              @updatedAt
+}
+
+model TeamSecurityPolicy {
+  id        String                   @id @default(cuid())
+  userId    String
+  user      User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  active    Boolean                  @default(true)
+  rules     TeamSecurityPolicyRule[]
+  violations TeamPolicyViolation[]
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
+
+  @@index([userId, active])
+}
+
+model TeamSecurityPolicyRule {
+  id        String             @id @default(cuid())
+  policyId  String
+  policy    TeamSecurityPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  type      TeamPolicyRuleType
+  value     String?            @db.Text
+  action    TeamPolicyAction   @default(BLOCK)
+  active    Boolean            @default(true)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@index([policyId, active])
+  @@index([type, active])
+}
+
+model TeamPolicyViolation {
+  id        String             @id @default(cuid())
+  userId    String
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  policyId  String?
+  policy    TeamSecurityPolicy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
+  ruleId    String?
+  target    String             @db.Text
+  source    String
+  chain     String?
+  action    TeamPolicyAction
+  reason    String             @db.Text
+  createdAt DateTime           @default(now())
+
+  @@index([userId, createdAt])
+  @@index([policyId, createdAt])
 }
 
 model Project {
