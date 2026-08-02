@@ -300,7 +300,7 @@ export function LandingPage() {
                 Protect Solana campaigns before rewards or wallet signatures go out.
               </h1>
               <p className="max-w-2xl text-base leading-7 text-muted-foreground">
-                Tri-Proof Guard gives Solana teams one safety layer for airdrop wallet review, fake claim links, risky token mints, and pre-sign transaction warnings. The live product includes ScamGuard, a Chrome extension, API docs, and Sybil analysis.
+                Tri-Proof Guard gives Solana teams one safety layer for airdrop wallet review, fake claim links, risky token mints, and pre-sign transaction warnings. Use ScamGuard before a click or signature, Sybil Analyst before rewards, Group Guardian inside Telegram, and the API inside your own product. ScamGuard also reads supported EVM surfaces.
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
@@ -308,6 +308,7 @@ export function LandingPage() {
               <a href="/downloads/scamguard-chrome-extension.zip" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`} download>
                 <Download data-icon="inline-start" /> Download extension
               </a>
+              <Link href="/learn" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>Choose a workflow <ArrowRight data-icon="inline-end" /></Link>
               <a href={pilotAuditHref} className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>Request pilot audit</a>
             </div>
             <div className="grid max-w-2xl gap-3 sm:grid-cols-3">

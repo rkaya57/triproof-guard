@@ -1,7 +1,7 @@
-import Image from "next/image"
 import Link from "next/link"
-import { ArrowRight, Bot, CheckCircle2, Code2, Database, History, ShieldCheck, Sparkles } from "lucide-react"
+import { ArrowRight, Bot, CheckCircle2, Code2, Database, History, KeyRound, ShieldCheck, Sparkles, WalletCards } from "lucide-react"
 
+import { PublicTopNav } from "@/components/layout/public-top-nav"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,11 +23,23 @@ const sybilPacks = Object.values(analysisCreditPacks).map((pack, index) => ({
   detail: index === 0 ? "For a focused wallet cluster check." : index === 1 ? "For recurring campaign and community research." : "For large-scale investigation workflows.",
 }))
 
+const accessJourney = [
+  [WalletCards, "Choose the job", "Use a plan for ongoing protection or an individual Sybil credit pack for a campaign wallet list."],
+  [ShieldCheck, "Pay once, activate clearly", "Sign in, pay the displayed USDC price or live SOL equivalent, and unlock the selected access without automatic renewal."],
+  [KeyRound, "Use the right workspace", "Run ScamGuard from the scanner, manage a community in Developer, create API keys for a backend, or start a wallet analysis from the dashboard."],
+] as const
+
 export function PricingPage() {
   return (
     <main className="premium-page min-h-screen bg-background">
-      <header className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8"><Link href="/" className="flex items-center gap-3"><Image src="/logo.svg" alt="Tri-Proof Guard" width={36} height={36} priority className="rounded-lg" /><span className="text-sm font-semibold">Tri-Proof Guard</span></Link><div className="flex items-center gap-3"><Link href="/docs" className={buttonVariants({ variant: "outline" })}>Docs</Link><Link href="/scamguard" className={`${buttonVariants()} glow-primary`}>Open Scanner</Link></div></header>
+      <PublicTopNav />
       <section className="security-grid border-y border-border"><div className="mx-auto max-w-7xl px-5 py-16 sm:px-8"><Badge variant="secondary" className="mb-5 w-fit border-primary/30 text-primary">USDC or SOL monthly access</Badge><h1 className="max-w-4xl text-4xl font-semibold sm:text-6xl">Choose the protection layer that matches your Web3 surface.</h1><p className="mt-5 max-w-3xl text-muted-foreground">Every paid plan is a 30-day access pass. Pay a fixed USDC amount or a live SOL equivalent, then renew manually when you want to continue. No card charges or silent recurring wallet transfers.</p></div></section>
+      <section className="border-b border-border bg-primary/[0.03]">
+        <div className="mx-auto max-w-7xl px-5 py-10 sm:px-8">
+          <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><Badge variant="secondary" className="w-fit border-primary/30 text-primary">Start here</Badge><h2 className="mt-3 text-2xl font-semibold text-white sm:text-3xl">Buy access, then use the product in the right place.</h2></div><Link href="/learn#plans" className="text-sm font-medium text-primary hover:underline">See the full usage guide <ArrowRight className="inline size-4" /></Link></div>
+          <div className="grid gap-4 md:grid-cols-3">{accessJourney.map(([Icon, title, text], index) => <div key={title} className="rounded-lg border border-border bg-background/45 p-5"><div className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-lg border border-primary/30 bg-primary/10"><Icon className="size-4 text-primary" /></span><span className="font-mono text-xs text-primary/80">0{index + 1}</span></div><p className="mt-4 font-semibold text-white">{title}</p><p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p></div>)}</div>
+        </div>
+      </section>
       <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8"><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">{plans.map((plan) => { const Icon = plan.icon; const featured = "featured" in plan && plan.featured; return <Card key={plan.id} className={featured ? "glass-panel premium-card relative overflow-hidden border-primary/50 bg-primary/10 shadow-[0_0_40px_rgba(56,189,248,0.14)]" : "glass-panel premium-card"}>{featured && <Badge className="absolute right-4 top-4 gap-1 bg-primary text-primary-foreground"><Sparkles className="size-3.5" />Best for integrations</Badge>}<CardHeader><span className="mb-3 flex size-10 items-center justify-center rounded-lg border border-primary/25 bg-primary/10"><Icon className="size-5 text-primary" /></span><CardTitle>{plan.name}</CardTitle><CardDescription>{plan.detail}</CardDescription><div className="pt-3 text-3xl font-semibold">{plan.price}</div>{plan.id !== "free" && <p className="pt-2 text-xs font-medium text-primary">30-day access. Manual renewal only.</p>}</CardHeader><CardContent className="flex flex-col gap-6"><ul className="flex flex-col gap-3">{plan.features.map((feature) => <li key={feature} className="flex items-start gap-2 text-sm"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" />{feature}</li>)}</ul><Link href={plan.href} className={buttonVariants({ variant: featured ? "default" : "outline" })}>{plan.cta}<ArrowRight data-icon="inline-end" /></Link></CardContent></Card> })}</div></section>
       <section className="border-y border-border bg-card/25">
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">

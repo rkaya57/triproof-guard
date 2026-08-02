@@ -61,6 +61,7 @@ const navLinks = [
 ]
 
 const pageAnchors = [
+  ["Start here", "#start-here"],
   ["Overview", "#overview"],
   ["Workflow", "#workflow"],
   ["Evidence", "#evidence"],
@@ -124,7 +125,24 @@ const productLayers = [
     title: "API and partner integration",
     text: "Wallets, launchpads, campaign platforms, and dApps can call authenticated endpoints to receive consistent ScamGuard and wallet-risk decisions.",
   },
+  {
+    icon: Send,
+    title: "Telegram protection",
+    text: "Individuals can scan in chat, while communities can connect Group Guardian for risk alerts, repeated-campaign context, summaries, and controlled moderation.",
+  },
+  {
+    icon: Globe2,
+    title: "Browser extension",
+    text: "Adds page status, link checks, and readable wallet-request warnings where users browse and sign.",
+  },
 ]
+
+const startPaths = [
+  [ShieldAlert, "I want to check something before I sign", "Open ScamGuard, choose URL, wallet, token, or transaction, then read the decision and evidence before acting.", "Open ScamGuard", "/scamguard"],
+  [WalletCards, "I run a campaign or rewards program", "Buy Sybil wallet credits, upload the campaign CSV, review the Gray Zone, then export a decision list.", "Analyze campaign wallets", "/dashboard/new-analysis"],
+  [Send, "I manage a Telegram community", "Choose Community or API Growth, connect the group from Developer, then set the Guardian threshold and moderator controls.", "Learn Group Guardian", "/learn#group-guardian"],
+  [Code2, "I want to add security to my product", "Choose an API plan, create a private key in Developer, call the scan or analysis endpoint from your backend, then use the explained result in your flow.", "Read API setup", "/docs/api"],
+] as const
 
 const signals = [
   [WalletCards, "Wallet age", "Newly created wallets are reviewed more carefully when combined with weak history, low balance, or campaign-only behavior."],
@@ -275,7 +293,7 @@ export default function DocsPage() {
               </Link>
             ))}
           </nav>
-          <Link href="/scamguard" className={`${buttonVariants()} glow-primary hover-lift`}>Open Demo</Link>
+          <Link href="/scamguard" className={`${buttonVariants()} glow-primary hover-lift`}>Open ScamGuard</Link>
         </header>
 
         <div className="relative z-10 mx-auto grid max-w-7xl gap-10 px-5 pb-16 pt-10 sm:px-8 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:pb-24 lg:pt-20">
@@ -334,6 +352,13 @@ export default function DocsPage() {
               })}
             </div>
           </div>
+        </div>
+      </section>
+
+      <section id="start-here" className="border-b border-border bg-primary/[0.03]">
+        <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8 lg:py-20">
+          <div className="mb-9 max-w-3xl"><span className="cyber-chip">Start here</span><h2 className="text-gradient mt-5 text-3xl font-semibold sm:text-5xl">Pick the workflow that matches your role.</h2><p className="mt-4 leading-7 text-muted-foreground">Tri-Proof Guard is one product suite, but the first action is different for a wallet user, a campaign operator, a Telegram administrator, and an integrating team.</p></div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{startPaths.map(([Icon, title, text, action, href], index) => <Card key={title} className="glass-panel premium-card hover-lift reveal-up" style={{ animationDelay: `${index * 0.06}s` }}><CardHeader><Icon className="text-primary" /><CardTitle className="text-base">{title}</CardTitle><CardDescription>{text}</CardDescription></CardHeader><CardContent><Link href={href} className={`${buttonVariants({ variant: "outline" })} w-full`}>{action} <ArrowRight data-icon="inline-end" /></Link></CardContent></Card>)}</div>
         </div>
       </section>
 

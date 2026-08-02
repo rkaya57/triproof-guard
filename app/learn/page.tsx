@@ -24,7 +24,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { scamGuardTelegramBotUrl } from "@/lib/telegram/links"
 
 export const metadata = {
-  title: "Product Academy | Tri-Proof Protocol",
+  title: "Product Academy | Tri-Proof Guard",
   description:
     "Step-by-step training for ScamGuard, the Chrome extension, Telegram Group Guardian, Sybil Analyst, reports, billing, and the Tri-Proof Protocol API.",
 }
@@ -34,6 +34,7 @@ const quickStart = [
   [Puzzle, "Install the browser extension", "Load the extension in Chrome, pin it, then let it explain supported wallet connection and signing requests.", "#extension", "Extension guide"],
   [Bot, "Message the Telegram Bot", "Send /start, paste a Web3 URL, wallet, token, or transaction, and receive a readable pre-sign report.", "#telegram-bot", "Bot guide"],
   [WalletCards, "Start a Sybil analysis", "Buy wallet credits when needed, upload a campaign CSV, review the graph evidence, then export the decision list.", "#sybil", "Sybil guide"],
+  [Code2, "Connect your product", "Choose an API plan, create a private API key in the dashboard, then add ScamGuard or Sybil decisions to your backend.", "#integrate", "API guide"],
 ] as const
 
 const productNavigation = [
@@ -84,7 +85,8 @@ const sybilSteps = [
 ] as const
 
 const integrationSteps = [
-  ["Create an API key", "Open the developer dashboard, create a scoped API key, and store it only in your server-side environment variables."],
+  ["Choose an API plan", "API Starter is for small integrations with 5,000 requests per month. API Growth is for production flows, higher volume, signed webhooks, and one Telegram group."],
+  ["Create an API key", "After payment, open the Developer dashboard, create a private API key, and store it only in your server-side environment variables."],
   ["Use a purpose-built endpoint", "Use the ScamGuard scan endpoint for pre-sign checks and the analysis endpoint for campaign wallet lists. Do not expose API keys in a browser client."],
   ["Handle a clear response", "Show users the decision, confidence, strongest evidence, decoded intent, and next action. Never reduce a security response to only a score."],
   ["Add webhook automation", "API Growth can send signed analysis events to your backend so your campaign or dApp workflow can react without polling."],
@@ -149,7 +151,7 @@ export default function LearnPage() {
         <header className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
           <Link href="/" className="group flex items-center gap-3">
             <span className="flex size-11 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 transition-transform group-hover:scale-105"><Image src="/logo.svg" alt="Tri-Proof Protocol" width={30} height={30} priority className="rounded-md" /></span>
-            <span><span className="block text-sm font-semibold">Tri-Proof Protocol</span><span className="font-mono text-[10px] uppercase tracking-[0.22em] text-primary/80">Product Academy</span></span>
+            <span><span className="block text-sm font-semibold">Tri-Proof Guard</span><span className="font-mono text-[10px] uppercase tracking-[0.22em] text-primary/80">Product Academy</span></span>
           </Link>
           <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
             <Link href="/docs" className="hover:text-primary">Docs</Link>
@@ -170,7 +172,7 @@ export default function LearnPage() {
             </div>
           </div>
           <div className="glass-panel premium-card animated-border rounded-lg p-5">
-            <div className="mb-4 flex items-center justify-between"><div><p className="font-semibold">Your learning path</p><p className="text-sm text-muted-foreground">Personal protection, community defense, then operations.</p></div><Badge variant="secondary" className="text-primary">6 modules</Badge></div>
+            <div className="mb-4 flex items-center justify-between"><div><p className="font-semibold">Your learning path</p><p className="text-sm text-muted-foreground">Personal protection, community defense, then operations.</p></div><Badge variant="secondary" className="text-primary">7 modules</Badge></div>
             <div className="grid gap-3 sm:grid-cols-2">
               {quickStart.map(([Icon, title, text, href, action], index) => (
                 <a key={title} href={href} className="group rounded-lg border border-border bg-background/55 p-4 transition-colors hover:border-primary/50">
@@ -187,7 +189,7 @@ export default function LearnPage() {
 
       <section id="start" className="mx-auto max-w-7xl px-5 py-16 sm:px-8 lg:py-20">
         <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-          <div><span className="cyber-chip">Module 01</span><h2 className="text-gradient mt-5 text-3xl font-semibold sm:text-5xl">Choose the right product for the moment.</h2><p className="mt-5 max-w-xl leading-7 text-muted-foreground">Use ScamGuard when someone is about to click or sign. Use the extension at the wallet prompt. Use the Telegram Bot in chat. Use Group Guardian for a community. Use Sybil Analyst before a reward distribution. Use the API when your own product needs this intelligence programmatically.</p></div>
+          <div><span className="cyber-chip">Module 01</span><h2 className="text-gradient mt-5 text-3xl font-semibold sm:text-5xl">Choose the right product for the moment.</h2><p className="mt-5 max-w-xl leading-7 text-muted-foreground">Use ScamGuard when someone is about to click or sign. Use the extension at the wallet prompt. Use the Telegram Bot in chat. Use Group Guardian for a community. Use Sybil Analyst before a reward distribution. Use the API when your own product needs this intelligence programmatically.</p><p className="mt-4 max-w-xl text-sm leading-6 text-primary">Personal safety and chat scanning start with Free. Deeper individual protection uses Builder. Community is for one protected Telegram group. Sybil analysis uses wallet credits. API plans are for teams embedding the engine in their own product.</p></div>
           <div className="grid gap-3 sm:grid-cols-2">
             {[[ShieldAlert, "Before a click or signature", "ScamGuard scanner or extension"], [MessageCircleWarning, "Inside Telegram", "Bot or Group Guardian"], [UsersRound, "Before campaign rewards", "Sybil Analyst"], [Code2, "Inside a product", "API and webhooks"]].map(([Icon, title, text]) => { const ItemIcon = Icon as typeof ShieldAlert; return <Card key={title as string} className="glass-panel premium-card"><CardHeader><ItemIcon className="text-primary" /><CardTitle className="text-base">{title as string}</CardTitle><CardDescription>{text as string}</CardDescription></CardHeader></Card> })}
           </div>

@@ -16,6 +16,7 @@ export function PublicTopNav() {
         <nav className="hidden items-center gap-5 text-sm text-muted-foreground md:flex">
           <Link href="/#product" className="hover:text-primary">Product</Link>
           <Link href="/scamguard" className="hover:text-primary">ScamGuard</Link>
+          <Link href="/audit" className="hover:text-primary">Sybil Analyst</Link>
           <Link href="/threat-reports" className="hover:text-primary">Threat Reports</Link>
           <Link href="/learn" className="hover:text-primary">Learn</Link>
           <Link href="/docs" className="hover:text-primary">Docs</Link>

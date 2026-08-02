@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowRight, Code2, KeyRound, ServerCog, ShieldAlert } from "lucide-react"
+import { ArrowRight, CheckCircle2, Code2, KeyRound, ServerCog, ShieldAlert, Webhook } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
@@ -69,6 +69,19 @@ export const metadata = {
   description: "V1.10 API documentation for wallet risk analyses, ScamGuard scans, URL Sandbox, Scam DNA and analysis status.",
 }
 
+const onboardingSteps = [
+  ["Choose API access", "Select API Starter for a small integration and 5,000 monthly requests, or API Growth for higher volume, signed webhooks, and priority support."],
+  ["Pay and open Developer", "After a USDC or SOL payment activates the plan, sign in and open Dashboard > Developer."],
+  ["Create a private key", "Name the key, copy it once, and store it in your backend environment. Never place it in browser code or a public repository."],
+  ["Call the matching endpoint", "Use ScamGuard scans before a click or signature. Use wallet-list analysis before campaign rewards, allowlists, grants, or loyalty distributions."],
+] as const
+
+const useCases = [
+  ["Wallet or dApp", "Call ScamGuard before showing a signature prompt, then display the decision, strongest evidence, and next action to the user."],
+  ["Campaign platform", "Submit participant wallets for Sybil analysis, review uncertain wallets, and use the completed decision list before distribution."],
+  ["Launchpad or quest app", "Check claim URLs, token or contract targets, and transaction intent before users connect a wallet or proceed."],
+] as const
+
 export default function ApiDocsPage() {
   return (
     <main className="premium-page min-h-screen bg-background text-foreground">
@@ -80,10 +93,11 @@ export default function ApiDocsPage() {
             Create wallet risk analyses from your own workflow.
           </h1>
           <p className="mt-5 max-w-2xl leading-7 text-muted-foreground">
-            The V1 API lets campaign teams submit wallet lists, queue real on-chain enrichment, run multichain ScamGuard scans, and retrieve decision summaries programmatically.
+            The V1 API lets teams add Tri-Proof intelligence to their own product: run ScamGuard before a wallet interaction, analyze campaign wallets before rewards, and retrieve clear decisions their users or operations team can act on.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link href="/api/v1" className={`${buttonVariants()} glow-primary`}>Open API index <ArrowRight data-icon="inline-end" /></Link>
+            <Link href="/pricing" className={buttonVariants({ variant: "outline" })}>Choose API access</Link>
             <Link href="/demo/report" className={buttonVariants({ variant: "outline" })}>View sample report</Link>
           </div>
         </div>
@@ -108,12 +122,24 @@ export default function ApiDocsPage() {
         </Card>
       </section>
 
+      <section className="border-y border-border bg-primary/[0.03]">
+        <div className="mx-auto max-w-7xl px-5 py-14 sm:px-8">
+          <div className="mb-8 max-w-3xl"><Badge variant="secondary" className="border-primary/30 text-primary">Integration path</Badge><h2 className="mt-4 text-3xl font-semibold text-white sm:text-4xl">From plan to first protected request.</h2><p className="mt-3 leading-7 text-muted-foreground">The API is sold as a 30-day access plan. The payment activates a request allowance; you then create the key yourself in the dashboard.</p></div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{onboardingSteps.map(([title, text], index) => <div key={title} className="rounded-lg border border-border bg-background/45 p-5"><span className="font-mono text-xs text-primary/80">0{index + 1}</span><p className="mt-3 font-semibold text-white">{title}</p><p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p></div>)}</div>
+          <div className="mt-8 grid gap-4 lg:grid-cols-3">{useCases.map(([title, text]) => <Card key={title} className="glass-panel premium-card"><CardHeader><CheckCircle2 className="text-primary" /><CardTitle className="text-base">{title}</CardTitle><CardDescription>{text}</CardDescription></CardHeader></Card>)}</div>
+        </div>
+      </section>
+
       <section className="mx-auto max-w-7xl px-5 pb-16 sm:px-8">
         <div className="grid gap-5 lg:grid-cols-3">
-          <Card className="glass-panel premium-card">
+        <Card className="glass-panel premium-card">
             <CardHeader><CardTitle>Create analysis example</CardTitle><CardDescription>Submit wallets and choose a risk policy.</CardDescription></CardHeader>
             <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{createExample}</code></pre></CardContent>
-          </Card>
+        </Card>
+        <Card className="glass-panel premium-card">
+          <CardHeader><Webhook className="text-primary" /><CardTitle>Automate events</CardTitle><CardDescription>API Growth can notify your backend with signed webhooks when configured analysis events occur.</CardDescription></CardHeader>
+          <CardContent className="text-sm text-muted-foreground">Verify the signature before changing eligibility, sending rewards, or triggering an internal review workflow.</CardContent>
+        </Card>
           <Card className="glass-panel premium-card">
             <CardHeader><CardTitle>Status example</CardTitle><CardDescription>Poll until the analysis status is completed.</CardDescription></CardHeader>
             <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{statusExample}</code></pre></CardContent>
