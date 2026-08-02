@@ -300,7 +300,7 @@ async function applyTeamPolicies(result, settings) {
   for (const policy of policies) {
     for (const rule of Array.isArray(policy?.rules) ? policy.rules : []) {
       const reason = policyRuleReason(rule, result)
-      if (reason) matched.push({ policyName: policy.name ?? "Team policy", ruleType: rule.type, action: rule.action, reason })
+      if (reason) matched.push({ policyId: policy.id, policyName: policy.name ?? "Team policy", ruleId: rule.id, ruleType: rule.type, action: rule.action, reason })
     }
   }
   const action = matched.reduce((current, match) => policyActionRank(match.action) > policyActionRank(current) ? match.action : current, "ALLOW")
@@ -327,6 +327,30 @@ async function applyTeamPolicies(result, settings) {
       ...(result?.metadata ?? {}),
       teamPolicy: { action, matched },
     },
+  }
+}
+
+async function reportTeamPolicyEvent(result, target) {
+  const policy = result?.metadata?.teamPolicy
+  if (!policy || !["BLOCK", "REVIEW"].includes(policy.action) || !Array.isArray(policy.matched) || !policy.matched.length) return
+  const stored = await chrome.storage.local.get({ [TEAM_POLICY_KEY]: "" })
+  const apiKey = String(stored[TEAM_POLICY_KEY] ?? "").trim()
+  if (!apiKey) return
+  try {
+    const settings = await getSettings()
+    await fetch(`${settings.apiBaseUrl}/api/v1/team-policies/events`, {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        target: String(target ?? "").slice(0, 4096),
+        chain: result?.metadata?.chain ?? "unknown",
+        action: policy.action,
+        matches: policy.matched.slice(0, 12).map((match) => ({ policyId: match.policyId, ruleId: match.ruleId, reason: match.reason })),
+      }),
+    })
+  } catch {
+    // Policy reporting must never delay or weaken the local safety decision.
   }
 }
 
@@ -381,6 +405,7 @@ async function scanUrl(value, { force = false, record = true, origin = "site", c
       scannedAt: new Date().toISOString(),
     }
     const policyResult = await applyTeamPolicies(localTrusted, settings)
+    void reportTeamPolicyEvent(policyResult, value)
     if (record) await recordScan(policyResult, { type: "url", sourceUrl: value, origin })
     return policyResult
   }
@@ -398,6 +423,7 @@ async function scanUrl(value, { force = false, record = true, origin = "site", c
     clientSignals: Array.isArray(clientSignals) ? clientSignals.slice(0, 8) : [],
   })
   const result = await applyTeamPolicies(rawResult, settings)
+  void reportTeamPolicyEvent(result, value)
   setCached("url", value, result)
   if (record) await recordScan(result, { type: "url", sourceUrl: value, origin })
   await notifyRisk(result, hostFromUrl(value) || "Current site")
@@ -408,6 +434,7 @@ async function scanTransaction(value, walletAddress, chain, sourceUrl) {
   const settings = await getSettings()
   const rawResult = await requestJson("/api/scamguard/scan-transaction", { value, walletAddress, chain, sourceUrl })
   const result = await applyTeamPolicies(rawResult, settings)
+  void reportTeamPolicyEvent(result, sourceUrl || value)
   await recordScan(result, { type: "transaction", sourceUrl, origin: "wallet" })
   await notifyRisk(result, "Wallet request")
   return result

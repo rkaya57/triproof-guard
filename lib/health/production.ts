@@ -62,6 +62,9 @@ async function checkRequiredTables(): Promise<HealthCheck> {
     "FeedbackEvent",
     "WebhookEndpoint",
     "WebhookDelivery",
+    "TeamSecurityPolicy",
+    "TeamSecurityPolicyRule",
+    "TeamPolicyViolation",
   ]
 
   try {
@@ -69,7 +72,7 @@ async function checkRequiredTables(): Promise<HealthCheck> {
       SELECT table_name
       FROM information_schema.tables
       WHERE table_schema = 'public'
-        AND table_name IN ('User','Project','Analysis','WalletAnalysis','Cluster','AnalysisBatch','TeamReview','FeedbackEvent','WebhookEndpoint','WebhookDelivery')
+        AND table_name IN ('User','Project','Analysis','WalletAnalysis','Cluster','AnalysisBatch','TeamReview','FeedbackEvent','WebhookEndpoint','WebhookDelivery','TeamSecurityPolicy','TeamSecurityPolicyRule','TeamPolicyViolation')
     `
     const existing = new Set(rows.map((row) => row.table_name))
     const missing = tables.filter((table) => !existing.has(table))

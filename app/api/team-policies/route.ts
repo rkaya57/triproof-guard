@@ -22,11 +22,26 @@ async function policyUser() {
 export async function GET() {
   const auth = await policyUser()
   if (auth.error || !auth.user) return auth.error
-  const [policies, violations] = await Promise.all([
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const [policies, violations, total, recent, byAction, bySource] = await Promise.all([
     listTeamPolicies(auth.user.id),
-    db.teamPolicyViolation.findMany({ where: { userId: auth.user.id }, orderBy: { createdAt: "desc" }, take: 12, select: { id: true, target: true, source: true, chain: true, action: true, reason: true, createdAt: true, policy: { select: { name: true } } } }),
+    db.teamPolicyViolation.findMany({ where: { userId: auth.user.id }, orderBy: { createdAt: "desc" }, take: 40, select: { id: true, target: true, source: true, chain: true, action: true, reason: true, createdAt: true, policy: { select: { name: true } } } }),
+    db.teamPolicyViolation.count({ where: { userId: auth.user.id } }),
+    db.teamPolicyViolation.count({ where: { userId: auth.user.id, createdAt: { gte: since } } }),
+    db.teamPolicyViolation.groupBy({ by: ["action"], where: { userId: auth.user.id }, _count: { _all: true } }),
+    db.teamPolicyViolation.groupBy({ by: ["source"], where: { userId: auth.user.id }, _count: { _all: true }, orderBy: { _count: { source: "desc" } }, take: 5 }),
   ])
-  return NextResponse.json({ policies, violations })
+  return NextResponse.json({
+    policies,
+    violations,
+    summary: {
+      total,
+      last24Hours: recent,
+      blocked: byAction.find((row) => row.action === TeamPolicyAction.BLOCK)?._count._all ?? 0,
+      reviewed: byAction.find((row) => row.action === TeamPolicyAction.REVIEW)?._count._all ?? 0,
+      sources: bySource.map((row) => ({ source: row.source, count: row._count._all })),
+    },
+  })
 }
 
 export async function POST(request: Request) {

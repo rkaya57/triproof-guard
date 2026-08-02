@@ -36,6 +36,20 @@ export async function GET() {
           walletAddress: "optionalConnectedWallet"
         }
       },
+      teamPolicies: {
+        method: "GET",
+        path: "/api/v1/team-policies",
+        note: "Returns active organization rules for a connected Chrome extension or service."
+      },
+      teamPolicyEvent: {
+        method: "POST",
+        path: "/api/v1/team-policies/events",
+        body: {
+          target: "https://example.com/claim",
+          action: "BLOCK | REVIEW",
+          matches: [{ policyId: "policyId", ruleId: "ruleId", reason: "Rule match explanation" }]
+        }
+      },
       scamGuardFeedback: {
         method: "POST",
         path: "/api/scamguard/feedback",

@@ -6,7 +6,7 @@ import { db } from "@/lib/db/prisma"
 
 export const runtime = "nodejs"
 
-const supportedEvents = ["analysis.completed"]
+const supportedEvents = ["analysis.completed", "policy.blocked", "policy.review"]
 
 function normalizeEvents(value: unknown) {
   if (!Array.isArray(value)) return null

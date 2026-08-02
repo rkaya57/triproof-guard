@@ -8,7 +8,7 @@ import { assertWebhookAccess, SubscriptionLimitError } from "@/lib/billing/subsc
 
 export const runtime = "nodejs"
 
-const supportedEvents = ["analysis.completed"]
+const supportedEvents = ["analysis.completed", "policy.blocked", "policy.review"]
 
 function safeWebhookUrl(value: unknown) {
   if (typeof value !== "string") return null

@@ -11,7 +11,7 @@ const createWebhook = `curl -X POST https://triproofprotocol.com/api/webhooks \\
   -b "dashboard_session_cookie" \\
   -d '{
     "url": "https://yourapp.com/api/triproof-webhook",
-    "eventTypes": ["analysis.completed"],
+    "eventTypes": ["analysis.completed", "policy.blocked", "policy.review"],
     "description": "Production campaign webhook"
   }'`
 
@@ -41,7 +41,7 @@ export default function WebhookDocsPage() {
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
           <Badge variant="secondary" className="mb-5 border-primary/30 text-primary">V2.3 Webhook / SDK</Badge>
           <h1 className="text-gradient max-w-4xl text-4xl font-semibold sm:text-6xl">Connect Tri-Proof to your campaign workflow.</h1>
-          <p className="mt-5 max-w-2xl leading-7 text-muted-foreground">Register webhook endpoints, receive signed analysis.completed events, and use the TypeScript SDK helper for API integrations.</p>
+          <p className="mt-5 max-w-2xl leading-7 text-muted-foreground">Register webhook endpoints, receive signed analysis events and real-time Team Policy incidents, then use the TypeScript SDK helper for API integrations.</p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link href="/docs/api" className={`${buttonVariants()} glow-primary`}>API docs <ArrowRight data-icon="inline-end" /></Link>
             <Link href="/api/v1" className={buttonVariants({ variant: "outline" })}>Open API index</Link>
@@ -49,10 +49,11 @@ export default function WebhookDocsPage() {
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-5 px-5 py-14 sm:px-8 lg:grid-cols-3">
+      <section className="mx-auto grid max-w-7xl gap-5 px-5 py-14 sm:px-8 lg:grid-cols-4">
         <Card className="glass-panel premium-card"><CardHeader><Webhook className="text-primary" /><CardTitle>analysis.completed</CardTitle><CardDescription>Sent after a batch analysis finishes and exports are ready.</CardDescription></CardHeader></Card>
+        <Card className="glass-panel premium-card"><CardHeader><Webhook className="text-rose-300" /><CardTitle>policy.blocked</CardTitle><CardDescription>Sent when an active team rule stops a Chrome, API, or Guardian action.</CardDescription></CardHeader></Card>
+        <Card className="glass-panel premium-card"><CardHeader><Webhook className="text-amber-200" /><CardTitle>policy.review</CardTitle><CardDescription>Sent when an active team rule requires an explicit human review.</CardDescription></CardHeader></Card>
         <Card className="glass-panel premium-card"><CardHeader><KeyRound className="text-primary" /><CardTitle>Signed payloads</CardTitle><CardDescription>Verify x-triproof-signature using the endpoint secret.</CardDescription></CardHeader></Card>
-        <Card className="glass-panel premium-card"><CardHeader><Code2 className="text-primary" /><CardTitle>SDK helper</CardTitle><CardDescription>Use lib/sdk/triproof-client.ts for create/status/metrics calls.</CardDescription></CardHeader></Card>
       </section>
 
       <section className="mx-auto grid max-w-7xl gap-5 px-5 pb-16 sm:px-8 lg:grid-cols-2">
