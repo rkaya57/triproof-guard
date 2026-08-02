@@ -11,6 +11,7 @@ const elements = {
   confidencePill: document.getElementById("confidencePill"),
   riskTimeline: document.getElementById("riskTimeline"),
   signalsList: document.getElementById("signalsList"),
+  permissionsList: document.getElementById("permissionsList"),
   historyList: document.getElementById("historyList"),
   riskEvents: document.getElementById("riskEvents"),
   blockedEvents: document.getElementById("blockedEvents"),
@@ -98,14 +99,26 @@ function renderHistory(items) {
     : "<p class=\"empty\">Your local protection history will appear here.</p>"
 }
 
+function compactAddress(value) {
+  const text = String(value ?? "")
+  return text.length > 18 ? `${text.slice(0, 8)}...${text.slice(-6)}` : text
+}
+
+function renderPermissions(items) {
+  elements.permissionsList.innerHTML = items.length
+    ? items.slice(0, 6).map((item) => `<article class="permission ${item.unlimited ? "danger" : ""}"><div><strong>${item.unlimited ? "Unlimited approval request" : "Approval request"}</strong><span>${escapeHtml(compactAddress(item.token))} -> ${escapeHtml(compactAddress(item.spender))}</span></div><b>${escapeHtml(String(item.amount))}</b><p>Seen from ${escapeHtml(item.source)} · ${escapeHtml(relativeTime(item.lastSeenAt))}</p></article>`).join("")
+    : "<p class=\"empty\">No approval requests have been observed in this browser yet.</p>"
+}
+
 async function refresh(force = false) {
   elements.rescanButton.disabled = true
   elements.rescanButton.textContent = "Scanning..."
-  const [tabResponse, settingsResponse, centerResponse, historyResponse] = await Promise.all([
+  const [tabResponse, settingsResponse, centerResponse, historyResponse, permissionsResponse] = await Promise.all([
     sendMessage({ type: "GET_ACTIVE_TAB" }),
     sendMessage({ type: "GET_SETTINGS" }),
     sendMessage({ type: "GET_SECURITY_CENTER" }),
     sendMessage({ type: "GET_HISTORY", limit: 8 }),
+    sendMessage({ type: "GET_OBSERVED_PERMISSIONS", limit: 8 }),
   ])
   state.tab = tabResponse?.tab ?? null
   state.settings = settingsResponse?.settings ?? null
@@ -117,6 +130,7 @@ async function refresh(force = false) {
     elements.firewallRules.textContent = String(center.firewallRules ?? 0)
   }
   if (historyResponse?.ok) renderHistory(historyResponse.items ?? [])
+  if (permissionsResponse?.ok) renderPermissions(permissionsResponse.items ?? [])
   if (!state.tab?.url?.startsWith("http")) {
     renderResult({ riskLevel: "CAUTION", score: 50, confidence: "LOW", summary: "ScamGuard can scan regular web pages, not this Chrome internal page.", signals: [], metadata: {} })
   } else {

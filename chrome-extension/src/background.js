@@ -15,6 +15,8 @@ const CACHE_TTL_MS = 45_000
 const HISTORY_KEY = "scamguardScanHistory"
 const HISTORY_LIMIT = 100
 const HISTORY_DEDUPE_MS = 90_000
+const OBSERVED_PERMISSIONS_KEY = "scamguardObservedPermissions"
+const OBSERVED_PERMISSIONS_LIMIT = 100
 const scanCache = new Map()
 
 function normalizeApiBaseUrl(value) {
@@ -63,6 +65,53 @@ function historyTarget(result, sourceUrl, type) {
   return type === "transaction" ? "Wallet request" : "Unknown source"
 }
 
+function shortPublicValue(value) {
+  const text = String(value ?? "").trim()
+  return text.length > 18 ? `${text.slice(0, 8)}...${text.slice(-6)}` : text || "Wallet not exposed"
+}
+
+async function recordObservedPermissions(result, sourceUrl) {
+  const intent = result?.metadata?.decodedIntent ?? {}
+  const owner = shortPublicValue(result?.metadata?.walletAddress)
+  const source = hostFromUrl(sourceUrl) || "Unknown signing site"
+  const rows = Array.isArray(intent.batch?.calls)
+    ? intent.batch.calls.filter((call) => call?.category === "approval").map((call) => ({
+        token: call.to ?? "Token contract not decoded",
+        spender: call.spender ?? "Spender not decoded",
+        amount: call.amount ?? "Amount not decoded",
+      }))
+    : intent.category === "approval"
+      ? [{ token: intent.contractTarget ?? "Token contract not decoded", spender: intent.spender ?? "Spender not decoded", amount: intent.amount ?? "Amount not decoded" }]
+      : []
+  if (!rows.length) return
+
+  const stored = await chrome.storage.local.get({ [OBSERVED_PERMISSIONS_KEY]: [] })
+  const current = Array.isArray(stored[OBSERVED_PERMISSIONS_KEY]) ? stored[OBSERVED_PERMISSIONS_KEY] : []
+  const now = new Date().toISOString()
+  const next = [...current]
+  for (const row of rows) {
+    const unlimited = row.amount === "all assets" || String(row.amount).length > 30 || /^1{20,}$/.test(String(row.amount))
+    const existing = next.find((entry) => entry?.owner === owner && entry?.token === row.token && entry?.spender === row.spender)
+    const entry = {
+      id: existing?.id ?? crypto.randomUUID(),
+      owner,
+      token: row.token,
+      spender: row.spender,
+      amount: row.amount,
+      unlimited,
+      source,
+      firstSeenAt: existing?.firstSeenAt ?? now,
+      lastSeenAt: now,
+      requestCount: Number(existing?.requestCount ?? 0) + 1,
+      status: "request_observed",
+    }
+    const index = next.findIndex((item) => item?.id === entry.id)
+    if (index >= 0) next.splice(index, 1)
+    next.unshift(entry)
+  }
+  await chrome.storage.local.set({ [OBSERVED_PERMISSIONS_KEY]: next.slice(0, OBSERVED_PERMISSIONS_LIMIT) })
+}
+
 async function recordScan(result, { type, sourceUrl, origin = "extension" }) {
   const target = historyTarget(result, sourceUrl, type)
   const metadata = result?.metadata ?? {}
@@ -94,6 +143,7 @@ async function recordScan(result, { type, sourceUrl, origin = "extension" }) {
     ? [{ ...existing, ...entry, id: existing.id, createdAt: now }, ...history.filter((item) => item?.id !== existing.id)]
     : [entry, ...history]
   await chrome.storage.local.set({ [HISTORY_KEY]: next.slice(0, HISTORY_LIMIT) })
+  if (type === "transaction") await recordObservedPermissions(result, sourceUrl)
   return entry
 }
 
@@ -102,6 +152,13 @@ async function getHistory(limit = 12) {
   const history = Array.isArray(stored[HISTORY_KEY]) ? stored[HISTORY_KEY] : []
   const boundedLimit = Math.max(1, Math.min(Number(limit) || 12, HISTORY_LIMIT))
   return { items: history.slice(0, boundedLimit), total: history.length }
+}
+
+async function getObservedPermissions(limit = 12) {
+  const stored = await chrome.storage.local.get({ [OBSERVED_PERMISSIONS_KEY]: [] })
+  const items = Array.isArray(stored[OBSERVED_PERMISSIONS_KEY]) ? stored[OBSERVED_PERMISSIONS_KEY] : []
+  const boundedLimit = Math.max(1, Math.min(Number(limit) || 12, OBSERVED_PERMISSIONS_LIMIT))
+  return { items: items.slice(0, boundedLimit), total: items.length }
 }
 
 async function getSettings() {
@@ -301,6 +358,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       if (message?.type === "GET_HISTORY") {
         sendResponse({ ok: true, ...(await getHistory(message.limit)) })
+        return
+      }
+      if (message?.type === "GET_OBSERVED_PERMISSIONS") {
+        sendResponse({ ok: true, ...(await getObservedPermissions(message.limit)) })
         return
       }
       if (message?.type === "CLEAR_HISTORY") {

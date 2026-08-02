@@ -242,6 +242,7 @@ function overlayMarkup(result, options) {
       </section>
     `
     : ""
+  const assetImpact = walletAssetImpact(result)
   const batchLedger = walletBatchLedger(result)
   const firewallNotice = options.policyReason
     ? `<section class="sgx-firewall-notice"><span>Firewall rule</span><strong>${escapeHtml(options.policyReason)}</strong><p>This local rule prevented the wallet request from being forwarded.</p></section>`
@@ -267,6 +268,7 @@ function overlayMarkup(result, options) {
           <p>${escapeHtml(decision?.userMessage ?? result.summary ?? "Pause for a second and review this before continuing.")}</p>
         </div>
         ${signingSummary}
+        ${assetImpact}
         ${batchLedger}
         ${firewallNotice}
         ${transactionSummary}
@@ -291,6 +293,26 @@ function overlayMarkup(result, options) {
         ${canContinue ? `<button type="button" data-decision="continue" ${result.riskLevel === "HIGH_RISK" ? 'data-wait="true" disabled' : ""}>${result.riskLevel === "HIGH_RISK" ? "Read for 3 seconds" : "I understand, continue"}</button>` : '<span class="sgx-force-block">Critical risk cannot continue from this prompt.</span>'}
       </div>
     </div>
+  `
+}
+
+function walletAssetImpact(result) {
+  const impact = result?.metadata?.assetImpact
+  if (!impact) return ""
+  const outgoing = Array.isArray(impact.outgoing) ? impact.outgoing : []
+  const approvals = Array.isArray(impact.approvals) ? impact.approvals : []
+  const confidence = impact.confidence === "decoded_calldata" ? "Decoded payload" : impact.confidence === "preflight_only" ? "Preflight only" : "Not decoded"
+  const item = (label, detail, tone = "neutral") => `<li class="${tone}"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(detail)}</span></li>`
+  return `
+    <section class="sgx-asset-impact" aria-label="Expected wallet impact">
+      <div class="sgx-impact-head"><div><span>Expected wallet impact</span><h3>What this request can change</h3></div><b>${escapeHtml(confidence)}</b></div>
+      <ul>
+        ${outgoing.map((entry) => item("Outgoing asset", `${entry.amount ?? "Amount not decoded"} · ${entry.asset}${entry.recipient ? ` -> ${shortAddress(entry.recipient)}` : ""}`, "outgoing")).join("")}
+        ${approvals.map((entry) => item(entry.unlimited ? "Unlimited permission" : "Token permission", `${entry.asset}${entry.spender ? ` -> ${shortAddress(entry.spender)}` : ""}${entry.amount ? ` · ${String(entry.amount).length > 24 ? "unlimited / very high" : entry.amount}` : ""}`, entry.unlimited ? "danger" : "approval")).join("")}
+        ${!outgoing.length && !approvals.length ? item("No exact asset delta decoded", impact.note ?? "Use the wallet preview to verify this action.") : ""}
+      </ul>
+      <p>${escapeHtml(impact.note ?? "Confirm the final wallet preview before signing.")}</p>
+    </section>
   `
 }
 

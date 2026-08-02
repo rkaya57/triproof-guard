@@ -268,6 +268,24 @@ test("ScamGuard decomposes EIP-5792 wallet call batches", async () => {
   assert.ok(result.signals.some((signal) => signal.code === "UNLIMITED_EVM_APPROVAL"))
 })
 
+test("ScamGuard exposes decoded EVM asset impact without claiming final execution", async () => {
+  const token = "0x1111111111111111111111111111111111111111"
+  const spender = "2222222222222222222222222222222222222222"
+  const result = await scanScamGuard({
+    type: "transaction",
+    chain: "evm",
+    value: JSON.stringify({
+      method: "eth_sendTransaction",
+      params: [{ to: token, data: `0x095ea7b3${spender.padStart(64, "0")}${"7".padStart(64, "0")}` }],
+    }),
+  })
+
+  assert.equal(result.metadata.assetImpact?.confidence, "decoded_calldata")
+  assert.equal(result.metadata.assetImpact?.approvals[0]?.asset, `Token contract ${token}`)
+  assert.equal(result.metadata.assetImpact?.approvals[0]?.amount, "7")
+  assert.equal(result.metadata.assetImpact?.approvals[0]?.unlimited, false)
+})
+
 test("ScamGuard includes bounded browser-observed safety signals in a URL decision", async () => {
   const result = await scanScamGuard({
     type: "url",

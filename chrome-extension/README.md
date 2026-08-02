@@ -23,6 +23,8 @@ Pre-sign protection for Solana and EVM dApps, airdrops, token claims, and suspic
 - Local scan history for the latest 100 site and wallet checks. History stores a redacted target and decision summary only.
 - A local Security Center that summarizes risk events, blocked critical events, protected domains, and active firewall rules.
 - A persistent Chrome Security Center side panel for the active site, decision path, local evidence, and private browser history.
+- Expected wallet-impact cards for decoded EVM calldata: outgoing native/token calls, approval recipients, raw-unit amounts, and explicit "decoded payload" versus "preflight only" confidence.
+- A private **Observed Permissions** ledger in the Security Center. It records approval requests seen by this browser, clearly labels them as observed requests, and never claims they were signed or remain active on-chain.
 - Shareable, privacy-preserving report snapshots that omit raw wallet payloads, public keys, and URL query parameters.
 - One-click handoff to the moderated Tri-Proof Threat Pool, where users can submit the current site for admin review.
 - Injected EVM provider pre-sign observer for MetaMask/Rabby/Coinbase style:
@@ -78,6 +80,7 @@ POST /api/scamguard/scan-transaction
 - Transaction payloads are sent to the configured ScamGuard API for risk analysis.
 - The connected wallet public key may be sent as context when available.
 - Local history and shared reports never include raw transaction payloads, seed phrases, private keys, or query parameters.
+- The Observed Permissions ledger stays in browser-local extension storage. It contains public token-contract and spender addresses from intercepted approval requests; it is not sent to ScamGuard as an inventory.
 
 ## Validation
 

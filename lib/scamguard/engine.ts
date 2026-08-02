@@ -74,6 +74,7 @@ export type ScamGuardScanResult = {
       spender?: string
       recipient?: string
       amount?: string
+      contractTarget?: string
       instructionCount?: number
       programs?: string[]
       typedData?: {
@@ -118,6 +119,22 @@ export type ScamGuardScanResult = {
       features: string[]
     }
     extensionSignals?: string[]
+    assetImpact?: {
+      confidence: "decoded_calldata" | "preflight_only" | "unavailable"
+      outgoing: Array<{
+        asset: string
+        amount?: string
+        recipient?: string
+        kind: "native" | "token"
+      }>
+      approvals: Array<{
+        asset: string
+        spender?: string
+        amount?: string
+        unlimited: boolean
+      }>
+      note: string
+    }
     domainAge?: {
       status: "available" | "unavailable"
       createdAt?: string
@@ -1884,6 +1901,7 @@ function decodeIntent(value: string, chain: ScamGuardChain): NonNullable<ScamGua
         spender: highestRisk?.spender,
         recipient: highestRisk?.recipient,
         amount: highestRisk?.amount,
+        contractTarget: highestRisk?.to,
         batch: {
           totalCalls: calls.length,
           atomicRequired: requestContext.atomicRequired,
@@ -1917,6 +1935,7 @@ function decodeIntent(value: string, chain: ScamGuardChain): NonNullable<ScamGua
         category: "approval",
         spender: decodedCalldata?.spender ?? findStringField(parsed, ["spender", "operator"]),
         amount: decodedCalldata?.amount ?? findStringField(parsed, ["value", "amount"]),
+        contractTarget: typeof requestContext.transaction?.to === "string" ? normalizeEvmAddress(requestContext.transaction.to) : undefined,
         warnings,
       }
     }
@@ -1927,6 +1946,7 @@ function decodeIntent(value: string, chain: ScamGuardChain): NonNullable<ScamGua
         category: "transfer",
         recipient: decodedCalldata?.recipient ?? findStringField(parsed, ["to", "recipient"]),
         amount: decodedCalldata?.amount ?? findStringField(parsed, ["value", "amount"]),
+        contractTarget: typeof requestContext.transaction?.to === "string" ? normalizeEvmAddress(requestContext.transaction.to) : undefined,
         warnings,
       }
     }
@@ -1957,6 +1977,66 @@ function decodeIntent(value: string, chain: ScamGuardChain): NonNullable<ScamGua
     return { method, category: "signature", warnings }
   }
   return { method, category: "unknown", warnings }
+}
+
+function decodedAssetImpact(intent: NonNullable<ScamGuardScanResult["metadata"]["decodedIntent"]>, simulation: SimulationMetadata) {
+  const outgoing: Array<{ asset: string; amount?: string; recipient?: string; kind: "native" | "token" }> = []
+  const approvals: Array<{ asset: string; spender?: string; amount?: string; unlimited: boolean }> = []
+  const tokenLabel = (target?: string) => target ? `Token contract ${target}` : "Token contract not decoded"
+
+  const collect = (call: {
+    category: "transfer" | "approval" | "authority" | "unknown"
+    to?: string
+    spender?: string
+    recipient?: string
+    amount?: string
+    value?: string
+  }) => {
+    if (call.category === "approval") {
+      approvals.push({
+        asset: tokenLabel(call.to),
+        spender: call.spender,
+        amount: call.amount,
+        unlimited: call.amount === maxUint256 || call.amount === "all assets",
+      })
+    }
+    if (call.category === "transfer") {
+      outgoing.push({ asset: tokenLabel(call.to), amount: call.amount, recipient: call.recipient, kind: "token" })
+    }
+    if (call.value && call.value !== "0") {
+      outgoing.push({ asset: "Native asset", amount: `${call.value} wei`, recipient: call.to, kind: "native" })
+    }
+  }
+
+  if (intent.batch?.calls.length) {
+    intent.batch.calls.forEach(collect)
+  } else {
+    collect({
+      category: intent.category === "approval" || intent.category === "transfer" ? intent.category : "unknown",
+      to: intent.contractTarget,
+      spender: intent.spender,
+      recipient: intent.recipient,
+      amount: intent.amount,
+    })
+  }
+
+  if (!outgoing.length && !approvals.length) {
+    return {
+      confidence: simulation.attempted ? "preflight_only" as const : "unavailable" as const,
+      outgoing,
+      approvals,
+      note: simulation.attempted
+        ? "The RPC preflight completed, but no exact token or native-asset effect was decoded from this request."
+        : "No exact asset effect was decoded. Treat the wallet preview as the source of truth.",
+    }
+  }
+
+  return {
+    confidence: "decoded_calldata" as const,
+    outgoing,
+    approvals,
+    note: "Amounts are decoded from the request payload. Token decimals, balances, and final execution can still differ; confirm the wallet preview before signing.",
+  }
 }
 
 async function scanTransaction(value: string, walletAddress: string | undefined, chain: ScamGuardChain, sourceUrl?: string) {
@@ -2188,6 +2268,7 @@ async function scanTransaction(value: string, walletAddress: string | undefined,
   }
 
   const simulation = chain === "evm" ? await maybeSimulateEvmTransaction(value) : await maybeSimulateTransaction(value)
+  const assetImpact = chain === "evm" ? decodedAssetImpact(decodedIntent, simulation) : undefined
   if (simulation.attempted && !simulation.ok) {
     signals.push({
       code: "SIMULATION_FAILED",
@@ -2208,6 +2289,7 @@ async function scanTransaction(value: string, walletAddress: string | undefined,
         : "not_applicable",
     walletAddress,
     simulation,
+    assetImpact,
     decodedIntent,
     domain: sourceDomain,
     domainIntelligence: sourceDomainIntel,
