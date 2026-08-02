@@ -46,10 +46,10 @@ function labelFor(items: ReadonlyArray<readonly [string, string]>, value: string
   return items.find(([key]) => key === value)?.[1] ?? value.replaceAll("_", " ")
 }
 
-export function ThreatReportHub({ initialReports, isSignedIn }: { initialReports: PublicReport[]; isSignedIn: boolean }) {
+export function ThreatReportHub({ initialReports, isSignedIn, initialTarget = "", initialTargetKind = "DOMAIN" }: { initialReports: PublicReport[]; isSignedIn: boolean; initialTarget?: string; initialTargetKind?: string }) {
   const [reports] = useState(initialReports)
   const [query, setQuery] = useState("")
-  const [form, setForm] = useState({ projectName: "", target: "", targetKind: "DOMAIN", chain: "unknown", category: "phishing", description: "", evidenceUrl: "", evidenceNote: "" })
+  const [form, setForm] = useState({ projectName: "", target: initialTarget, targetKind: initialTargetKind, chain: "unknown", category: "phishing", description: "", evidenceUrl: "", evidenceNote: "" })
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState("")
   const [error, setError] = useState("")

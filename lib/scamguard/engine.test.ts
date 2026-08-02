@@ -189,6 +189,43 @@ test("ScamGuard decodes limited EVM approvals without escalating to critical", a
   assert.ok(!result.signals.some((signal) => signal.code === "UNLIMITED_EVM_APPROVAL"))
 })
 
+test("ScamGuard explains high-impact EIP-712 typed-data signatures", async () => {
+  const verifyingContract = "0x2222222222222222222222222222222222222222"
+  const result = await scanScamGuard({
+    type: "transaction",
+    chain: "evm",
+    value: JSON.stringify({
+      method: "eth_signTypedData_v4",
+      params: [
+        "0x1111111111111111111111111111111111111111",
+        JSON.stringify({
+          primaryType: "Permit",
+          domain: { name: "Example Token", verifyingContract },
+          message: { owner: "0x1111111111111111111111111111111111111111", spender: verifyingContract, value: "100" },
+          types: { Permit: [] },
+        }),
+      ],
+    }),
+  })
+
+  assert.equal(result.metadata.decodedIntent?.category, "signature")
+  assert.equal(result.metadata.decodedIntent?.typedData?.primaryType, "Permit")
+  assert.equal(result.metadata.decodedIntent?.typedData?.verifyingContract, verifyingContract)
+  assert.ok(result.signals.some((signal) => signal.code === "HIGH_IMPACT_TYPED_DATA"))
+})
+
+test("ScamGuard includes bounded browser-observed safety signals in a URL decision", async () => {
+  const result = await scanScamGuard({
+    type: "url",
+    value: "https://example.org/claim",
+    clientSignals: [{ code: "SEED_PHRASE_FORM", detail: "A form asks for a recovery phrase." }],
+  })
+
+  assert.equal(result.riskLevel, "CRITICAL")
+  assert.ok(result.signals.some((signal) => signal.code === "EXTENSION_SEED_PHRASE_FORM"))
+  assert.deepEqual(result.metadata.extensionSignals, ["EXTENSION_SEED_PHRASE_FORM"])
+})
+
 test("ScamGuard includes verified source context without hiding approval risk", async () => {
   const spender = "0x2222222222222222222222222222222222222222"
   const result = await scanScamGuard({

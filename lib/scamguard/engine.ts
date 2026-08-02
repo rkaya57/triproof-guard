@@ -25,6 +25,12 @@ export type ScamGuardScanInput = {
   chain?: ScamGuardChain
   sourceUrl?: string
   deepScan?: boolean
+  clientSignals?: Array<{
+    code?: string
+    severity?: ScamGuardSignalSeverity
+    title?: string
+    detail?: string
+  }>
 }
 
 export type ScamGuardScanResult = {
@@ -56,6 +62,8 @@ export type ScamGuardScanResult = {
     simulation?: {
       attempted: boolean
       ok: boolean
+      chain?: "solana" | "evm"
+      mode?: "transaction" | "call"
       error?: string
       logs?: string[]
     }
@@ -68,6 +76,13 @@ export type ScamGuardScanResult = {
       amount?: string
       instructionCount?: number
       programs?: string[]
+      typedData?: {
+        primaryType?: string
+        domainName?: string
+        verifyingContract?: string
+        messageFields: string[]
+        highImpact: boolean
+      }
       warnings: string[]
     }
     reputation?: {
@@ -82,6 +97,7 @@ export type ScamGuardScanResult = {
       sourceUrl?: string
       features: string[]
     }
+    extensionSignals?: string[]
     domainAge?: {
       status: "available" | "unavailable"
       createdAt?: string
@@ -897,7 +913,29 @@ function brandMentioned(text: string) {
   )
 }
 
-async function scanUrl(value: string, chain: ScamGuardChain, deepScan = false) {
+function normalizedExtensionSignals(input: ScamGuardScanInput["clientSignals"]) {
+  const allowedCodes = new Map([
+    ["SEED_PHRASE_FORM", { severity: "critical" as const, title: "Seed phrase form detected" }],
+    ["PRIVATE_KEY_FORM", { severity: "critical" as const, title: "Private key form detected" }],
+    ["SUSPICIOUS_WALLET_DEEPLINK", { severity: "medium" as const, title: "Wallet deep link detected" }],
+    ["HIDDEN_CROSS_ORIGIN_IFRAME", { severity: "low" as const, title: "Hidden cross-origin frame" }],
+    ["CLIPBOARD_WRITE_HANDLER", { severity: "low" as const, title: "Clipboard write behavior" }],
+  ])
+  return (input ?? []).slice(0, 8).flatMap((item) => {
+    const code = typeof item?.code === "string" ? item.code.trim().toUpperCase() : ""
+    const template = allowedCodes.get(code)
+    if (!template) return []
+    const detail = typeof item?.detail === "string" ? item.detail.replace(/\s+/g, " ").trim().slice(0, 280) : ""
+    return [{
+      code: `EXTENSION_${code}`,
+      severity: template.severity,
+      title: template.title,
+      detail: detail || "ScamGuard observed this signal in the currently rendered page. Verify independently before interacting.",
+    }]
+  })
+}
+
+async function scanUrl(value: string, chain: ScamGuardChain, deepScan = false, clientSignals?: ScamGuardScanInput["clientSignals"]) {
   const text = value.toLowerCase()
   const url = parsedUrl(value)
   const domain = hostFromUrl(value)
@@ -907,6 +945,8 @@ async function scanUrl(value: string, chain: ScamGuardChain, deepScan = false) {
   const reputation = strongestReputation(domainReputation(domain ?? undefined), await externalDomainReputation(domain ?? undefined))
   const domainAge = deepScan ? await inspectDomainAge(domain ?? undefined) : { status: "unavailable" as const, source: "rdap" as const }
   const signals: ScamGuardSignal[] = []
+  const extensionSignals = normalizedExtensionSignals(clientSignals)
+  signals.push(...extensionSignals)
   const brand = brandMentioned(text)
   const hasClaimLanguage = highRiskWords.some((word) => text.includes(word))
   const hasCampaignSurface = campaignSurfaceWords.some((word) => path.includes(word))
@@ -1117,6 +1157,7 @@ async function scanUrl(value: string, chain: ScamGuardChain, deepScan = false) {
     rpcStatus: "not_applicable",
     domain: domain ?? undefined,
     domainIntelligence: domainIntel,
+    extensionSignals: extensionSignals.map((signal) => signal.code),
     domainAge,
     reputation,
     sandbox: sandbox
@@ -1496,6 +1537,8 @@ async function maybeSimulateTransaction(value: string): Promise<SimulationMetada
     return {
       attempted: true,
       ok: !result.value?.err,
+      chain: "solana",
+      mode: "transaction",
       error: result.value?.err ? JSON.stringify(result.value.err) : undefined,
       logs: result.value?.logs?.slice(0, 20) ?? [],
     }
@@ -1503,7 +1546,37 @@ async function maybeSimulateTransaction(value: string): Promise<SimulationMetada
     return {
       attempted: true,
       ok: false,
+      chain: "solana",
+      mode: "transaction",
       error: error instanceof Error ? error.message : "Simulation failed",
+    }
+  }
+}
+
+async function maybeSimulateEvmTransaction(value: string): Promise<SimulationMetadata> {
+  const parsed = safeJson(value)
+  const context = evmRequestContext(parsed)
+  const transaction = context.transaction
+  if (!transaction || !getEvmRpcUrl()) return { attempted: false, ok: false, chain: "evm", mode: "call" }
+  const to = typeof transaction.to === "string" ? normalizeEvmAddress(transaction.to) : undefined
+  const data = typeof transaction.data === "string" ? transaction.data : typeof transaction.input === "string" ? transaction.input : undefined
+  const from = typeof transaction.from === "string" ? normalizeEvmAddress(transaction.from) : undefined
+  const call: Record<string, string> = {}
+  if (to) call.to = to
+  if (data) call.data = data
+  if (from) call.from = from
+  if (typeof transaction.value === "string" && /^0x[0-9a-f]+$/i.test(transaction.value)) call.value = transaction.value
+  if (!Object.keys(call).length) return { attempted: false, ok: false, chain: "evm", mode: "call" }
+  try {
+    await evmRpc<string>("eth_call", [call, "latest"])
+    return { attempted: true, ok: true, chain: "evm", mode: "call" }
+  } catch (error) {
+    return {
+      attempted: true,
+      ok: false,
+      chain: "evm",
+      mode: "call",
+      error: error instanceof Error ? error.message : "EVM call simulation failed",
     }
   }
 }
@@ -1564,10 +1637,10 @@ function decodeEvmCalldata(data?: string) {
     return { spender: addressFromEvmWord(first), amount: uintFromEvmWord(second) }
   }
   if (selector === "0xa22cb465") {
-    return { spender: addressFromEvmWord(first), amount: uintFromEvmWord(second) }
+    return { spender: addressFromEvmWord(first), amount: uintFromEvmWord(second) === "1" ? "all assets" : "disabled" }
   }
   if (selector === "0xd505accf") {
-    return { spender: addressFromEvmWord(first), amount: uintFromEvmWord(second) }
+    return { spender: addressFromEvmWord(second), amount: uintFromEvmWord(third) }
   }
   if (selector === "0xa9059cbb") {
     return { recipient: addressFromEvmWord(first), amount: uintFromEvmWord(second) }
@@ -1576,6 +1649,38 @@ function decodeEvmCalldata(data?: string) {
     return { recipient: addressFromEvmWord(second), amount: uintFromEvmWord(third) }
   }
   return null
+}
+
+function parseTypedData(value: unknown) {
+  const raw = typeof value === "string" ? value : value && typeof value === "object" ? JSON.stringify(value) : ""
+  if (!raw || raw.length > 100_000) return undefined
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    const domain = parsed.domain && typeof parsed.domain === "object" ? parsed.domain as Record<string, unknown> : {}
+    const message = parsed.message && typeof parsed.message === "object" ? parsed.message as Record<string, unknown> : {}
+    const primaryType = typeof parsed.primaryType === "string" ? parsed.primaryType : undefined
+    const domainName = typeof domain.name === "string" ? domain.name : undefined
+    const verifyingContract = typeof domain.verifyingContract === "string" ? normalizeEvmAddress(domain.verifyingContract) : undefined
+    const highImpact = /permit|order|offer|listing|delegate|authorization|transfer/i.test(`${primaryType ?? ""} ${Object.keys(message).join(" ")}`)
+    return {
+      primaryType,
+      domainName,
+      verifyingContract,
+      messageFields: Object.keys(message).slice(0, 8),
+      highImpact,
+    }
+  } catch {
+    return undefined
+  }
+}
+
+function evmRequestContext(parsed: unknown) {
+  if (!parsed || typeof parsed !== "object") return { transaction: undefined, typedData: undefined }
+  const record = parsed as Record<string, unknown>
+  const params = Array.isArray(record.params) ? record.params : []
+  const transaction = params.find((item) => item && typeof item === "object" && !Array.isArray(item)) as Record<string, unknown> | undefined
+  const typedCandidate = [...params].reverse().find((item) => typeof item === "string" && item.includes("\"types\""))
+  return { transaction, typedData: parseTypedData(typedCandidate) }
 }
 
 function collectInstructionLikeObjects(value: unknown, out: Array<Record<string, unknown>> = []) {
@@ -1662,12 +1767,17 @@ function isUnlimitedEvmApproval(decodedIntent: NonNullable<ScamGuardScanResult["
 function decodeIntent(value: string, chain: ScamGuardChain): NonNullable<ScamGuardScanResult["metadata"]["decodedIntent"]> {
   const text = value.toLowerCase()
   const parsed = safeJson(value)
+  const requestContext = evmRequestContext(parsed)
   const leadingMethod = /^[a-z][a-z0-9_]{0,64}$/i.exec(value.trim())?.[0]
   const safeLeadingMethod = leadingMethod && /^(sign|transfer|approve|delegate|setauthority|closeaccount|mintto|wallet_|eth_|personal_)/i.test(leadingMethod)
     ? leadingMethod
     : undefined
   const method = findStringField(parsed, ["method", "functionName", "name"]) ?? safeLeadingMethod
-  const data = findStringField(parsed, ["data", "input"]) ?? (/0x[a-fA-F0-9]{8,}/.exec(value)?.[0])
+  const data =
+    (typeof requestContext.transaction?.data === "string" ? requestContext.transaction.data : undefined) ??
+    (typeof requestContext.transaction?.input === "string" ? requestContext.transaction.input : undefined) ??
+    findStringField(parsed, ["data", "input"]) ??
+    (/0x[a-fA-F0-9]{8,}/.exec(value)?.[0])
   const warnings: string[] = []
 
   if (chain === "evm") {
@@ -1676,6 +1786,19 @@ function decodeIntent(value: string, chain: ScamGuardChain): NonNullable<ScamGua
     const decodedCalldata = decodeEvmCalldata(data)
     const methodText = method ?? selectorMatch?.method
     const isSignMethod = /personal_sign|eth_sign|eth_signtypeddata|sign/i.test(methodText ?? "")
+    if (isSignMethod) {
+      const typedData = requestContext.typedData
+      warnings.push(typedData?.highImpact
+        ? "Typed data resembles a permit, order, authorization, or transfer-capable signature."
+        : "Message signatures can authorize off-chain approvals, login challenges, orders, or permit flows.")
+      return {
+        method: methodText,
+        category: "signature",
+        spender: typedData?.verifyingContract,
+        typedData,
+        warnings,
+      }
+    }
     if (selectorMatch?.category === "approval" || /approve|setapprovalforall|permit/.test(text)) {
       warnings.push("Approval-style EVM call can allow another address or contract to move assets.")
       return {
@@ -1695,10 +1818,6 @@ function decodeIntent(value: string, chain: ScamGuardChain): NonNullable<ScamGua
         amount: decodedCalldata?.amount ?? findStringField(parsed, ["value", "amount"]),
         warnings,
       }
-    }
-    if (isSignMethod) {
-      warnings.push("Message signatures can authorize off-chain approvals, login challenges, orders, or permit flows.")
-      return { method: methodText, category: "signature", warnings }
     }
     return { method: methodText, category: "unknown", warnings }
   }
@@ -1914,6 +2033,14 @@ async function scanTransaction(value: string, walletAddress: string | undefined,
       detail: "Message signatures can be safe login prompts, but they can also authorize orders, permits, or off-chain approvals.",
     })
   }
+  if (chain === "evm" && decodedIntent.typedData?.highImpact) {
+    signals.push({
+      code: "HIGH_IMPACT_TYPED_DATA",
+      severity: "high",
+      title: "High-impact typed-data signature",
+      detail: `${decodedIntent.typedData.primaryType ?? "Typed data"} can authorize a permit, order, transfer, or delegated action without a direct on-chain transfer prompt.`,
+    })
+  }
   if (seedPhraseWords.some((word) => text.includes(word))) {
     signals.push({
       code: "SECRET_MATERIAL_IN_TRANSACTION_PROMPT",
@@ -1923,7 +2050,7 @@ async function scanTransaction(value: string, walletAddress: string | undefined,
     })
   }
 
-  const simulation = await maybeSimulateTransaction(value)
+  const simulation = chain === "evm" ? await maybeSimulateEvmTransaction(value) : await maybeSimulateTransaction(value)
   if (simulation.attempted && !simulation.ok) {
     signals.push({
       code: "SIMULATION_FAILED",
@@ -1963,7 +2090,7 @@ export async function scanScamGuard(input: ScamGuardScanInput): Promise<ScamGuar
     return createResult(input.type, [], { chain, rpcStatus: "not_applicable" })
   }
 
-  if (input.type === "url") return scanUrl(value, chain, input.deepScan ?? false)
+  if (input.type === "url") return scanUrl(value, chain, input.deepScan ?? false, input.clientSignals)
   if (input.type === "wallet") return scanWallet(value, chain)
   if (input.type === "token") return scanToken(value, chain)
   return scanTransaction(value, input.walletAddress, chain, input.sourceUrl)

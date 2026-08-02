@@ -177,6 +177,7 @@ h1 {
 .link-card,
 .signals,
 .history-card,
+.security-center-card,
 .settings {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -396,8 +397,43 @@ h2 {
 .timeline-card,
 .link-card,
 .signals,
-.history-card {
+.history-card,
+.security-center-card {
   padding: 13px;
+}
+
+.security-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.security-grid > div {
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(4, 12, 24, 0.42);
+  padding: 9px 7px;
+}
+
+.security-grid strong,
+.security-grid span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.security-grid strong {
+  color: #aaf3ff;
+  font-family: var(--font-mono);
+  font-size: 17px;
+  line-height: 1;
+}
+
+.security-grid span {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.2;
 }
 
 .section-head {
@@ -794,6 +830,7 @@ textarea {
   .link-card,
   .signals,
   .history-card,
+  .security-center-card,
   .settings {
     animation: none;
     transition: none;

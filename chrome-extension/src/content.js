@@ -93,7 +93,7 @@ async function getSettings() {
 }
 
 async function scanCurrentUrl(force = false) {
-  const response = await sendMessage({ type: "SCAN_URL", value: window.location.href, force })
+  const response = await sendMessage({ type: "SCAN_URL", value: window.location.href, force, clientSignals: pageSafetySignals() })
   if (!response?.ok) {
     updateBanner({ riskLevel: "CAUTION", score: 31, summary: response?.error ?? "ScamGuard scan failed" })
     return null
@@ -109,6 +109,26 @@ async function scanCurrentUrl(force = false) {
     })
   }
   return response.result
+}
+
+function pageSafetySignals() {
+  const signals = []
+  const inputs = Array.from(document.querySelectorAll("input, textarea"))
+  const fieldText = inputs.map((input) => `${input.name} ${input.id} ${input.placeholder} ${input.autocomplete}`).join(" ")
+  const hasPhraseField = /seed|recovery|mnemonic|private.?key|secret.?phrase/i.test(fieldText)
+  if (hasPhraseField) {
+    signals.push({ code: /private.?key/i.test(fieldText) ? "PRIVATE_KEY_FORM" : "SEED_PHRASE_FORM", detail: "A rendered form field references recovery material or a private key." })
+  }
+  const deepLink = Array.from(document.querySelectorAll("a[href], button[data-url]")).some((element) => /(?:phantom|solflare|walletconnect|metamask|coinbase|backpack):\/\//i.test(element.getAttribute("href") ?? element.getAttribute("data-url") ?? ""))
+  if (deepLink) signals.push({ code: "SUSPICIOUS_WALLET_DEEPLINK", detail: "The page contains a wallet deep link. Confirm the final wallet target before continuing." })
+  const hiddenFrame = Array.from(document.querySelectorAll("iframe[src]")).some((frame) => {
+    const style = window.getComputedStyle(frame)
+    return frame.src && new URL(frame.src, window.location.href).origin !== window.location.origin && (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0 || frame.width <= 2 || frame.height <= 2)
+  })
+  if (hiddenFrame) signals.push({ code: "HIDDEN_CROSS_ORIGIN_IFRAME", detail: "A hidden cross-origin iframe is present in the rendered page." })
+  const clipboardHandler = Boolean(document.querySelector("[oncopy], [oncut], [onpaste]") || document.documentElement.innerHTML.includes("clipboard.writeText"))
+  if (clipboardHandler) signals.push({ code: "CLIPBOARD_WRITE_HANDLER", detail: "The page includes clipboard-write behavior. Recheck pasted wallet addresses in your wallet prompt." })
+  return signals.slice(0, 8)
 }
 
 function pageLinks() {
@@ -222,6 +242,9 @@ function overlayMarkup(result, options) {
       </section>
     `
     : ""
+  const firewallNotice = options.policyReason
+    ? `<section class="sgx-firewall-notice"><span>Firewall rule</span><strong>${escapeHtml(options.policyReason)}</strong><p>This local rule prevented the wallet request from being forwarded.</p></section>`
+    : ""
   const timelineSummary = timeline.length
     ? `
       <ol class="sgx-mini-timeline" aria-label="ScamGuard decision path">
@@ -243,6 +266,7 @@ function overlayMarkup(result, options) {
           <p>${escapeHtml(decision?.userMessage ?? result.summary ?? "Pause for a second and review this before continuing.")}</p>
         </div>
         ${signingSummary}
+        ${firewallNotice}
         ${transactionSummary}
         <div class="sgx-decision-note">
           <strong>${escapeHtml(decision?.headline ?? "Decision context")}</strong>
@@ -268,6 +292,15 @@ function overlayMarkup(result, options) {
   `
 }
 
+function firewallBlockReason(result, settings) {
+  const codes = new Set((result?.signals ?? []).map((signal) => signal?.code))
+  if (result?.riskLevel === "CRITICAL") return "Critical ScamGuard risk"
+  if (settings.blockUnlimitedApprovals && codes.has("UNLIMITED_EVM_APPROVAL")) return "Unlimited token approval"
+  if (settings.blockApprovalToEoa && codes.has("APPROVAL_TO_EOA")) return "Approval to a wallet address instead of a contract"
+  if (settings.blockAuthorityChanges && codes.has("AUTHORITY_CHANGE")) return "Token or account authority change"
+  return null
+}
+
 function shortAddress(value) {
   if (!value) return null
   const text = String(value)
@@ -288,6 +321,9 @@ function transactionFacts(result) {
   if (intent?.spender) facts.push({ label: "Spender", value: shortAddress(intent.spender) })
   if (intent?.recipient) facts.push({ label: "Recipient", value: shortAddress(intent.recipient) })
   if (intent?.amount) facts.push({ label: "Amount", value: String(intent.amount).length > 24 ? "Unlimited / very high" : String(intent.amount) })
+  if (intent?.typedData?.primaryType) facts.push({ label: "Typed data", value: intent.typedData.primaryType })
+  if (intent?.typedData?.verifyingContract) facts.push({ label: "Verifier", value: shortAddress(intent.typedData.verifyingContract) })
+  if (metadata.simulation?.attempted) facts.push({ label: "Simulation", value: metadata.simulation.ok ? "Passed" : "Failed" })
   if (contract?.checked) {
     facts.push({ label: "Contract", value: contract.isContract ? (contract.verified ? "Verified" : "Unverified") : "EOA" })
   }
@@ -351,10 +387,13 @@ async function handleSignRequest(payload) {
   const result = response.result
   const settings = await getSettings()
   const protectionLevel = settings.protectionLevel ?? "balanced"
+  const policyReason = firewallBlockReason(result, settings)
+  const sourceNeedsReview = (result.signals ?? []).some((signal) => ["UNVERIFIED_WEB3_APP_SURFACE", "UNVERIFIED_CLAIM_DOMAIN", "UNVERIFIED_PROJECT_CONTEXT"].includes(signal?.code))
   const shouldWarn =
     result.riskLevel === "CRITICAL" ||
     result.riskLevel === "HIGH_RISK" ||
     protectionLevel === "paranoid" ||
+    (settings.requireNewDomainReview && sourceNeedsReview) ||
     ((settings.warnOnCaution || protectionLevel === "strict") && result.riskLevel === "CAUTION")
   const allow = await showDecisionOverlay(result, {
     title: result.riskLevel === "CRITICAL"
@@ -363,7 +402,8 @@ async function handleSignRequest(payload) {
         ? "Review this wallet request before signing"
         : "Confirm what your wallet will sign",
     mode: "transaction",
-    forceBlock: result.riskLevel === "CRITICAL",
+    forceBlock: Boolean(policyReason),
+    policyReason,
   })
 
   window.postMessage({

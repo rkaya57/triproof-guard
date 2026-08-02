@@ -30,11 +30,20 @@ const elements = {
   historyMeta: document.getElementById("historyMeta"),
   historyList: document.getElementById("historyList"),
   clearHistoryButton: document.getElementById("clearHistoryButton"),
+  reportThreatButton: document.getElementById("reportThreatButton"),
+  centerRiskEvents: document.getElementById("centerRiskEvents"),
+  centerBlocked: document.getElementById("centerBlocked"),
+  centerDomains: document.getElementById("centerDomains"),
+  centerRules: document.getElementById("centerRules"),
   protectionLevel: document.getElementById("protectionLevel"),
   enableNotifications: document.getElementById("enableNotifications"),
   apiBaseUrl: document.getElementById("apiBaseUrl"),
   warnOnCaution: document.getElementById("warnOnCaution"),
   blockCriticalSites: document.getElementById("blockCriticalSites"),
+  blockUnlimitedApprovals: document.getElementById("blockUnlimitedApprovals"),
+  blockApprovalToEoa: document.getElementById("blockApprovalToEoa"),
+  blockAuthorityChanges: document.getElementById("blockAuthorityChanges"),
+  requireNewDomainReview: document.getElementById("requireNewDomainReview"),
   trustedDomains: document.getElementById("trustedDomains"),
   saveSettingsButton: document.getElementById("saveSettingsButton"),
   settingsMessage: document.getElementById("settingsMessage"),
@@ -225,6 +234,10 @@ function renderSettings(settings) {
   elements.apiBaseUrl.value = settings.apiBaseUrl ?? "https://triproofprotocol.com"
   elements.warnOnCaution.checked = Boolean(settings.warnOnCaution)
   elements.blockCriticalSites.checked = Boolean(settings.blockCriticalSites)
+  elements.blockUnlimitedApprovals.checked = settings.blockUnlimitedApprovals !== false
+  elements.blockApprovalToEoa.checked = settings.blockApprovalToEoa !== false
+  elements.blockAuthorityChanges.checked = Boolean(settings.blockAuthorityChanges)
+  elements.requireNewDomainReview.checked = settings.requireNewDomainReview !== false
   elements.trustedDomains.value = (settings.trustedDomains ?? []).join("\n")
 }
 
@@ -249,7 +262,7 @@ async function scanActiveTab(force = false) {
   const response = await sendMessage({ type: "SCAN_URL", value: state.tab.url, force })
   if (!response?.ok) throw new Error(response?.error ?? "Could not scan current tab")
   renderResult(response.result)
-  await loadHistory()
+  await Promise.all([loadHistory(), loadSecurityCenter()])
 }
 
 function relativeTime(value) {
@@ -323,6 +336,10 @@ async function saveSettings() {
       enableNotifications: elements.enableNotifications.checked,
       warnOnCaution: elements.warnOnCaution.checked,
       blockCriticalSites: elements.blockCriticalSites.checked,
+      blockUnlimitedApprovals: elements.blockUnlimitedApprovals.checked,
+      blockApprovalToEoa: elements.blockApprovalToEoa.checked,
+      blockAuthorityChanges: elements.blockAuthorityChanges.checked,
+      requireNewDomainReview: elements.requireNewDomainReview.checked,
       trustedDomainsText: elements.trustedDomains.value,
     },
   })
@@ -332,6 +349,22 @@ async function saveSettings() {
   }
   renderSettings(response.settings)
   elements.settingsMessage.textContent = "Saved. Guard brain updated."
+}
+
+async function loadSecurityCenter() {
+  const response = await sendMessage({ type: "GET_SECURITY_CENTER" })
+  if (!response?.ok) return
+  const center = response.center ?? {}
+  elements.centerRiskEvents.textContent = String(center.riskEvents ?? 0)
+  elements.centerBlocked.textContent = String(center.blocked ?? 0)
+  elements.centerDomains.textContent = String(center.protectedDomains ?? 0)
+  elements.centerRules.textContent = String(center.firewallRules ?? 0)
+}
+
+function reportCurrentSite() {
+  const base = (state.settings?.apiBaseUrl ?? "https://triproofprotocol.com").replace(/\/$/, "")
+  const target = encodeURIComponent(state.tab?.url ?? "")
+  void chrome.tabs.create({ url: `${base}/threat-reports?target=${target}&kind=DOMAIN` })
 }
 
 async function messageActiveTab(message) {
@@ -380,9 +413,14 @@ elements.openReportButton.addEventListener("click", () => {
 
 elements.clearHistoryButton.addEventListener("click", () => {
   void sendMessage({ type: "CLEAR_HISTORY" }).then((response) => {
-    if (response?.ok) renderHistory([], 0)
+    if (response?.ok) {
+      renderHistory([], 0)
+      void loadSecurityCenter()
+    }
   })
 })
+
+elements.reportThreatButton.addEventListener("click", reportCurrentSite)
 
 elements.saveSettingsButton.addEventListener("click", () => {
   void saveSettings()
@@ -390,7 +428,7 @@ elements.saveSettingsButton.addEventListener("click", () => {
 
 void (async () => {
   try {
-    await Promise.all([loadSettings(), loadActiveTab(), loadHistory()])
+    await Promise.all([loadSettings(), loadActiveTab(), loadHistory(), loadSecurityCenter()])
     setPageBannerCompact(true)
     sendPopupHeartbeat()
     window.setInterval(sendPopupHeartbeat, 900)

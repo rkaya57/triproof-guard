@@ -25,7 +25,11 @@ export async function POST(request: Request) {
     )
   }
 
-  const body = (await request.json().catch(() => null)) as { value?: string; chain?: ScamGuardChain } | null
+  const body = (await request.json().catch(() => null)) as {
+    value?: string
+    chain?: ScamGuardChain
+    clientSignals?: Array<{ code?: unknown; detail?: unknown }>
+  } | null
   const value = body?.value?.trim()
   if (!value) return NextResponse.json({ error: "value is required" }, { status: 400 })
   if (value.length > 4_096) return NextResponse.json({ error: "URL is too long" }, { status: 413 })
@@ -33,7 +37,14 @@ export async function POST(request: Request) {
   const access = await scanAccess(true)
   if (access.error) return access.error
 
-  return NextResponse.json(await scanScamGuard({ type: "url", value, chain: body?.chain, deepScan: access.deepScan }), {
+  const clientSignals = Array.isArray(body?.clientSignals)
+    ? body.clientSignals.slice(0, 8).map((signal) => ({
+      code: typeof signal?.code === "string" ? signal.code : undefined,
+      detail: typeof signal?.detail === "string" ? signal.detail : undefined,
+    }))
+    : undefined
+
+  return NextResponse.json(await scanScamGuard({ type: "url", value, chain: body?.chain, deepScan: access.deepScan, clientSignals }), {
     headers: {
       "Cache-Control": "no-store",
       "X-RateLimit-Remaining": String(rateLimit.remaining),

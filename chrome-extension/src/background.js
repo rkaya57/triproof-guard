@@ -4,6 +4,10 @@ const DEFAULT_SETTINGS = {
   enableNotifications: true,
   warnOnCaution: true,
   blockCriticalSites: true,
+  blockUnlimitedApprovals: true,
+  blockApprovalToEoa: true,
+  blockAuthorityChanges: false,
+  requireNewDomainReview: true,
   trustedDomains: [],
 }
 
@@ -119,6 +123,10 @@ async function saveSettings(nextSettings) {
     enableNotifications: Boolean(nextSettings.enableNotifications),
     warnOnCaution: Boolean(nextSettings.warnOnCaution),
     blockCriticalSites: Boolean(nextSettings.blockCriticalSites),
+    blockUnlimitedApprovals: Boolean(nextSettings.blockUnlimitedApprovals),
+    blockApprovalToEoa: Boolean(nextSettings.blockApprovalToEoa),
+    blockAuthorityChanges: Boolean(nextSettings.blockAuthorityChanges),
+    requireNewDomainReview: Boolean(nextSettings.requireNewDomainReview),
     trustedDomains: String(nextSettings.trustedDomainsText ?? "")
       .split(/\s|,|\n/)
       .map((item) => item.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, ""))
@@ -155,7 +163,7 @@ async function notifyRisk(result, context) {
   })
 }
 
-async function scanUrl(value, { force = false, record = true, origin = "site" } = {}) {
+async function scanUrl(value, { force = false, record = true, origin = "site", clientSignals = [] } = {}) {
   const settings = await getSettings()
   const domain = hostFromUrl(value)
   if (domain && settings.trustedDomains.includes(domain)) {
@@ -191,7 +199,10 @@ async function scanUrl(value, { force = false, record = true, origin = "site" } 
     }
   }
 
-  const result = await requestJson("/api/scamguard/scan-url", { value })
+  const result = await requestJson("/api/scamguard/scan-url", {
+    value,
+    clientSignals: Array.isArray(clientSignals) ? clientSignals.slice(0, 8) : [],
+  })
   setCached("url", value, result)
   if (record) await recordScan(result, { type: "url", sourceUrl: value, origin })
   await notifyRisk(result, hostFromUrl(value) || "Current site")
@@ -230,6 +241,26 @@ async function scanLinks(links) {
   return results
 }
 
+async function getSecurityCenter() {
+  const { items, total } = await getHistory(HISTORY_LIMIT)
+  const riskEvents = items.filter((item) => ["HIGH_RISK", "CRITICAL"].includes(item?.riskLevel))
+  const blocked = riskEvents.filter((item) => item?.riskLevel === "CRITICAL")
+  const domains = new Set(items.map((item) => item?.target).filter(Boolean))
+  const settings = await getSettings()
+  return {
+    total,
+    riskEvents: riskEvents.length,
+    blocked: blocked.length,
+    protectedDomains: domains.size,
+    firewallRules: [
+      settings.blockUnlimitedApprovals,
+      settings.blockApprovalToEoa,
+      settings.blockAuthorityChanges,
+      settings.requireNewDomainReview,
+    ].filter(Boolean).length,
+  }
+}
+
 chrome.runtime.onInstalled.addListener(async () => {
   const existing = await chrome.storage.sync.get(Object.keys(DEFAULT_SETTINGS))
   if (!existing.apiBaseUrl) await chrome.storage.sync.set(DEFAULT_SETTINGS)
@@ -247,7 +278,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return
       }
       if (message?.type === "SCAN_URL") {
-        sendResponse({ ok: true, result: await scanUrl(message.value, { force: Boolean(message.force) }) })
+        sendResponse({ ok: true, result: await scanUrl(message.value, { force: Boolean(message.force), clientSignals: message.clientSignals }) })
         return
       }
       if (message?.type === "SCAN_TRANSACTION") {
@@ -265,6 +296,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message?.type === "CLEAR_HISTORY") {
         await chrome.storage.local.set({ [HISTORY_KEY]: [] })
         sendResponse({ ok: true })
+        return
+      }
+      if (message?.type === "GET_SECURITY_CENTER") {
+        sendResponse({ ok: true, center: await getSecurityCenter() })
         return
       }
       if (message?.type === "GET_ACTIVE_TAB") {

@@ -87,6 +87,7 @@
         <button id="scanLinksButton" type="button" class="button primary">Scan page links</button>
         <button id="shareReportButton" type="button" class="button ghost">Copy report link</button>
       </section>
+      <button id="reportThreatButton" type="button" class="text-action">Report this site to the Threat Pool</button>
       <p id="shareStatus" class="share-status" role="status"></p>
 
       <button id="openReportButton" type="button" class="text-action">Open live ScamGuard scanner</button>
@@ -118,6 +119,22 @@
         <div id="historyList" class="history-list" aria-live="polite"></div>
       </section>
 
+      <section class="security-center-card">
+        <div class="section-head">
+          <div>
+            <h3>Security Center</h3>
+            <p>Private protection activity on this browser.</p>
+          </div>
+          <span class="mini-pill">Local</span>
+        </div>
+        <div class="security-grid">
+          <div><strong id="centerRiskEvents">0</strong><span>risk events</span></div>
+          <div><strong id="centerBlocked">0</strong><span>blocked</span></div>
+          <div><strong id="centerDomains">0</strong><span>domains</span></div>
+          <div><strong id="centerRules">0</strong><span>firewall rules</span></div>
+        </div>
+      </section>
+
       <details class="settings">
         <summary>
           <span>Advanced controls</span>
@@ -147,6 +164,22 @@
           <label class="check">
             <input id="blockCriticalSites" type="checkbox">
             <span>Block critical pages with overlay</span>
+          </label>
+          <label class="check">
+            <input id="blockUnlimitedApprovals" type="checkbox">
+            <span>Block unlimited token approvals</span>
+          </label>
+          <label class="check">
+            <input id="blockApprovalToEoa" type="checkbox">
+            <span>Block approvals sent to wallet addresses</span>
+          </label>
+          <label class="check">
+            <input id="blockAuthorityChanges" type="checkbox">
+            <span>Block Solana authority changes</span>
+          </label>
+          <label class="check">
+            <input id="requireNewDomainReview" type="checkbox">
+            <span>Always review unverified signing domains</span>
           </label>
           <label>
             Trusted domains

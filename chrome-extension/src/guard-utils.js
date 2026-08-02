@@ -66,6 +66,16 @@
       }
     }
     if (category === "signature") {
+      const typedData = intent.typedData
+      if (typedData?.highImpact) {
+        const primaryType = typedData.primaryType || "typed-data request"
+        return {
+          eyebrow: "High-impact typed data",
+          title: `Sign ${primaryType}`,
+          detail: `This EIP-712 signature is associated with${typedData.domainName ? ` ${typedData.domainName}` : " a dApp"}${typedData.verifyingContract ? ` and contract ${shortAddress(typedData.verifyingContract)}` : ""}. It can authorize a permit, order, transfer, or delegated action without directly moving funds in this popup.`,
+          caution: "Only sign typed data when its domain, contract, and message fields exactly match the action you intended.",
+        }
+      }
       return {
         eyebrow: "Message signature",
         title: "Sign a message for this site",

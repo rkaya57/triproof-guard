@@ -21,6 +21,10 @@
     "TokenzQdBNbLqP5VEhdkAS6EPF1SMH1dbKqP6Xk6mN": "Token-2022 Program",
     "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL": "Associated Token Program",
     "ComputeBudget111111111111111111111111111111": "Compute Budget Program",
+    "JUP6LkbZbjS1jKKwapd7YHKyQfCwzyxSAYQmRjsBnxN": "Jupiter Aggregator",
+    "JUP4Fb2cqiRUcaTHdrPC8h2gNsA2ETXiPDD33WcGuJB": "Jupiter Aggregator",
+    "RVKd61ztZW9GKqKpHfF7vrbgBKYS9CagHokxraJALbk": "Raydium AMM",
+    "dRiftyHA39MWEi3m9xxcDjQ2BuBuKLKmiNYkq3fK4nR": "Drift Protocol",
   }
   const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 
@@ -124,6 +128,8 @@
         12: "transferChecked",
         13: "approveChecked",
         14: "mintToChecked",
+        15: "burnChecked",
+        16: "syncNative",
       })[opcode]
     }
     return undefined
