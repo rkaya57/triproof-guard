@@ -71,6 +71,7 @@ export type TelegramBotContext = {
     allowlisted: boolean
     alertLevel: "CAUTION" | "HIGH_RISK" | "CRITICAL"
     dailySummary: boolean
+    autoMuteCritical?: boolean
   }
   isGroupAdmin?: (chatId: number, userId: number) => Promise<boolean>
   updateGroupSettings?: (
@@ -79,13 +80,16 @@ export type TelegramBotContext = {
       guardianEnabled?: boolean
       alertLevel?: "CAUTION" | "HIGH_RISK" | "CRITICAL"
       dailySummary?: boolean
+      autoMuteCritical?: boolean
     }
   ) => Promise<{
     guardianEnabled: boolean
     allowlisted: boolean
     alertLevel: "CAUTION" | "HIGH_RISK" | "CRITICAL"
     dailySummary: boolean
+    autoMuteCritical?: boolean
   }>
+  muteMember?: (chatId: number, userId: number, seconds: number) => Promise<boolean>
   claimGroup?: (chatId: number, code: string) => Promise<{ ok: boolean; reason?: string; title?: string; plan?: string }>
   authorizeGroupManager?: (chatId: number, userId: number) => Promise<boolean>
   loadHistory?: (chatId: number, limit?: number) => Promise<
@@ -136,6 +140,7 @@ const urlRegex = /\bhttps?:\/\/[^\s<>"')\]]+/gi
 const solanaAddressRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
 const evmAddressRegex = /^0x[a-fA-F0-9]{40}$/
 const base64ishRegex = /^[A-Za-z0-9+/=_-]{80,}$/
+const secretRequestRegex = /\b(seed phrase|recovery phrase|secret phrase|private key|mnemonic)\b/i
 const solanaSystemProgramId = "11111111111111111111111111111111"
 const splTokenProgramId = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 const token2022ProgramId = "TokenzQdBNbLqP5VEhdkAS6EPF1SMH1dbKqP6Xk6mN"
@@ -256,6 +261,22 @@ function looksLikeTransaction(value: string) {
     text.includes("eth_sign") ||
     text.includes("eth_sendtransaction")
   )
+}
+
+function secretMaterialRequestResult(): ScamGuardScanResult {
+  return {
+    id: "telegram-secret-material-request",
+    type: "transaction",
+    score: 96,
+    riskLevel: "CRITICAL",
+    summary: "This message asks for secret wallet material. Never share recovery phrases, private keys, or mnemonics.",
+    confidence: "HIGH",
+    explanation: "Seed phrases and private keys grant full wallet control. A legitimate project, moderator, or support agent will never request them in Telegram.",
+    signals: [{ code: "SECRET_MATERIAL_REQUEST", severity: "critical", title: "Secret material request", detail: "The message contains recovery-phrase, mnemonic, or private-key language." }],
+    actions: ["Do not reply or share any secret material.", "Report the account to group administrators.", "Move funds immediately if any secret was already shared."],
+    metadata: { chain: "unknown", rpcStatus: "not_applicable", decodedIntent: { category: "unknown", warnings: [] } },
+    scannedAt: new Date().toISOString(),
+  }
 }
 
 function levelMeetsThreshold(level: ScamGuardRiskLevel, threshold: NonNullable<TelegramBotContext["groupAlertLevel"]>) {
@@ -497,6 +518,7 @@ function currentGroupSettings(context: TelegramBotContext) {
       allowlisted: true,
       alertLevel: context.groupAlertLevel ?? "HIGH_RISK",
       dailySummary: true,
+      autoMuteCritical: false,
     }
   )
 }
@@ -514,6 +536,7 @@ function guardianStatusText(context: TelegramBotContext) {
     `📅 Daily summary: ${settings.dailySummary ? "ON" : "OFF"}`,
     `✨ Gemini analyst: ${context.geminiConfigured ? "CONFIGURED" : "EVIDENCE FALLBACK"}`,
     "",
+    `Auto-containment: ${settings.autoMuteCritical ? "ON (critical or policy block only)" : "OFF"}`,
     "[ ADMIN COMMANDS ]",
     "/guardian on",
     "/guardian off",
@@ -522,6 +545,8 @@ function guardianStatusText(context: TelegramBotContext) {
     "/guardian threshold critical",
     "/guardian summary on",
     "/guardian summary off",
+    "/guardian automute on",
+    "/guardian automute off",
     "",
     "Use /history for recent scans and /summary for the last 24 hours.",
   ].join("\n")
@@ -603,6 +628,7 @@ async function handleGuardianCommand(message: TelegramMessage, args: string, con
         guardianEnabled?: boolean
         alertLevel?: "CAUTION" | "HIGH_RISK" | "CRITICAL"
         dailySummary?: boolean
+        autoMuteCritical?: boolean
       }
     | null = null
 
@@ -610,6 +636,8 @@ async function handleGuardianCommand(message: TelegramMessage, args: string, con
   if (normalized === "off") values = { guardianEnabled: false }
   if (normalized === "summary on") values = { dailySummary: true }
   if (normalized === "summary off") values = { dailySummary: false }
+  if (normalized === "automute on") values = { autoMuteCritical: true }
+  if (normalized === "automute off") values = { autoMuteCritical: false }
   if (normalized === "threshold caution") values = { alertLevel: "CAUTION" }
   if (normalized === "threshold high" || normalized === "threshold high_risk") values = { alertLevel: "HIGH_RISK" }
   if (normalized === "threshold critical") values = { alertLevel: "CRITICAL" }
@@ -629,6 +657,7 @@ async function handleGuardianCommand(message: TelegramMessage, args: string, con
         `Protection: ${updated.guardianEnabled ? "ON" : "OFF"}`,
         `Alert threshold: ${updated.alertLevel}`,
         `Daily summary: ${updated.dailySummary ? "ON" : "OFF"}`,
+        `Auto-containment: ${updated.autoMuteCritical ? "ON (critical or policy block only)" : "OFF"}`,
       ].join("\n")
     ),
   ]
@@ -717,17 +746,37 @@ async function handlePrivateOrCommand(message: TelegramMessage, context: Telegra
   }
 
   const result = await scanCandidate(candidate)
+  const isGroup = message.chat.type === "group" || message.chat.type === "supergroup"
+  const policy = isGroup && context.applyTeamPolicy
+    ? await context.applyTeamPolicy({ candidate, result, chatId: message.chat.id })
+    : { action: TeamPolicyAction.ALLOW, matched: [] }
+  const alerted = isGroup && (policy.action !== TeamPolicyAction.ALLOW || levelMeetsThreshold(result.riskLevel, currentGroupSettings(context).alertLevel))
   await recordScanSafely(context, {
     message,
     candidate,
     result,
-    source:
-      message.chat.type === "group" || message.chat.type === "supergroup"
-        ? "GROUP_GUARDIAN"
-        : "PRIVATE_COMMAND",
-    alerted: false,
+    source: isGroup ? "GROUP_GUARDIAN" : "PRIVATE_COMMAND",
+    alerted,
   })
-  return [simpleReply(message, await formatTelegramPrivateScanReport(result, context))]
+  const policyNotice = policy.action === TeamPolicyAction.ALLOW ? "" : `\n\nTEAM POLICY: ${policy.action}\n${policy.matched.slice(0, 2).map((item) => `${item.policyName}: ${item.reason}`).join("\n")}`
+  return [simpleReply(message, `${await formatTelegramPrivateScanReport(result, context)}${policyNotice}`)]
+}
+
+async function shouldAutoMute(
+  message: TelegramMessage,
+  result: ScamGuardScanResult,
+  policy: { action: TeamPolicyAction },
+  settings: ReturnType<typeof currentGroupSettings>,
+  context: TelegramBotContext
+) {
+  if (!settings.autoMuteCritical || !message.from?.id || !context.muteMember) return false
+  if (result.riskLevel !== "CRITICAL" && policy.action !== TeamPolicyAction.BLOCK) return false
+  if (await isVerifiedGroupAdmin(message, context)) return false
+  try {
+    return await context.muteMember(message.chat.id, message.from.id, 60 * 60)
+  } catch {
+    return false
+  }
 }
 
 async function handleGroupGuardian(message: TelegramMessage, context: TelegramBotContext) {
@@ -739,11 +788,15 @@ async function handleGroupGuardian(message: TelegramMessage, context: TelegramBo
 
   const threshold = settings.alertLevel
   const urls = urlEntities(message).slice(0, 5)
+  const candidates: Array<ScanCandidate & { secretMaterial?: boolean }> = urls.map((url) => ({ type: "url", value: url, chain: "unknown" }))
+  if (secretRequestRegex.test(textOf(message))) {
+    candidates.unshift({ type: "transaction", value: "Secret material request detected in Telegram message", chain: "unknown", secretMaterial: true })
+  }
   const actions: TelegramBotAction[] = []
+  let autoMuted = false
 
-  for (const url of urls) {
-    const candidate: ScanCandidate = { type: "url", value: url, chain: "unknown" }
-    const result = await scanCandidate(candidate)
+  for (const candidate of candidates.slice(0, 6)) {
+    const result = candidate.secretMaterial ? secretMaterialRequestResult() : await scanCandidate(candidate)
     const policy = context.applyTeamPolicy ? await context.applyTeamPolicy({ candidate, result, chatId: message.chat.id }) : { action: TeamPolicyAction.ALLOW, matched: [] }
     const alerted = policy.action !== TeamPolicyAction.ALLOW || levelMeetsThreshold(result.riskLevel, threshold)
     const campaign = await recordScanSafely(context, {
@@ -754,14 +807,15 @@ async function handleGroupGuardian(message: TelegramMessage, context: TelegramBo
       alerted,
     })
     if (alerted) {
-      const canOfferMute = Boolean(campaign.eventId && campaign.senderBehavior?.moderationRecommended && message.from?.id)
+      const autoContained: boolean = !autoMuted && await shouldAutoMute(message, result, policy, settings, context)
+      autoMuted ||= autoContained
+      const canOfferMute = Boolean(campaign.eventId && !autoContained && campaign.senderBehavior?.moderationRecommended && message.from?.id)
       const policyNotice = policy.action === TeamPolicyAction.ALLOW ? "" : `\n\nTEAM POLICY: ${policy.action}\n${policy.matched.slice(0, 2).map((item) => `${item.policyName}: ${item.reason}`).join("\n")}`
-      actions.push(simpleReply(message, `${groupWarningText(result, campaign)}${policyNotice}`, canOfferMute ? {
-        inline_keyboard: [[
-          { text: "Mute sender for 1 hour", callback_data: `sg_mute:${campaign.eventId}` },
-          { text: "Open scanner", url: `${context.publicBaseUrl?.replace(/\/$/, "") ?? "https://triproofprotocol.com"}/scamguard` },
-        ]],
-      } : undefined))
+      const buttons: NonNullable<TelegramSendMessage["reply_markup"]>["inline_keyboard"] = []
+      if (canOfferMute && campaign.eventId) buttons.push([{ text: "Mute 1 hour", callback_data: `sg_mute:${campaign.eventId}:1` }, { text: "Mute 24 hours", callback_data: `sg_mute:${campaign.eventId}:24` }])
+      buttons.push([{ text: "Open full scanner", url: `${context.publicBaseUrl?.replace(/\/$/, "") ?? "https://triproofprotocol.com"}/scamguard` }])
+      const containmentNotice = autoContained ? "\n\nAUTO-CONTAINMENT: Sender muted for 1 hour after a critical or policy-block decision." : ""
+      actions.push(simpleReply(message, `${groupWarningText(result, campaign)}${policyNotice}${containmentNotice}`, { inline_keyboard: buttons }))
     }
   }
 

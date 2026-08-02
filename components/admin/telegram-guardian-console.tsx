@@ -25,6 +25,7 @@ type GuardianGroup = {
   allowlisted: boolean
   alertLevel: AlertLevel
   dailySummary: boolean
+  autoMuteCritical: boolean
   scanCount: number
   alertCount: number
   lastSeenAt: string
@@ -97,7 +98,7 @@ export function TelegramGuardianConsole() {
     return () => window.clearTimeout(timer)
   }, [load])
 
-  async function updateGroup(id: string, values: Partial<Pick<GuardianGroup, "guardianEnabled" | "allowlisted" | "alertLevel" | "dailySummary">>) {
+  async function updateGroup(id: string, values: Partial<Pick<GuardianGroup, "guardianEnabled" | "allowlisted" | "alertLevel" | "dailySummary" | "autoMuteCritical">>) {
     setSavingId(id)
     setError("")
     try {
@@ -159,7 +160,7 @@ export function TelegramGuardianConsole() {
           </Button>
         </CardHeader>
         <CardContent className="overflow-x-auto">
-          <table className="w-full min-w-[920px] text-left text-sm">
+          <table className="w-full min-w-[1030px] text-left text-sm">
             <thead className="text-slate-400">
               <tr>
                 <th className="py-3">Group</th>
@@ -167,6 +168,7 @@ export function TelegramGuardianConsole() {
                 <th>Protection</th>
                 <th>Threshold</th>
                 <th>Daily report</th>
+                <th>Auto-containment</th>
                 <th>Scans</th>
                 <th>Alerts</th>
                 <th>Last seen</th>
@@ -191,6 +193,17 @@ export function TelegramGuardianConsole() {
                       >
                         {saving ? <Loader2 className="animate-spin" /> : null}
                         {group.allowlisted ? "Approved" : "Blocked"}
+                      </Button>
+                    </td>
+                    <td>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={group.autoMuteCritical ? "default" : "outline"}
+                        disabled={saving}
+                        onClick={() => void updateGroup(group.id, { autoMuteCritical: !group.autoMuteCritical })}
+                      >
+                        {group.autoMuteCritical ? "Critical only" : "Manual"}
                       </Button>
                     </td>
                     <td>
@@ -236,7 +249,7 @@ export function TelegramGuardianConsole() {
               })}
               {!overview.groups.length && (
                 <tr>
-                  <td colSpan={8} className="py-10 text-center text-slate-400">
+                  <td colSpan={9} className="py-10 text-center text-slate-400">
                     {loading ? "Loading Telegram groups..." : "No Telegram group has contacted the bot yet."}
                   </td>
                 </tr>

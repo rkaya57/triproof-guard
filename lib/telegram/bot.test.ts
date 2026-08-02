@@ -152,6 +152,25 @@ test("Group Guardian warns on known scam links", async () => {
   assert.match(actions[0].payload.text, /ScamGuard Group Guardian/)
 })
 
+test("Group scan commands enforce the same team policy used by API and Guardian links", async () => {
+  const update: TelegramUpdate = {
+    update_id: 31,
+    message: {
+      message_id: 121,
+      text: "/scan https://phantom-airdrop-claim.example/",
+      chat: { id: -100, type: "group", title: "Test group" },
+    },
+  }
+  let recordedAlert = false
+  const actions = await handleTelegramUpdate(update, {
+    applyTeamPolicy: async () => ({ action: "REVIEW" as const, matched: [{ policyName: "Production policy", reason: "Project review is required." }] }),
+    recordScan: async (input) => { recordedAlert = input.alerted; return { occurrenceCount: 1, repeatedCampaign: false } },
+  })
+
+  assert.equal(recordedAlert, true)
+  assert.match(actions[0].payload.text, /TEAM POLICY: REVIEW/)
+})
+
 test("Group Guardian stays quiet when group protection is disabled", async () => {
   const update: TelegramUpdate = {
     update_id: 4,
@@ -294,7 +313,54 @@ test("Group Guardian offers a time-limited moderation action for repeated high-r
     }),
   })
   assert.match(actions[0].payload.text, /SENDER BEHAVIOR/)
-  assert.equal(actions[0].payload.reply_markup?.inline_keyboard[0][0].callback_data, "sg_mute:evt-guard-1")
+  assert.equal(actions[0].payload.reply_markup?.inline_keyboard[0][0].callback_data, "sg_mute:evt-guard-1:1")
+  assert.equal(actions[0].payload.reply_markup?.inline_keyboard[0][1].callback_data, "sg_mute:evt-guard-1:24")
+})
+
+test("Group Guardian auto-contains a secret-material request from a non-admin sender", async () => {
+  const update: TelegramUpdate = {
+    update_id: 72,
+    message: {
+      message_id: 172,
+      text: "Support needs your seed phrase to recover your wallet.",
+      chat: { id: -100, type: "group", title: "Test group" },
+      from: { id: 56, first_name: "Risky sender" },
+    },
+  }
+  let mutedFor = 0
+  const actions = await handleTelegramUpdate(update, {
+    groupSettings: { guardianEnabled: true, allowlisted: true, alertLevel: "HIGH_RISK", dailySummary: true, autoMuteCritical: true },
+    isGroupAdmin: async () => false,
+    muteMember: async (_chatId, _userId, seconds) => { mutedFor = seconds; return true },
+  })
+
+  assert.equal(mutedFor, 60 * 60)
+  assert.equal(actions.length, 1)
+  assert.match(actions[0].payload.text, /Secret material request/)
+  assert.match(actions[0].payload.text, /AUTO-CONTAINMENT/)
+})
+
+test("Group Guardian lets a verified admin toggle auto-containment", async () => {
+  const update: TelegramUpdate = {
+    update_id: 73,
+    message: {
+      message_id: 173,
+      text: "/guardian automute on",
+      chat: { id: -100, type: "group", title: "Test group" },
+      from: { id: 7, first_name: "Admin" },
+    },
+  }
+  let enabled = false
+  const actions = await handleTelegramUpdate(update, {
+    isGroupAdmin: async () => true,
+    updateGroupSettings: async (_chatId, values) => {
+      enabled = values.autoMuteCritical === true
+      return { guardianEnabled: true, allowlisted: true, alertLevel: "HIGH_RISK", dailySummary: true, autoMuteCritical: enabled }
+    },
+  })
+
+  assert.equal(enabled, true)
+  assert.match(actions[0].payload.text, /Auto-containment: ON/)
 })
 
 test("Telegram history command renders persisted scan history", async () => {

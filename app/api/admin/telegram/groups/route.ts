@@ -16,6 +16,7 @@ const updateSchema = z.object({
   allowlisted: z.boolean().optional(),
   alertLevel: z.enum(["CAUTION", "HIGH_RISK", "CRITICAL"]).optional(),
   dailySummary: z.boolean().optional(),
+  autoMuteCritical: z.boolean().optional(),
 })
 
 export async function GET() {

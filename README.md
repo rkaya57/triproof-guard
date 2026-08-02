@@ -90,13 +90,17 @@ The current product build includes a public landing page, ScamGuard scanner, Tel
 - Automatic URL extraction from messages and Telegram URL entities
 - Persistent private and group scan history
 - Telegram-verified, admin-only `/guardian` controls
-- Per-group protection status, approval, alert threshold, and daily summary settings
+- Per-group protection status, approval, alert threshold, daily summary, and opt-in critical auto-containment settings
 - Repeated campaign detection after the same target appears multiple times
 - Scheduled 24-hour community protection summaries
 - Community/API Growth groups are linked through a short-lived dashboard connection code and Telegram admin confirmation
 - Admin operations console at `/dashboard/admin/telegram`
 - Configurable group alert threshold: `CAUTION`, `HIGH_RISK`, or `CRITICAL`
 - Replies only when a scanned group link meets the configured risk threshold
+- Detects recovery-phrase, mnemonic, and private-key requests even when a message has no link; the raw group message is not stored
+- Optional auto-containment can mute a non-admin sender for one hour after a critical finding or Team Policy block
+- Administrator moderation controls offer one-hour and twenty-four-hour mute actions for eligible repeated high-risk senders
+- Group commands use the same Team Policy engine as Guardian links and B2B API scans
 - Uses the same ScamGuard engine as the web scanner, extension, and API
 
 ### Sybil Campaign Analysis
@@ -510,6 +514,8 @@ Group admin commands:
 /guardian threshold critical
 /guardian summary on
 /guardian summary off
+/guardian automute on
+/guardian automute off
 /history
 /summary
 ```

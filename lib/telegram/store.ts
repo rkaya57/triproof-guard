@@ -14,6 +14,7 @@ export type GuardianGroupSettings = {
   allowlisted: boolean
   alertLevel: GuardianAlertLevel
   dailySummary: boolean
+  autoMuteCritical: boolean
 }
 
 export type TelegramScanRecordInput = {
@@ -98,6 +99,7 @@ export async function ensureTelegramGroup(
       allowlisted: true,
       alertLevel: true,
       dailySummary: true,
+      autoMuteCritical: true,
     },
   })
 }
@@ -108,6 +110,7 @@ export async function updateTelegramGroupSettings(
     guardianEnabled?: boolean
     alertLevel?: GuardianAlertLevel
     dailySummary?: boolean
+    autoMuteCritical?: boolean
   }
 ) {
   return db.telegramGuardianGroup.update({
@@ -118,6 +121,7 @@ export async function updateTelegramGroupSettings(
       allowlisted: true,
       alertLevel: true,
       dailySummary: true,
+      autoMuteCritical: true,
     },
   })
 }
@@ -351,6 +355,7 @@ export async function getTelegramGuardianAdminOverview() {
         allowlisted: true,
         alertLevel: true,
         dailySummary: true,
+        autoMuteCritical: true,
         scanCount: true,
         alertCount: true,
         lastSeenAt: true,
@@ -399,6 +404,7 @@ export async function updateTelegramGroupFromAdmin(
     allowlisted?: boolean
     alertLevel?: GuardianAlertLevel
     dailySummary?: boolean
+    autoMuteCritical?: boolean
   }
 ) {
   return db.telegramGuardianGroup.update({

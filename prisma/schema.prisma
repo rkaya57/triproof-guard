@@ -943,6 +943,7 @@ model TelegramGuardianGroup {
   allowlisted     Boolean                    @default(false)
   alertLevel      TelegramGuardianAlertLevel @default(HIGH_RISK)
   dailySummary    Boolean                    @default(true)
+  autoMuteCritical Boolean                   @default(false)
   scanCount       Int                        @default(0)
   alertCount      Int                        @default(0)
   lastSeenAt      DateTime                   @default(now())

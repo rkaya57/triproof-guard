@@ -61,7 +61,9 @@ export async function POST(request: Request) {
   const callback = update.callback_query
   if (callback?.id && callback.data?.startsWith("sg_mute:")) {
     if (!token || !callback.from?.id || !callback.message?.chat?.id) return NextResponse.json({ ok: false, error: "Telegram moderation is not configured." }, { status: 400 })
-    const target = await getTelegramModerationTarget(callback.data.slice("sg_mute:".length))
+    const [eventId, requestedHours] = callback.data.slice("sg_mute:".length).split(":")
+    const muteHours = requestedHours === "24" ? 24 : 1
+    const target = await getTelegramModerationTarget(eventId)
     const isAdmin = await isTelegramGroupAdmin(token, callback.message.chat.id, callback.from.id)
     if (!target || target.chatId !== callback.message.chat.id) {
       await answerTelegramCallbackQuery(token, callback.id, "This moderation action is no longer available.", true)
@@ -72,9 +74,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: "Admin access required" }, { status: 403 })
     }
     try {
-      await muteTelegramMember(token, target.chatId, target.userId)
-      await answerTelegramCallbackQuery(token, callback.id, "Sender muted for one hour.")
-      return NextResponse.json({ ok: true, moderation: "muted_1h" })
+      await muteTelegramMember(token, target.chatId, target.userId, muteHours * 60 * 60)
+      await answerTelegramCallbackQuery(token, callback.id, `Sender muted for ${muteHours} hour${muteHours === 1 ? "" : "s"}.`)
+      return NextResponse.json({ ok: true, moderation: `muted_${muteHours}h` })
     } catch (error) {
       await answerTelegramCallbackQuery(token, callback.id, "The bot needs permission to restrict members in this group.", true).catch(() => undefined)
       return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Telegram moderation failed" }, { status: 500 })
@@ -114,6 +116,11 @@ export async function POST(request: Request) {
         return isTelegramGroupAdmin(token, chatId, userId)
       },
       updateGroupSettings: (chatId, values) => updateTelegramGroupSettings(chatId, values),
+      muteMember: async (chatId, userId, seconds) => {
+        if (!token) return false
+        await muteTelegramMember(token, chatId, userId, seconds)
+        return true
+      },
       claimGroup: (chatId, code) => claimTelegramGroup(chatId, code),
       authorizeGroupManager: (chatId, userId) => authorizeTelegramGuardianAdmin(chatId, userId),
       loadHistory: getTelegramHistory,
