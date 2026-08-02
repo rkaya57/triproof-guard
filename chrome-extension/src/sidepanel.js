@@ -17,6 +17,9 @@ const elements = {
   blockedEvents: document.getElementById("blockedEvents"),
   protectedDomains: document.getElementById("protectedDomains"),
   firewallRules: document.getElementById("firewallRules"),
+  inspectPermissionsButton: document.getElementById("inspectPermissionsButton"),
+  inventoryStatus: document.getElementById("inventoryStatus"),
+  inventoryList: document.getElementById("inventoryList"),
   rescanButton: document.getElementById("rescanButton"),
   openScannerButton: document.getElementById("openScannerButton"),
 }
@@ -110,6 +113,41 @@ function renderPermissions(items) {
     : "<p class=\"empty\">No approval requests have been observed in this browser yet.</p>"
 }
 
+function renderInventory(inventories) {
+  const entries = Array.isArray(inventories) ? inventories.flatMap((inventory) => {
+    const permissions = Array.isArray(inventory.permissions) ? inventory.permissions : []
+    return permissions.map((permission) => ({ ...permission, chain: inventory.chain, network: inventory.network }))
+  }) : []
+  elements.inventoryList.innerHTML = entries.length
+    ? entries.slice(0, 16).map((item) => {
+        const counterparty = item.chain === "evm" ? item.spender : item.delegate
+        const asset = item.chain === "evm" ? item.token : item.mint
+        return `<article class="inventory ${item.unlimited ? "danger" : ""}"><div><strong>${item.chain === "evm" ? "Active ERC-20 allowance" : "Active token delegate"}</strong><span>${escapeHtml(compactAddress(asset))} -> ${escapeHtml(compactAddress(counterparty))}</span></div><b>${item.unlimited ? "Unlimited / very high" : escapeHtml(String(item.amount))}</b><p>Verified from ${escapeHtml(item.chain)} ${escapeHtml(item.network ?? "network")}. Amount is in raw token units.</p></article>`
+      }).join("")
+    : "<p class=\"empty\">No active permission was found in this focused check.</p>"
+}
+
+async function inspectPermissions() {
+  elements.inspectPermissionsButton.disabled = true
+  elements.inspectPermissionsButton.textContent = "Checking wallet..."
+  elements.inventoryStatus.textContent = "Reading connected wallet data. No signature or transaction is requested."
+  const response = await sendMessage({ type: "INSPECT_ACTIVE_WALLET_PERMISSIONS" })
+  if (!response?.ok) {
+    elements.inventoryStatus.textContent = response?.error ?? "Could not inspect permissions on this page."
+    elements.inventoryList.innerHTML = ""
+  } else {
+    const inventories = response.inventory?.inventories ?? []
+    const active = inventories.reduce((total, item) => total + (Array.isArray(item.permissions) ? item.permissions.length : 0), 0)
+    const checked = inventories.reduce((total, item) => total + Number(item.checked ?? 0), 0)
+    elements.inventoryStatus.textContent = active
+      ? `${active} active permission${active === 1 ? "" : "s"} found across ${checked} checked account or approval record${checked === 1 ? "" : "s"}.`
+      : `No active permission found across ${checked} checked account or approval record${checked === 1 ? "" : "s"}.`
+    renderInventory(inventories)
+  }
+  elements.inspectPermissionsButton.disabled = false
+  elements.inspectPermissionsButton.textContent = "Check connected wallet"
+}
+
 async function refresh(force = false) {
   elements.rescanButton.disabled = true
   elements.rescanButton.textContent = "Scanning..."
@@ -143,6 +181,7 @@ async function refresh(force = false) {
 }
 
 elements.rescanButton.addEventListener("click", () => void refresh(true))
+elements.inspectPermissionsButton.addEventListener("click", () => void inspectPermissions())
 elements.openScannerButton.addEventListener("click", () => {
   const base = (state.settings?.apiBaseUrl ?? "https://triproofprotocol.com").replace(/\/$/, "")
   void chrome.tabs.create({ url: `${base}/scamguard` })

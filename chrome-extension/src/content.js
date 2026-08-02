@@ -470,6 +470,32 @@ function injectPreSignHook() {
   ;(document.head || document.documentElement).appendChild(script)
 }
 
+function requestPermissionInventory(candidates) {
+  const requestId = crypto.randomUUID()
+  window.postMessage({
+    source: EXTENSION_SOURCE,
+    type: "SCAMGUARD_PERMISSION_INVENTORY_REQUEST",
+    requestId,
+    candidates: Array.isArray(candidates) ? candidates.slice(0, 60) : [],
+  }, "*")
+
+  return new Promise((resolve) => {
+    const timeout = window.setTimeout(() => {
+      window.removeEventListener("message", onMessage)
+      resolve({ ok: false, error: "Wallet permission check timed out. Keep the dApp tab open and try again." })
+    }, 20_000)
+    function onMessage(event) {
+      if (event.source !== window) return
+      const data = event.data
+      if (!data || data.source !== PAGE_SOURCE || data.type !== "SCAMGUARD_PERMISSION_INVENTORY_RESPONSE" || data.requestId !== requestId) return
+      window.clearTimeout(timeout)
+      window.removeEventListener("message", onMessage)
+      resolve(data)
+    }
+    window.addEventListener("message", onMessage)
+  })
+}
+
 window.addEventListener("message", (event) => {
   if (event.source !== window) return
   const data = event.data
@@ -497,6 +523,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === "CONTENT_POPUP_HEARTBEAT") {
       setPopupOpen(true)
       sendResponse({ ok: true })
+      return
+    }
+    if (message?.type === "CONTENT_INSPECT_WALLET_PERMISSIONS") {
+      sendResponse(await requestPermissionInventory(message.candidates))
       return
     }
     sendResponse({ ok: false, error: "Unknown content message" })

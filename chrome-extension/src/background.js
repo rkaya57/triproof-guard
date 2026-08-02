@@ -161,6 +161,23 @@ async function getObservedPermissions(limit = 12) {
   return { items: items.slice(0, boundedLimit), total: items.length }
 }
 
+async function inspectActiveWalletPermissions() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  if (!tab?.id || !tab.url?.startsWith("http")) {
+    throw new Error("Open a regular dApp page with a connected wallet, then try again.")
+  }
+
+  const observed = await getObservedPermissions(60)
+  try {
+    return await chrome.tabs.sendMessage(tab.id, {
+      type: "CONTENT_INSPECT_WALLET_PERMISSIONS",
+      candidates: observed.items,
+    })
+  } catch {
+    throw new Error("Reload this page so ScamGuard can reach the connected wallet, then try again.")
+  }
+}
+
 async function getSettings() {
   const stored = await chrome.storage.sync.get(DEFAULT_SETTINGS)
   return {
@@ -362,6 +379,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       if (message?.type === "GET_OBSERVED_PERMISSIONS") {
         sendResponse({ ok: true, ...(await getObservedPermissions(message.limit)) })
+        return
+      }
+      if (message?.type === "INSPECT_ACTIVE_WALLET_PERMISSIONS") {
+        const inspection = await inspectActiveWalletPermissions()
+        sendResponse({ ok: Boolean(inspection?.ok), ...(inspection ?? {}) })
         return
       }
       if (message?.type === "CLEAR_HISTORY") {

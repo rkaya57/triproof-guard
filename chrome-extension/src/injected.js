@@ -196,6 +196,120 @@
     })
   }
 
+  function padEvmAddress(value) {
+    const normalized = String(value ?? "").toLowerCase().replace(/^0x/, "")
+    return /^[0-9a-f]{40}$/.test(normalized) ? normalized.padStart(64, "0") : ""
+  }
+
+  function hexQuantity(value) {
+    try {
+      return BigInt(value ?? "0x0").toString()
+    } catch {
+      return "0"
+    }
+  }
+
+  async function inspectEvmPermissions(candidates) {
+    const provider = evmProviders()[0]
+    if (!provider) throw new Error("No EVM wallet provider was detected on this page.")
+    const accounts = await provider.request({ method: "eth_accounts" })
+    const owner = Array.isArray(accounts) ? accounts.find((item) => /^0x[0-9a-f]{40}$/i.test(String(item))) : null
+    if (!owner) throw new Error("Connect your EVM wallet to this dApp before checking permissions.")
+    const chainId = await provider.request({ method: "eth_chainId" }).catch(() => "unknown")
+    const rows = Array.isArray(candidates) ? candidates : []
+    const checks = rows
+      .filter((row) => /^0x[0-9a-f]{40}$/i.test(String(row?.token)) && /^0x[0-9a-f]{40}$/i.test(String(row?.spender)))
+      .slice(0, 30)
+    const ownerPart = padEvmAddress(owner)
+    const permissions = []
+    for (const row of checks) {
+      const calldata = `0xdd62ed3e${ownerPart}${padEvmAddress(row.spender)}`
+      try {
+        const allowance = await provider.request({ method: "eth_call", params: [{ to: row.token, data: calldata }, "latest"] })
+        const amount = hexQuantity(allowance)
+        if (BigInt(amount) > 0n) {
+          permissions.push({
+            token: row.token,
+            spender: row.spender,
+            amount,
+            unlimited: BigInt(amount) > (2n ** 255n),
+            source: row.source ?? "Observed approval request",
+            status: "active_onchain",
+          })
+        }
+      } catch {
+        // A non-standard token or disconnected RPC cannot be treated as an active approval.
+      }
+    }
+    return {
+      chain: "evm",
+      wallet: owner,
+      network: String(chainId),
+      checked: checks.length,
+      permissions,
+      note: checks.length
+        ? "ScamGuard rechecked approval requests it observed in this browser through the connected wallet's RPC. Amounts are raw token units."
+        : "No compatible ERC-20 approval request has been observed in this browser yet. Sign-in or site reads are not token permissions.",
+    }
+  }
+
+  async function solanaRpc(endpoint, method, params) {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: "scamguard-permissions", method, params }),
+    })
+    const body = await response.json()
+    if (!response.ok || body?.error) throw new Error(body?.error?.message ?? "Solana RPC request failed.")
+    return body.result
+  }
+
+  async function inspectSolanaPermissions() {
+    const provider = solanaProviders().find((item) => publicKey(item, "solana"))
+    const wallet = publicKey(provider, "solana")
+    if (!provider || !wallet) throw new Error("Connect your Solana wallet to this dApp before checking token delegates.")
+    const endpoint = provider?.connection?.rpcEndpoint || "https://api.mainnet-beta.solana.com"
+    const programs = ["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPF1SMH1dbKqKp6Xk6mN"]
+    const accounts = []
+    for (const programId of programs) {
+      const result = await solanaRpc(endpoint, "getTokenAccountsByOwner", [wallet, { programId }, { encoding: "jsonParsed" }])
+      accounts.push(...(result?.value ?? []))
+    }
+    const permissions = accounts.flatMap((entry) => {
+      const info = entry?.account?.data?.parsed?.info
+      if (!info?.delegate) return []
+      const amount = info?.delegatedAmount?.amount ?? info?.tokenAmount?.amount ?? "unknown"
+      return [{
+        tokenAccount: entry?.pubkey ?? "Unknown token account",
+        mint: info.mint ?? "Unknown mint",
+        delegate: info.delegate,
+        amount: String(amount),
+        status: "active_onchain_delegate",
+      }]
+    })
+    return {
+      chain: "solana",
+      wallet,
+      network: endpoint.includes("devnet") ? "devnet" : endpoint.includes("testnet") ? "testnet" : "mainnet-beta",
+      checked: accounts.length,
+      permissions,
+      note: "ScamGuard read active SPL Token and Token-2022 delegates from token accounts owned by this connected wallet. Amounts are raw token units.",
+    }
+  }
+
+  async function inspectWalletPermissions(candidates) {
+    const outcomes = await Promise.allSettled([
+      inspectEvmPermissions(candidates),
+      inspectSolanaPermissions(),
+    ])
+    const inventories = outcomes.filter((outcome) => outcome.status === "fulfilled").map((outcome) => outcome.value)
+    if (!inventories.length) {
+      const message = outcomes.map((outcome) => outcome.status === "rejected" ? outcome.reason?.message : "").filter(Boolean).join(" ")
+      throw new Error(message || "No connected wallet could be inspected on this page.")
+    }
+    return { inventories }
+  }
+
   function askScamGuard({ method, transaction, provider, chain }) {
     const requestId = crypto.randomUUID()
     const value = serializedScanValue(method, transaction, chain)
@@ -221,7 +335,14 @@
   window.addEventListener("message", (event) => {
     if (event.source !== window) return
     const data = event.data
-    if (!data || data.source !== EXTENSION_SOURCE || data.type !== "SCAMGUARD_SIGN_RESPONSE") return
+    if (!data || data.source !== EXTENSION_SOURCE) return
+    if (data.type === "SCAMGUARD_PERMISSION_INVENTORY_REQUEST") {
+      void inspectWalletPermissions(data.candidates)
+        .then((inventory) => window.postMessage({ source: PAGE_SOURCE, type: "SCAMGUARD_PERMISSION_INVENTORY_RESPONSE", requestId: data.requestId, ok: true, inventory }, "*"))
+        .catch((error) => window.postMessage({ source: PAGE_SOURCE, type: "SCAMGUARD_PERMISSION_INVENTORY_RESPONSE", requestId: data.requestId, ok: false, error: error instanceof Error ? error.message : "Permission check failed." }, "*"))
+      return
+    }
+    if (data.type !== "SCAMGUARD_SIGN_RESPONSE") return
     const entry = pending.get(data.requestId)
     if (!entry) return
     window.clearTimeout(entry.timeout)

@@ -54,13 +54,18 @@ function walletLab({ decision = { allow: true }, solana, ethereum, extraWindow =
     Object,
     Set,
     Promise,
+    BigInt,
     Error,
     queueMicrotask,
     btoa: (value) => Buffer.from(String(value), "binary").toString("base64"),
   })
   vm.runInContext(injectedSource, context, { filename: "injected.js" })
 
-  return { pageMessages, pageWindow, intervalCallbacks, runAgain: () => vm.runInContext(injectedSource, context, { filename: "injected.js" }) }
+  function dispatch(data) {
+    for (const listener of listeners) listener({ source: pageWindow, data })
+  }
+
+  return { pageMessages, pageWindow, intervalCallbacks, dispatch, runAgain: () => vm.runInContext(injectedSource, context, { filename: "injected.js" }) }
 }
 
 function solanaProvider(methods = {}) {
@@ -208,4 +213,35 @@ test("preserves Wallet Call API batches for the ScamGuard risk ledger", async ()
     method: "wallet_sendCalls",
     params: [{ version: "2.0.0", atomicRequired: true, calls }],
   })
+})
+
+test("rechecks observed EVM approvals with read-only wallet RPC calls", async () => {
+  const calls = []
+  const provider = {
+    selectedAddress: "0x1111111111111111111111111111111111111111",
+    async request({ method }) {
+      calls.push(method)
+      if (method === "eth_accounts") return [this.selectedAddress]
+      if (method === "eth_chainId") return "0x1"
+      if (method === "eth_call") return "0x1"
+      return null
+    },
+  }
+  const lab = walletLab({ ethereum: provider })
+  lab.dispatch({
+    source: "SCAMGUARD_EXTENSION",
+    type: "SCAMGUARD_PERMISSION_INVENTORY_REQUEST",
+    requestId: "inventory-check",
+    candidates: [{
+      token: "0x2222222222222222222222222222222222222222",
+      spender: "0x3333333333333333333333333333333333333333",
+      source: "test dApp",
+    }],
+  })
+
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  const response = lab.pageMessages.find((message) => message?.type === "SCAMGUARD_PERMISSION_INVENTORY_RESPONSE")
+  assert.equal(response?.ok, true)
+  assert.equal(response?.inventory?.inventories?.[0]?.permissions?.[0]?.status, "active_onchain")
+  assert.deepEqual(calls, ["eth_accounts", "eth_chainId", "eth_call"])
 })

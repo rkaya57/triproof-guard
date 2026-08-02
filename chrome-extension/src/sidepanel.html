@@ -53,6 +53,14 @@
         <div id="permissionsList" class="permissions-list"></div>
       </section>
 
+      <section class="inventory-card">
+        <div class="section-title"><div><p class="eyebrow">Connected wallet</p><h2>Verify live permissions</h2></div><span class="soft-pill">On-chain</span></div>
+        <p class="permission-note">EVM rechecks compatible approval requests seen by ScamGuard. Solana reads active SPL token delegates. This is a focused safety check, not a complete portfolio or protocol-permission crawl.</p>
+        <button id="inspectPermissionsButton" type="button" class="primary inventory-button">Check connected wallet</button>
+        <p id="inventoryStatus" class="inventory-status">Open a connected dApp tab, then run a read-only check.</p>
+        <div id="inventoryList" class="inventory-list"></div>
+      </section>
+
       <section class="history-card">
         <div class="section-title"><div><p class="eyebrow">Local only</p><h2>Recent protection activity</h2></div></div>
         <div id="historyList" class="history-list"></div>
