@@ -46,6 +46,7 @@ Pre-sign protection for Solana and EVM dApps, airdrops, token claims, and suspic
   - optionally block Solana authority changes
   - require a review for unverified signing domains
   - trusted domains
+  - optional Team Policy Sync: paste a Tri-Proof B2B API key to apply the same active organization rules used by the API and Telegram Guardian. The key is stored only in `chrome.storage.local`, never synced with Chrome or included in shared reports. Policies refresh at most once every 10 minutes; a cached policy is used if the network is unavailable.
 
 ## Local install
 

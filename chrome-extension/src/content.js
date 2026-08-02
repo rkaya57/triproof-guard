@@ -222,6 +222,7 @@ function isGuardedNavigation(event, anchor) {
 }
 
 function needsNavigationReview(result, settings) {
+  if (result?.metadata?.teamPolicy?.action === "REVIEW") return true
   if (["CRITICAL", "HIGH_RISK"].includes(result?.riskLevel)) return true
   return result?.riskLevel === "CAUTION" && ["strict", "paranoid"].includes(settings?.protectionLevel)
 }
@@ -433,6 +434,7 @@ function walletBatchLedger(result) {
 
 function firewallBlockReason(result, settings) {
   const codes = new Set((result?.signals ?? []).map((signal) => signal?.code))
+  if (result?.metadata?.teamPolicy?.action === "BLOCK" || codes.has("TEAM_POLICY_BLOCK")) return "Blocked by your organization's team policy"
   if (result?.riskLevel === "CRITICAL") return "Critical ScamGuard risk"
   if (settings.blockUnlimitedApprovals && codes.has("UNLIMITED_EVM_APPROVAL")) return "Unlimited token approval"
   if (settings.blockApprovalToEoa && codes.has("APPROVAL_TO_EOA")) return "Approval to a wallet address instead of a contract"
@@ -531,6 +533,7 @@ async function handleSignRequest(payload) {
   const policyReason = firewallBlockReason(result, settings)
   const sourceNeedsReview = (result.signals ?? []).some((signal) => ["UNVERIFIED_WEB3_APP_SURFACE", "UNVERIFIED_CLAIM_DOMAIN", "UNVERIFIED_PROJECT_CONTEXT"].includes(signal?.code))
   const shouldWarn =
+    result?.metadata?.teamPolicy?.action === "REVIEW" ||
     result.riskLevel === "CRITICAL" ||
     result.riskLevel === "HIGH_RISK" ||
     protectionLevel === "paranoid" ||

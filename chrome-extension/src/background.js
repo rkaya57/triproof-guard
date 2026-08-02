@@ -18,6 +18,9 @@ const HISTORY_LIMIT = 100
 const HISTORY_DEDUPE_MS = 90_000
 const OBSERVED_PERMISSIONS_KEY = "scamguardObservedPermissions"
 const OBSERVED_PERMISSIONS_LIMIT = 100
+const TEAM_POLICY_KEY = "scamguardTeamPolicyApiKey"
+const TEAM_POLICY_CACHE_KEY = "scamguardTeamPolicyCache"
+const TEAM_POLICY_CACHE_TTL_MS = 10 * 60_000
 const scanCache = new Map()
 
 function normalizeApiBaseUrl(value) {
@@ -181,11 +184,13 @@ async function inspectActiveWalletPermissions() {
 
 async function getSettings() {
   const stored = await chrome.storage.sync.get(DEFAULT_SETTINGS)
+  const local = await chrome.storage.local.get({ [TEAM_POLICY_KEY]: "" })
   return {
     ...DEFAULT_SETTINGS,
     ...stored,
     apiBaseUrl: normalizeApiBaseUrl(stored.apiBaseUrl),
     trustedDomains: Array.isArray(stored.trustedDomains) ? stored.trustedDomains : [],
+    teamPolicyConnected: Boolean(String(local[TEAM_POLICY_KEY] ?? "").trim()),
   }
 }
 
@@ -209,8 +214,120 @@ async function saveSettings(nextSettings) {
       .filter(Boolean),
   }
   delete settings.trustedDomainsText
+  delete settings.teamPolicyApiKey
   await chrome.storage.sync.set(settings)
-  return settings
+
+  const teamPolicyApiKey = String(nextSettings.teamPolicyApiKey ?? "").trim()
+  if (teamPolicyApiKey) {
+    await chrome.storage.local.set({ [TEAM_POLICY_KEY]: teamPolicyApiKey })
+    await chrome.storage.local.remove(TEAM_POLICY_CACHE_KEY)
+  }
+  return getSettings()
+}
+
+function policyActionRank(action) {
+  if (action === "BLOCK") return 2
+  if (action === "REVIEW") return 1
+  return 0
+}
+
+function normalizePolicyDomain(value) {
+  return String(value ?? "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "")
+}
+
+function policyDomainMatches(domain, value) {
+  const expected = normalizePolicyDomain(value)
+  return Boolean(expected) && (domain === expected || domain.endsWith(`.${expected}`))
+}
+
+function policyRuleReason(rule, result) {
+  const metadata = result?.metadata ?? {}
+  const domain = normalizePolicyDomain(metadata.domain)
+  const intent = metadata.decodedIntent ?? {}
+  const codes = new Set((result?.signals ?? []).map((signal) => signal?.code))
+  const ruleValue = String(rule?.value ?? "").trim()
+
+  if (rule?.type === "DOMAIN_ALLOWLIST") {
+    return domain && !policyDomainMatches(domain, ruleValue)
+      ? `Destination ${domain} is outside the team allowlist entry ${normalizePolicyDomain(ruleValue)}.`
+      : null
+  }
+  if (rule?.type === "DOMAIN_BLOCK") {
+    return policyDomainMatches(domain, ruleValue) ? `Destination ${domain} matches the team blocklist.` : null
+  }
+  if (rule?.type === "EVM_SPENDER_BLOCK") {
+    const spender = String(intent.spender ?? "").trim().toLowerCase()
+    return spender && spender === ruleValue.toLowerCase() ? `EVM spender ${spender} is blocked by team policy.` : null
+  }
+  if (rule?.type === "UNLIMITED_APPROVAL_BLOCK") {
+    return codes.has("UNLIMITED_EVM_APPROVAL") ? "An unlimited token approval violates team policy." : null
+  }
+  if (rule?.type === "SOLANA_AUTHORITY_CHANGE_BLOCK") {
+    return codes.has("AUTHORITY_CHANGE") ? "A Solana authority change violates team policy." : null
+  }
+  return null
+}
+
+async function fetchTeamPolicies(settings) {
+  const stored = await chrome.storage.local.get({ [TEAM_POLICY_KEY]: "", [TEAM_POLICY_CACHE_KEY]: null })
+  const apiKey = String(stored[TEAM_POLICY_KEY] ?? "").trim()
+  if (!apiKey) return []
+
+  const cached = stored[TEAM_POLICY_CACHE_KEY]
+  if (cached?.fetchedAt && Array.isArray(cached.policies) && Date.now() - cached.fetchedAt < TEAM_POLICY_CACHE_TTL_MS) {
+    return cached.policies
+  }
+
+  try {
+    const response = await fetch(`${settings.apiBaseUrl}/api/v1/team-policies`, {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${apiKey}` },
+    })
+    const body = await response.json().catch(() => ({}))
+    if (!response.ok || !Array.isArray(body.policies)) return Array.isArray(cached?.policies) ? cached.policies : []
+    await chrome.storage.local.set({ [TEAM_POLICY_CACHE_KEY]: { fetchedAt: Date.now(), policies: body.policies } })
+    return body.policies
+  } catch {
+    return Array.isArray(cached?.policies) ? cached.policies : []
+  }
+}
+
+async function applyTeamPolicies(result, settings) {
+  const policies = await fetchTeamPolicies(settings)
+  if (!policies.length) return result
+
+  const matched = []
+  for (const policy of policies) {
+    for (const rule of Array.isArray(policy?.rules) ? policy.rules : []) {
+      const reason = policyRuleReason(rule, result)
+      if (reason) matched.push({ policyName: policy.name ?? "Team policy", ruleType: rule.type, action: rule.action, reason })
+    }
+  }
+  const action = matched.reduce((current, match) => policyActionRank(match.action) > policyActionRank(current) ? match.action : current, "ALLOW")
+  if (action === "ALLOW") return result
+
+  const primary = matched.find((match) => match.action === action) ?? matched[0]
+  const isBlock = action === "BLOCK"
+  const signal = {
+    code: isBlock ? "TEAM_POLICY_BLOCK" : "TEAM_POLICY_REVIEW",
+    severity: isBlock ? "critical" : "medium",
+    title: isBlock ? "Blocked by team policy" : "Team policy requires review",
+    detail: primary.reason,
+  }
+  const currentScore = Number(result?.score ?? 0)
+  return {
+    ...result,
+    score: Math.max(currentScore, isBlock ? 86 : 31),
+    riskLevel: isBlock ? "CRITICAL" : result?.riskLevel === "SAFE" ? "CAUTION" : result?.riskLevel,
+    summary: isBlock ? "Your organization blocked this destination or wallet action." : "Your organization requires a review before this action continues.",
+    explanation: primary.reason,
+    signals: [...(result?.signals ?? []), signal],
+    actions: [isBlock ? "Stop this action and contact your security administrator if you believe this is incorrect." : "Review this action with your team policy before continuing.", ...(result?.actions ?? [])],
+    metadata: {
+      ...(result?.metadata ?? {}),
+      teamPolicy: { action, matched },
+    },
+  }
 }
 
 async function requestJson(path, payload) {
@@ -263,8 +380,9 @@ async function scanUrl(value, { force = false, record = true, origin = "site", c
       metadata: { chain: "unknown", rpcStatus: "not_applicable", domain },
       scannedAt: new Date().toISOString(),
     }
-    if (record) await recordScan(localTrusted, { type: "url", sourceUrl: value, origin })
-    return localTrusted
+    const policyResult = await applyTeamPolicies(localTrusted, settings)
+    if (record) await recordScan(policyResult, { type: "url", sourceUrl: value, origin })
+    return policyResult
   }
 
   if (!force) {
@@ -275,10 +393,11 @@ async function scanUrl(value, { force = false, record = true, origin = "site", c
     }
   }
 
-  const result = await requestJson("/api/scamguard/scan-url", {
+  const rawResult = await requestJson("/api/scamguard/scan-url", {
     value,
     clientSignals: Array.isArray(clientSignals) ? clientSignals.slice(0, 8) : [],
   })
+  const result = await applyTeamPolicies(rawResult, settings)
   setCached("url", value, result)
   if (record) await recordScan(result, { type: "url", sourceUrl: value, origin })
   await notifyRisk(result, hostFromUrl(value) || "Current site")
@@ -286,7 +405,9 @@ async function scanUrl(value, { force = false, record = true, origin = "site", c
 }
 
 async function scanTransaction(value, walletAddress, chain, sourceUrl) {
-  const result = await requestJson("/api/scamguard/scan-transaction", { value, walletAddress, chain, sourceUrl })
+  const settings = await getSettings()
+  const rawResult = await requestJson("/api/scamguard/scan-transaction", { value, walletAddress, chain, sourceUrl })
+  const result = await applyTeamPolicies(rawResult, settings)
   await recordScan(result, { type: "transaction", sourceUrl, origin: "wallet" })
   await notifyRisk(result, "Wallet request")
   return result

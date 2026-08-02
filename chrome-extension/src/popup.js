@@ -39,6 +39,8 @@ const elements = {
   protectionLevel: document.getElementById("protectionLevel"),
   enableNotifications: document.getElementById("enableNotifications"),
   apiBaseUrl: document.getElementById("apiBaseUrl"),
+  teamPolicyApiKey: document.getElementById("teamPolicyApiKey"),
+  teamPolicyStatus: document.getElementById("teamPolicyStatus"),
   warnOnCaution: document.getElementById("warnOnCaution"),
   blockCriticalSites: document.getElementById("blockCriticalSites"),
   blockRiskyNavigation: document.getElementById("blockRiskyNavigation"),
@@ -234,6 +236,11 @@ function renderSettings(settings) {
   elements.protectionLevel.value = settings.protectionLevel ?? "balanced"
   elements.enableNotifications.checked = settings.enableNotifications !== false
   elements.apiBaseUrl.value = settings.apiBaseUrl ?? "https://triproofprotocol.com"
+  elements.teamPolicyApiKey.value = ""
+  elements.teamPolicyApiKey.placeholder = settings.teamPolicyConnected ? "Connected on this device — enter a new key to replace" : "tp_live_..."
+  elements.teamPolicyStatus.textContent = settings.teamPolicyConnected
+    ? "Connected. Team rules refresh every 10 minutes and are stored only on this device."
+    : "Optional. Connect organization-wide rules on this device."
   elements.warnOnCaution.checked = Boolean(settings.warnOnCaution)
   elements.blockCriticalSites.checked = Boolean(settings.blockCriticalSites)
   elements.blockRiskyNavigation.checked = settings.blockRiskyNavigation !== false
@@ -345,6 +352,7 @@ async function saveSettings() {
       blockAuthorityChanges: elements.blockAuthorityChanges.checked,
       requireNewDomainReview: elements.requireNewDomainReview.checked,
       trustedDomainsText: elements.trustedDomains.value,
+      ...(elements.teamPolicyApiKey.value.trim() ? { teamPolicyApiKey: elements.teamPolicyApiKey.value.trim() } : {}),
     },
   })
   if (!response?.ok) {

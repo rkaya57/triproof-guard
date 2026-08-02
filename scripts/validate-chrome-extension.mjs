@@ -58,6 +58,14 @@ for (const file of ["src/background.js", "src/guard-utils.js", "src/content.js",
   }
 }
 
+const backgroundSource = readFileSync(join(extensionDir, "src/background.js"), "utf8")
+if (!backgroundSource.includes("TEAM_POLICY_KEY") || !backgroundSource.includes("/api/v1/team-policies")) {
+  problems.push("Team Policy Sync wiring is incomplete")
+}
+if (!backgroundSource.includes("chrome.storage.local.set({ [TEAM_POLICY_KEY]: teamPolicyApiKey })")) {
+  problems.push("Team Policy API keys must be stored in local extension storage")
+}
+
 if (problems.length) {
   console.error(`Chrome extension validation failed:\n- ${problems.join("\n- ")}`)
   process.exit(1)

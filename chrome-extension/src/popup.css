@@ -776,6 +776,7 @@ label {
 }
 
 input[type="url"],
+input[type="password"],
 select,
 textarea {
   width: 100%;
@@ -792,6 +793,7 @@ select {
 }
 
 input[type="url"]:focus,
+input[type="password"]:focus,
 select:focus,
 textarea:focus {
   border-color: rgba(66, 205, 244, 0.66);
@@ -800,6 +802,13 @@ textarea:focus {
 
 textarea {
   resize: vertical;
+}
+
+label small {
+  color: var(--soft);
+  font-size: 10px;
+  font-weight: 560;
+  line-height: 1.35;
 }
 
 .message {
