@@ -366,6 +366,107 @@
   line-height: 1.45;
 }
 
+#scamguard-extension-overlay .sgx-batch-ledger {
+  margin-top: 14px;
+  border-color: rgba(96, 165, 250, 0.38);
+  background: linear-gradient(135deg, rgba(30, 58, 138, 0.18), rgba(15, 23, 42, 0.72));
+}
+
+#scamguard-extension-overlay .sgx-batch-head,
+#scamguard-extension-overlay .sgx-batch-ledger li {
+  display: flex;
+  align-items: center;
+}
+
+#scamguard-extension-overlay .sgx-batch-head {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#scamguard-extension-overlay .sgx-batch-head > div > span {
+  display: block;
+  color: #7dd3fc;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+#scamguard-extension-overlay .sgx-batch-head h3 {
+  margin: 5px 0 0;
+  color: #f8fafc;
+}
+
+#scamguard-extension-overlay .sgx-batch-head > b,
+#scamguard-extension-overlay .sgx-batch-ledger li > b {
+  border: 1px solid rgba(96, 165, 250, 0.38);
+  border-radius: 999px;
+  color: #bfdbfe;
+  font-size: 10px;
+  font-weight: 850;
+  padding: 5px 8px;
+  text-transform: uppercase;
+}
+
+#scamguard-extension-overlay .sgx-batch-ledger ol {
+  display: grid;
+  gap: 8px;
+  margin: 13px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+#scamguard-extension-overlay .sgx-batch-ledger li {
+  gap: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 11px;
+  background: rgba(2, 6, 23, 0.32);
+  padding: 9px;
+}
+
+#scamguard-extension-overlay .sgx-batch-ledger li > span {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 7px;
+  background: rgba(56, 189, 248, 0.17);
+  color: #bae6fd;
+  font-family: "Cascadia Code", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+#scamguard-extension-overlay .sgx-batch-ledger li > div {
+  min-width: 0;
+  flex: 1;
+}
+
+#scamguard-extension-overlay .sgx-batch-ledger li strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #f8fafc;
+  font-size: 12px;
+}
+
+#scamguard-extension-overlay .sgx-batch-ledger li p {
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  color: #b8c8da;
+  font-size: 11px;
+}
+
+#scamguard-extension-overlay .sgx-batch-ledger li.high > b {
+  border-color: rgba(251, 191, 36, 0.56);
+  color: #fde68a;
+}
+
+#scamguard-extension-overlay .sgx-batch-ledger li.medium > b {
+  border-color: rgba(125, 211, 252, 0.46);
+  color: #bae6fd;
+}
+
 #scamguard-extension-overlay .sgx-firewall-notice {
   margin-top: 14px;
   border: 1px solid rgba(251, 113, 133, 0.58);

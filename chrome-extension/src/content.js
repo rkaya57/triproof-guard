@@ -242,6 +242,7 @@ function overlayMarkup(result, options) {
       </section>
     `
     : ""
+  const batchLedger = walletBatchLedger(result)
   const firewallNotice = options.policyReason
     ? `<section class="sgx-firewall-notice"><span>Firewall rule</span><strong>${escapeHtml(options.policyReason)}</strong><p>This local rule prevented the wallet request from being forwarded.</p></section>`
     : ""
@@ -266,6 +267,7 @@ function overlayMarkup(result, options) {
           <p>${escapeHtml(decision?.userMessage ?? result.summary ?? "Pause for a second and review this before continuing.")}</p>
         </div>
         ${signingSummary}
+        ${batchLedger}
         ${firewallNotice}
         ${transactionSummary}
         <div class="sgx-decision-note">
@@ -292,6 +294,28 @@ function overlayMarkup(result, options) {
   `
 }
 
+function walletBatchLedger(result) {
+  const calls = result?.metadata?.decodedIntent?.batch?.calls
+  if (!Array.isArray(calls) || !calls.length) return ""
+  const atomic = result.metadata.decodedIntent.batch.atomicRequired
+  return `
+    <section class="sgx-batch-ledger" aria-label="Wallet call batch ledger">
+      <div class="sgx-batch-head">
+        <div><span>Batch risk ledger</span><h3>${calls.length} call${calls.length === 1 ? "" : "s"} to review</h3></div>
+        <b>${atomic ? "Atomic batch" : "Multi-call"}</b>
+      </div>
+      <ol>
+        ${calls.map((call) => {
+          const target = call.spender ?? call.recipient ?? call.to ?? "No destination decoded"
+          const amount = call.amount ?? call.value
+          const risk = call.risk ?? "low"
+          return `<li class="${escapeHtml(risk)}"><span>${Number(call.index) + 1}</span><div><strong>${escapeHtml(call.method ?? "Unknown call")}</strong><p>${escapeHtml(call.category ?? "unknown")} · ${escapeHtml(shortAddress(target) ?? target)}${amount ? ` · ${escapeHtml(String(amount).length > 24 ? "unlimited / very high" : String(amount))}` : ""}</p></div><b>${escapeHtml(risk)}</b></li>`
+        }).join("")}
+      </ol>
+    </section>
+  `
+}
+
 function firewallBlockReason(result, settings) {
   const codes = new Set((result?.signals ?? []).map((signal) => signal?.code))
   if (result?.riskLevel === "CRITICAL") return "Critical ScamGuard risk"
@@ -314,6 +338,7 @@ function transactionFacts(result) {
   const facts = []
   if (metadata.chain && metadata.chain !== "unknown") facts.push({ label: "Chain", value: metadata.chain.toUpperCase() })
   if (intent?.category && intent.category !== "unknown") facts.push({ label: "Intent", value: intent.category.replaceAll("_", " ") })
+  if (intent?.batch?.totalCalls) facts.push({ label: "Batch", value: `${intent.batch.totalCalls} call${intent.batch.totalCalls === 1 ? "" : "s"}` })
   if (intent?.method && intent.method.length <= 64 && !/^[A-Za-z0-9+/=]{32,}$/.test(intent.method)) {
     facts.push({ label: "Method", value: intent.method })
   }
@@ -322,6 +347,7 @@ function transactionFacts(result) {
   if (intent?.recipient) facts.push({ label: "Recipient", value: shortAddress(intent.recipient) })
   if (intent?.amount) facts.push({ label: "Amount", value: String(intent.amount).length > 24 ? "Unlimited / very high" : String(intent.amount) })
   if (intent?.typedData?.primaryType) facts.push({ label: "Typed data", value: intent.typedData.primaryType })
+  if (intent?.typedData?.action && intent.typedData.action !== "message") facts.push({ label: "Effect", value: intent.typedData.action.replaceAll("_", " ") })
   if (intent?.typedData?.verifyingContract) facts.push({ label: "Verifier", value: shortAddress(intent.typedData.verifyingContract) })
   if (metadata.simulation?.attempted) facts.push({ label: "Simulation", value: metadata.simulation.ok ? "Passed" : "Failed" })
   if (contract?.checked) {

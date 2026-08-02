@@ -1209,6 +1209,11 @@ textarea:focus-visible {
   font-size: 18px;
 }
 
+.center-button {
+  width: 100%;
+  margin-top: 11px;
+}
+
 .settings summary {
   position: relative;
   padding-right: 42px;

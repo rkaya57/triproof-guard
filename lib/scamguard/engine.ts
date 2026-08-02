@@ -82,6 +82,26 @@ export type ScamGuardScanResult = {
         verifyingContract?: string
         messageFields: string[]
         highImpact: boolean
+        action?: "permit" | "asset_order" | "delegation" | "authorization" | "message"
+        spender?: string
+        recipient?: string
+        amount?: string
+        deadline?: string
+      }
+      batch?: {
+        totalCalls: number
+        atomicRequired: boolean
+        calls: Array<{
+          index: number
+          to?: string
+          method?: string
+          category: "transfer" | "approval" | "authority" | "unknown"
+          spender?: string
+          recipient?: string
+          amount?: string
+          value?: string
+          risk: "low" | "medium" | "high"
+        }>
       }
       warnings: string[]
     }
@@ -1556,19 +1576,27 @@ async function maybeSimulateTransaction(value: string): Promise<SimulationMetada
 async function maybeSimulateEvmTransaction(value: string): Promise<SimulationMetadata> {
   const parsed = safeJson(value)
   const context = evmRequestContext(parsed)
-  const transaction = context.transaction
-  if (!transaction || !getEvmRpcUrl()) return { attempted: false, ok: false, chain: "evm", mode: "call" }
-  const to = typeof transaction.to === "string" ? normalizeEvmAddress(transaction.to) : undefined
-  const data = typeof transaction.data === "string" ? transaction.data : typeof transaction.input === "string" ? transaction.input : undefined
-  const from = typeof transaction.from === "string" ? normalizeEvmAddress(transaction.from) : undefined
-  const call: Record<string, string> = {}
-  if (to) call.to = to
-  if (data) call.data = data
-  if (from) call.from = from
-  if (typeof transaction.value === "string" && /^0x[0-9a-f]+$/i.test(transaction.value)) call.value = transaction.value
-  if (!Object.keys(call).length) return { attempted: false, ok: false, chain: "evm", mode: "call" }
+  const requests = context.batchCalls.length ? context.batchCalls : context.transaction ? [context.transaction] : []
+  if (!requests.length || !getEvmRpcUrl()) return { attempted: false, ok: false, chain: "evm", mode: "call" }
+  const calls = requests.slice(0, 8).map((transaction) => {
+    const to = typeof transaction.to === "string" ? normalizeEvmAddress(transaction.to) : undefined
+    const data = typeof transaction.data === "string" ? transaction.data : typeof transaction.input === "string" ? transaction.input : undefined
+    const from = typeof transaction.from === "string" ? normalizeEvmAddress(transaction.from) : undefined
+    const call: Record<string, string> = {}
+    if (to) call.to = to
+    if (data) call.data = data
+    if (from) call.from = from
+    if (typeof transaction.value === "string" && /^0x[0-9a-f]+$/i.test(transaction.value)) call.value = transaction.value
+    return call
+  }).filter((call) => Object.keys(call).length)
+  if (!calls.length) return { attempted: false, ok: false, chain: "evm", mode: "call" }
   try {
-    await evmRpc<string>("eth_call", [call, "latest"])
+    const results = await Promise.allSettled(calls.map((call) => evmRpc<string>("eth_call", [call, "latest"])))
+    const failed = results.filter((result) => result.status === "rejected")
+    if (failed.length) {
+      const first = failed[0]
+      throw first.status === "rejected" ? first.reason : new Error("EVM call simulation failed")
+    }
     return { attempted: true, ok: true, chain: "evm", mode: "call" }
   } catch (error) {
     return {
@@ -1651,6 +1679,20 @@ function decodeEvmCalldata(data?: string) {
   return null
 }
 
+function scalarField(value: unknown, keys: string[]): string | undefined {
+  if (!value || typeof value !== "object") return undefined
+  const record = value as Record<string, unknown>
+  for (const key of keys) {
+    const item = record[key]
+    if (typeof item === "string" || typeof item === "number" || typeof item === "bigint") return String(item)
+  }
+  for (const item of Object.values(record)) {
+    const nested = scalarField(item, keys)
+    if (nested) return nested
+  }
+  return undefined
+}
+
 function parseTypedData(value: unknown) {
   const raw = typeof value === "string" ? value : value && typeof value === "object" ? JSON.stringify(value) : ""
   if (!raw || raw.length > 100_000) return undefined
@@ -1661,13 +1703,28 @@ function parseTypedData(value: unknown) {
     const primaryType = typeof parsed.primaryType === "string" ? parsed.primaryType : undefined
     const domainName = typeof domain.name === "string" ? domain.name : undefined
     const verifyingContract = typeof domain.verifyingContract === "string" ? normalizeEvmAddress(domain.verifyingContract) : undefined
-    const highImpact = /permit|order|offer|listing|delegate|authorization|transfer/i.test(`${primaryType ?? ""} ${Object.keys(message).join(" ")}`)
+    const semanticText = `${primaryType ?? ""} ${Object.keys(message).join(" ")}`.toLowerCase()
+    const action: "permit" | "asset_order" | "delegation" | "authorization" | "message" = /permit/.test(semanticText)
+      ? "permit"
+      : /order|offer|listing|seaport|consideration/.test(semanticText)
+        ? "asset_order"
+        : /delegate|operator/.test(semanticText)
+          ? "delegation"
+          : /authorization|transferwithauthorization/.test(semanticText)
+            ? "authorization"
+            : "message"
+    const highImpact = action !== "message"
     return {
       primaryType,
       domainName,
       verifyingContract,
       messageFields: Object.keys(message).slice(0, 8),
       highImpact,
+      action,
+      spender: scalarField(message, ["spender", "operator", "delegate"]),
+      recipient: scalarField(message, ["recipient", "to", "receiver"]),
+      amount: scalarField(message, ["amount", "value", "tokenId"]),
+      deadline: scalarField(message, ["deadline", "expiry", "expiration"]),
     }
   } catch {
     return undefined
@@ -1675,12 +1732,42 @@ function parseTypedData(value: unknown) {
 }
 
 function evmRequestContext(parsed: unknown) {
-  if (!parsed || typeof parsed !== "object") return { transaction: undefined, typedData: undefined }
+  if (!parsed || typeof parsed !== "object") return { transaction: undefined, typedData: undefined, batchCalls: [] as Array<Record<string, unknown>>, atomicRequired: false }
   const record = parsed as Record<string, unknown>
   const params = Array.isArray(record.params) ? record.params : []
-  const transaction = params.find((item) => item && typeof item === "object" && !Array.isArray(item)) as Record<string, unknown> | undefined
-  const typedCandidate = [...params].reverse().find((item) => typeof item === "string" && item.includes("\"types\""))
-  return { transaction, typedData: parseTypedData(typedCandidate) }
+  const batch = params.find((item) => item && typeof item === "object" && !Array.isArray(item) && Array.isArray((item as Record<string, unknown>).calls)) as Record<string, unknown> | undefined
+  const transaction = params.find((item) => item && typeof item === "object" && !Array.isArray(item) && (typeof (item as Record<string, unknown>).to === "string" || typeof (item as Record<string, unknown>).data === "string" || typeof (item as Record<string, unknown>).input === "string")) as Record<string, unknown> | undefined
+  const typedCandidate = [...params].reverse().find((item) => {
+    if (typeof item === "string") return item.includes("\"types\"")
+    return Boolean(item && typeof item === "object" && !Array.isArray(item) && ((item as Record<string, unknown>).types || (item as Record<string, unknown>).primaryType || (item as Record<string, unknown>).message))
+  })
+  const batchCalls = Array.isArray(batch?.calls)
+    ? batch.calls.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item))).slice(0, 12)
+    : []
+  return { transaction, typedData: parseTypedData(typedCandidate), batchCalls, atomicRequired: batch?.atomicRequired === true }
+}
+
+function decodeEvmCall(call: Record<string, unknown>, index = 0) {
+  const data = typeof call.data === "string" ? call.data : typeof call.input === "string" ? call.input : undefined
+  const selector = data?.slice(0, 10).toLowerCase()
+  const selectorMatch = selector ? evmFunctionSelectors.get(selector) : undefined
+  const decoded = decodeEvmCalldata(data)
+  const category: "approval" | "transfer" | "unknown" = selectorMatch?.category === "approval" || selectorMatch?.category === "transfer"
+    ? selectorMatch.category
+    : "unknown"
+  const amount = decoded?.amount
+  const isUnlimited = amount === maxUint256 || amount === "all assets"
+  return {
+    index,
+    to: typeof call.to === "string" ? normalizeEvmAddress(call.to) : undefined,
+    method: selectorMatch?.method ?? (selector ? `Unknown call ${selector}` : "Native value call"),
+    category,
+    spender: decoded?.spender,
+    recipient: decoded?.recipient,
+    amount,
+    value: typeof call.value === "string" ? uintFromEvmWord(call.value.replace(/^0x/, "").padStart(64, "0")) : undefined,
+    risk: isUnlimited || category === "approval" ? "high" as const : category === "transfer" ? "medium" as const : "low" as const,
+  }
 }
 
 function collectInstructionLikeObjects(value: unknown, out: Array<Record<string, unknown>> = []) {
@@ -1781,6 +1868,30 @@ function decodeIntent(value: string, chain: ScamGuardChain): NonNullable<ScamGua
   const warnings: string[] = []
 
   if (chain === "evm") {
+    if (requestContext.batchCalls.length) {
+      const calls = requestContext.batchCalls.map((call, index) => decodeEvmCall(call, index))
+      const actionable = calls.filter((call) => call.category !== "unknown")
+      const highestRisk = [...calls].sort((left, right) => ({ low: 0, medium: 1, high: 2 }[right.risk] - { low: 0, medium: 1, high: 2 }[left.risk]))[0]
+      const category = actionable.find((call) => call.category === "approval")?.category
+        ?? actionable.find((call) => call.category === "transfer")?.category
+        ?? "unknown"
+      warnings.push(`Wallet Call API batch contains ${calls.length} call${calls.length === 1 ? "" : "s"}${requestContext.atomicRequired ? " and requires atomic execution" : ""}.`)
+      if (calls.some((call) => call.category === "approval")) warnings.push("At least one batch step grants token or NFT approval.")
+      if (calls.some((call) => call.amount === maxUint256 || call.amount === "all assets")) warnings.push("At least one batch step creates an unlimited or all-assets approval.")
+      return {
+        method: method ?? "wallet_sendCalls",
+        category,
+        spender: highestRisk?.spender,
+        recipient: highestRisk?.recipient,
+        amount: highestRisk?.amount,
+        batch: {
+          totalCalls: calls.length,
+          atomicRequired: requestContext.atomicRequired,
+          calls,
+        },
+        warnings,
+      }
+    }
     const selector = data?.slice(0, 10).toLowerCase()
     const selectorMatch = selector ? evmFunctionSelectors.get(selector) : undefined
     const decodedCalldata = decodeEvmCalldata(data)
@@ -1861,7 +1972,7 @@ async function scanTransaction(value: string, walletAddress: string | undefined,
   const sourceDomain = sourceUrl ? (hostFromUrl(sourceUrl) ?? undefined) : undefined
   const sourceDomainIntel = sourceUrl ? domainIntelligenceFor(sourceUrl) : undefined
   const sourceReputation = sourceDomain ? domainReputation(sourceDomain) : defaultReputation()
-  const unlimitedApproval = chain === "evm" && isUnlimitedEvmApproval(decodedIntent, text)
+  const unlimitedApproval = chain === "evm" && !decodedIntent.batch && isUnlimitedEvmApproval(decodedIntent, text)
   const knownBadCounterparty = counterpartyReputation.verdict === "known_bad"
   const sourceTrusted = sourceReputation.verdict === "trusted"
   const sourceKnownBad = sourceReputation.verdict === "known_bad"
@@ -1875,6 +1986,24 @@ async function scanTransaction(value: string, walletAddress: string | undefined,
         ? `Approval-style call detected${decodedIntent.spender ? ` for spender ${decodedIntent.spender}` : " without a decoded spender"}. Review amount and counterparty before signing.`
         : "Delegate approvals can allow another account to move tokens.",
     })
+  }
+  if (chain === "evm" && decodedIntent.batch?.totalCalls) {
+    const approvals = decodedIntent.batch.calls.filter((call) => call.category === "approval")
+    const transfers = decodedIntent.batch.calls.filter((call) => call.category === "transfer")
+    signals.push({
+      code: "EVM_CALL_BATCH",
+      severity: approvals.length ? "medium" : "info",
+      title: `EVM batch contains ${decodedIntent.batch.totalCalls} call${decodedIntent.batch.totalCalls === 1 ? "" : "s"}`,
+      detail: `${approvals.length} approval${approvals.length === 1 ? "" : "s"} and ${transfers.length} transfer${transfers.length === 1 ? "" : "s"} were decoded. Review each step before signing${decodedIntent.batch.atomicRequired ? "; this batch requests atomic execution" : ""}.`,
+    })
+    if (approvals.some((call) => call.amount === maxUint256 || call.amount === "all assets")) {
+      signals.push({
+        code: "UNLIMITED_EVM_APPROVAL",
+        severity: "critical",
+        title: "Unlimited approval inside a batch",
+        detail: "One batch step grants an unlimited or all-assets approval. The full batch should be treated as high impact.",
+      })
+    }
   }
   if (sourceDomain && sourceTrusted) {
     signals.push({
@@ -2039,6 +2168,14 @@ async function scanTransaction(value: string, walletAddress: string | undefined,
       severity: "high",
       title: "High-impact typed-data signature",
       detail: `${decodedIntent.typedData.primaryType ?? "Typed data"} can authorize a permit, order, transfer, or delegated action without a direct on-chain transfer prompt.`,
+    })
+  }
+  if (chain === "evm" && decodedIntent.typedData?.action === "permit" && decodedIntent.typedData.deadline) {
+    signals.push({
+      code: "TYPED_DATA_PERMIT_WINDOW",
+      severity: "medium",
+      title: "Permit signature includes an expiry",
+      detail: `This typed-data permit includes expiry ${decodedIntent.typedData.deadline}. Confirm the spender, amount, and expiry in the wallet request.`,
     })
   }
   if (seedPhraseWords.some((word) => text.includes(word))) {

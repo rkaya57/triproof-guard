@@ -17,6 +17,9 @@ const requiredFiles = [
   "src/popup.html",
   "src/popup.css",
   "src/popup.js",
+  "src/sidepanel.html",
+  "src/sidepanel.css",
+  "src/sidepanel.js",
   "assets/icon16.png",
   "assets/icon48.png",
   "assets/icon128.png",
@@ -27,6 +30,7 @@ const problems = []
 if (manifest.manifest_version !== 3) problems.push("manifest_version must be 3")
 if (!manifest.background?.service_worker) problems.push("background.service_worker is required")
 if (!manifest.action?.default_popup) problems.push("action.default_popup is required")
+if (!manifest.side_panel?.default_path) problems.push("side_panel.default_path is required")
 
 for (const file of requiredFiles) {
   try {
@@ -45,7 +49,7 @@ for (const file of textFiles) {
   }
 }
 
-for (const file of ["src/background.js", "src/guard-utils.js", "src/content.js", "src/injected.js", "src/popup.js"]) {
+for (const file of ["src/background.js", "src/guard-utils.js", "src/content.js", "src/injected.js", "src/popup.js", "src/sidepanel.js"]) {
   const result = spawnSync(process.execPath, ["--check", join(extensionDir, file)], {
     encoding: "utf8",
   })

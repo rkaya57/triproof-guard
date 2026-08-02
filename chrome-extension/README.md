@@ -14,13 +14,15 @@ Pre-sign protection for Solana and EVM dApps, airdrops, token claims, and suspic
   - `signMessage`
   - generic signing `provider.request(...)` calls
 - Plain-language signing review for every intercepted wallet request, including approvals, transfers, authority changes, account closure, mint actions, and message signatures.
-- EIP-712 typed-data review that highlights permit, order, authorization, and transfer-capable message signatures with their primary type and verifying contract when present.
-- EVM `eth_call` preflight for transaction-shaped requests when an EVM RPC is configured, plus existing Solana transaction simulation evidence when a serializable transaction is available.
+- EIP-712 typed-data review that translates Permit, asset-order, delegation, and authorization payloads into spender, amount, expiry, primary type, domain, and verifying-contract context when present.
+- EIP-5792 Wallet Call API support: `wallet_sendCalls` batches are retained end-to-end, decomposed into a per-call risk ledger, and shown before the wallet request continues.
+- EVM `eth_call` preflight for every decodable batch call or transaction-shaped request when an EVM RPC is configured, plus existing Solana transaction simulation evidence when a serializable transaction is available.
 - Local transaction firewall rules for unlimited approvals, approvals to EOAs, Solana authority changes, critical pages, and unverified signing domains.
 - Browser-observed page signals for recovery-phrase/private-key forms, wallet deep links, hidden cross-origin frames, and clipboard-write behavior. These signals are bounded and used only in the current scan decision.
 - A short decision timeline that shows source context, decoded intent, evidence, and the final risk decision.
 - Local scan history for the latest 100 site and wallet checks. History stores a redacted target and decision summary only.
 - A local Security Center that summarizes risk events, blocked critical events, protected domains, and active firewall rules.
+- A persistent Chrome Security Center side panel for the active site, decision path, local evidence, and private browser history.
 - Shareable, privacy-preserving report snapshots that omit raw wallet payloads, public keys, and URL query parameters.
 - One-click handoff to the moderated Tri-Proof Threat Pool, where users can submit the current site for admin review.
 - Injected EVM provider pre-sign observer for MetaMask/Rabby/Coinbase style:

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ScamGuard Security Center</title>
+    <link rel="stylesheet" href="sidepanel.css">
+  </head>
+  <body>
+    <main class="panel-shell">
+      <header class="panel-header">
+        <div class="brand">
+          <img src="../assets/icon48.png" alt="">
+          <div><strong>ScamGuard</strong><span>Security Center</span></div>
+        </div>
+        <span id="riskBadge" class="badge">Reading</span>
+      </header>
+
+      <section class="hero-card">
+        <p class="eyebrow">Active surface</p>
+        <h1 id="domainLabel">Loading current tab</h1>
+        <p id="summaryLabel">Checking source reputation and live protection context.</p>
+        <div class="score-row">
+          <div id="scoreMeter" class="score-meter" style="--score-fill: 0%"><strong id="scoreLabel">--</strong><span>shield</span></div>
+          <div class="score-copy"><strong id="decisionLabel">Waiting for telemetry</strong><span id="decisionDetail">A decision will appear here after the scan.</span></div>
+        </div>
+        <div class="hero-actions">
+          <button id="rescanButton" type="button" class="primary">Rescan active site</button>
+          <button id="openScannerButton" type="button" class="secondary">Open scanner</button>
+        </div>
+      </section>
+
+      <section class="metrics-card">
+        <div><strong id="riskEvents">0</strong><span>risk events</span></div>
+        <div><strong id="blockedEvents">0</strong><span>blocked</span></div>
+        <div><strong id="protectedDomains">0</strong><span>domains</span></div>
+        <div><strong id="firewallRules">0</strong><span>rules active</span></div>
+      </section>
+
+      <section class="timeline-card">
+        <div class="section-title"><div><p class="eyebrow">Decision path</p><h2>Why this result</h2></div><span id="confidencePill" class="soft-pill">Waiting</span></div>
+        <ol id="riskTimeline" class="timeline"></ol>
+      </section>
+
+      <section class="signals-card">
+        <div class="section-title"><div><p class="eyebrow">Evidence</p><h2>Top risk drivers</h2></div><span class="soft-pill">Live</span></div>
+        <div id="signalsList" class="signals-list">No decision yet.</div>
+      </section>
+
+      <section class="history-card">
+        <div class="section-title"><div><p class="eyebrow">Local only</p><h2>Recent protection activity</h2></div></div>
+        <div id="historyList" class="history-list"></div>
+      </section>
+    </main>
+    <script src="guard-utils.js"></script>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

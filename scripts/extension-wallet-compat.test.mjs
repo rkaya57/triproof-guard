@@ -188,3 +188,24 @@ test("covers EVM transaction, typed-data, chain, and batched-call approval paths
   assert.equal(lab.pageMessages.length, methods.length)
   assert.deepEqual(lab.pageMessages.map((message) => message.method), methods)
 })
+
+test("preserves Wallet Call API batches for the ScamGuard risk ledger", async () => {
+  const provider = evmProvider("wallet")
+  const lab = walletLab({ ethereum: provider })
+  const calls = [
+    { to: "0x1111111111111111111111111111111111111111", data: "0x095ea7b3" },
+    { to: "0x2222222222222222222222222222222222222222", value: "0x1" },
+  ]
+
+  await provider.request({
+    method: "wallet_sendCalls",
+    params: [{ version: "2.0.0", atomicRequired: true, calls }],
+  })
+
+  const payload = JSON.parse(lab.pageMessages[0].value)
+  assert.deepEqual(payload, {
+    kind: "evm_wallet_request",
+    method: "wallet_sendCalls",
+    params: [{ version: "2.0.0", atomicRequired: true, calls }],
+  })
+})

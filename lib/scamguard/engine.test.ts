@@ -214,6 +214,60 @@ test("ScamGuard explains high-impact EIP-712 typed-data signatures", async () =>
   assert.ok(result.signals.some((signal) => signal.code === "HIGH_IMPACT_TYPED_DATA"))
 })
 
+test("ScamGuard explains typed-data permit semantics from object payloads", async () => {
+  const verifyingContract = "0x2222222222222222222222222222222222222222"
+  const spender = "0x3333333333333333333333333333333333333333"
+  const result = await scanScamGuard({
+    type: "transaction",
+    chain: "evm",
+    value: JSON.stringify({
+      method: "eth_signTypedData_v4",
+      params: [
+        "0x1111111111111111111111111111111111111111",
+        {
+          primaryType: "Permit",
+          domain: { name: "Example Token", verifyingContract },
+          message: { owner: "0x1111111111111111111111111111111111111111", spender, value: "42", deadline: "9999999999" },
+        },
+      ],
+    }),
+  })
+
+  assert.equal(result.metadata.decodedIntent?.typedData?.action, "permit")
+  assert.equal(result.metadata.decodedIntent?.typedData?.spender, spender)
+  assert.equal(result.metadata.decodedIntent?.typedData?.amount, "42")
+  assert.equal(result.metadata.decodedIntent?.typedData?.deadline, "9999999999")
+})
+
+test("ScamGuard decomposes EIP-5792 wallet call batches", async () => {
+  const token = "0x1111111111111111111111111111111111111111"
+  const spender = "2222222222222222222222222222222222222222"
+  const recipient = "3333333333333333333333333333333333333333"
+  const max = "f".repeat(64)
+  const result = await scanScamGuard({
+    type: "transaction",
+    chain: "evm",
+    value: JSON.stringify({
+      method: "wallet_sendCalls",
+      params: [{
+        version: "2.0.0",
+        atomicRequired: true,
+        calls: [
+          { to: token, data: `0x095ea7b3${spender.padStart(64, "0")}${max}` },
+          { to: token, data: `0xa9059cbb${recipient.padStart(64, "0")}${"5".padStart(64, "0")}` },
+        ],
+      }],
+    }),
+  })
+
+  assert.equal(result.metadata.decodedIntent?.batch?.totalCalls, 2)
+  assert.equal(result.metadata.decodedIntent?.batch?.atomicRequired, true)
+  assert.equal(result.metadata.decodedIntent?.batch?.calls[0]?.category, "approval")
+  assert.equal(result.metadata.decodedIntent?.batch?.calls[1]?.category, "transfer")
+  assert.ok(result.signals.some((signal) => signal.code === "EVM_CALL_BATCH"))
+  assert.ok(result.signals.some((signal) => signal.code === "UNLIMITED_EVM_APPROVAL"))
+})
+
 test("ScamGuard includes bounded browser-observed safety signals in a URL decision", async () => {
   const result = await scanScamGuard({
     type: "url",

@@ -264,7 +264,17 @@ async function getSecurityCenter() {
 chrome.runtime.onInstalled.addListener(async () => {
   const existing = await chrome.storage.sync.get(Object.keys(DEFAULT_SETTINGS))
   if (!existing.apiBaseUrl) await chrome.storage.sync.set(DEFAULT_SETTINGS)
+  if (chrome.sidePanel?.setPanelBehavior) {
+    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => undefined)
+  }
 })
+
+async function openSecurityCenter(sender) {
+  if (!chrome.sidePanel?.open) throw new Error("Chrome Security Center requires Chrome 116 or newer.")
+  const windowId = sender?.tab?.windowId ?? (await chrome.windows.getCurrent()).id
+  if (typeof windowId !== "number") throw new Error("Could not identify the active Chrome window.")
+  await chrome.sidePanel.open({ windowId })
+}
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   void (async () => {
@@ -300,6 +310,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       if (message?.type === "GET_SECURITY_CENTER") {
         sendResponse({ ok: true, center: await getSecurityCenter() })
+        return
+      }
+      if (message?.type === "OPEN_SECURITY_CENTER") {
+        await openSecurityCenter(sender)
+        sendResponse({ ok: true })
         return
       }
       if (message?.type === "GET_ACTIVE_TAB") {

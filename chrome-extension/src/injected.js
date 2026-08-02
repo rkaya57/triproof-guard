@@ -177,12 +177,23 @@
   }
 
   function serializedScanValue(method, transaction, chain) {
-    const serialized = serializeTransactionLike(transaction)
     if (chain === "solana") {
+      const serialized = serializeTransactionLike(transaction)
       if (/signmessage/i.test(method)) return JSON.stringify({ method, message: serialized })
       return JSON.stringify({ ...solanaRequestSummary(method, transaction), serializedTransaction: serialized })
     }
-    return serialized
+    const requestParams = transaction && typeof transaction === "object" && !Array.isArray(transaction) && Array.isArray(transaction.params)
+      ? transaction.params
+      : Array.isArray(transaction) ? transaction : [transaction]
+    return JSON.stringify({
+      kind: "evm_wallet_request",
+      method,
+      params: requestParams,
+    }, (_key, item) => {
+      if (typeof item === "bigint") return item.toString()
+      if (item instanceof Uint8Array) return `[Uint8Array:${item.length}]`
+      return item
+    })
   }
 
   function askScamGuard({ method, transaction, provider, chain }) {

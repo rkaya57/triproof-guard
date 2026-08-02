@@ -35,6 +35,7 @@ const elements = {
   centerBlocked: document.getElementById("centerBlocked"),
   centerDomains: document.getElementById("centerDomains"),
   centerRules: document.getElementById("centerRules"),
+  openSecurityCenterButton: document.getElementById("openSecurityCenterButton"),
   protectionLevel: document.getElementById("protectionLevel"),
   enableNotifications: document.getElementById("enableNotifications"),
   apiBaseUrl: document.getElementById("apiBaseUrl"),
@@ -421,6 +422,12 @@ elements.clearHistoryButton.addEventListener("click", () => {
 })
 
 elements.reportThreatButton.addEventListener("click", reportCurrentSite)
+
+elements.openSecurityCenterButton.addEventListener("click", () => {
+  void sendMessage({ type: "OPEN_SECURITY_CENTER" }).then((response) => {
+    if (!response?.ok) elements.shareStatus.textContent = response?.error ?? "Could not open Security Center."
+  })
+})
 
 elements.saveSettingsButton.addEventListener("click", () => {
   void saveSettings()

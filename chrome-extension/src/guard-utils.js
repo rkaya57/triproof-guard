@@ -25,6 +25,19 @@
     const amount = intent.amount ? (isUnlimited(intent.amount) ? "an unlimited or extremely high amount" : String(intent.amount)) : null
     const counterparty = intent.spender ?? intent.recipient
 
+    if (intent.batch?.totalCalls) {
+      const calls = Array.isArray(intent.batch.calls) ? intent.batch.calls : []
+      const approvals = calls.filter((call) => call.category === "approval").length
+      const transfers = calls.filter((call) => call.category === "transfer").length
+      const unlimited = calls.some((call) => isUnlimited(call.amount) || call.amount === "all assets")
+      return {
+        eyebrow: intent.batch.atomicRequired ? "Atomic wallet batch" : "Wallet call batch",
+        title: `Review ${intent.batch.totalCalls} wallet actions together`,
+        detail: `This request bundles ${intent.batch.totalCalls} action${intent.batch.totalCalls === 1 ? "" : "s"}: ${approvals} approval${approvals === 1 ? "" : "s"} and ${transfers} transfer${transfers === 1 ? "" : "s"}. ${intent.batch.atomicRequired ? "The wallet expects the batch to execute as one unit." : "Each call still needs to match your intended action."}`,
+        caution: unlimited ? "One step grants unlimited or all-assets approval. Do not approve this batch unless you fully trust every call." : "Open the batch ledger and verify every destination, approval, and amount before continuing.",
+      }
+    }
+
     if (category === "approval") {
       return {
         eyebrow: "Wallet approval",
@@ -69,11 +82,18 @@
       const typedData = intent.typedData
       if (typedData?.highImpact) {
         const primaryType = typedData.primaryType || "typed-data request"
+        const actionLabel = typedData.action === "permit"
+          ? "permission to spend tokens"
+          : typedData.action === "asset_order"
+            ? "an NFT or asset order"
+            : typedData.action === "delegation"
+              ? "delegated control"
+              : "an off-chain authorization"
         return {
           eyebrow: "High-impact typed data",
           title: `Sign ${primaryType}`,
-          detail: `This EIP-712 signature is associated with${typedData.domainName ? ` ${typedData.domainName}` : " a dApp"}${typedData.verifyingContract ? ` and contract ${shortAddress(typedData.verifyingContract)}` : ""}. It can authorize a permit, order, transfer, or delegated action without directly moving funds in this popup.`,
-          caution: "Only sign typed data when its domain, contract, and message fields exactly match the action you intended.",
+          detail: `This EIP-712 signature can authorize ${actionLabel}${typedData.domainName ? ` for ${typedData.domainName}` : ""}${typedData.verifyingContract ? ` through ${shortAddress(typedData.verifyingContract)}` : ""}${typedData.spender ? ` to ${shortAddress(typedData.spender)}` : ""}${typedData.amount ? ` for ${isUnlimited(typedData.amount) ? "an unlimited amount" : typedData.amount}` : ""}. It may not move funds in this popup, but it can create a usable authorization.`,
+          caution: typedData.deadline ? `Check the spender, amount, and expiry (${typedData.deadline}) before you sign.` : "Only sign typed data when its domain, contract, and message fields exactly match the action you intended.",
         }
       }
       return {
@@ -108,7 +128,9 @@
         : reputation.verdict === "suspicious"
           ? "Suspicious source context"
           : "Source not yet verified"
-    const intentLabel = intent.category && intent.category !== "unknown"
+    const intentLabel = intent.batch?.totalCalls
+      ? `wallet batch (${intent.batch.totalCalls} call${intent.batch.totalCalls === 1 ? "" : "s"})`
+      : intent.category && intent.category !== "unknown"
       ? intent.category.replaceAll("_", " ")
       : result?.type === "transaction" ? intent.instructionCount ? `Solana transaction (${intent.instructionCount} instruction${intent.instructionCount === 1 ? "" : "s"})` : "wallet request (not decoded)" : "site and URL read"
     const evidenceLabel = signals.length
