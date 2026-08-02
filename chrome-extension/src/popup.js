@@ -41,6 +41,7 @@ const elements = {
   apiBaseUrl: document.getElementById("apiBaseUrl"),
   warnOnCaution: document.getElementById("warnOnCaution"),
   blockCriticalSites: document.getElementById("blockCriticalSites"),
+  blockRiskyNavigation: document.getElementById("blockRiskyNavigation"),
   blockUnlimitedApprovals: document.getElementById("blockUnlimitedApprovals"),
   blockApprovalToEoa: document.getElementById("blockApprovalToEoa"),
   blockAuthorityChanges: document.getElementById("blockAuthorityChanges"),
@@ -235,6 +236,7 @@ function renderSettings(settings) {
   elements.apiBaseUrl.value = settings.apiBaseUrl ?? "https://triproofprotocol.com"
   elements.warnOnCaution.checked = Boolean(settings.warnOnCaution)
   elements.blockCriticalSites.checked = Boolean(settings.blockCriticalSites)
+  elements.blockRiskyNavigation.checked = settings.blockRiskyNavigation !== false
   elements.blockUnlimitedApprovals.checked = settings.blockUnlimitedApprovals !== false
   elements.blockApprovalToEoa.checked = settings.blockApprovalToEoa !== false
   elements.blockAuthorityChanges.checked = Boolean(settings.blockAuthorityChanges)
@@ -337,6 +339,7 @@ async function saveSettings() {
       enableNotifications: elements.enableNotifications.checked,
       warnOnCaution: elements.warnOnCaution.checked,
       blockCriticalSites: elements.blockCriticalSites.checked,
+      blockRiskyNavigation: elements.blockRiskyNavigation.checked,
       blockUnlimitedApprovals: elements.blockUnlimitedApprovals.checked,
       blockApprovalToEoa: elements.blockApprovalToEoa.checked,
       blockAuthorityChanges: elements.blockAuthorityChanges.checked,

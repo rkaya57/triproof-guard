@@ -366,6 +366,36 @@
   line-height: 1.45;
 }
 
+#scamguard-extension-overlay .sgx-navigation-brief {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  border: 1px solid rgba(74, 222, 255, 0.34);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(8, 47, 73, 0.56), rgba(12, 24, 47, 0.8));
+  padding: 14px;
+}
+
+#scamguard-extension-overlay .sgx-navigation-brief > span {
+  color: #6ce6ff;
+  font-family: "Cascadia Code", ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+#scamguard-extension-overlay .sgx-navigation-brief h3,
+#scamguard-extension-overlay .sgx-navigation-brief p {
+  margin: 0;
+}
+
+#scamguard-extension-overlay .sgx-navigation-brief h3 { color: #f2fbff; font-size: 16px; }
+#scamguard-extension-overlay .sgx-navigation-brief div { display: grid; gap: 4px; }
+#scamguard-extension-overlay .sgx-navigation-brief b { color: #aaf3ff; font-size: 12px; }
+#scamguard-extension-overlay .sgx-navigation-brief p { color: #bfcedd; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+#scamguard-extension-overlay .sgx-navigation-brief > strong { color: #ffe18a; font-size: 12px; line-height: 1.45; }
+
 #scamguard-extension-overlay .sgx-batch-ledger {
   margin-top: 14px;
   border-color: rgba(96, 165, 250, 0.38);

@@ -6,6 +6,7 @@ import test from "node:test"
 import vm from "node:vm"
 
 const injectedSource = readFileSync(join(process.cwd(), "chrome-extension", "src", "injected.js"), "utf8")
+const contentSource = readFileSync(join(process.cwd(), "chrome-extension", "src", "content.js"), "utf8")
 
 function walletLab({ decision = { allow: true }, solana, ethereum, extraWindow = {} } = {}) {
   const listeners = []
@@ -244,4 +245,14 @@ test("rechecks observed EVM approvals with read-only wallet RPC calls", async ()
   assert.equal(response?.ok, true)
   assert.equal(response?.inventory?.inventories?.[0]?.permissions?.[0]?.status, "active_onchain")
   assert.deepEqual(calls, ["eth_accounts", "eth_chainId", "eth_call"])
+})
+
+test("navigation shield prevents a same-tab external link before awaiting its risk scan", () => {
+  const start = contentSource.indexOf("async function guardExternalNavigation")
+  const end = contentSource.indexOf("function overlayMarkup", start)
+  const handler = contentSource.slice(start, end)
+  assert.ok(start >= 0)
+  assert.ok(handler.indexOf("event.preventDefault()") < handler.indexOf("await getSettings()"))
+  assert.match(handler, /forceBlock: result\.riskLevel === "CRITICAL"/)
+  assert.match(handler, /window\.location\.assign\(href\)/)
 })

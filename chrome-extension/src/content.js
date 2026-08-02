@@ -5,6 +5,8 @@ let latestUrlResult = null
 let settingsCache = null
 let overlayOpen = false
 let popupHeartbeatTimer = null
+let navigationInFlight = false
+const scannedLinkResults = new Map()
 
 function sendMessage(message) {
   return new Promise((resolve) => {
@@ -182,6 +184,9 @@ function markScannedLinks(results) {
     badge.textContent = riskLabel(result.riskLevel)
     link.appendChild(badge)
   })
+  for (const item of results ?? []) {
+    if (item?.value) scannedLinkResults.set(linkKey(item.value), item)
+  }
 }
 
 async function scanPageLinks() {
@@ -204,6 +209,74 @@ async function scanPageLinks() {
   return { ok: true, counts }
 }
 
+function isGuardedNavigation(event, anchor) {
+  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false
+  if (anchor.target && anchor.target !== "_self") return false
+  if (anchor.hasAttribute("download") || anchor.getAttribute("rel")?.includes("external")) return false
+  try {
+    const target = new URL(anchor.href, window.location.href)
+    return /^https?:$/.test(target.protocol) && target.origin !== window.location.origin
+  } catch {
+    return false
+  }
+}
+
+function needsNavigationReview(result, settings) {
+  if (["CRITICAL", "HIGH_RISK"].includes(result?.riskLevel)) return true
+  return result?.riskLevel === "CAUTION" && ["strict", "paranoid"].includes(settings?.protectionLevel)
+}
+
+async function guardExternalNavigation(event) {
+  const rawTarget = event.target
+  const anchor = rawTarget instanceof Element ? rawTarget.closest("a[href]") : null
+  if (!(anchor instanceof HTMLAnchorElement) || !isGuardedNavigation(event, anchor)) return
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  if (navigationInFlight) return
+  navigationInFlight = true
+  const href = anchor.href
+  const settings = await getSettings()
+  if (!settings.blockRiskyNavigation) {
+    window.location.assign(href)
+    return
+  }
+  const key = linkKey(href)
+  let result = scannedLinkResults.get(key)
+  if (!result) {
+    const response = await sendMessage({ type: "SCAN_URL", value: href, clientSignals: pageSafetySignals() })
+    if (!response?.ok) {
+      const allow = await showDecisionOverlay({
+        riskLevel: "CAUTION",
+        score: 38,
+        summary: "ScamGuard could not verify this external link before navigation.",
+        explanation: response?.error ?? "The link check did not complete.",
+        signals: [{ title: "Navigation scan unavailable", detail: "Do not rely on a clean result when the link could not be checked.", severity: "medium" }],
+        actions: ["Cancel and open the project from an official bookmark or verified profile."],
+        metadata: { chain: "unknown", domain: hostFromUrl(href) },
+      }, { title: "External link could not be checked", mode: "navigation" })
+      if (allow) window.location.assign(href)
+      else navigationInFlight = false
+      return
+    }
+    result = response.result
+    scannedLinkResults.set(key, result)
+  }
+
+  if (needsNavigationReview(result, settings)) {
+    const allow = await showDecisionOverlay(result, {
+      title: result.riskLevel === "CRITICAL" ? "ScamGuard blocked this destination" : "Review this external destination",
+      mode: "navigation",
+      forceBlock: result.riskLevel === "CRITICAL",
+    })
+    if (!allow) {
+      navigationInFlight = false
+      return
+    }
+  }
+
+  window.location.assign(href)
+}
+
 function overlayMarkup(result, options) {
   const signals = (result.signals ?? [])
     .slice(0, 4)
@@ -219,6 +292,7 @@ function overlayMarkup(result, options) {
   const signingBrief = options.mode === "transaction"
     ? globalThis.ScamGuardUtils?.signingExplanation(result)
     : null
+  const navigationBrief = options.mode === "navigation" ? navigationShieldBrief(result) : ""
   const timeline = globalThis.ScamGuardUtils?.riskTimeline(result, window.location.href) ?? []
   const transactionSummary = facts.length
     ? `
@@ -268,6 +342,7 @@ function overlayMarkup(result, options) {
           <p>${escapeHtml(decision?.userMessage ?? result.summary ?? "Pause for a second and review this before continuing.")}</p>
         </div>
         ${signingSummary}
+        ${navigationBrief}
         ${assetImpact}
         ${batchLedger}
         ${firewallNotice}
@@ -312,6 +387,24 @@ function walletAssetImpact(result) {
         ${!outgoing.length && !approvals.length ? item("No exact asset delta decoded", impact.note ?? "Use the wallet preview to verify this action.") : ""}
       </ul>
       <p>${escapeHtml(impact.note ?? "Confirm the final wallet preview before signing.")}</p>
+    </section>
+  `
+}
+
+function navigationShieldBrief(result) {
+  const sandbox = result?.metadata?.sandbox
+  const chain = Array.isArray(sandbox?.redirectChain) ? sandbox.redirectChain : []
+  const finalDestination = sandbox?.finalUrl
+  const status = sandbox?.status === "complete" ? "Sandbox checked" : sandbox?.status ? `Sandbox ${sandbox.status}` : "Fast route check"
+  return `
+    <section class="sgx-navigation-brief">
+      <span>Navigation shield</span>
+      <h3>Check where this link really leads</h3>
+      <div>
+        <b>${escapeHtml(status)}</b>
+        <p>${chain.length ? `${chain.length} redirect${chain.length === 1 ? "" : "s"} observed${finalDestination ? ` before ${finalDestination}` : ""}.` : finalDestination ? `Sandbox destination: ${finalDestination}` : "No redirect destination was available from this scan."}</p>
+      </div>
+      <strong>Admin-reviewed threat intelligence, brand impersonation, typosquatting, and redirect signals can block this route.</strong>
     </section>
   `
 }
@@ -502,6 +595,10 @@ window.addEventListener("message", (event) => {
   if (!data || data.source !== PAGE_SOURCE || data.type !== "SCAMGUARD_SIGN_REQUEST") return
   void handleSignRequest(data)
 })
+
+document.addEventListener("click", (event) => {
+  void guardExternalNavigation(event)
+}, true)
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   void (async () => {
