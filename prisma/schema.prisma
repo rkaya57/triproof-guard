@@ -201,8 +201,29 @@ model User {
   reviewedThreatReports      CommunityThreatReport[] @relation("CommunityThreatReportReviewer")
   teamSecurityPolicies       TeamSecurityPolicy[]
   teamPolicyViolations       TeamPolicyViolation[]
+  extensionConnectRequests   ExtensionConnectRequest[]
   createdAt                  DateTime              @default(now())
   updatedAt                  DateTime              @updatedAt
+}
+
+model ExtensionConnectRequest {
+  id                    String    @id @default(cuid())
+  verificationCodeHash  String
+  pollTokenHash         String    @unique
+  deviceName            String?
+  status                String    @default("PENDING")
+  userId                String?
+  user                  User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  approvedAt            DateTime?
+  extensionTokenId      String?   @unique
+  extensionTokenExpiresAt DateTime?
+  revokedAt             DateTime?
+  expiresAt             DateTime
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([status, expiresAt])
+  @@index([userId, createdAt])
 }
 
 model TeamSecurityPolicy {

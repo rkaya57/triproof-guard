@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { scanScamGuard, type ScamGuardChain } from "@/lib/scamguard/engine"
 import { sandboxRateLimit } from "@/lib/scamguard/sandbox-rate-limit"
 import { scanAccess } from "@/lib/scamguard/scan-access"
+import { getExtensionSession } from "@/lib/extension/session"
 
 export const runtime = "nodejs"
 export const maxDuration = 20
@@ -34,7 +35,8 @@ export async function POST(request: Request) {
   if (!value) return NextResponse.json({ error: "value is required" }, { status: 400 })
   if (value.length > 4_096) return NextResponse.json({ error: "URL is too long" }, { status: 413 })
 
-  const access = await scanAccess(true)
+  const extensionSession = await getExtensionSession(request)
+  const access = await scanAccess(true, extensionSession?.user)
   if (access.error) return access.error
 
   const clientSignals = Array.isArray(body?.clientSignals)

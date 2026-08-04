@@ -22,6 +22,8 @@ const TEAM_POLICY_KEY = "scamguardTeamPolicyApiKey"
 const TEAM_POLICY_CACHE_KEY = "scamguardTeamPolicyCache"
 const TEAM_POLICY_CACHE_TTL_MS = 10 * 60_000
 const SECURITY_CENTER_TARGET_KEY = "scamguardSecurityCenterTarget"
+const EXTENSION_ACCESS_TOKEN_KEY = "scamguardExtensionAccessToken"
+const EXTENSION_CONNECTION_KEY = "scamguardExtensionConnection"
 const scanCache = new Map()
 
 function normalizeApiBaseUrl(value) {
@@ -375,15 +377,97 @@ async function reportTeamPolicyEvent(result, target) {
 
 async function requestJson(path, payload) {
   const settings = await getSettings()
+  const stored = await chrome.storage.local.get({ [EXTENSION_ACCESS_TOKEN_KEY]: "" })
+  const accessToken = String(stored[EXTENSION_ACCESS_TOKEN_KEY] ?? "").trim()
   const response = await fetch(`${settings.apiBaseUrl}${path}`, {
     method: "POST",
     cache: "no-store",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
     body: JSON.stringify(payload),
   })
   const body = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(body.error ?? `ScamGuard API failed: ${response.status}`)
   return body
+}
+
+async function getExtensionEntitlement({ poll = true } = {}) {
+  const settings = await getSettings()
+  const stored = await chrome.storage.local.get({ [EXTENSION_ACCESS_TOKEN_KEY]: "", [EXTENSION_CONNECTION_KEY]: null })
+  let accessToken = String(stored[EXTENSION_ACCESS_TOKEN_KEY] ?? "").trim()
+  const connection = stored[EXTENSION_CONNECTION_KEY]
+
+  if (!accessToken && poll && connection?.requestId && connection?.pollToken) {
+    try {
+      const response = await fetch(`${settings.apiBaseUrl}/api/extension/connect/poll`, {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId: connection.requestId, pollToken: connection.pollToken }),
+      })
+      const body = await response.json().catch(() => ({}))
+      if (response.ok && body.status === "approved" && typeof body.accessToken === "string") {
+        accessToken = body.accessToken
+        await chrome.storage.local.set({ [EXTENSION_ACCESS_TOKEN_KEY]: accessToken })
+        await chrome.storage.local.remove(EXTENSION_CONNECTION_KEY)
+      } else if (body.status === "expired") {
+        await chrome.storage.local.remove(EXTENSION_CONNECTION_KEY)
+        return { connected: false, pending: false, expired: true }
+      } else {
+        return { connected: false, pending: true, verificationCode: connection.verificationCode, expiresAt: connection.expiresAt }
+      }
+    } catch {
+      return { connected: false, pending: true, verificationCode: connection.verificationCode, expiresAt: connection.expiresAt }
+    }
+  }
+
+  if (!accessToken) return { connected: false, pending: false }
+  try {
+    const response = await fetch(`${settings.apiBaseUrl}/api/extension/entitlement`, {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    const body = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      await chrome.storage.local.remove(EXTENSION_ACCESS_TOKEN_KEY)
+      return { connected: false, pending: false, error: body.error ?? "Reconnect your Tri-Proof account to continue." }
+    }
+    return { connected: true, pending: false, ...body }
+  } catch {
+    return { connected: false, pending: false, error: "Could not refresh your account plan. Check your connection." }
+  }
+}
+
+async function beginExtensionConnection() {
+  const settings = await getSettings()
+  const response = await fetch(`${settings.apiBaseUrl}/api/extension/connect/start`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ deviceName: "Chrome ScamGuard" }),
+  })
+  const body = await response.json().catch(() => ({}))
+  if (!response.ok || !body.requestId || !body.pollToken || !body.verificationCode || !body.connectUrl) {
+    throw new Error(body.error ?? "Could not start the secure account connection.")
+  }
+  const connection = { requestId: body.requestId, pollToken: body.pollToken, verificationCode: body.verificationCode, expiresAt: body.expiresAt }
+  await chrome.storage.local.set({ [EXTENSION_CONNECTION_KEY]: connection })
+  await chrome.tabs.create({ url: `${settings.apiBaseUrl}${body.connectUrl}` })
+  return { connected: false, pending: true, verificationCode: connection.verificationCode, expiresAt: connection.expiresAt }
+}
+
+async function disconnectExtensionAccount() {
+  const settings = await getSettings()
+  const stored = await chrome.storage.local.get({ [EXTENSION_ACCESS_TOKEN_KEY]: "" })
+  const accessToken = String(stored[EXTENSION_ACCESS_TOKEN_KEY] ?? "").trim()
+  if (accessToken) {
+    try {
+      await fetch(`${settings.apiBaseUrl}/api/extension/disconnect`, { method: "POST", cache: "no-store", headers: { Authorization: `Bearer ${accessToken}` } })
+    } catch {
+      // Removing local access still signs this browser out safely.
+    }
+  }
+  await chrome.storage.local.remove([EXTENSION_ACCESS_TOKEN_KEY, EXTENSION_CONNECTION_KEY])
+  return { connected: false, pending: false }
 }
 
 async function notifyRisk(result, context) {
@@ -564,6 +648,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       if (message?.type === "SAVE_SETTINGS") {
         sendResponse({ ok: true, settings: await saveSettings(message.settings ?? {}) })
+        return
+      }
+      if (message?.type === "GET_EXTENSION_ENTITLEMENT") {
+        sendResponse({ ok: true, entitlement: await getExtensionEntitlement() })
+        return
+      }
+      if (message?.type === "CONNECT_EXTENSION_ACCOUNT") {
+        sendResponse({ ok: true, entitlement: await beginExtensionConnection() })
+        return
+      }
+      if (message?.type === "DISCONNECT_EXTENSION_ACCOUNT") {
+        sendResponse({ ok: true, entitlement: await disconnectExtensionAccount() })
         return
       }
       if (message?.type === "SCAN_URL") {

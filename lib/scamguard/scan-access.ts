@@ -19,8 +19,8 @@ const defaultDependencies: ScanAccessDependencies = {
 }
 
 export function createScanAccess(dependencies: ScanAccessDependencies = defaultDependencies) {
-  return async function scanAccess(deepRequested: boolean) {
-    const user = await dependencies.getCurrentUser()
+  return async function scanAccess(deepRequested: boolean, authenticatedUser?: { id: string; email?: string | null }) {
+    const user = authenticatedUser ?? await dependencies.getCurrentUser()
     if (!user) {
       return {
         user: null,

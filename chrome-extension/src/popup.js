@@ -44,6 +44,15 @@ const elements = {
   centerDomains: document.getElementById("centerDomains"),
   centerRules: document.getElementById("centerRules"),
   openSecurityCenterButton: document.getElementById("openSecurityCenterButton"),
+  accountMessage: document.getElementById("accountMessage"),
+  accountPlanPill: document.getElementById("accountPlanPill"),
+  accountUsageLabel: document.getElementById("accountUsageLabel"),
+  accountUsageBar: document.getElementById("accountUsageBar"),
+  accountFeatureLabel: document.getElementById("accountFeatureLabel"),
+  accountPairingCode: document.getElementById("accountPairingCode"),
+  connectAccountButton: document.getElementById("connectAccountButton"),
+  upgradeAccountButton: document.getElementById("upgradeAccountButton"),
+  disconnectAccountButton: document.getElementById("disconnectAccountButton"),
   protectionLevel: document.getElementById("protectionLevel"),
   profileDescription: document.getElementById("profileDescription"),
   enableNotifications: document.getElementById("enableNotifications"),
@@ -346,13 +355,86 @@ async function loadActiveTab() {
   elements.siteFavicon.src = state.tab?.favIconUrl || "../assets/icon48.png"
 }
 
+function renderAccountAccess(entitlement) {
+  const access = entitlement?.access
+  const pending = Boolean(entitlement?.pending)
+  const connected = Boolean(entitlement?.connected && access)
+  const isFree = access?.planId === "free"
+  const limit = Number(access?.dailyScanLimit ?? 0)
+  const used = Number(access?.scanCount ?? 0)
+  const remaining = Math.max(0, limit - used)
+  const usagePercent = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0
+
+  elements.accountPairingCode.hidden = true
+  elements.disconnectAccountButton.hidden = true
+  elements.connectAccountButton.hidden = false
+  elements.upgradeAccountButton.hidden = false
+
+  if (pending) {
+    elements.accountPlanPill.textContent = "Pairing"
+    elements.accountMessage.textContent = "Finish account connection in the Tri-Proof tab, then reopen this popup."
+    elements.accountUsageLabel.textContent = "Waiting for approval"
+    elements.accountUsageBar.style.width = "18%"
+    elements.accountFeatureLabel.textContent = "Enter the code below only on the official Tri-Proof connection page."
+    elements.accountPairingCode.hidden = false
+    elements.accountPairingCode.textContent = `Connection code: ${entitlement.verificationCode ?? "Open the connection tab"}`
+    elements.connectAccountButton.textContent = "Restart connection"
+    elements.upgradeAccountButton.textContent = "View plans"
+    return
+  }
+
+  if (!connected) {
+    elements.accountPlanPill.textContent = "Guest"
+    elements.accountMessage.textContent = entitlement?.expired ? "Connection expired. Start a fresh secure pairing." : "Connect your Tri-Proof account to receive your Free scan allowance."
+    elements.accountUsageLabel.textContent = "Account required"
+    elements.accountUsageBar.style.width = "0%"
+    elements.accountFeatureLabel.textContent = "Critical in-page warnings remain active. Account connection enables server-backed scans, limits, and upgrades."
+    elements.connectAccountButton.textContent = "Connect account"
+    elements.upgradeAccountButton.textContent = "See plans"
+    return
+  }
+
+  elements.accountPlanPill.textContent = access.planName
+  elements.accountMessage.textContent = `${entitlement.account?.name ?? "Connected"}, your ${access.planName} protection is active on this browser.`
+  elements.accountUsageLabel.textContent = limit > 0 ? `${remaining} of ${limit} server scans left today` : "Unlimited plan allowance"
+  elements.accountUsageBar.style.width = `${usagePercent}%`
+  elements.accountFeatureLabel.textContent = access.deepUrlScamDna
+    ? "Deep URL Sandbox and Scam DNA are active for server scans."
+    : "Core protection is active. Upgrade to Builder for Deep URL Sandbox, Scam DNA, and a 100-scan daily allowance."
+  elements.connectAccountButton.hidden = true
+  elements.disconnectAccountButton.hidden = false
+  elements.disconnectAccountButton.textContent = "Disconnect browser"
+  elements.upgradeAccountButton.textContent = isFree ? "Unlock Builder" : "Manage plan"
+}
+
+async function loadAccountAccess() {
+  const response = await sendMessage({ type: "GET_EXTENSION_ENTITLEMENT" })
+  if (!response?.ok) return null
+  state.entitlement = response.entitlement
+  renderAccountAccess(response.entitlement)
+  return response.entitlement
+}
+
 async function scanActiveTab(force = false) {
   if (!state.tab?.url) await loadActiveTab()
+  if (!state.entitlement?.connected) {
+    const entitlement = await loadAccountAccess()
+    if (!entitlement?.connected) {
+      elements.riskBadge.className = "badge ready"
+      elements.riskBadge.textContent = "Account"
+      elements.summaryLabel.textContent = "Connect your Tri-Proof account to start your Free server-backed scan allowance."
+      elements.scoreWhisper.textContent = "Critical local browser warnings remain active before account connection."
+      elements.decisionMessage.textContent = "Server scans are linked to your Free, Builder, Community, or API plan so limits and upgrades stay protected."
+      elements.primarySignalLabel.textContent = "Account connection required for this scan."
+      renderScanState("READY")
+      return
+    }
+  }
   setBusy("Scanning this site with the ScamGuard engine.")
   const response = await sendMessage({ type: "SCAN_URL", value: state.tab.url, force })
   if (!response?.ok) throw new Error(response?.error ?? "Could not scan current tab")
   renderResult(response.result)
-  await Promise.all([loadHistory(), loadSecurityCenter()])
+  await Promise.all([loadHistory(), loadSecurityCenter(), loadAccountAccess()])
 }
 
 function relativeTime(value) {
@@ -539,6 +621,35 @@ elements.openSecurityCenterButton.addEventListener("click", () => {
   })
 })
 
+elements.connectAccountButton.addEventListener("click", () => {
+  elements.connectAccountButton.disabled = true
+  elements.connectAccountButton.textContent = "Opening secure connection..."
+  void sendMessage({ type: "CONNECT_EXTENSION_ACCOUNT" }).then((response) => {
+    if (!response?.ok) throw new Error(response?.error ?? "Could not start account connection.")
+    state.entitlement = response.entitlement
+    renderAccountAccess(response.entitlement)
+  }).catch((error) => {
+    elements.accountMessage.textContent = error instanceof Error ? error.message : "Could not start account connection."
+  }).finally(() => {
+    elements.connectAccountButton.disabled = false
+  })
+})
+
+elements.upgradeAccountButton.addEventListener("click", () => {
+  const base = (state.settings?.apiBaseUrl ?? "https://triproofprotocol.com").replace(/\/$/, "")
+  const plan = state.entitlement?.access?.planId === "free" || !state.entitlement?.connected ? "builder" : ""
+  void chrome.tabs.create({ url: plan ? `${base}/checkout?plan=${plan}` : `${base}/pricing` })
+})
+
+elements.disconnectAccountButton.addEventListener("click", () => {
+  void sendMessage({ type: "DISCONNECT_EXTENSION_ACCOUNT" }).then((response) => {
+    if (response?.ok) {
+      state.entitlement = response.entitlement
+      renderAccountAccess(response.entitlement)
+    }
+  })
+})
+
 elements.saveSettingsButton.addEventListener("click", () => {
   void saveSettings()
 })
@@ -559,7 +670,7 @@ profileButtons.forEach((button) => {
 
 void (async () => {
   try {
-    await Promise.all([loadSettings(), loadActiveTab(), loadHistory(), loadSecurityCenter()])
+    await Promise.all([loadSettings(), loadActiveTab(), loadHistory(), loadSecurityCenter(), loadAccountAccess()])
     setPageBannerCompact(true)
     sendPopupHeartbeat()
     window.setInterval(sendPopupHeartbeat, 900)
