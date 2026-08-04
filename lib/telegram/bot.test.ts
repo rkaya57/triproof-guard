@@ -76,6 +76,16 @@ test("Telegram inline mode returns a safe help result before a target is supplie
   assert.equal(actions[0].inlineQuery?.results[0].title, "Scan a Web3 target with ScamGuard")
 })
 
+test("Telegram bot includes scanner actions when /start is used in a group", async () => {
+  const actions = await handleTelegramUpdate({
+    update_id: 103,
+    message: { message_id: 103, text: "/start", chat: { id: -100, type: "supergroup", title: "Test group" } },
+  })
+
+  assert.equal(actions[0].payload.reply_markup?.inline_keyboard[0][0].text, "Open live scanner")
+  assert.equal(actions[0].payload.reply_markup?.inline_keyboard[0][1].text, "Threat Pool")
+})
+
 test("Telegram watch command saves an evaluated target", async () => {
   let savedTarget = ""
   const actions = await handleTelegramUpdate({

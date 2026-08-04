@@ -562,6 +562,15 @@ function startKeyboard(context: TelegramBotContext): TelegramSendMessage["reply_
   }
 }
 
+function groupStartKeyboard(context: TelegramBotContext): TelegramSendMessage["reply_markup"] {
+  return {
+    inline_keyboard: [[
+      { text: "Open live scanner", url: `${baseUrl(context)}/scamguard` },
+      { text: "Threat Pool", url: `${baseUrl(context)}/threat-reports` },
+    ]],
+  }
+}
+
 function scanReportKeyboard(context: TelegramBotContext, candidate: ScanCandidate, eventId?: string): TelegramSendMessage["reply_markup"] {
   const scannerUrl = `${baseUrl(context)}/scamguard`
   const reportUrl = `${baseUrl(context)}/threat-reports?target=${encodeURIComponent(candidate.value)}${candidate.type === "url" ? "&kind=DOMAIN" : ""}`
@@ -775,7 +784,7 @@ async function handlePrivateOrCommand(message: TelegramMessage, context: Telegra
   const command = parseCommand(text)
 
   if (command?.name === "start" || command?.name === "help") {
-    return [simpleReply(message, commandHelp, message.chat.type === "private" ? startKeyboard(context) : undefined)]
+    return [simpleReply(message, commandHelp, message.chat.type === "private" ? startKeyboard(context) : groupStartKeyboard(context))]
   }
 
   if (command?.name === "settings") {
