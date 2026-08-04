@@ -9,15 +9,24 @@ import {
 } from "@/lib/airdrop/tasks"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
+const noStoreHeaders = {
+  "Cache-Control": "private, no-store, no-cache, max-age=0, must-revalidate",
+}
+
+function json(body: unknown, status = 200) {
+  return NextResponse.json(body, { status, headers: noStoreHeaders })
+}
 
 export async function GET() {
   const admin = await getAdminUser()
-  if (!admin) return NextResponse.json({ error: "Admin access required" }, { status: 403 })
+  if (!admin) return json({ error: "Admin access required" }, 403)
 
   try {
     await ensureAirdropTasks(db)
 
-    const [submissions, totals] = await Promise.all([
+    const [submissions, totals, totalCount] = await Promise.all([
       db.airdropSubmission.findMany({
         include: {
           task: true,
@@ -25,16 +34,18 @@ export async function GET() {
           profile: true,
           reviewedBy: { select: { id: true, name: true, email: true } },
         },
-        orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-        take: 100,
+        orderBy: [{ createdAt: "desc" }],
+        take: 250,
       }),
       db.airdropSubmission.groupBy({
         by: ["status"],
         _count: { _all: true },
       }),
+      db.airdropSubmission.count(),
     ])
 
-    return NextResponse.json({
+    return json({
+      totalCount,
       totals: totals.reduce<Record<string, number>>((acc, row) => {
         acc[row.status] = row._count._all
         return acc
@@ -68,10 +79,10 @@ export async function GET() {
     })
   } catch (error) {
     if (isAirdropSchemaMissing(error)) {
-      return NextResponse.json(airdropSchemaMissingResponse(), { status: 503 })
+      return json(airdropSchemaMissingResponse(), 503)
     }
 
     console.error("Airdrop submissions load failed", error)
-    return NextResponse.json({ error: "Could not load airdrop submissions." }, { status: 500 })
+    return json({ error: "Could not load airdrop submissions." }, 500)
   }
 }
