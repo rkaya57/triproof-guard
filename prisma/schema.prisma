@@ -902,6 +902,7 @@ model AirdropTask {
   slug          String              @unique
   title         String
   description   String              @db.Text
+  targetUrl     String?             @db.Text
   type          AirdropTaskType
   points        Int
   proofRequired Boolean             @default(true)

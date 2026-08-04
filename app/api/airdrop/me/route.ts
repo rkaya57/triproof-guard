@@ -104,6 +104,7 @@ export async function GET() {
           slug: task.slug,
           title: task.title,
           description: task.description,
+          targetUrl: task.targetUrl,
           type: task.type,
           points: task.points,
           proofRequired: task.proofRequired,

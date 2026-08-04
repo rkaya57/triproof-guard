@@ -24,7 +24,7 @@ import { Textarea } from "@/components/ui/textarea"
 
 type SubmissionStatus = "PENDING" | "APPROVED" | "REJECTED"
 type ReviewFilter = SubmissionStatus
-type TaskType = "X_FOLLOW" | "X_QUOTE" | "TELEGRAM_JOIN" | "HUMANITY_GATE_FEEDBACK"
+type TaskType = "X_FOLLOW" | "X_QUOTE" | "TELEGRAM_JOIN" | "THREAT_REPORT" | "HUMANITY_GATE_FEEDBACK"
 
 type AdminSubmission = {
   id: string
@@ -71,6 +71,7 @@ type AdminTask = {
   slug: string
   title: string
   description: string
+  targetUrl: string | null
   type: TaskType
   points: number
   proofRequired: boolean
@@ -83,6 +84,7 @@ const emptyTaskForm = {
   id: "",
   title: "",
   description: "",
+  targetUrl: "",
   type: "X_FOLLOW" as TaskType,
   points: 100,
   proofRequired: true,
@@ -212,6 +214,7 @@ export function AirdropReviewConsole() {
       id: task.id,
       title: task.title,
       description: task.description,
+      targetUrl: task.targetUrl ?? "",
       type: task.type,
       points: task.points,
       proofRequired: task.proofRequired,
@@ -354,6 +357,19 @@ export function AirdropReviewConsole() {
                 placeholder="Explain exactly what users must do and what proof admins need."
               />
             </label>
+            <label className="grid gap-2 text-sm text-slate-300">
+              Task link {taskForm.type === "X_QUOTE" ? "(required)" : "(optional)"}
+              <Input
+                type="url"
+                value={taskForm.targetUrl}
+                onChange={(event) => setTaskForm((current) => ({ ...current, targetUrl: event.target.value }))}
+                placeholder="https://x.com/TriProof_/status/..."
+                required={taskForm.type === "X_QUOTE"}
+              />
+              <span className="text-xs leading-5 text-slate-400">
+                Paste the exact post, profile, Telegram, or campaign URL users must open before submitting proof.
+              </span>
+            </label>
             <div className="grid gap-3 sm:grid-cols-3">
               <label className="grid gap-2 text-sm text-slate-300">
                 Type
@@ -365,6 +381,7 @@ export function AirdropReviewConsole() {
                   <option value="X_FOLLOW">X follow</option>
                   <option value="X_QUOTE">X quote</option>
                   <option value="TELEGRAM_JOIN">Telegram join</option>
+                  <option value="THREAT_REPORT">Threat report</option>
                   <option value="HUMANITY_GATE_FEEDBACK">ScamGuard feedback</option>
                 </select>
               </label>
@@ -440,6 +457,16 @@ export function AirdropReviewConsole() {
                       <Badge variant="secondary">{task.points} pts</Badge>
                     </div>
                     <p className="text-sm leading-6 text-slate-300">{task.description}</p>
+                    {task.targetUrl && (
+                      <a
+                        href={task.targetUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                      >
+                        Open task link <ExternalLink className="size-3" />
+                      </a>
+                    )}
                     <p className="mt-2 font-mono text-xs text-slate-400">
                       {task.type} / {task.proofRequired ? "proof required" : "proof optional"} / {task.submissionCount} submissions
                     </p>

@@ -8,6 +8,8 @@ import {
   airdropSchemaMissingResponse,
   ensureAirdropTasks,
   isAirdropSchemaMissing,
+  isLikelyUrl,
+  isXUrl,
 } from "@/lib/airdrop/tasks"
 
 export const runtime = "nodejs"
@@ -25,6 +27,7 @@ function parseTaskBody(body: unknown) {
     id?: string
     title?: string
     description?: string
+    targetUrl?: string
     type?: AirdropTaskType
     points?: number | string
     proofRequired?: boolean
@@ -34,6 +37,7 @@ function parseTaskBody(body: unknown) {
 
   const title = input?.title?.trim() ?? ""
   const description = input?.description?.trim() ?? ""
+  const targetUrl = input?.targetUrl?.trim() || null
   const type = input?.type
   const points = Number(input?.points)
   const sortOrder = Number(input?.sortOrder ?? 100)
@@ -41,6 +45,12 @@ function parseTaskBody(body: unknown) {
   if (title.length < 3) return { error: "Task title is required." }
   if (description.length < 10) return { error: "Task description must be at least 10 characters." }
   if (!type || !AIRDROP_TASK_TYPES.includes(type)) return { error: "Select a valid task type." }
+  if (targetUrl && (targetUrl.length > 2048 || !isLikelyUrl(targetUrl))) {
+    return { error: "Task link must be a valid http or https URL." }
+  }
+  if (type === "X_QUOTE" && (!targetUrl || !isXUrl(targetUrl))) {
+    return { error: "X quote tasks require a valid X post or profile link." }
+  }
   if (!Number.isInteger(points) || points <= 0 || points > 100000) {
     return { error: "Points must be a positive whole number." }
   }
@@ -49,6 +59,7 @@ function parseTaskBody(body: unknown) {
     data: {
       title,
       description,
+      targetUrl,
       type,
       points,
       proofRequired: Boolean(input?.proofRequired),
@@ -78,6 +89,7 @@ export async function GET() {
         slug: task.slug,
         title: task.title,
         description: task.description,
+        targetUrl: task.targetUrl,
         type: task.type,
         points: task.points,
         proofRequired: task.proofRequired,

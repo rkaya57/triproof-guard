@@ -9,6 +9,7 @@ export type AirdropTaskDefinition = {
   slug: string
   title: string
   description: string
+  targetUrl: string | null
   type: AirdropTaskType
   points: number
   proofRequired: boolean
@@ -21,6 +22,7 @@ export const AIRDROP_TASK_DEFINITIONS: AirdropTaskDefinition[] = [
     title: "Follow Tri-Proof on X",
     description:
       "Follow the official Tri-Proof Protocol X account at https://x.com/TriProof_ and submit a screenshot as proof.",
+    targetUrl: TRIPROOF_X_URL,
     type: "X_FOLLOW",
     points: 100,
     proofRequired: true,
@@ -31,6 +33,7 @@ export const AIRDROP_TASK_DEFINITIONS: AirdropTaskDefinition[] = [
     title: "Quote a Tri-Proof post",
     description:
       "Quote-share any post from the official Tri-Proof Protocol X account and submit the quote URL plus screenshot evidence.",
+    targetUrl: TRIPROOF_X_URL,
     type: "X_QUOTE",
     points: 180,
     proofRequired: true,
@@ -41,6 +44,7 @@ export const AIRDROP_TASK_DEFINITIONS: AirdropTaskDefinition[] = [
     title: "Join the Tri-Proof Protocol Telegram group",
     description:
       "Join the official Tri-Proof Protocol Telegram group at https://t.me/+MuFX4GKruRU1YTRk and submit a screenshot that clearly shows your membership.",
+    targetUrl: TRIPROOF_TELEGRAM_URL,
     type: "TELEGRAM_JOIN",
     points: 100,
     proofRequired: true,
@@ -51,6 +55,7 @@ export const AIRDROP_TASK_DEFINITIONS: AirdropTaskDefinition[] = [
     title: "Submit a verified Threat Pool report",
     description:
       "Submit one evidence-backed scam report to the Threat Pool. If an admin verifies and publishes it, you earn 150 points once per UTC day.",
+    targetUrl: null,
     type: "THREAT_REPORT",
     points: DAILY_THREAT_REPORT_POINTS,
     proofRequired: false,
@@ -61,6 +66,7 @@ export const AIRDROP_TASK_DEFINITIONS: AirdropTaskDefinition[] = [
     title: "Test ScamGuard and leave feedback",
     description:
       "Run the one-time ScamGuard Solana readiness test, then submit feedback and optional screenshot evidence for admin review.",
+    targetUrl: null,
     type: "HUMANITY_GATE_FEEDBACK",
     points: 250,
     proofRequired: false,
@@ -80,25 +86,16 @@ type AirdropTaskClient = Pick<PrismaClient, "airdropTask">
 type AirdropTaskTransaction = Prisma.TransactionClient
 
 export async function ensureAirdropTasks(dbClient: AirdropTaskClient | AirdropTaskTransaction) {
-  const activeSlugs = AIRDROP_TASK_DEFINITIONS.map((task) => task.slug)
-
   await Promise.all(
     AIRDROP_TASK_DEFINITIONS.map((task) =>
       dbClient.airdropTask.upsert({
         where: { slug: task.slug },
-        update: {
-          title: task.title,
-          description: task.description,
-          type: task.type,
-          points: task.points,
-          proofRequired: task.proofRequired,
-          active: true,
-          sortOrder: task.sortOrder,
-        },
+        update: {},
         create: {
           slug: task.slug,
           title: task.title,
           description: task.description,
+          targetUrl: task.targetUrl,
           type: task.type,
           points: task.points,
           proofRequired: task.proofRequired,
@@ -108,14 +105,6 @@ export async function ensureAirdropTasks(dbClient: AirdropTaskClient | AirdropTa
       })
     )
   )
-
-  await dbClient.airdropTask.updateMany({
-    where: {
-      active: true,
-      slug: { notIn: activeSlugs },
-    },
-    data: { active: false },
-  })
 }
 
 export function normalizeXHandle(value: string) {
@@ -136,6 +125,23 @@ export function isLikelyUrl(value: string) {
   } catch {
     return false
   }
+}
+
+export function isXUrl(value: string) {
+  try {
+    const url = new URL(value)
+    const hostname = url.hostname.toLowerCase().replace(/^www\./, "")
+    return (
+      (url.protocol === "https:" || url.protocol === "http:") &&
+      (hostname === "x.com" || hostname === "twitter.com")
+    )
+  } catch {
+    return false
+  }
+}
+
+export function isSubmissionLocked(status: string | null | undefined) {
+  return status === "PENDING" || status === "APPROVED"
 }
 
 export function isAirdropSchemaMissing(error: unknown) {
