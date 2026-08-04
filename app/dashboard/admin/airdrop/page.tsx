@@ -1,6 +1,6 @@
 import Link from "next/link"
 
-import { AirdropReviewConsole } from "@/components/admin/airdrop-review-console"
+import { AirdropReviewConsoleV2 } from "@/components/admin/airdrop-review-console-v2"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { getAdminUser } from "@/lib/auth/admin"
@@ -23,5 +23,5 @@ export default async function AirdropAdminPage() {
   const admin = await getAdminUser()
   if (!admin) return <AccessDenied />
 
-  return <AirdropReviewConsole />
+  return <AirdropReviewConsoleV2 />
 }
