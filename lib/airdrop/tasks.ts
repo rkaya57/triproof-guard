@@ -140,6 +140,35 @@ export function isXUrl(value: string) {
   }
 }
 
+export function slugifyAirdropTask(value: string) {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "airdrop-task"
+  )
+}
+
+function xStatusId(targetUrl: string | null) {
+  if (!targetUrl || !isXUrl(targetUrl)) return null
+  try {
+    return new URL(targetUrl).pathname.match(/\/status\/(\d+)/i)?.[1] ?? null
+  } catch {
+    return null
+  }
+}
+
+export function airdropTaskSlugBase(title: string, targetUrl: string | null) {
+  const titleSlug = slugifyAirdropTask(title)
+  const statusId = xStatusId(targetUrl)
+  return statusId ? `${titleSlug}-${statusId}` : titleSlug
+}
+
+export function airdropTaskSlugCandidate(base: string, attempt: number) {
+  return attempt <= 0 ? base : `${base}-${attempt + 1}`
+}
+
 export function isSubmissionLocked(status: string | null | undefined) {
   return status === "PENDING" || status === "APPROVED"
 }
@@ -147,16 +176,22 @@ export function isSubmissionLocked(status: string | null | undefined) {
 export function isAirdropSchemaMissing(error: unknown) {
   if (typeof error !== "object" || error === null) return false
   const code = "code" in error ? String((error as { code?: unknown }).code) : ""
+  if (["P2021", "P2022", "42P01", "42703"].includes(code)) return true
+
   const message = error instanceof Error ? error.message.toLowerCase() : ""
-  return (
-    code === "P2021" ||
-    code === "P2022" ||
-    message.includes("airdroptask") ||
-    message.includes("airdropprofile") ||
-    message.includes("airdropsubmission") ||
-    message.includes("airdropthreatreportreward") ||
-    message.includes("does not exist")
-  )
+  const mentionsAirdropSchema = [
+    "airdroptask",
+    "airdropprofile",
+    "airdropsubmission",
+    "airdropthreatreportreward",
+  ].some((model) => message.includes(model))
+  const describesMissingSchema =
+    message.includes("does not exist") ||
+    message.includes("unknown column") ||
+    message.includes("missing column") ||
+    message.includes("relation not found")
+
+  return mentionsAirdropSchema && describesMissingSchema
 }
 
 export function airdropSchemaMissingResponse() {
