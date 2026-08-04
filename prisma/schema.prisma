@@ -176,6 +176,40 @@ enum TeamPolicyRuleType {
   SOLANA_AUTHORITY_CHANGE_BLOCK
 }
 
+enum FormalDocumentStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  SENT
+  ARCHIVED
+}
+
+enum FormalDocumentType {
+  OFFICIAL_LETTER
+  DECISION
+  MEMO
+  MINUTES
+  REPORT
+}
+
+enum FormalApprovalRole {
+  PARAPH
+  CONTROL
+  APPROVE
+}
+
+enum FormalApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum FormalRecipientKind {
+  ACTION
+  INFO
+}
+
 model User {
   id                         String                @id @default(cuid())
   name                       String
@@ -202,8 +236,86 @@ model User {
   teamSecurityPolicies       TeamSecurityPolicy[]
   teamPolicyViolations       TeamPolicyViolation[]
   extensionConnectRequests   ExtensionConnectRequest[]
+  formalDocuments            FormalDocument[]           @relation("FormalDocumentAuthor")
+  formalDocumentAudits       FormalDocumentAudit[]      @relation("FormalDocumentAuditActor")
   createdAt                  DateTime              @default(now())
   updatedAt                  DateTime              @updatedAt
+}
+
+model FormalDocument {
+  id              String               @id @default(cuid())
+  authorId        String
+  author          User                 @relation("FormalDocumentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  documentNumber  String?              @unique
+  type            FormalDocumentType   @default(OFFICIAL_LETTER)
+  status          FormalDocumentStatus @default(DRAFT)
+  unit            String               @default("Tri-Proof Protocol")
+  subject         String
+  recipient       String
+  reference       String?
+  body            String               @db.Text
+  attachments     Json?
+  deadlineAt      DateTime?
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+  sentAt          DateTime?
+  archivedAt      DateTime?
+  approvals       FormalDocumentApproval[]
+  recipients      FormalDocumentRecipient[]
+  audits          FormalDocumentAudit[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([authorId, status, updatedAt])
+  @@index([status, updatedAt])
+  @@index([documentNumber])
+}
+
+model FormalDocumentApproval {
+  id              String               @id @default(cuid())
+  documentId      String
+  document        FormalDocument       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  sequence        Int
+  role            FormalApprovalRole
+  status          FormalApprovalStatus @default(PENDING)
+  approverName    String?
+  approverEmail   String
+  note            String?              @db.Text
+  actedAt         DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@unique([documentId, sequence])
+  @@index([approverEmail, status, sequence])
+}
+
+model FormalDocumentRecipient {
+  id              String               @id @default(cuid())
+  documentId      String
+  document        FormalDocument       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  kind            FormalRecipientKind
+  recipientName   String
+  recipientEmail  String?
+  deliveredAt     DateTime?
+  readAt          DateTime?
+  createdAt       DateTime             @default(now())
+
+  @@index([recipientEmail, kind])
+  @@index([documentId, kind])
+}
+
+model FormalDocumentAudit {
+  id              String         @id @default(cuid())
+  documentId      String
+  document        FormalDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  actorId         String?
+  actor           User?          @relation("FormalDocumentAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorName       String
+  event           String
+  detail          String?        @db.Text
+  createdAt       DateTime       @default(now())
+
+  @@index([documentId, createdAt])
 }
 
 model ExtensionConnectRequest {

@@ -12,6 +12,7 @@ import {
   Gift,
   HeartPulse,
   Home,
+  Landmark,
   LogOut,
   Settings,
   ShieldAlert,
@@ -33,6 +34,7 @@ const navItems = [
   { href: "/threat-reports", label: "Threat Pool", icon: ShieldAlert },
   { href: "/dashboard/developer", label: "Developer", icon: Code2 },
   { href: "/dashboard/policies", label: "Team Policies", icon: ShieldCheck },
+  { href: "/dashboard/net", label: "Tri Proof Net", icon: Landmark },
   { href: "/pricing", label: "Pricing", icon: Tags },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ]
@@ -61,6 +63,7 @@ const routeTitles = [
   { href: "/threat-reports", title: "Threat Pool", eyebrow: "Community-reviewed scam intelligence" },
   { href: "/dashboard/developer", title: "Developer", eyebrow: "API keys and Group Guardian access" },
   { href: "/dashboard/policies", title: "Team Policies", eyebrow: "B2B and Guardian safety controls" },
+  { href: "/dashboard/net", title: "Tri Proof Net", eyebrow: "Internal document office and approval workflow" },
   { href: "/dashboard/settings", title: "Settings", eyebrow: "Workspace preferences" },
   { href: "/dashboard/analysis", title: "Analysis Report", eyebrow: "Risk decision center" },
   { href: "/dashboard", title: "Overview", eyebrow: "Web3 Campaign Wallet Risk Analysis" },
