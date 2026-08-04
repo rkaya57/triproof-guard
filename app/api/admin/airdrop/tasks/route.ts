@@ -13,6 +13,15 @@ import {
 } from "@/lib/airdrop/tasks"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
+const noStoreHeaders = {
+  "Cache-Control": "private, no-store, no-cache, max-age=0, must-revalidate",
+}
+
+function json(body: unknown, status = 200) {
+  return NextResponse.json(body, { status, headers: noStoreHeaders })
+}
 
 function slugify(value: string) {
   return value
@@ -72,7 +81,7 @@ function parseTaskBody(body: unknown) {
 
 export async function GET() {
   const admin = await getAdminUser()
-  if (!admin) return NextResponse.json({ error: "Admin access required" }, { status: 403 })
+  if (!admin) return json({ error: "Admin access required" }, 403)
 
   try {
     await ensureAirdropTasks(db)
@@ -83,7 +92,7 @@ export async function GET() {
       },
     })
 
-    return NextResponse.json({
+    return json({
       tasks: tasks.map((task) => ({
         id: task.id,
         slug: task.slug,
@@ -100,20 +109,20 @@ export async function GET() {
     })
   } catch (error) {
     if (isAirdropSchemaMissing(error)) {
-      return NextResponse.json(airdropSchemaMissingResponse(), { status: 503 })
+      return json(airdropSchemaMissingResponse(), 503)
     }
 
     console.error("Airdrop tasks load failed", error)
-    return NextResponse.json({ error: "Could not load airdrop tasks." }, { status: 500 })
+    return json({ error: "Could not load airdrop tasks." }, 500)
   }
 }
 
 export async function POST(request: Request) {
   const admin = await getAdminUser()
-  if (!admin) return NextResponse.json({ error: "Admin access required" }, { status: 403 })
+  if (!admin) return json({ error: "Admin access required" }, 403)
 
   const parsed = parseTaskBody(await request.json().catch(() => null))
-  if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 })
+  if ("error" in parsed) return json({ error: parsed.error }, 400)
 
   try {
     const task = await db.airdropTask.create({
@@ -123,24 +132,24 @@ export async function POST(request: Request) {
       },
     })
 
-    return NextResponse.json({ task }, { status: 201 })
+    return json({ task }, 201)
   } catch (error) {
     if (isAirdropSchemaMissing(error)) {
-      return NextResponse.json(airdropSchemaMissingResponse(), { status: 503 })
+      return json(airdropSchemaMissingResponse(), 503)
     }
 
     console.error("Airdrop task create failed", error)
-    return NextResponse.json({ error: "Could not create airdrop task. Check for duplicate titles." }, { status: 500 })
+    return json({ error: "Could not create airdrop task. Check for duplicate titles." }, 500)
   }
 }
 
 export async function PATCH(request: Request) {
   const admin = await getAdminUser()
-  if (!admin) return NextResponse.json({ error: "Admin access required" }, { status: 403 })
+  if (!admin) return json({ error: "Admin access required" }, 403)
 
   const parsed = parseTaskBody(await request.json().catch(() => null))
-  if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 })
-  if (!parsed.id) return NextResponse.json({ error: "Task id is required." }, { status: 400 })
+  if ("error" in parsed) return json({ error: parsed.error }, 400)
+  if (!parsed.id) return json({ error: "Task id is required." }, 400)
 
   try {
     const task = await db.airdropTask.update({
@@ -148,13 +157,13 @@ export async function PATCH(request: Request) {
       data: parsed.data,
     })
 
-    return NextResponse.json({ task })
+    return json({ task })
   } catch (error) {
     if (isAirdropSchemaMissing(error)) {
-      return NextResponse.json(airdropSchemaMissingResponse(), { status: 503 })
+      return json(airdropSchemaMissingResponse(), 503)
     }
 
     console.error("Airdrop task update failed", error)
-    return NextResponse.json({ error: "Could not update airdrop task." }, { status: 500 })
+    return json({ error: "Could not update airdrop task." }, 500)
   }
 }

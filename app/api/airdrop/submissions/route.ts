@@ -11,17 +11,23 @@ import {
 } from "@/lib/airdrop/tasks"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
-function duplicateSubmissionResponse() {
-  return NextResponse.json(
-    { error: "This task already has a submission pending review." },
-    { status: 409 }
-  )
+const noStoreHeaders = {
+  "Cache-Control": "private, no-store, no-cache, max-age=0, must-revalidate",
+}
+
+function json(body: unknown, status = 200) {
+  return NextResponse.json(body, { status, headers: noStoreHeaders })
+}
+
+function duplicateSubmissionResponse(message = "This task already has a submission pending review.") {
+  return json({ error: message, code: "AIRDROP_SUBMISSION_LOCKED" }, 409)
 }
 
 export async function POST(request: Request) {
   const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!user) return json({ error: "Unauthorized" }, 401)
 
   const body = (await request.json().catch(() => null)) as {
     taskSlug?: string
@@ -31,7 +37,7 @@ export async function POST(request: Request) {
   } | null
 
   const taskSlug = body?.taskSlug?.trim()
-  if (!taskSlug) return NextResponse.json({ error: "taskSlug is required" }, { status: 400 })
+  if (!taskSlug) return json({ error: "taskSlug is required" }, 400)
 
   await ensureAirdropTasks(db)
 
@@ -41,24 +47,24 @@ export async function POST(request: Request) {
   ])
 
   if (!profile) {
-    return NextResponse.json({ error: "Create your airdrop registration profile before submitting tasks." }, { status: 400 })
+    return json({ error: "Create your airdrop registration profile before submitting tasks." }, 400)
   }
-  if (!task || !task.active) return NextResponse.json({ error: "Task not found" }, { status: 404 })
+  if (!task || !task.active) return json({ error: "Task not found" }, 404)
 
   const evidenceUrl = body?.evidenceUrl?.trim() || null
   const evidenceImageData = body?.evidenceImageData?.trim() || null
   const feedbackText = body?.feedbackText?.trim() || null
 
   if (task.type === "X_QUOTE" && (!evidenceUrl || !isXUrl(evidenceUrl))) {
-    return NextResponse.json({ error: "Submit a valid X quote URL." }, { status: 400 })
+    return json({ error: "Submit a valid X quote URL." }, 400)
   }
 
   if (task.proofRequired && !isValidEvidenceImage(evidenceImageData)) {
-    return NextResponse.json({ error: "Upload a screenshot proof image under 1.75 MB." }, { status: 400 })
+    return json({ error: "Upload a screenshot proof image under 1.75 MB." }, 400)
   }
 
   if (evidenceImageData && !isValidEvidenceImage(evidenceImageData)) {
-    return NextResponse.json({ error: "Screenshot proof must be an image under 1.75 MB." }, { status: 400 })
+    return json({ error: "Screenshot proof must be an image under 1.75 MB." }, 400)
   }
 
   const current = await db.airdropSubmission.findUnique({
@@ -67,13 +73,13 @@ export async function POST(request: Request) {
 
   if (task.type === "HUMANITY_GATE_FEEDBACK") {
     if (!current?.humanityTestResult) {
-      return NextResponse.json({ error: "Run the one-time ScamGuard test before sending feedback." }, { status: 400 })
+      return json({ error: "Run the one-time ScamGuard test before sending feedback." }, 400)
     }
     if (!feedbackText || feedbackText.length < 20) {
-      return NextResponse.json({ error: "Write at least 20 characters of ScamGuard feedback." }, { status: 400 })
+      return json({ error: "Write at least 20 characters of ScamGuard feedback." }, 400)
     }
     if (current.feedbackText) {
-      return NextResponse.json({ error: "ScamGuard feedback can only be submitted once." }, { status: 409 })
+      return duplicateSubmissionResponse("ScamGuard feedback can only be submitted once.")
     }
   }
 
@@ -85,10 +91,7 @@ export async function POST(request: Request) {
 
   if (isSubmissionLocked(current?.status) && !completingScamGuardFeedback) {
     if (current?.status === "APPROVED") {
-      return NextResponse.json(
-        { error: "This task is already approved and cannot earn points again." },
-        { status: 409 }
-      )
+      return duplicateSubmissionResponse("This task is already approved and cannot earn points again.")
     }
     return duplicateSubmissionResponse()
   }
@@ -139,14 +142,21 @@ export async function POST(request: Request) {
       })
     }
 
-    return NextResponse.json({
+    return json({
       submission: {
         id: submission.id,
+        taskId: submission.taskId,
+        taskSlug: task.slug,
         status: submission.status,
+        evidenceUrl: submission.evidenceUrl,
+        feedbackText: submission.feedbackText,
+        humanityTestResult: submission.humanityTestResult,
         pointsAwarded: submission.pointsAwarded,
+        adminNotes: submission.adminNotes,
+        reviewedAt: submission.reviewedAt?.toISOString() ?? null,
         createdAt: submission.createdAt.toISOString(),
       },
-    })
+    }, 201)
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       return duplicateSubmissionResponse()
