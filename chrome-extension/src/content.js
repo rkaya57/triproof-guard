@@ -1,11 +1,13 @@
 const EXTENSION_SOURCE = "SCAMGUARD_EXTENSION"
 const PAGE_SOURCE = "SCAMGUARD_PAGE"
+const BANNER_HIDDEN_KEY = "scamguardBannerHidden"
 
 let latestUrlResult = null
 let settingsCache = null
 let overlayOpen = false
 let popupHeartbeatTimer = null
 let navigationInFlight = false
+let bannerHidden = false
 const scannedLinkResults = new Map()
 
 function sendMessage(message) {
@@ -55,6 +57,7 @@ function ensureBanner() {
       <button type="button" data-action="scan-links">Scan links</button>
       <button type="button" data-action="rescan">Rescan</button>
     </div>
+    <button type="button" class="sgx-banner-dismiss" data-action="dismiss-banner" aria-label="Hide ScamGuard status" title="Hide ScamGuard status">&times;</button>
   `
   banner.addEventListener("click", (event) => {
     const target = event.target
@@ -62,16 +65,51 @@ function ensureBanner() {
     const action = target.dataset.action
     if (action === "rescan") void scanCurrentUrl(true)
     if (action === "scan-links") void scanPageLinks()
+    if (action === "dismiss-banner") setBannerHidden(true)
   })
   document.documentElement.appendChild(banner)
+  applyBannerVisibility()
   return banner
+}
+
+function ensureBannerLauncher() {
+  let launcher = document.getElementById("scamguard-extension-launcher")
+  if (launcher) return launcher
+  launcher = document.createElement("button")
+  launcher.id = "scamguard-extension-launcher"
+  launcher.type = "button"
+  launcher.setAttribute("aria-label", "Show ScamGuard status")
+  launcher.title = "Show ScamGuard status"
+  launcher.innerHTML = `<img src="${chrome.runtime.getURL("assets/icon48.png")}" alt="">`
+  launcher.addEventListener("click", () => setBannerHidden(false))
+  document.documentElement.appendChild(launcher)
+  return launcher
+}
+
+function applyBannerVisibility() {
+  const banner = document.getElementById("scamguard-extension-banner")
+  const launcher = ensureBannerLauncher()
+  if (banner) banner.hidden = bannerHidden
+  launcher.hidden = !bannerHidden
+}
+
+function setBannerHidden(hidden) {
+  bannerHidden = hidden
+  applyBannerVisibility()
+  void chrome.storage.local.set({ [BANNER_HIDDEN_KEY]: hidden })
+}
+
+async function restoreBannerVisibility() {
+  const stored = await chrome.storage.local.get(BANNER_HIDDEN_KEY)
+  bannerHidden = Boolean(stored[BANNER_HIDDEN_KEY])
+  applyBannerVisibility()
 }
 
 function updateBanner(result) {
   const banner = ensureBanner()
   const level = result?.riskLevel ?? "SAFE"
   banner.dataset.risk = riskClass(level)
-  banner.querySelector(".sgx-risk").textContent = `${riskLabel(level)}${result?.score !== undefined ? ` / safe ${securityScore(result)}` : ""}`
+  banner.querySelector(".sgx-risk").textContent = `${riskLabel(level)}${result?.score !== undefined ? ` | Shield ${securityScore(result)}` : ""}`
   banner.title = result?.summary ?? "ScamGuard is ready"
 }
 
@@ -636,4 +674,5 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 ensureBanner()
 injectPreSignHook()
+void restoreBannerVisibility()
 void scanCurrentUrl(false)
