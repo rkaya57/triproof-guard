@@ -29,8 +29,14 @@ async function callTelegramApi<T>(
 }
 
 export async function sendTelegramAction(token: string, action: TelegramBotAction) {
-  if (action.method !== "sendMessage") return
-  await callTelegramApi(token, "sendMessage", action.payload)
+  if (action.method === "sendMessage") {
+    await callTelegramApi(token, "sendMessage", action.payload)
+    return
+  }
+  if (action.method === "answerInlineQuery") {
+    if (!action.inlineQuery) throw new Error("Inline query action is missing its query payload.")
+    await callTelegramApi(token, "answerInlineQuery", action.inlineQuery)
+  }
 }
 
 export async function sendTelegramMessage(token: string, chatId: string | number, text: string) {

@@ -8,16 +8,23 @@ import {
 } from "@/lib/telegram/bot"
 import { answerTelegramCallbackQuery, isTelegramGroupAdmin, muteTelegramMember, sendTelegramAction } from "@/lib/telegram/api"
 import {
+  addTelegramWatch,
+  addTelegramWatchFromEvent,
   ensureTelegramGroup,
+  getTelegramWatchAlertRecipients,
   getTelegramGroupSummary,
   getTelegramHistory,
   claimTelegramGroup,
   authorizeTelegramGuardianAdmin,
   getTelegramModerationTarget,
   recordTelegramScan,
+  listTelegramWatches,
+  removeTelegramWatch,
+  saveTelegramScanFeedback,
   updateTelegramGroupSettings,
 } from "@/lib/telegram/store"
 import { enforceTelegramGroupPolicies } from "@/lib/team-policy/store"
+import { consumeTelegramScanAllowance } from "@/lib/telegram/rate-limit"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -59,6 +66,24 @@ export async function POST(request: Request) {
 
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim()
   const callback = update.callback_query
+  if (callback?.id && callback.data?.startsWith("sg_watch:")) {
+    if (!token || !callback.from?.id || !callback.message?.chat?.id) return NextResponse.json({ ok: false, error: "Watchlist action is unavailable." }, { status: 400 })
+    const watch = await addTelegramWatchFromEvent(callback.data.slice("sg_watch:".length), callback.from.id, callback.message.chat.id)
+    await answerTelegramCallbackQuery(token, callback.id, watch ? "Target added to your watchlist." : "This scan cannot be added to your watchlist.", !watch)
+    return NextResponse.json({ ok: Boolean(watch), watch })
+  }
+  if (callback?.id && callback.data?.startsWith("sg_feedback:")) {
+    if (!token || !callback.from?.id || !callback.message?.chat?.id) return NextResponse.json({ ok: false, error: "Feedback action is unavailable." }, { status: 400 })
+    const [, eventId, decision] = callback.data.split(":")
+    const verdict = decision === "scam" ? "reported_scam" : decision === "safe" ? "reported_safe" : null
+    if (!eventId || !verdict) {
+      await answerTelegramCallbackQuery(token, callback.id, "This feedback action is invalid.", true)
+      return NextResponse.json({ ok: false, error: "Invalid feedback action" }, { status: 400 })
+    }
+    const feedback = await saveTelegramScanFeedback({ eventId, telegramUserId: callback.from.id, telegramChatId: callback.message.chat.id, verdict })
+    await answerTelegramCallbackQuery(token, callback.id, feedback ? "Thanks. Your feedback is queued for review." : "This scan is no longer available.", !feedback)
+    return NextResponse.json({ ok: Boolean(feedback), feedback })
+  }
   if (callback?.id && callback.data?.startsWith("sg_mute:")) {
     if (!token || !callback.from?.id || !callback.message?.chat?.id) return NextResponse.json({ ok: false, error: "Telegram moderation is not configured." }, { status: 400 })
     const [eventId, requestedHours] = callback.data.slice("sg_mute:".length).split(":")
@@ -125,6 +150,23 @@ export async function POST(request: Request) {
       authorizeGroupManager: (chatId, userId) => authorizeTelegramGuardianAdmin(chatId, userId),
       loadHistory: getTelegramHistory,
       loadSummary: getTelegramGroupSummary,
+      consumeScanAllowance: consumeTelegramScanAllowance,
+      addWatch: ({ telegramUserId, telegramChatId, candidate, result }) =>
+        addTelegramWatch({
+          telegramUserId,
+          telegramChatId,
+          target: candidate.value,
+          domain: result.metadata.domain,
+          scanType: result.type,
+          chain: result.metadata.chain,
+          riskLevel: result.riskLevel,
+          score: result.score,
+        }),
+      addWatchFromEvent: addTelegramWatchFromEvent,
+      listWatches: listTelegramWatches,
+      removeWatch: removeTelegramWatch,
+      findWatchAlerts: ({ candidate, result, excludeTelegramUserId }) =>
+        getTelegramWatchAlertRecipients({ target: candidate.value, riskLevel: result.riskLevel, score: result.score, excludeTelegramUserId }),
       recordScan: ({ message: scanMessage, candidate, result, source, alerted }) =>
         recordTelegramScan({
           updateId: update.update_id,

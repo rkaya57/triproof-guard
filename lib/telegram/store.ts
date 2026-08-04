@@ -2,6 +2,7 @@ import { createHash } from "node:crypto"
 
 import { db } from "@/lib/db/prisma"
 import { getSubscriptionEntitlement, hashTelegramConnectCode } from "@/lib/billing/subscription"
+import { saveScamGuardFeedback, type ScamGuardFeedbackVerdict } from "@/lib/scamguard/feedback"
 
 export type GuardianAlertLevel = "CAUTION" | "HIGH_RISK" | "CRITICAL"
 
@@ -59,6 +60,19 @@ const riskRank: Record<string, number> = {
 
 function fingerprint(value: string) {
   return createHash("sha256").update(value.trim().toLowerCase()).digest("hex")
+}
+
+export type TelegramWatchItem = {
+  id: string
+  target: string
+  domain: string | null
+  scanType: string
+  chain: string
+  active: boolean
+  lastRiskLevel: string | null
+  lastScore: number | null
+  lastAlertedAt: Date | null
+  createdAt: Date
 }
 
 function storedTarget(input: TelegramScanRecordInput, targetHash: string) {
@@ -300,6 +314,155 @@ export async function getTelegramModerationTarget(eventId: string) {
   })
   if (!event?.groupId || !event.telegramUserId || !event.alerted || !["HIGH_RISK", "CRITICAL"].includes(event.riskLevel) || event.createdAt < new Date(Date.now() - 24 * 60 * 60 * 1000)) return null
   return { chatId: Number(event.telegramChatId), userId: Number(event.telegramUserId) }
+}
+
+export async function addTelegramWatch(input: {
+  telegramUserId: number
+  telegramChatId: number
+  target: string
+  domain?: string | null
+  scanType: string
+  chain: string
+  riskLevel?: string
+  score?: number
+}) {
+  const target = input.target.trim().slice(0, 500)
+  if (!target) throw new Error("A target is required for a watch.")
+  return db.telegramWatchlist.upsert({
+    where: {
+      telegramUserId_targetHash: {
+        telegramUserId: String(input.telegramUserId),
+        targetHash: fingerprint(target),
+      },
+    },
+    create: {
+      telegramUserId: String(input.telegramUserId),
+      telegramChatId: String(input.telegramChatId),
+      target,
+      targetHash: fingerprint(target),
+      domain: input.domain?.toLowerCase() || null,
+      scanType: input.scanType,
+      chain: input.chain,
+      lastRiskLevel: input.riskLevel ?? null,
+      lastScore: input.score ?? null,
+    },
+    update: {
+      telegramChatId: String(input.telegramChatId),
+      target,
+      domain: input.domain?.toLowerCase() || null,
+      scanType: input.scanType,
+      chain: input.chain,
+      active: true,
+      lastRiskLevel: input.riskLevel ?? undefined,
+      lastScore: input.score ?? undefined,
+    },
+    select: {
+      id: true,
+      target: true,
+      domain: true,
+      scanType: true,
+      chain: true,
+      active: true,
+      lastRiskLevel: true,
+      lastScore: true,
+      lastAlertedAt: true,
+      createdAt: true,
+    },
+  })
+}
+
+export async function addTelegramWatchFromEvent(eventId: string, telegramUserId: number, telegramChatId: number) {
+  const event = await db.telegramScanEvent.findUnique({
+    where: { id: eventId },
+    select: { target: true, domain: true, scanType: true, chain: true, riskLevel: true, score: true, telegramChatId: true },
+  })
+  if (!event || event.telegramChatId !== String(telegramChatId) || event.scanType === "transaction") {
+    return null
+  }
+  return addTelegramWatch({
+    telegramUserId,
+    telegramChatId,
+    target: event.target,
+    domain: event.domain,
+    scanType: event.scanType,
+    chain: event.chain,
+    riskLevel: event.riskLevel,
+    score: event.score,
+  })
+}
+
+export async function listTelegramWatches(telegramUserId: number): Promise<TelegramWatchItem[]> {
+  return db.telegramWatchlist.findMany({
+    where: { telegramUserId: String(telegramUserId), active: true },
+    orderBy: { updatedAt: "desc" },
+    take: 20,
+    select: {
+      id: true,
+      target: true,
+      domain: true,
+      scanType: true,
+      chain: true,
+      active: true,
+      lastRiskLevel: true,
+      lastScore: true,
+      lastAlertedAt: true,
+      createdAt: true,
+    },
+  })
+}
+
+export async function removeTelegramWatch(telegramUserId: number, target: string) {
+  const updated = await db.telegramWatchlist.updateMany({
+    where: { telegramUserId: String(telegramUserId), targetHash: fingerprint(target.trim()) },
+    data: { active: false },
+  })
+  return updated.count > 0
+}
+
+export async function getTelegramWatchAlertRecipients(input: {
+  target: string
+  riskLevel: string
+  score: number
+  excludeTelegramUserId?: number
+}) {
+  if (!["HIGH_RISK", "CRITICAL"].includes(input.riskLevel)) return []
+  const cutoff = new Date(Date.now() - 12 * 60 * 60 * 1000)
+  const matches = await db.telegramWatchlist.findMany({
+    where: {
+      targetHash: fingerprint(input.target),
+      active: true,
+      OR: [{ lastAlertedAt: null }, { lastAlertedAt: { lt: cutoff } }, { lastRiskLevel: { not: input.riskLevel } }],
+    },
+    select: { id: true, telegramChatId: true, telegramUserId: true, target: true },
+  })
+  const recipients = matches.filter((item) => item.telegramUserId !== String(input.excludeTelegramUserId ?? ""))
+  if (recipients.length) {
+    await db.telegramWatchlist.updateMany({
+      where: { id: { in: recipients.map((item) => item.id) } },
+      data: { lastRiskLevel: input.riskLevel, lastScore: input.score, lastAlertedAt: new Date() },
+    })
+  }
+  return recipients.map((item) => ({ chatId: Number(item.telegramChatId), target: item.target }))
+}
+
+export async function saveTelegramScanFeedback(input: {
+  eventId: string
+  telegramUserId: number
+  telegramChatId: number
+  verdict: ScamGuardFeedbackVerdict
+}) {
+  const event = await db.telegramScanEvent.findUnique({
+    where: { id: input.eventId },
+    select: { target: true, chain: true, telegramChatId: true },
+  })
+  if (!event || event.telegramChatId !== String(input.telegramChatId)) return null
+  return saveScamGuardFeedback({
+    scanId: input.eventId,
+    verdict: input.verdict,
+    value: event.target,
+    chain: event.chain,
+    source: `telegram:${input.telegramUserId}`,
+  })
 }
 
 export async function getTelegramHistory(chatId: number, limit = 6) {

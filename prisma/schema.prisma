@@ -1132,6 +1132,27 @@ model TelegramScanEvent {
   @@index([riskLevel, alerted, createdAt])
 }
 
+model TelegramWatchlist {
+  id            String   @id @default(cuid())
+  telegramUserId String
+  telegramChatId String
+  target        String   @db.Text
+  targetHash    String
+  domain        String?
+  chain         String   @default("unknown")
+  scanType      String
+  active        Boolean  @default(true)
+  lastRiskLevel String?
+  lastScore     Int?
+  lastAlertedAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([telegramUserId, targetHash])
+  @@index([telegramUserId, active])
+  @@index([targetHash, active])
+}
+
 model TelegramThreatCampaign {
   id              String                @id @default(cuid())
   groupId         String

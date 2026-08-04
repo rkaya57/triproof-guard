@@ -62,6 +62,41 @@ test("Telegram bot returns help for private /start", async () => {
   assert.equal(actions.length, 1)
   assert.equal(actions[0].method, "sendMessage")
   assert.match(actions[0].payload.text, /SCAMGUARD BOT/)
+  assert.equal(actions[0].payload.reply_markup?.inline_keyboard[0][0].web_app?.url, "https://triproofprotocol.com/telegram")
+})
+
+test("Telegram inline mode returns a safe help result before a target is supplied", async () => {
+  const actions = await handleTelegramUpdate({
+    update_id: 101,
+    inline_query: { id: "inline-help", query: "", from: { id: 99, language_code: "en" } },
+  })
+
+  assert.equal(actions.length, 1)
+  assert.equal(actions[0].method, "answerInlineQuery")
+  assert.equal(actions[0].inlineQuery?.results[0].title, "Scan a Web3 target with ScamGuard")
+})
+
+test("Telegram watch command saves an evaluated target", async () => {
+  let savedTarget = ""
+  const actions = await handleTelegramUpdate({
+    update_id: 102,
+    message: {
+      message_id: 102,
+      text: "/watch https://phantom-airdrop-claim.example/",
+      chat: { id: 123, type: "private" },
+      from: { id: 99, first_name: "Watcher" },
+    },
+  }, {
+    addWatch: async ({ candidate }) => {
+      savedTarget = candidate.value
+      return { id: "watch-1", target: candidate.value }
+    },
+    recordScan: async () => ({ eventId: "event-1", occurrenceCount: 1, repeatedCampaign: false }),
+  })
+
+  assert.equal(savedTarget, "https://phantom-airdrop-claim.example/")
+  assert.match(actions[0].payload.text, /Now watching/)
+  assert.equal(actions[0].payload.reply_markup?.inline_keyboard[1][0].callback_data, "sg_watch:event-1")
 })
 
 test("Telegram report uses premium English sections", () => {

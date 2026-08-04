@@ -36,6 +36,11 @@ export type TelegramUpdate = {
   update_id: number
   message?: TelegramMessage
   edited_message?: TelegramMessage
+  inline_query?: {
+    id: string
+    query: string
+    from: { id: number; language_code?: string }
+  }
   callback_query?: {
     id: string
     data?: string
@@ -53,13 +58,28 @@ export type TelegramSendMessage = {
   }
   disable_web_page_preview?: boolean
   reply_markup?: {
-    inline_keyboard: Array<Array<{ text: string; callback_data?: string; url?: string }>>
+    inline_keyboard: Array<Array<{ text: string; callback_data?: string; url?: string; web_app?: { url: string } }>>
   }
 }
 
+export type TelegramInlineQueryPayload = {
+  inline_query_id: string
+  cache_time?: number
+  is_personal?: boolean
+  results: Array<{
+    type: "article"
+    id: string
+    title: string
+    description: string
+    input_message_content: { message_text: string; disable_web_page_preview?: boolean }
+    reply_markup?: TelegramSendMessage["reply_markup"]
+  }>
+}
+
 export type TelegramBotAction = {
-  method: "sendMessage"
+  method: "sendMessage" | "answerInlineQuery"
   payload: TelegramSendMessage
+  inlineQuery?: TelegramInlineQueryPayload
 }
 
 export type TelegramBotContext = {
@@ -128,6 +148,12 @@ export type TelegramBotContext = {
     }
   }>
   applyTeamPolicy?: (input: { candidate: ScanCandidate; result: ScamGuardScanResult; chatId: number }) => Promise<{ action: TeamPolicyAction; matched: Array<{ policyName: string; reason: string }> }>
+  consumeScanAllowance?: (input: { chatId: number; userId?: number; group: boolean }) => { allowed: boolean; retryAfterSeconds: number }
+  addWatch?: (input: { telegramUserId: number; telegramChatId: number; candidate: ScanCandidate; result: ScamGuardScanResult }) => Promise<{ id: string; target: string }>
+  addWatchFromEvent?: (eventId: string, telegramUserId: number, telegramChatId: number) => Promise<{ id: string; target: string } | null>
+  listWatches?: (telegramUserId: number) => Promise<Array<{ target: string; domain: string | null; lastRiskLevel: string | null; lastScore: number | null }>>
+  removeWatch?: (telegramUserId: number, target: string) => Promise<boolean>
+  findWatchAlerts?: (input: { candidate: ScanCandidate; result: ScamGuardScanResult; excludeTelegramUserId?: number }) => Promise<Array<{ chatId: number; target: string }>>
 }
 
 type ScanCandidate = {
@@ -167,11 +193,25 @@ const commandHelp = [
   "• /report <item>",
   "• /history, /summary, /monthly",
   "• /settings",
+  "• /watch <link|wallet|token> and /watchlist",
+  "• /unwatch <link|wallet|token>",
   "",
   "👥 Group Guardian",
   "Add the bot to a Telegram group and it will scan posted links. It only replies when the risk crosses the configured alert threshold.",
   "Group admins can use /guardian to manage protection and /guardian connect <code> to link a paid group.",
 ].join("\n")
+
+function baseUrl(context: TelegramBotContext) {
+  return context.publicBaseUrl?.replace(/\/$/, "") ?? "https://triproofprotocol.com"
+}
+
+function miniAppUrl(context: TelegramBotContext) {
+  return `${baseUrl(context)}/telegram`
+}
+
+function localized(text: { en: string; tr: string }, languageCode?: string) {
+  return languageCode?.toLowerCase().startsWith("tr") ? text.tr : text.en
+}
 
 function textOf(message: TelegramMessage) {
   return message.text ?? message.caption ?? ""
@@ -501,6 +541,61 @@ function simpleReply(message: TelegramMessage, text: string, replyMarkup?: Teleg
   }
 }
 
+function directMessage(chatId: number, text: string, replyMarkup?: TelegramSendMessage["reply_markup"]): TelegramBotAction {
+  return {
+    method: "sendMessage",
+    payload: {
+      chat_id: chatId,
+      text,
+      disable_web_page_preview: true,
+      reply_markup: replyMarkup,
+    },
+  }
+}
+
+function startKeyboard(context: TelegramBotContext): TelegramSendMessage["reply_markup"] {
+  return {
+    inline_keyboard: [
+      [{ text: "Open Security Center", web_app: { url: miniAppUrl(context) } }],
+      [{ text: "Open live scanner", url: `${baseUrl(context)}/scamguard` }, { text: "Threat Pool", url: `${baseUrl(context)}/threat-reports` }],
+    ],
+  }
+}
+
+function scanReportKeyboard(context: TelegramBotContext, candidate: ScanCandidate, eventId?: string): TelegramSendMessage["reply_markup"] {
+  const scannerUrl = `${baseUrl(context)}/scamguard`
+  const reportUrl = `${baseUrl(context)}/threat-reports?target=${encodeURIComponent(candidate.value)}${candidate.type === "url" ? "&kind=DOMAIN" : ""}`
+  const rows: NonNullable<TelegramSendMessage["reply_markup"]>["inline_keyboard"] = [
+    [{ text: "Open full scanner", url: scannerUrl }, { text: "Report to Threat Pool", url: reportUrl }],
+  ]
+  if (eventId && candidate.type !== "transaction") {
+    rows.push([{ text: "Watch this target", callback_data: `sg_watch:${eventId}` }])
+    rows.push([{ text: "Looks safe", callback_data: `sg_feedback:${eventId}:safe` }, { text: "Report scam", callback_data: `sg_feedback:${eventId}:scam` }])
+  }
+  return { inline_keyboard: rows }
+}
+
+function watchListText(items: Awaited<ReturnType<NonNullable<TelegramBotContext["listWatches"]>>>) {
+  if (!items.length) {
+    return "WATCHLIST\n\nNo watched targets yet. Use /watch <link|wallet|token> after you find a project you want ScamGuard to remember."
+  }
+  return [
+    "WATCHLIST",
+    "Targets will receive an alert in this chat when a later ScamGuard scan finds a high-risk or critical result.",
+    "",
+    ...items.map((item, index) => `${index + 1}. ${item.domain ?? item.target}\n   Last result: ${item.lastRiskLevel ?? "not scanned"}${item.lastScore === null ? "" : ` | ${item.lastScore}/100`}`),
+    "",
+    "Remove one with /unwatch <exact target>",
+  ].join("\n").slice(0, 3900)
+}
+
+function rateLimitText(seconds: number, languageCode?: string) {
+  return localized(
+    { en: `Scan limit reached. Please wait about ${Math.max(1, Math.ceil(seconds / 60))} minute(s), then try again.`, tr: `Tarama sınırına ulaştınız. Lütfen yaklaşık ${Math.max(1, Math.ceil(seconds / 60))} dakika bekleyip tekrar deneyin.` },
+    languageCode
+  )
+}
+
 async function scanCandidate(candidate: ScanCandidate) {
   return scanScamGuard({
     type: candidate.type,
@@ -680,7 +775,7 @@ async function handlePrivateOrCommand(message: TelegramMessage, context: Telegra
   const command = parseCommand(text)
 
   if (command?.name === "start" || command?.name === "help") {
-    return [simpleReply(message, commandHelp)]
+    return [simpleReply(message, commandHelp, message.chat.type === "private" ? startKeyboard(context) : undefined)]
   }
 
   if (command?.name === "settings") {
@@ -715,6 +810,19 @@ async function handlePrivateOrCommand(message: TelegramMessage, context: Telegra
     return [simpleReply(message, historyText(await context.loadHistory(message.chat.id, 6)))]
   }
 
+  if (command?.name === "watchlist") {
+    if (!message.from?.id || !context.listWatches) return [simpleReply(message, "Watchlist storage is temporarily unavailable.")]
+    return [simpleReply(message, watchListText(await context.listWatches(message.from.id)))]
+  }
+
+  if (command?.name === "unwatch") {
+    if (!message.from?.id || !context.removeWatch) return [simpleReply(message, "Watchlist storage is temporarily unavailable.")]
+    const candidate = detectScanCandidate(command.args)
+    if (!candidate) return [simpleReply(message, "Usage: /unwatch <link|wallet|token>")]
+    const removed = await context.removeWatch(message.from.id, candidate.value)
+    return [simpleReply(message, removed ? `Stopped watching ${candidate.value}.` : "That target is not in your active watchlist.")]
+  }
+
   if (command?.name === "summary") {
     if (!context.loadSummary) return [simpleReply(message, "Guardian summary is temporarily unavailable.")]
     return [simpleReply(message, formatGuardianSummary(await context.loadSummary(message.chat.id, 24)))]
@@ -733,7 +841,8 @@ async function handlePrivateOrCommand(message: TelegramMessage, context: Telegra
         : command?.name === "tx"
           ? "transaction"
           : undefined
-  const input = command && (command.name === "scan" || command.name === "report" || forcedType) ? command.args : text
+  const watchCommand = command?.name === "watch"
+  const input = command && (command.name === "scan" || command.name === "report" || watchCommand || forcedType) ? command.args : text
   const candidate = detectScanCandidate(input, forcedType)
 
   if (!candidate) {
@@ -745,21 +854,36 @@ async function handlePrivateOrCommand(message: TelegramMessage, context: Telegra
     ]
   }
 
+  const allowance = context.consumeScanAllowance?.({ chatId: message.chat.id, userId: message.from?.id, group: message.chat.type !== "private" })
+  if (allowance && !allowance.allowed) return [simpleReply(message, rateLimitText(allowance.retryAfterSeconds, message.from?.language_code))]
+
   const result = await scanCandidate(candidate)
   const isGroup = message.chat.type === "group" || message.chat.type === "supergroup"
   const policy = isGroup && context.applyTeamPolicy
     ? await context.applyTeamPolicy({ candidate, result, chatId: message.chat.id })
     : { action: TeamPolicyAction.ALLOW, matched: [] }
   const alerted = isGroup && (policy.action !== TeamPolicyAction.ALLOW || levelMeetsThreshold(result.riskLevel, currentGroupSettings(context).alertLevel))
-  await recordScanSafely(context, {
+  const recorded = await recordScanSafely(context, {
     message,
     candidate,
     result,
     source: isGroup ? "GROUP_GUARDIAN" : "PRIVATE_COMMAND",
     alerted,
   })
+  if (watchCommand) {
+    if (!message.from?.id || !context.addWatch) return [simpleReply(message, "The scan is complete, but watchlist storage is temporarily unavailable.")]
+    await context.addWatch({ telegramUserId: message.from.id, telegramChatId: message.chat.id, candidate, result })
+    return [simpleReply(message, `Now watching ${compactTarget(result)}. You will receive an alert in this chat if a future scan finds a high-risk or critical result.`, scanReportKeyboard(context, candidate, recorded.eventId))]
+  }
   const policyNotice = policy.action === TeamPolicyAction.ALLOW ? "" : `\n\nTEAM POLICY: ${policy.action}\n${policy.matched.slice(0, 2).map((item) => `${item.policyName}: ${item.reason}`).join("\n")}`
-  return [simpleReply(message, `${await formatTelegramPrivateScanReport(result, context)}${policyNotice}`)]
+  const actions: TelegramBotAction[] = [simpleReply(message, `${await formatTelegramPrivateScanReport(result, context)}${policyNotice}`, scanReportKeyboard(context, candidate, recorded.eventId))]
+  if (!isGroup && context.findWatchAlerts) {
+    const watchers = await context.findWatchAlerts({ candidate, result, excludeTelegramUserId: message.from?.id })
+    for (const watcher of watchers) {
+      actions.push(directMessage(watcher.chatId, `WATCH ALERT\n\n${watcher.target}\nA new ScamGuard scan returned ${result.riskLevel} (${result.score}/100). Open ScamGuard before interacting or signing.`, { inline_keyboard: [[{ text: "Open full scanner", url: `${baseUrl(context)}/scamguard` }]] }))
+    }
+  }
+  return actions
 }
 
 async function shouldAutoMute(
@@ -796,6 +920,8 @@ async function handleGroupGuardian(message: TelegramMessage, context: TelegramBo
   let autoMuted = false
 
   for (const candidate of candidates.slice(0, 6)) {
+    const allowance = context.consumeScanAllowance?.({ chatId: message.chat.id, userId: message.from?.id, group: true })
+    if (allowance && !allowance.allowed) break
     const result = candidate.secretMaterial ? secretMaterialRequestResult() : await scanCandidate(candidate)
     const policy = context.applyTeamPolicy ? await context.applyTeamPolicy({ candidate, result, chatId: message.chat.id }) : { action: TeamPolicyAction.ALLOW, matched: [] }
     const alerted = policy.action !== TeamPolicyAction.ALLOW || levelMeetsThreshold(result.riskLevel, threshold)
@@ -813,7 +939,7 @@ async function handleGroupGuardian(message: TelegramMessage, context: TelegramBo
       const policyNotice = policy.action === TeamPolicyAction.ALLOW ? "" : `\n\nTEAM POLICY: ${policy.action}\n${policy.matched.slice(0, 2).map((item) => `${item.policyName}: ${item.reason}`).join("\n")}`
       const buttons: NonNullable<TelegramSendMessage["reply_markup"]>["inline_keyboard"] = []
       if (canOfferMute && campaign.eventId) buttons.push([{ text: "Mute 1 hour", callback_data: `sg_mute:${campaign.eventId}:1` }, { text: "Mute 24 hours", callback_data: `sg_mute:${campaign.eventId}:24` }])
-      buttons.push([{ text: "Open full scanner", url: `${context.publicBaseUrl?.replace(/\/$/, "") ?? "https://triproofprotocol.com"}/scamguard` }])
+      buttons.push([{ text: "Open full scanner", url: `${baseUrl(context)}/scamguard` }, { text: "Threat Pool", url: `${baseUrl(context)}/threat-reports?target=${encodeURIComponent(candidate.value)}${candidate.type === "url" ? "&kind=DOMAIN" : ""}` }])
       const containmentNotice = autoContained ? "\n\nAUTO-CONTAINMENT: Sender muted for 1 hour after a critical or policy-block decision." : ""
       actions.push(simpleReply(message, `${groupWarningText(result, campaign)}${policyNotice}${containmentNotice}`, { inline_keyboard: buttons }))
     }
@@ -822,7 +948,62 @@ async function handleGroupGuardian(message: TelegramMessage, context: TelegramBo
   return actions
 }
 
-export async function handleTelegramUpdate(update: TelegramUpdate, context: TelegramBotContext = {}) {
+export async function handleTelegramUpdate(update: TelegramUpdate, context: TelegramBotContext = {}): Promise<TelegramBotAction[]> {
+  if (update.inline_query) {
+    const candidate = detectScanCandidate(update.inline_query.query)
+    if (!candidate) {
+      return [{
+        method: "answerInlineQuery",
+        payload: {
+          chat_id: 0,
+          text: "",
+        },
+        inlineQuery: {
+          inline_query_id: update.inline_query.id,
+          is_personal: true,
+          cache_time: 0,
+          results: [{
+            type: "article",
+            id: "scan-help",
+            title: "Scan a Web3 target with ScamGuard",
+            description: "Type or paste a URL, wallet, token mint, contract, or transaction payload.",
+            input_message_content: { message_text: "ScamGuard inline scanner: paste a URL, wallet, token mint, contract, or transaction payload after the bot mention.", disable_web_page_preview: true },
+            reply_markup: { inline_keyboard: [[{ text: "Open full scanner", url: `${baseUrl(context)}/scamguard` }]] },
+          }],
+        },
+      }]
+    }
+    const result = await scanCandidate(candidate)
+    const text = [
+      "SCAMGUARD INLINE REPORT",
+      `${result.riskLevel} | Shield ${result.score}/100 | ${result.confidence} confidence`,
+      `Target: ${compactTarget(result)}`,
+      "",
+      result.summary,
+      "",
+      "Open the full scanner before signing or connecting a wallet.",
+    ].join("\n").slice(0, 3900)
+    return [{
+      method: "answerInlineQuery",
+      payload: {
+        chat_id: 0,
+        text: "",
+      },
+      inlineQuery: {
+        inline_query_id: update.inline_query.id,
+        is_personal: true,
+        cache_time: 0,
+        results: [{
+          type: "article",
+          id: `scan-${result.id}`.slice(0, 64),
+          title: `${result.riskLevel}: ${compactTarget(result)}`.slice(0, 64),
+          description: `${result.score}/100 shield score - ${result.summary}`.slice(0, 220),
+          input_message_content: { message_text: text, disable_web_page_preview: true },
+          reply_markup: scanReportKeyboard(context, candidate),
+        }],
+      },
+    }]
+  }
   const message = update.message ?? update.edited_message
   if (!message) return []
 
