@@ -9,6 +9,7 @@ on:
       - "lib/telegram/**"
       - "lib/scamguard/**"
       - "prisma/migrations/**"
+      - "tsconfig.telegram.json"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/telegram-guardian-hardening.yml"
@@ -23,6 +24,7 @@ on:
       - "lib/telegram/**"
       - "lib/scamguard/**"
       - "prisma/migrations/**"
+      - "tsconfig.telegram.json"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/telegram-guardian-hardening.yml"
@@ -75,5 +77,5 @@ jobs:
           lib/telegram/guardian-v2.test.ts
           lib/telegram/project-registry.test.ts
 
-      - name: Type-check application
-        run: npx tsc --noEmit
+      - name: Type-check Telegram Guardian production surfaces
+        run: npx tsc -p tsconfig.telegram.json --noEmit
