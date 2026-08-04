@@ -5,7 +5,7 @@ import {
   type TelegramBotAction,
   type TelegramBotContext,
   type TelegramUpdate,
-} from "@/lib/telegram/bot"
+} from "@/lib/telegram/safe-update"
 import { answerTelegramCallbackQuery, isTelegramGroupAdmin, muteTelegramMember, sendTelegramAction } from "@/lib/telegram/api"
 import {
   addTelegramWatch,
