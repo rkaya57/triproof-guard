@@ -60,3 +60,5 @@ jobs:
           git add -A
           git commit -m "Fix airdrop submission status and review UX"
           git push origin HEAD:fix/airdrop-status-review-ux
+
+# Triggered after the workflow file was present on the branch.
