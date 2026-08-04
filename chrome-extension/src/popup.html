@@ -26,7 +26,7 @@
 
       <section class="score-card">
         <div class="tab-copy">
-          <p class="eyebrow">Live risk telemetry</p>
+          <p class="eyebrow">Current site check</p>
           <h2 id="domainLabel">Loading...</h2>
           <p id="summaryLabel">Reading the page and checking the risk engine.</p>
         </div>
@@ -58,11 +58,11 @@
             <strong id="sourceIntel">Checking</strong>
           </div>
           <div class="intel-tile">
-            <span>Threat feed</span>
+            <span>Reputation</span>
             <strong id="feedIntel">Checking</strong>
           </div>
           <div class="intel-tile">
-            <span>Intent</span>
+          <span>Activity</span>
             <strong id="intentIntel">URL scan</strong>
           </div>
           <div class="intel-tile">
@@ -87,10 +87,11 @@
         <button id="scanLinksButton" type="button" class="button primary">Scan page links</button>
         <button id="shareReportButton" type="button" class="button ghost">Copy report link</button>
       </section>
-      <button id="reportThreatButton" type="button" class="text-action">Report this site to the Threat Pool</button>
+      <section class="support-actions" aria-label="More ScamGuard actions">
+        <button id="reportThreatButton" type="button" class="button secondary">Report to Threat Pool</button>
+        <button id="openReportButton" type="button" class="button secondary">Open full scanner</button>
+      </section>
       <p id="shareStatus" class="share-status" role="status"></p>
-
-      <button id="openReportButton" type="button" class="text-action">Open live ScamGuard scanner</button>
 
       <section class="link-card">
         <div class="section-head">
@@ -111,7 +112,7 @@
       <section class="history-card">
         <div class="section-head">
           <div>
-            <h3>Recent protection activity</h3>
+            <h3>Recent activity</h3>
             <p id="historyMeta">Private to this browser.</p>
           </div>
           <button id="clearHistoryButton" type="button" class="quiet-button">Clear</button>

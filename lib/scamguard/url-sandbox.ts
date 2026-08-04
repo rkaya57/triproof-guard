@@ -343,9 +343,9 @@ export async function inspectUrlSandbox(
       signals: blocked
         ? [{
             code: "SANDBOX_TARGET_BLOCKED",
-            severity: "low",
-            title: "Sandbox could not safely open this target",
-            detail: error instanceof Error ? error.message : "The URL did not pass sandbox network policy.",
+            severity: "medium",
+            title: "Limited sandbox visibility",
+            detail: "ScamGuard could not complete its passive inspection of this target. This is not a threat finding by itself, but the scan is incomplete and should be reviewed before signing or connecting a wallet.",
           }]
         : [],
     }

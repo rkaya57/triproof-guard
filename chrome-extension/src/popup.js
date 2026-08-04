@@ -114,17 +114,17 @@ function shortText(value, fallback = "Unknown") {
 }
 
 function reputationText(reputation) {
-  if (!reputation) return "No feed hit"
-  if (reputation.verdict === "trusted") return `Trusted: ${reputation.source ?? "registry"}`
-  if (reputation.verdict === "known_bad") return `Known bad: ${reputation.source ?? "feed"}`
-  if (reputation.verdict === "suspicious") return `Suspicious: ${reputation.source ?? "feed"}`
-  return `Clean: ${reputation.source ?? "local read"}`
+  if (!reputation || reputation.verdict === "unknown") return "No known threat match"
+  if (reputation.verdict === "trusted") return "Verified project"
+  if (reputation.verdict === "known_bad") return "Known threat match"
+  if (reputation.verdict === "suspicious") return "Needs extra review"
+  return "No known threat match"
 }
 
 function intentText(metadata) {
   const intent = metadata?.decodedIntent
-  if (!intent) return "URL / domain read"
-  const category = intent.category && intent.category !== "unknown" ? intent.category.replaceAll("_", " ") : "unknown intent"
+  if (!intent) return "Site and URL inspected"
+  const category = intent.category && intent.category !== "unknown" ? intent.category.replaceAll("_", " ") : "Wallet request"
   return intent.method ? `${category} / ${intent.method}` : category
 }
 
@@ -293,7 +293,7 @@ function renderHistory(items, total) {
     return
   }
   elements.historyList.className = "history-list"
-  elements.historyList.innerHTML = items.slice(0, 6).map((entry) => `
+  elements.historyList.innerHTML = items.slice(0, 3).map((entry) => `
     <article class="history-item ${riskClass(entry.riskLevel)}">
       <div class="history-score">${escapeHtml(entry.shieldScore)}</div>
       <div class="history-copy">

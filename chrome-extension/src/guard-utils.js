@@ -119,28 +119,32 @@
     const intent = metadata.decodedIntent ?? {}
     const signals = Array.isArray(result?.signals) ? result.signals : []
     const decision = metadata.decision ?? {}
-    const host = metadata.domain ?? hostFromUrl(sourceUrl) ?? "Current site"
+    const host = String(metadata.domain ?? hostFromUrl(sourceUrl) ?? "Current site").toLowerCase()
     const verifiedSource = reputation.verdict === "trusted" || signals.some((signal) => /VERIFIED_(TRANSACTION_)?SOURCE|VERIFIED_PROJECT_DOMAIN/.test(signal.code ?? ""))
     const sourceLabel = verifiedSource
-      ? "Verified source context"
+      ? "Verified project record"
       : reputation.verdict === "known_bad"
         ? "Threat feed match"
         : reputation.verdict === "suspicious"
           ? "Suspicious source context"
-          : "Source not yet verified"
+          : "No verified project record (not a threat by itself)"
     const intentLabel = intent.batch?.totalCalls
       ? `wallet batch (${intent.batch.totalCalls} call${intent.batch.totalCalls === 1 ? "" : "s"})`
       : intent.category && intent.category !== "unknown"
       ? intent.category.replaceAll("_", " ")
-      : result?.type === "transaction" ? intent.instructionCount ? `Solana transaction (${intent.instructionCount} instruction${intent.instructionCount === 1 ? "" : "s"})` : "wallet request (not decoded)" : "site and URL read"
-    const evidenceLabel = signals.length
-      ? `${signals.length} signal${signals.length === 1 ? "" : "s"} considered`
-      : "No material signal found"
+      : result?.type === "transaction" ? intent.instructionCount ? `Solana transaction (${intent.instructionCount} instruction${intent.instructionCount === 1 ? "" : "s"})` : "Wallet request not decoded" : "Site and URL inspected"
+    const materialSignals = signals.filter((signal) => signal.severity !== "info")
+    const evidenceLabel = materialSignals.length
+      ? `${materialSignals.length} risk signal${materialSignals.length === 1 ? "" : "s"} considered`
+      : "No material risk signal found"
+    const decisionValue = result?.riskLevel === "SAFE"
+      ? "No critical threat found"
+      : String(result?.riskLevel ?? "READY").replaceAll("_", " ")
     return [
       { label: "Source", value: host, status: sourceLabel },
       { label: "Intent", value: intentLabel, status: "Decoded" },
-      { label: "Evidence", value: evidenceLabel, status: signals[0]?.title ?? "Clean read" },
-      { label: "Decision", value: String(result?.riskLevel ?? "READY").replaceAll("_", " "), status: decision.primaryReason ?? result?.summary ?? "Awaiting scan" },
+      { label: "Evidence", value: evidenceLabel, status: materialSignals[0]?.title ?? "No high-confidence risk driver" },
+      { label: "Decision", value: decisionValue, status: decision.primaryReason ?? result?.summary ?? "Awaiting scan" },
     ]
   }
 

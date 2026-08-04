@@ -41,6 +41,18 @@ test("ScamGuard keeps URL reports chain-neutral without an explicit or detected 
   assert.doesNotMatch(result.explanation, /^Solana scan found /)
 })
 
+test("ScamGuard marks a URL for review when passive sandboxing is blocked", async () => {
+  const result = await scanScamGuard({
+    type: "url",
+    value: "http://127.0.0.1/",
+    deepScan: true,
+  })
+
+  assert.equal(result.riskLevel, "CAUTION")
+  assert.equal(result.metadata.sandbox?.status, "blocked")
+  assert.ok(result.signals.some((signal) => signal.code === "SANDBOX_TARGET_BLOCKED" && signal.severity === "medium"))
+})
+
 test("ScamGuard reduces false positives for verified domains", async () => {
   const result = await scanScamGuard({
     type: "url",
