@@ -197,6 +197,22 @@ test("Group Guardian warns on known scam links", async () => {
   assert.match(actions[0].payload.text, /ScamGuard Group Guardian/)
 })
 
+test("Group Guardian confirms that a clean posted link was scanned", async () => {
+  const update: TelegramUpdate = {
+    update_id: 32,
+    message: {
+      message_id: 122,
+      text: "https://testnet.awarizon.com/node",
+      chat: { id: -103, type: "group", title: "Test group" },
+    },
+  }
+
+  const actions = await handleTelegramUpdate(update)
+  assert.equal(actions.length, 1)
+  assert.match(actions[0].payload.text, /SCAMGUARD GROUP SCAN/)
+  assert.match(actions[0].payload.text, /No alert-level rule was triggered/)
+})
+
 test("Group scan commands enforce the same team policy used by API and Guardian links", async () => {
   const update: TelegramUpdate = {
     update_id: 31,

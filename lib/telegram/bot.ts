@@ -198,7 +198,7 @@ const commandHelp = [
   "• /unwatch <link|wallet|token>",
   "",
   "👥 Group Guardian",
-  "Add the bot to a Telegram group and it will scan posted links. It only replies when the risk crosses the configured alert threshold.",
+  "Add the bot to a Telegram group and it will scan posted links. Every detected link receives a compact result; elevated risks include a full Guardian alert.",
   "Group admins can use /guardian to manage protection and /guardian connect <code> to link a paid group.",
 ].join("\n")
 
@@ -663,6 +663,19 @@ function groupSetupReminder(message: TelegramMessage, context: TelegramBotContex
   })
 }
 
+function groupScanReceipt(result: ScamGuardScanResult) {
+  return [
+    "SCAMGUARD GROUP SCAN",
+    "",
+    `Status: ${result.riskLevel} | Shield ${result.score}/100 | ${result.confidence} confidence`,
+    `Target: ${compactTarget(result)}`,
+    "",
+    result.summary,
+    "",
+    "No alert-level rule was triggered. Always verify the source and wallet prompt before signing.",
+  ].join("\n")
+}
+
 function guardianStatusText(context: TelegramBotContext) {
   const settings = currentGroupSettings(context)
   return [
@@ -991,6 +1004,8 @@ async function handleGroupGuardian(message: TelegramMessage, context: TelegramBo
       buttons.push([{ text: "Open full scanner", url: `${baseUrl(context)}/scamguard` }, { text: "Threat Pool", url: `${baseUrl(context)}/threat-reports?target=${encodeURIComponent(candidate.value)}${candidate.type === "url" ? "&kind=DOMAIN" : ""}` }])
       const containmentNotice = autoContained ? "\n\nAUTO-CONTAINMENT: Sender muted for 1 hour after a critical or policy-block decision." : ""
       actions.push(simpleReply(message, `${groupWarningText(result, campaign)}${policyNotice}${containmentNotice}`, { inline_keyboard: buttons }))
+    } else {
+      actions.push(simpleReply(message, groupScanReceipt(result), scanReportKeyboard(context, candidate, campaign.eventId)))
     }
   }
 
