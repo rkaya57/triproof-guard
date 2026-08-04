@@ -1,0 +1,81 @@
+name: Telegram Guardian hardening
+
+on:
+  pull_request:
+    paths:
+      - "app/api/telegram/**"
+      - "app/api/admin/telegram/**"
+      - "components/admin/telegram-guardian-console.tsx"
+      - "lib/telegram/**"
+      - "lib/scamguard/**"
+      - "prisma/migrations/**"
+      - "tsconfig.telegram.json"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/telegram-guardian-hardening.yml"
+  push:
+    branches:
+      - main
+      - "feat/telegram-guardian-hardening"
+    paths:
+      - "app/api/telegram/**"
+      - "app/api/admin/telegram/**"
+      - "components/admin/telegram-guardian-console.tsx"
+      - "lib/telegram/**"
+      - "lib/scamguard/**"
+      - "prisma/migrations/**"
+      - "tsconfig.telegram.json"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/telegram-guardian-hardening.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  guardian-hardening:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run Telegram Guardian tests
+        run: >-
+          node --import tsx --test
+          lib/telegram/bot.test.ts
+          lib/telegram/safe-update.test.ts
+          lib/telegram/guardian-v2.test.ts
+          lib/telegram/project-registry.test.ts
+          lib/telegram/api.test.ts
+
+      - name: Lint Telegram Guardian surfaces
+        run: >-
+          npx eslint
+          app/api/telegram/webhook/route.ts
+          app/api/admin/telegram/groups/route.ts
+          app/api/admin/telegram/projects/route.ts
+          components/admin/telegram-guardian-console.tsx
+          lib/telegram/api.ts
+          lib/telegram/advanced-store.ts
+          lib/telegram/guardian-v2.ts
+          lib/telegram/project-registry.ts
+          lib/telegram/safe-update.ts
+          lib/telegram/api.test.ts
+          lib/telegram/guardian-v2.test.ts
+          lib/telegram/project-registry.test.ts
+
+      - name: Type-check Telegram Guardian production surfaces
+        run: npx tsc -p tsconfig.telegram.json --noEmit

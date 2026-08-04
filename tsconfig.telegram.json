@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "app/api/telegram/webhook/route.ts",
+    "app/api/admin/telegram/groups/route.ts",
+    "app/api/admin/telegram/projects/route.ts",
+    "components/admin/telegram-guardian-console.tsx",
+    "lib/telegram/api.ts",
+    "lib/telegram/advanced-store.ts",
+    "lib/telegram/guardian-v2.ts",
+    "lib/telegram/project-registry.ts",
+    "lib/telegram/safe-update.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ]
+}

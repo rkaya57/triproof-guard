@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import {
+  handleTelegramUpdate,
   maskBenignSecretMaterialMentions,
   normalizeTelegramUpdate,
   normalizeTelegramUrl,
@@ -41,4 +42,29 @@ test("masks educational secret-material warnings without hiding real requests", 
 test("masks Turkish safety wording around secret material", () => {
   const educational = "Asla seed phrase paylaşmayın; Tri-Proof bunu istemez."
   assert.equal(/\bseed phrase\b/i.test(maskBenignSecretMaterialMentions(educational)), false)
+})
+
+test("persistent rate limits also protect explicit group scan commands", async () => {
+  let requestedGroupLimit = false
+  const actions = await handleTelegramUpdate(
+    {
+      update_id: 2,
+      message: {
+        message_id: 10,
+        text: "/scan https://example.com/claim",
+        chat: { id: -100, type: "supergroup" },
+        from: { id: 7, first_name: "Tester" },
+      },
+    },
+    {
+      consumePersistentAllowance: async (input) => {
+        requestedGroupLimit = input.group
+        return { allowed: false, retryAfterSeconds: 60 }
+      },
+    }
+  )
+
+  assert.equal(requestedGroupLimit, true)
+  assert.equal(actions.length, 1)
+  assert.match(actions[0].payload.text, /scan limit reached/i)
 })
