@@ -5,6 +5,7 @@ import { db } from "@/lib/db/prisma"
 import {
   ensureAirdropTasks,
   isLikelyUrl,
+  isSubmissionLocked,
   isValidEvidenceImage,
 } from "@/lib/airdrop/tasks"
 
@@ -70,8 +71,12 @@ export async function POST(request: Request) {
     where: { userId_taskId: { userId: user.id, taskId: task.id } },
   })
 
-  if (current?.status === "APPROVED") {
-    return NextResponse.json({ error: "This task is already approved." }, { status: 409 })
+  if (isSubmissionLocked(current?.status)) {
+    const error =
+      current?.status === "APPROVED"
+        ? "This task is already approved and cannot earn points again."
+        : "This task already has a submission pending review."
+    return NextResponse.json({ error }, { status: 409 })
   }
 
   if (task.type === "HUMANITY_GATE_FEEDBACK" && current?.feedbackText) {

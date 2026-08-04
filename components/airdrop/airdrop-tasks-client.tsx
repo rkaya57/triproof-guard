@@ -51,6 +51,7 @@ type AirdropTask = {
   slug: string
   title: string
   description: string
+  targetUrl: string | null
   type: TaskType
   points: number
   proofRequired: boolean
@@ -482,14 +483,14 @@ export function AirdropTasksClient() {
                 </div>
 
                 {task.type === "X_FOLLOW" && (
-                  <a href={triproofXUrl} target="_blank" rel="noreferrer" className={`${buttonVariants({ variant: "outline" })} w-full text-white`}>
+                  <a href={task.targetUrl ?? triproofXUrl} target="_blank" rel="noreferrer" className={`${buttonVariants({ variant: "outline" })} w-full text-white`}>
                     Follow @TriProof_ <ExternalLink data-icon="inline-end" />
                   </a>
                 )}
 
                 {task.type === "X_QUOTE" && (
-                  <a href={quoteSearchUrl} target="_blank" rel="noreferrer" className={`${buttonVariants({ variant: "outline" })} w-full text-white`}>
-                    Open Tri-Proof posts <ExternalLink data-icon="inline-end" />
+                  <a href={task.targetUrl ?? quoteSearchUrl} target="_blank" rel="noreferrer" className={`${buttonVariants({ variant: "outline" })} w-full text-white`}>
+                    Open post to quote <ExternalLink data-icon="inline-end" />
                   </a>
                 )}
 
@@ -517,8 +518,14 @@ export function AirdropTasksClient() {
                 )}
 
                 {task.type === "TELEGRAM_JOIN" && (
-                  <a href={triproofTelegramUrl} target="_blank" rel="noreferrer" className={`${buttonVariants({ variant: "outline" })} w-full text-white`}>
+                  <a href={task.targetUrl ?? triproofTelegramUrl} target="_blank" rel="noreferrer" className={`${buttonVariants({ variant: "outline" })} w-full text-white`}>
                     Join Tri-Proof Telegram <ExternalLink data-icon="inline-end" />
+                  </a>
+                )}
+
+                {task.targetUrl && !["X_FOLLOW", "X_QUOTE", "TELEGRAM_JOIN"].includes(task.type) && (
+                  <a href={task.targetUrl} target="_blank" rel="noreferrer" className={`${buttonVariants({ variant: "outline" })} w-full text-white`}>
+                    Open task link <ExternalLink data-icon="inline-end" />
                   </a>
                 )}
 
