@@ -11,29 +11,34 @@ import {
 import { utcRewardDate } from "@/lib/airdrop/threat-rewards"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
+const noStoreHeaders = {
+  "Cache-Control": "private, no-store, no-cache, max-age=0, must-revalidate",
+}
+
+function json(body: unknown, status = 200) {
+  return NextResponse.json(body, { status, headers: noStoreHeaders })
+}
 
 export async function GET() {
   const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!user) return json({ error: "Unauthorized" }, 401)
 
   try {
     await ensureAirdropTasks(db)
     const today = utcRewardDate(new Date())
     const startOfToday = new Date(`${today}T00:00:00.000Z`)
 
-    const [profile, tasks, leaderboard, dailyThreatReward, pendingThreatReport] = await Promise.all([
-      db.airdropProfile.findUnique({
-        where: { userId: user.id },
-        include: {
-          submissions: {
-            include: { task: true },
-            orderBy: { createdAt: "desc" },
-          },
-        },
-      }),
+    const [profile, tasks, submissions, leaderboard, dailyThreatReward, pendingThreatReport] = await Promise.all([
+      db.airdropProfile.findUnique({ where: { userId: user.id } }),
       db.airdropTask.findMany({
         where: { active: true },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      }),
+      db.airdropSubmission.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: "desc" },
       }),
       db.airdropProfile.findMany({
         where: { totalPoints: { gt: 0 } },
@@ -58,13 +63,13 @@ export async function GET() {
     ])
 
     const submissionsByTaskId = new Map(
-      (profile?.submissions ?? []).map((submission) => [submission.taskId, submission])
+      submissions.map((submission) => [submission.taskId, submission])
     )
-    const approved = profile?.submissions.filter((submission) => submission.status === "APPROVED") ?? []
-    const pending = profile?.submissions.filter((submission) => submission.status === "PENDING") ?? []
-    const rejected = profile?.submissions.filter((submission) => submission.status === "REJECTED") ?? []
+    const approved = submissions.filter((submission) => submission.status === "APPROVED")
+    const pending = submissions.filter((submission) => submission.status === "PENDING")
+    const rejected = submissions.filter((submission) => submission.status === "REJECTED")
 
-    return NextResponse.json({
+    return json({
       user,
       profile: profile
         ? {
@@ -126,10 +131,10 @@ export async function GET() {
     })
   } catch (error) {
     if (isAirdropSchemaMissing(error)) {
-      return NextResponse.json(airdropSchemaMissingResponse(), { status: 503 })
+      return json(airdropSchemaMissingResponse(), 503)
     }
 
     console.error("Airdrop account load failed", error)
-    return NextResponse.json({ error: "Could not load airdrop tasks." }, { status: 500 })
+    return json({ error: "Could not load airdrop tasks." }, 500)
   }
 }
