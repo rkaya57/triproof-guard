@@ -8,12 +8,17 @@ const elements = {
   riskBadge: document.getElementById("riskBadge"),
   domainLabel: document.getElementById("domainLabel"),
   summaryLabel: document.getElementById("summaryLabel"),
+  siteFavicon: document.getElementById("siteFavicon"),
+  siteIdentityLabel: document.getElementById("siteIdentityLabel"),
+  siteIdentityDetail: document.getElementById("siteIdentityDetail"),
+  scanStatePill: document.getElementById("scanStatePill"),
   scoreLabel: document.getElementById("scoreLabel"),
   scoreMeter: document.getElementById("scoreMeter"),
   scoreBar: document.getElementById("scoreBar"),
   scoreWhisper: document.getElementById("scoreWhisper"),
   confidencePill: document.getElementById("confidencePill"),
   decisionMessage: document.getElementById("decisionMessage"),
+  primarySignalLabel: document.getElementById("primarySignalLabel"),
   sourceIntel: document.getElementById("sourceIntel"),
   feedIntel: document.getElementById("feedIntel"),
   intentIntel: document.getElementById("intentIntel"),
@@ -21,6 +26,8 @@ const elements = {
   riskTimeline: document.getElementById("riskTimeline"),
   linkScanPill: document.getElementById("linkScanPill"),
   linkScanSummary: document.getElementById("linkScanSummary"),
+  signalsCard: document.getElementById("signalsCard"),
+  signalSummary: document.getElementById("signalSummary"),
   signalsList: document.getElementById("signalsList"),
   rescanButton: document.getElementById("rescanButton"),
   scanLinksButton: document.getElementById("scanLinksButton"),
@@ -28,6 +35,7 @@ const elements = {
   shareStatus: document.getElementById("shareStatus"),
   openReportButton: document.getElementById("openReportButton"),
   historyMeta: document.getElementById("historyMeta"),
+  historySummary: document.getElementById("historySummary"),
   historyList: document.getElementById("historyList"),
   clearHistoryButton: document.getElementById("clearHistoryButton"),
   reportThreatButton: document.getElementById("reportThreatButton"),
@@ -37,6 +45,7 @@ const elements = {
   centerRules: document.getElementById("centerRules"),
   openSecurityCenterButton: document.getElementById("openSecurityCenterButton"),
   protectionLevel: document.getElementById("protectionLevel"),
+  profileDescription: document.getElementById("profileDescription"),
   enableNotifications: document.getElementById("enableNotifications"),
   apiBaseUrl: document.getElementById("apiBaseUrl"),
   teamPolicyApiKey: document.getElementById("teamPolicyApiKey"),
@@ -52,6 +61,8 @@ const elements = {
   saveSettingsButton: document.getElementById("saveSettingsButton"),
   settingsMessage: document.getElementById("settingsMessage"),
 }
+
+const profileButtons = Array.from(document.querySelectorAll("[data-profile]"))
 
 function sendMessage(message) {
   return new Promise((resolve) => {
@@ -137,6 +148,57 @@ function contractText(metadata) {
   return contract.verified ? "Verified contract" : "Unverified contract"
 }
 
+function profileDescription(profile) {
+  if (profile === "strict") return "Extra review for new domains and caution-level actions."
+  if (profile === "paranoid") return "Review every wallet request before it reaches your wallet."
+  return "Balanced checks for everyday browsing."
+}
+
+function renderProtectionProfile(profile) {
+  const selected = ["balanced", "strict", "paranoid"].includes(profile) ? profile : "balanced"
+  elements.profileDescription.textContent = profileDescription(selected)
+  profileButtons.forEach((button) => {
+    const active = button.dataset.profile === selected
+    button.classList.toggle("active", active)
+    button.setAttribute("aria-pressed", String(active))
+  })
+}
+
+function renderSiteIdentity(result) {
+  const metadata = result?.metadata ?? {}
+  const reputation = metadata.reputation ?? {}
+  const source = metadata.domain ?? hostFromUrl(state.tab?.url)
+  if (reputation.verdict === "trusted") {
+    elements.siteIdentityLabel.textContent = "Verified project context"
+    elements.siteIdentityDetail.textContent = `${source} matches a trusted project record.`
+    return
+  }
+  if (reputation.verdict === "known_bad") {
+    elements.siteIdentityLabel.textContent = "Threat intelligence match"
+    elements.siteIdentityDetail.textContent = `${source} appears in ScamGuard threat intelligence.`
+    return
+  }
+  if (reputation.verdict === "suspicious") {
+    elements.siteIdentityLabel.textContent = "Source needs extra review"
+    elements.siteIdentityDetail.textContent = `${source} has a reputation signal that needs confirmation.`
+    return
+  }
+  elements.siteIdentityLabel.textContent = "Unverified source"
+  elements.siteIdentityDetail.textContent = "No known threat match. Confirm the wallet request before signing."
+}
+
+function renderScanState(level, checking = false) {
+  const status = checking ? "checking" : riskClass(level)
+  elements.scanStatePill.className = `scan-state ${status}`
+  elements.scanStatePill.textContent = checking
+    ? "Scanning"
+    : level === "CRITICAL" || level === "HIGH_RISK"
+      ? "Risk found"
+      : level === "CAUTION"
+        ? "Review needed"
+        : "Scan complete"
+}
+
 function renderDecision(result) {
   const metadata = result.metadata ?? {}
   const decision = metadata.decision ?? {}
@@ -146,6 +208,9 @@ function renderDecision(result) {
   elements.feedIntel.textContent = reputationText(metadata.reputation)
   elements.intentIntel.textContent = intentText(metadata)
   elements.contractIntel.textContent = contractText(metadata)
+  const materialSignals = (result.signals ?? []).filter((signal) => signal.severity !== "info")
+  const primary = materialSignals[0] ?? result.signals?.[0]
+  elements.primarySignalLabel.textContent = primary ? `Primary finding: ${primary.title}` : "No material risk signal found."
 }
 
 function renderTimeline(result) {
@@ -176,8 +241,10 @@ function linkSummary(counts) {
 }
 
 function setBusy(message) {
+  document.body.dataset.scanState = "checking"
   elements.riskBadge.className = "badge ready"
   elements.riskBadge.textContent = "Checking"
+  renderScanState("READY", true)
   elements.summaryLabel.textContent = message
   elements.scoreWhisper.textContent = "Reading links, intent, reputation, and known risk patterns."
   elements.scoreMeter.className = "score-meter"
@@ -185,6 +252,8 @@ function setBusy(message) {
   elements.scoreBar.style.width = "0%"
   elements.confidencePill.textContent = "Checking"
   elements.decisionMessage.textContent = "ScamGuard is comparing source reputation, wallet intent, and known threat patterns."
+  elements.siteIdentityLabel.textContent = "Refreshing site identity"
+  elements.siteIdentityDetail.textContent = "ScamGuard is checking the source and its current reputation."
   elements.sourceIntel.textContent = "Reading"
   elements.feedIntel.textContent = "Reading"
   elements.intentIntel.textContent = "Reading"
@@ -199,6 +268,8 @@ function setBusy(message) {
 
 function renderResult(result) {
   state.result = result
+  document.body.dataset.scanState = "complete"
+  document.body.dataset.risk = riskClass(result.riskLevel)
   const securityScore = Math.max(0, Math.min(100, 100 - Number(result.score ?? 0)))
   elements.riskBadge.className = `badge ${riskClass(result.riskLevel)}`
   elements.riskBadge.textContent = riskLabel(result.riskLevel)
@@ -208,14 +279,21 @@ function renderResult(result) {
   elements.scoreMeter.className = `score-meter ${riskClass(result.riskLevel)}`
   elements.scoreMeter.style.setProperty("--score-fill", `${securityScore}%`)
   elements.scoreBar.style.width = `${securityScore}%`
+  renderScanState(result.riskLevel)
+  renderSiteIdentity(result)
   renderDecision(result)
   renderTimeline(result)
   elements.shareReportButton.disabled = false
 
   const signals = result.signals ?? []
+  const materialSignals = signals.filter((signal) => signal.severity !== "info")
+  elements.signalSummary.textContent = materialSignals.length
+    ? `${materialSignals.length} risk signal${materialSignals.length === 1 ? "" : "s"} available for review.`
+    : "No material risk signals surfaced in this scan."
+  elements.signalsCard.open = result.riskLevel !== "SAFE" || materialSignals.length > 0
   if (!signals.length) {
     elements.signalsList.className = "list empty"
-    elements.signalsList.textContent = "No obvious red flags returned. Keep checking wallet prompts before signing."
+    elements.signalsList.textContent = "No material risk signals surfaced. Keep matching every wallet prompt to your intended action."
     return
   }
 
@@ -234,6 +312,7 @@ function renderResult(result) {
 function renderSettings(settings) {
   state.settings = settings
   elements.protectionLevel.value = settings.protectionLevel ?? "balanced"
+  renderProtectionProfile(elements.protectionLevel.value)
   elements.enableNotifications.checked = settings.enableNotifications !== false
   elements.apiBaseUrl.value = settings.apiBaseUrl ?? "https://triproofprotocol.com"
   elements.teamPolicyApiKey.value = ""
@@ -264,6 +343,7 @@ async function loadActiveTab() {
   if (!response?.ok) throw new Error(response?.error ?? "Could not read active tab")
   state.tab = response.tab
   elements.domainLabel.textContent = hostFromUrl(state.tab?.url)
+  elements.siteFavicon.src = state.tab?.favIconUrl || "../assets/icon48.png"
 }
 
 async function scanActiveTab(force = false) {
@@ -285,13 +365,26 @@ function relativeTime(value) {
 }
 
 function renderHistory(items, total) {
-  elements.historyMeta.textContent = total ? `${total} private scan${total === 1 ? "" : "s"} stored on this device.` : "Private to this browser."
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  const todayCount = items.filter((entry) => new Date(entry.createdAt).getTime() >= todayStart.getTime()).length
+  elements.historyMeta.textContent = total ? `${todayCount} today, ${total} private scan${total === 1 ? "" : "s"} stored on this device.` : "Private to this browser."
   elements.clearHistoryButton.disabled = !total
   if (!items.length) {
+    elements.historySummary.hidden = true
     elements.historyList.className = "history-list empty"
-    elements.historyList.textContent = "Your next site or wallet check will appear here."
+    elements.historyList.textContent = "Your next site or wallet check will appear here. ScamGuard keeps this history on this browser only."
     return
   }
+  const riskCount = items.filter((entry) => ["CAUTION", "HIGH_RISK", "CRITICAL"].includes(entry.riskLevel)).length
+  const protectedCount = Math.max(0, items.length - riskCount)
+  const safeWidth = Math.round((protectedCount / items.length) * 100)
+  elements.historySummary.hidden = false
+  elements.historySummary.innerHTML = `
+    <div><strong>${protectedCount}</strong><span>clear reads</span></div>
+    <div><strong>${riskCount}</strong><span>reviewed risks</span></div>
+    <div class="history-meter" aria-label="${protectedCount} clear reads and ${riskCount} reviewed risks"><span style="width:${safeWidth}%"></span></div>
+  `
   elements.historyList.className = "history-list"
   elements.historyList.innerHTML = items.slice(0, 3).map((entry) => `
     <article class="history-item ${riskClass(entry.riskLevel)}">
@@ -448,6 +541,20 @@ elements.openSecurityCenterButton.addEventListener("click", () => {
 
 elements.saveSettingsButton.addEventListener("click", () => {
   void saveSettings()
+})
+
+elements.siteFavicon.addEventListener("error", () => {
+  elements.siteFavicon.src = "../assets/icon48.png"
+})
+
+profileButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const profile = button.dataset.profile
+    if (!profile || profile === elements.protectionLevel.value) return
+    elements.protectionLevel.value = profile
+    renderProtectionProfile(profile)
+    void saveSettings()
+  })
 })
 
 void (async () => {

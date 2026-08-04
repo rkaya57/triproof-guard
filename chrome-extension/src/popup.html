@@ -31,6 +31,15 @@
           <p id="summaryLabel">Reading the page and checking the risk engine.</p>
         </div>
 
+        <div class="site-identity" aria-label="Current site identity">
+          <img id="siteFavicon" src="../assets/icon48.png" alt="" width="28" height="28">
+          <div>
+            <span id="siteIdentityLabel">Checking site identity</span>
+            <strong id="siteIdentityDetail">ScamGuard is reading the source.</strong>
+          </div>
+          <span id="scanStatePill" class="scan-state checking">Scanning</span>
+        </div>
+
         <div class="score-row">
           <div id="scoreMeter" class="score-meter" style="--score-fill: 0%">
             <div class="score-core">
@@ -46,9 +55,24 @@
         </div>
       </section>
 
+      <section class="profile-card" aria-label="Protection profile">
+        <div class="profile-copy">
+          <span>Protection profile</span>
+          <strong id="profileDescription">Balanced checks for everyday browsing.</strong>
+        </div>
+        <div class="profile-toggle" role="group" aria-label="Choose protection profile">
+          <button type="button" class="profile-button" data-profile="balanced">Balanced</button>
+          <button type="button" class="profile-button" data-profile="strict">Strict</button>
+          <button type="button" class="profile-button" data-profile="paranoid">Max</button>
+        </div>
+      </section>
+
       <section class="decision-card">
         <div class="section-head">
-          <h3>Why this result?</h3>
+          <div>
+            <h3>Decision summary</h3>
+            <p id="primarySignalLabel">Finding the strongest signal.</p>
+          </div>
           <span id="confidencePill" class="mini-pill">Waiting</span>
         </div>
         <p id="decisionMessage" class="decision-message">ScamGuard will explain the source, action, and strongest risk driver after the scan.</p>
@@ -62,7 +86,7 @@
             <strong id="feedIntel">Checking</strong>
           </div>
           <div class="intel-tile">
-          <span>Activity</span>
+            <span>Activity</span>
             <strong id="intentIntel">URL scan</strong>
           </div>
           <div class="intel-tile">
@@ -101,13 +125,16 @@
         <p id="linkScanSummary">Run a link scan to mark risky URLs directly on the page.</p>
       </section>
 
-      <section class="signals">
-        <div class="section-head">
-          <h3>Top risk drivers</h3>
-          <span class="mini-pill">Live</span>
-        </div>
+      <details id="signalsCard" class="signals">
+        <summary class="section-head">
+          <div>
+            <h3>Evidence details</h3>
+            <p id="signalSummary">Risk evidence and supporting context.</p>
+          </div>
+          <span class="mini-pill">Details</span>
+        </summary>
         <div id="signalsList" class="list empty">No signals yet. Open a page or rescan to start the read.</div>
-      </section>
+      </details>
 
       <section class="history-card">
         <div class="section-head">
@@ -117,6 +144,7 @@
           </div>
           <button id="clearHistoryButton" type="button" class="quiet-button">Clear</button>
         </div>
+        <div id="historySummary" class="history-summary" hidden></div>
         <div id="historyList" class="history-list" aria-live="polite"></div>
       </section>
 

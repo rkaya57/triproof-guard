@@ -351,6 +351,7 @@ function overlayMarkup(result, options) {
         <span>${escapeHtml(signingBrief.eyebrow)}</span>
         <h3>${escapeHtml(signingBrief.title)}</h3>
         <p>${escapeHtml(signingBrief.detail)}</p>
+        ${signingImpactFacts(result)}
         <strong>${escapeHtml(signingBrief.caution)}</strong>
       </section>
     `
@@ -428,6 +429,38 @@ function walletAssetImpact(result) {
       <p>${escapeHtml(impact.note ?? "Confirm the final wallet preview before signing.")}</p>
     </section>
   `
+}
+
+function signingImpactFacts(result) {
+  const intent = result?.metadata?.decodedIntent ?? {}
+  const category = intent.category ?? "unknown"
+  const action = category === "approval"
+    ? "Token permission"
+    : category === "transfer"
+      ? "Asset transfer"
+      : category === "authority"
+        ? "Control change"
+        : category === "signature"
+          ? "Message signature"
+          : "Wallet request"
+  const assetEffect = category === "transfer"
+    ? "Funds can leave your wallet"
+    : category === "approval"
+      ? "No funds move immediately"
+      : category === "authority"
+        ? "Future token control can change"
+        : category === "signature"
+          ? "No direct transfer is shown"
+          : "Exact asset effect not decoded"
+  const permissionEffect = category === "approval"
+    ? "A third party may spend approved tokens"
+    : category === "authority"
+      ? "Another account may gain control"
+      : category === "signature" && intent.typedData?.highImpact
+        ? "Signature may authorize an off-chain action"
+        : "No new spending permission decoded"
+  const fact = (label, value) => `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`
+  return `<div class="sgx-signing-facts" aria-label="Wallet request impact summary">${fact("Action", action)}${fact("Asset effect", assetEffect)}${fact("Permission", permissionEffect)}</div>`
 }
 
 function navigationShieldBrief(result) {
@@ -525,7 +558,19 @@ function showDecisionOverlay(result, options = {}) {
   return new Promise((resolve) => {
     const root = document.createElement("div")
     root.id = "scamguard-extension-overlay"
+    root.tabIndex = -1
     root.innerHTML = overlayMarkup(result, options)
+    const close = (allow) => {
+      window.removeEventListener("keydown", onKeyDown, true)
+      root.remove()
+      overlayOpen = false
+      resolve(allow)
+    }
+    const onKeyDown = (event) => {
+      if (event.key !== "Escape") return
+      event.preventDefault()
+      close(false)
+    }
     const waitButton = root.querySelector('[data-wait="true"]')
     if (waitButton instanceof HTMLButtonElement) {
       window.setTimeout(() => {
@@ -538,11 +583,11 @@ function showDecisionOverlay(result, options = {}) {
       if (!(target instanceof HTMLElement)) return
       const decision = target.dataset.decision
       if (!decision) return
-      root.remove()
-      overlayOpen = false
-      resolve(decision === "continue")
+      close(decision === "continue")
     })
     document.documentElement.appendChild(root)
+    window.addEventListener("keydown", onKeyDown, true)
+    root.focus()
   })
 }
 

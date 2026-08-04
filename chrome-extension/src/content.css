@@ -405,6 +405,42 @@
   margin-top: 7px;
 }
 
+#scamguard-extension-overlay .sgx-signing-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 12px;
+}
+
+#scamguard-extension-overlay .sgx-signing-facts > div {
+  min-width: 0;
+  border: 1px solid rgba(94, 234, 212, 0.24);
+  border-radius: 9px;
+  background: rgba(2, 6, 23, 0.28);
+  padding: 8px;
+}
+
+#scamguard-extension-overlay .sgx-signing-facts span,
+#scamguard-extension-overlay .sgx-signing-facts strong {
+  display: block;
+}
+
+#scamguard-extension-overlay .sgx-signing-facts span {
+  color: #86efdc;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#scamguard-extension-overlay .sgx-signing-facts strong {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  color: #e6fffb;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 #scamguard-extension-overlay .sgx-approval-brief > strong {
   display: block;
   margin-top: 10px;
@@ -912,7 +948,8 @@ a[data-sgx-risk="critical"] .sgx-link-badge {
   #scamguard-extension-overlay .sgx-modal-grid,
   #scamguard-extension-overlay .sgx-transaction-strip,
   #scamguard-extension-overlay .sgx-modal-actions,
-  #scamguard-extension-overlay .sgx-mini-timeline {
+  #scamguard-extension-overlay .sgx-mini-timeline,
+  #scamguard-extension-overlay .sgx-signing-facts {
     grid-template-columns: 1fr;
     flex-direction: column;
   }
