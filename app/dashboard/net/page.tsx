@@ -1,7 +1,9 @@
 import { TriProofNetConsole } from "@/components/net/tri-proof-net-console"
-import { requirePageUser } from "@/lib/auth/page"
+import { getAdminUser } from "@/lib/auth/admin"
+import { redirect } from "next/navigation"
 
 export default async function Page() {
-  const user = await requirePageUser("/dashboard/net")
+  const user = await getAdminUser()
+  if (!user) redirect("/dashboard")
   return <TriProofNetConsole currentUser={user} />
 }

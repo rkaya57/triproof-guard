@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { FormalApprovalStatus, FormalDocumentStatus } from "@prisma/client"
 import { z } from "zod"
 
-import { getCurrentUser } from "@/lib/auth/session"
+import { getAdminUser } from "@/lib/auth/admin"
 import { db } from "@/lib/db/prisma"
 import { canAccessFormalDocument, formatDocumentNumber } from "@/lib/tri-proof-net/documents"
 
@@ -26,7 +26,7 @@ async function documentForUser(id: string, user: { id: string; email: string }) 
 }
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
-  const user = await getCurrentUser()
+  const user = await getAdminUser()
   if (!user) return error("Unauthorized", 401)
   const { id } = await context.params
   const document = await documentForUser(id, user)
@@ -35,7 +35,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 }
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  const user = await getCurrentUser()
+  const user = await getAdminUser()
   if (!user) return error("Unauthorized", 401)
   const { id } = await context.params
   const parsed = actionSchema.safeParse(await request.json().catch(() => null))

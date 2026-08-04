@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { FormalDocumentStatus } from "@prisma/client"
 
-import { getCurrentUser } from "@/lib/auth/session"
+import { getAdminUser } from "@/lib/auth/admin"
 import { db } from "@/lib/db/prisma"
 import { createFormalDocumentSchema } from "@/lib/tri-proof-net/documents"
 
@@ -12,7 +12,7 @@ function unauthorized() {
 }
 
 export async function GET() {
-  const user = await getCurrentUser()
+  const user = await getAdminUser()
   if (!user) return unauthorized()
 
   const documents = await db.formalDocument.findMany({
@@ -37,7 +37,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const user = await getCurrentUser()
+  const user = await getAdminUser()
   if (!user) return unauthorized()
   const parsed = createFormalDocumentSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ error: "Complete the document subject, recipient, body, and at least one approval step." }, { status: 400 })
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const user = await getCurrentUser()
+  const user = await getAdminUser()
   if (!user) return unauthorized()
   const id = new URL(request.url).searchParams.get("id")
   if (!id) return NextResponse.json({ error: "Document id is required." }, { status: 400 })

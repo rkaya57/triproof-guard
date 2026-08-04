@@ -34,7 +34,6 @@ const navItems = [
   { href: "/threat-reports", label: "Threat Pool", icon: ShieldAlert },
   { href: "/dashboard/developer", label: "Developer", icon: Code2 },
   { href: "/dashboard/policies", label: "Team Policies", icon: ShieldCheck },
-  { href: "/dashboard/net", label: "Tri Proof Net", icon: Landmark },
   { href: "/pricing", label: "Pricing", icon: Tags },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ]
@@ -45,6 +44,7 @@ const adminNavItems = [
   { href: "/dashboard/admin/airdrop", label: "Airdrop Review", icon: Gift },
   { href: "/dashboard/admin/diagnostics", label: "Diagnostics", icon: HeartPulse },
   { href: "/dashboard/admin/payments", label: "Payments", icon: Tags },
+  { href: "/dashboard/net", label: "Tri Proof Net", icon: Landmark },
 ]
 
 const routeTitles = [
