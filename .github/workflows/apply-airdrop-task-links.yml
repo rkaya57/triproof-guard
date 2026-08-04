@@ -27,10 +27,10 @@ jobs:
           ref: feature/airdrop-task-links
           fetch-depth: 0
 
-      - name: Apply patch
+      - name: Apply changes
         run: |
-          git apply --check scripts/airdrop-task-links.patch
-          git apply scripts/airdrop-task-links.patch
+          python scripts/apply-airdrop-task-links.py
+          rm scripts/apply-airdrop-task-links.py
           rm scripts/airdrop-task-links.patch
           rm .github/workflows/apply-airdrop-task-links.yml
           git diff --check
