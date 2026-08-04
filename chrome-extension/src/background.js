@@ -72,6 +72,45 @@ function historyTarget(result, sourceUrl, type) {
   return type === "transaction" ? "Wallet request" : "Unknown source"
 }
 
+function browserSystemPage(value) {
+  try {
+    const url = new URL(value)
+    if (["chrome:", "edge:", "about:", "devtools:"].includes(url.protocol)) {
+      return `${url.protocol.replace(":", "")} internal page`
+    }
+    if (url.protocol === "chrome-extension:") return "Browser extension page"
+  } catch {
+    // The normal scanner will explain malformed external values.
+  }
+  return null
+}
+
+function systemPageResult(value, pageLabel) {
+  return {
+    id: crypto.randomUUID(),
+    type: "url",
+    score: 0,
+    riskLevel: "SAFE",
+    summary: "This is a browser system page, not an external Web3 site.",
+    confidence: "NOT ASSESSED",
+    explanation: "ScamGuard does not assign a risk score to Chrome, browser, or extension internal pages because no external destination or wallet request is available to inspect.",
+    signals: [{
+      code: "BROWSER_SYSTEM_PAGE",
+      severity: "info",
+      title: "Browser system page",
+      detail: `${pageLabel} was kept outside website risk scoring.`,
+    }],
+    actions: ["Open a normal website or dApp to run a ScamGuard check."],
+    metadata: {
+      chain: "unknown",
+      rpcStatus: "not_applicable",
+      domain: pageLabel,
+      systemPage: true,
+    },
+    scannedAt: new Date().toISOString(),
+  }
+}
+
 function shortPublicValue(value) {
   const text = String(value ?? "").trim()
   return text.length > 18 ? `${text.slice(0, 8)}...${text.slice(-6)}` : text || "Wallet not exposed"
@@ -485,6 +524,12 @@ async function notifyRisk(result, context) {
 
 async function scanUrl(value, { force = false, record = true, origin = "site", clientSignals = [] } = {}) {
   const settings = await getSettings()
+  const systemPage = browserSystemPage(value)
+  if (systemPage) {
+    const result = systemPageResult(value, systemPage)
+    if (record) await recordScan(result, { type: "url", sourceUrl: value, origin })
+    return result
+  }
   const domain = hostFromUrl(value)
   if (domain && settings.trustedDomains.includes(domain)) {
     const localTrusted = {

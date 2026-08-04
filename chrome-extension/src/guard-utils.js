@@ -115,6 +115,14 @@
 
   function riskTimeline(result, sourceUrl) {
     const metadata = result?.metadata ?? {}
+    if (metadata.systemPage) {
+      return [
+        { label: "Source", value: metadata.domain ?? "Browser system page", status: "Internal browser surface" },
+        { label: "Intent", value: "No Web3 action", status: "No wallet request available" },
+        { label: "Evidence", value: "Not assessed", status: "External site intelligence was not requested" },
+        { label: "Decision", value: "System page", status: "No risk score was created" },
+      ]
+    }
     const reputation = metadata.reputation ?? {}
     const intent = metadata.decodedIntent ?? {}
     const signals = Array.isArray(result?.signals) ? result.signals : []

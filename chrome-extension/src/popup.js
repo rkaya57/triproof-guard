@@ -177,6 +177,11 @@ function renderSiteIdentity(result) {
   const metadata = result?.metadata ?? {}
   const reputation = metadata.reputation ?? {}
   const source = metadata.domain ?? hostFromUrl(state.tab?.url)
+  if (metadata.systemPage) {
+    elements.siteIdentityLabel.textContent = "Browser system page"
+    elements.siteIdentityDetail.textContent = "No external Web3 destination was assessed."
+    return
+  }
   if (reputation.verdict === "trusted") {
     elements.siteIdentityLabel.textContent = "Verified project context"
     elements.siteIdentityDetail.textContent = `${source} matches a trusted project record.`
@@ -211,7 +216,7 @@ function renderScanState(level, checking = false) {
 function renderDecision(result) {
   const metadata = result.metadata ?? {}
   const decision = metadata.decision ?? {}
-  elements.confidencePill.textContent = result.confidence ?? "LOW"
+  elements.confidencePill.textContent = metadata.systemPage ? "Not assessed" : result.confidence ?? "LOW"
   elements.decisionMessage.textContent = decision.userMessage ?? result.explanation ?? friendlySummary(result)
   elements.sourceIntel.textContent = metadata.domain ? shortText(metadata.domain) : hostFromUrl(state.tab?.url)
   elements.feedIntel.textContent = reputationText(metadata.reputation)
@@ -279,16 +284,17 @@ function renderResult(result) {
   state.result = result
   document.body.dataset.scanState = "complete"
   document.body.dataset.risk = riskClass(result.riskLevel)
+  const systemPage = Boolean(result.metadata?.systemPage)
   const securityScore = Math.max(0, Math.min(100, 100 - Number(result.score ?? 0)))
-  elements.riskBadge.className = `badge ${riskClass(result.riskLevel)}`
-  elements.riskBadge.textContent = riskLabel(result.riskLevel)
-  elements.scoreLabel.textContent = String(securityScore)
-  elements.summaryLabel.textContent = friendlySummary(result)
-  elements.scoreWhisper.textContent = scoreWhisper(securityScore, result.riskLevel)
+  elements.riskBadge.className = `badge ${systemPage ? "ready" : riskClass(result.riskLevel)}`
+  elements.riskBadge.textContent = systemPage ? "System page" : riskLabel(result.riskLevel)
+  elements.scoreLabel.textContent = systemPage ? "--" : String(securityScore)
+  elements.summaryLabel.textContent = systemPage ? "No website risk score was created for this Chrome internal page." : friendlySummary(result)
+  elements.scoreWhisper.textContent = systemPage ? "Open an external site or dApp when you want ScamGuard to assess a destination." : scoreWhisper(securityScore, result.riskLevel)
   elements.scoreMeter.className = `score-meter ${riskClass(result.riskLevel)}`
-  elements.scoreMeter.style.setProperty("--score-fill", `${securityScore}%`)
-  elements.scoreBar.style.width = `${securityScore}%`
-  renderScanState(result.riskLevel)
+  elements.scoreMeter.style.setProperty("--score-fill", `${systemPage ? 0 : securityScore}%`)
+  elements.scoreBar.style.width = `${systemPage ? 0 : securityScore}%`
+  renderScanState(systemPage ? "READY" : result.riskLevel)
   renderSiteIdentity(result)
   renderDecision(result)
   renderTimeline(result)
