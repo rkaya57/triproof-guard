@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - feature/airdrop-task-links
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 permissions:
   contents: write
@@ -14,9 +21,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Check out branch
+      - name: Check out feature branch
         uses: actions/checkout@v4
         with:
+          ref: feature/airdrop-task-links
           fetch-depth: 0
 
       - name: Apply patch
