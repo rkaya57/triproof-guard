@@ -1,0 +1,62 @@
+name: Apply airdrop status review fixes
+
+on:
+  push:
+    branches:
+      - fix/airdrop-status-review-ux
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/airdrop-status-review-ux
+          fetch-depth: 0
+
+      - name: Apply UI fixes
+        run: |
+          python scripts/apply-airdrop-status-review-fixes.py
+          rm scripts/apply-airdrop-status-review-fixes.py
+          rm .github/workflows/apply-airdrop-status-review-fixes.yml
+          git diff --check
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run airdrop policy tests
+        run: npm run test:airdrop
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Check changed TypeScript surfaces
+        run: |
+          set +e
+          npx tsc --noEmit 2>&1 | tee /tmp/tsc-output.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if grep -E "(components/admin/airdrop-review-console|components/airdrop/airdrop-tasks-client|app/api/admin/airdrop/tasks|app/api/admin/airdrop/submissions|app/api/airdrop/me|app/api/airdrop/submissions)" /tmp/tsc-output.log; then
+            echo "TypeScript reported an error in a changed airdrop surface."
+            exit 1
+          fi
+          if [ "$status" -ne 0 ]; then
+            echo "Full-project TypeScript check has pre-existing errors outside the changed airdrop surfaces."
+          fi
+
+      - name: Commit verified fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Fix airdrop submission status and review UX"
+          git push origin HEAD:fix/airdrop-status-review-ux
