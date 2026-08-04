@@ -150,9 +150,9 @@ export async function claimTelegramGroup(chatId: number, code: string) {
     })
     if (!invite || invite.usedAt || invite.expiresAt <= now) return { ok: false, reason: "This connection code is invalid or expired." }
     const entitlement = await getSubscriptionEntitlement(invite.user)
-    if (entitlement.plan.telegramGroupLimit <= 0) return { ok: false, reason: "The linked account needs a Community or API Growth plan." }
+    if (!entitlement.isAdmin && entitlement.plan.telegramGroupLimit <= 0) return { ok: false, reason: "The linked account needs a Community or API Growth plan." }
     const ownedCount = await tx.telegramGuardianGroup.count({ where: { ownerId: invite.userId } })
-    if (ownedCount >= entitlement.plan.telegramGroupLimit) return { ok: false, reason: `This plan can protect up to ${entitlement.plan.telegramGroupLimit} Telegram group.` }
+    if (!entitlement.isAdmin && ownedCount >= entitlement.plan.telegramGroupLimit) return { ok: false, reason: `This plan can protect up to ${entitlement.plan.telegramGroupLimit} Telegram group.` }
     const group = await tx.telegramGuardianGroup.upsert({
       where: { telegramChatId: String(chatId) },
       create: { telegramChatId: String(chatId), ownerId: invite.userId, allowlisted: true, guardianEnabled: true },
@@ -170,6 +170,7 @@ export async function authorizeTelegramGuardianAdmin(chatId: number, telegramUse
   })
   if (!group?.owner) return false
   const entitlement = await getSubscriptionEntitlement(group.owner)
+  if (entitlement.isAdmin) return true
   const limit = entitlement.plan.telegramAdminLimit
   if (limit <= 0) return false
   const existing = await db.telegramGuardianAdmin.findUnique({

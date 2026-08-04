@@ -13,7 +13,13 @@ export async function GET() {
     getSubscriptionEntitlement(user),
     db.telegramGuardianGroup.findMany({ where: { ownerId: user.id }, orderBy: { createdAt: "desc" }, select: { id: true, title: true, username: true, guardianEnabled: true, alertLevel: true, lastSeenAt: true } }),
   ])
-  return NextResponse.json({ plan: entitlement.plan.id, groupLimit: entitlement.plan.telegramGroupLimit, adminLimit: entitlement.plan.telegramAdminLimit, groups })
+  return NextResponse.json({
+    plan: entitlement.plan.id,
+    groupLimit: entitlement.isAdmin ? null : entitlement.plan.telegramGroupLimit,
+    adminLimit: entitlement.isAdmin ? null : entitlement.plan.telegramAdminLimit,
+    isAdmin: entitlement.isAdmin,
+    groups,
+  })
 }
 
 export async function POST() {

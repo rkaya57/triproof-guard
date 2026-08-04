@@ -13,7 +13,7 @@ export async function GET() {
     getSubscriptionEntitlement(user),
     db.apiKey.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, select: { id: true, name: true, prefix: true, lastFour: true, isActive: true, lastUsedAt: true, createdAt: true, revokedAt: true } }),
   ])
-  return NextResponse.json({ plan: entitlement.plan.id, monthlyLimit: entitlement.plan.monthlyApiRequestLimit, keys })
+  return NextResponse.json({ plan: entitlement.plan.id, monthlyLimit: entitlement.isAdmin ? null : entitlement.plan.monthlyApiRequestLimit, isAdmin: entitlement.isAdmin, keys })
 }
 
 export async function POST(request: Request) {
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as { name?: string }
   const name = String(body.name ?? "Production key").trim().slice(0, 80) || "Production key"
   const activeCount = await db.apiKey.count({ where: { userId: user.id, isActive: true } })
-  if (activeCount >= 5) return NextResponse.json({ error: "You can keep up to five active API keys." }, { status: 409 })
+  if (!entitlement.isAdmin && activeCount >= 5) return NextResponse.json({ error: "You can keep up to five active API keys." }, { status: 409 })
   const material = createApiKeyMaterial()
   const key = await db.apiKey.create({ data: { userId: user.id, name, keyHash: material.keyHash, prefix: material.prefix, lastFour: material.lastFour } })
   return NextResponse.json({ key: { id: key.id, name: key.name, prefix: key.prefix, lastFour: key.lastFour, createdAt: key.createdAt }, token: material.token, warning: "Copy this key now. It cannot be shown again." }, { status: 201 })

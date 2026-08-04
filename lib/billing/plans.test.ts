@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { analysisCreditPacks, getAnalysisCreditPack, getSubscriptionPlan, subscriptionPlanFromDb, subscriptionPlans } from "@/lib/billing/plans"
+import { getSubscriptionEntitlement } from "@/lib/billing/subscription"
 
 test("subscription plans expose the public USDC access tiers", () => {
   assert.equal(subscriptionPlans.free.amountUsdc, 0)
@@ -15,6 +16,13 @@ test("subscription plan lookups fail closed to free", () => {
   assert.equal(getSubscriptionPlan("api_growth")?.dbPlan, "API_GROWTH")
   assert.equal(getSubscriptionPlan("not-a-plan"), null)
   assert.equal(subscriptionPlanFromDb("missing").id, "free")
+})
+
+test("known administrators receive the unrestricted entitlement without a subscription record", async () => {
+  const entitlement = await getSubscriptionEntitlement({ id: "admin-test", email: "info@triproofprotocol.com" })
+  assert.equal(entitlement.isAdmin, true)
+  assert.equal(entitlement.status, "ACTIVE")
+  assert.equal(entitlement.expiresAt, null)
 })
 
 test("Sybil wallet credit packs expose exact per-wallet capacity", () => {

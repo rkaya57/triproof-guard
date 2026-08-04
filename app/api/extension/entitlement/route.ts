@@ -19,7 +19,7 @@ export async function GET(request: Request) {
         dailyScanLimit: status.dailyScanLimit,
         scanCount: status.scanCount,
         deepUrlScamDna: status.plan.deepUrlScamDna,
-        telegramGroupLimit: status.plan.telegramGroupLimit,
+        telegramGroupLimit: status.isAdmin ? null : status.plan.telegramGroupLimit,
         expiresAt: status.expiresAt?.toISOString() ?? null,
         isAdmin: status.isAdmin,
       },
