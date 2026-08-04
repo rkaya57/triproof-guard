@@ -435,8 +435,14 @@ elements.clearHistoryButton.addEventListener("click", () => {
 elements.reportThreatButton.addEventListener("click", reportCurrentSite)
 
 elements.openSecurityCenterButton.addEventListener("click", () => {
-  void sendMessage({ type: "OPEN_SECURITY_CENTER" }).then((response) => {
+  elements.openSecurityCenterButton.disabled = true
+  elements.openSecurityCenterButton.textContent = "Opening Security Center..."
+  void sendMessage({ type: "OPEN_SECURITY_CENTER", tabId: state.tab?.id, windowId: state.tab?.windowId }).then((response) => {
     if (!response?.ok) elements.shareStatus.textContent = response?.error ?? "Could not open Security Center."
+    else if (response.presentation === "tab") elements.shareStatus.textContent = "Security Center opened in a new extension tab."
+  }).finally(() => {
+    elements.openSecurityCenterButton.disabled = false
+    elements.openSecurityCenterButton.textContent = "Open full Security Center"
   })
 })
 

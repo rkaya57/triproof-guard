@@ -22,7 +22,7 @@ Pre-sign protection for Solana and EVM dApps, airdrops, token claims, and suspic
 - A short decision timeline that shows source context, decoded intent, evidence, and the final risk decision.
 - Local scan history for the latest 100 site and wallet checks. History stores a redacted target and decision summary only.
 - A local Security Center that summarizes risk events, blocked critical events, protected domains, and active firewall rules.
-- A persistent Chrome Security Center side panel for the active site, decision path, local evidence, and private browser history.
+- A persistent Chrome Security Center side panel for the selected site, decision path, local evidence, and private browser history. If Chrome cannot open a side panel, ScamGuard opens the same Security Center in a full extension tab.
 - Expected wallet-impact cards for decoded EVM calldata: outgoing native/token calls, approval recipients, raw-unit amounts, and explicit "decoded payload" versus "preflight only" confidence.
 - A private **Observed Permissions** ledger in the Security Center. It records approval requests seen by this browser, clearly labels them as observed requests, and never claims they were signed or remain active on-chain.
 - A user-triggered **Verify live permissions** check in the Security Center. On EVM it rechecks compatible ERC-20 approval requests previously observed by ScamGuard with read-only `eth_call` allowance reads. On Solana it reads active SPL Token and Token-2022 delegates for the connected wallet. It never requests a signature, sends a transaction, or claims to be a complete portfolio-permission crawl.

@@ -31,6 +31,7 @@ if (manifest.manifest_version !== 3) problems.push("manifest_version must be 3")
 if (!manifest.background?.service_worker) problems.push("background.service_worker is required")
 if (!manifest.action?.default_popup) problems.push("action.default_popup is required")
 if (!manifest.side_panel?.default_path) problems.push("side_panel.default_path is required")
+if (!manifest.permissions?.includes("sidePanel")) problems.push("sidePanel permission is required")
 
 for (const file of requiredFiles) {
   try {
@@ -64,6 +65,9 @@ if (!backgroundSource.includes("TEAM_POLICY_KEY") || !backgroundSource.includes(
 }
 if (!backgroundSource.includes("chrome.storage.local.set({ [TEAM_POLICY_KEY]: teamPolicyApiKey })")) {
   problems.push("Team Policy API keys must be stored in local extension storage")
+}
+if (!backgroundSource.includes("SECURITY_CENTER_TARGET_KEY") || !backgroundSource.includes("chrome.runtime.getURL(\"src/sidepanel.html\")")) {
+  problems.push("Security Center fallback tab wiring is incomplete")
 }
 
 if (problems.length) {

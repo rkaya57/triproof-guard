@@ -152,7 +152,7 @@ async function refresh(force = false) {
   elements.rescanButton.disabled = true
   elements.rescanButton.textContent = "Scanning..."
   const [tabResponse, settingsResponse, centerResponse, historyResponse, permissionsResponse] = await Promise.all([
-    sendMessage({ type: "GET_ACTIVE_TAB" }),
+    sendMessage({ type: "GET_SECURITY_CENTER_TAB" }),
     sendMessage({ type: "GET_SETTINGS" }),
     sendMessage({ type: "GET_SECURITY_CENTER" }),
     sendMessage({ type: "GET_HISTORY", limit: 8 }),

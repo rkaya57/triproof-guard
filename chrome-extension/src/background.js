@@ -21,6 +21,7 @@ const OBSERVED_PERMISSIONS_LIMIT = 100
 const TEAM_POLICY_KEY = "scamguardTeamPolicyApiKey"
 const TEAM_POLICY_CACHE_KEY = "scamguardTeamPolicyCache"
 const TEAM_POLICY_CACHE_TTL_MS = 10 * 60_000
+const SECURITY_CENTER_TARGET_KEY = "scamguardSecurityCenterTarget"
 const scanCache = new Map()
 
 function normalizeApiBaseUrl(value) {
@@ -165,8 +166,26 @@ async function getObservedPermissions(limit = 12) {
   return { items: items.slice(0, boundedLimit), total: items.length }
 }
 
+async function getActiveBrowserTab() {
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
+  return tab ?? null
+}
+
+async function getSecurityCenterTargetTab() {
+  const stored = await chrome.storage.local.get({ [SECURITY_CENTER_TARGET_KEY]: null })
+  const tabId = Number(stored[SECURITY_CENTER_TARGET_KEY]?.tabId)
+  if (Number.isInteger(tabId) && tabId > 0) {
+    try {
+      return await chrome.tabs.get(tabId)
+    } catch {
+      await chrome.storage.local.remove(SECURITY_CENTER_TARGET_KEY)
+    }
+  }
+  return getActiveBrowserTab()
+}
+
 async function inspectActiveWalletPermissions() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  const tab = await getSecurityCenterTargetTab()
   if (!tab?.id || !tab.url?.startsWith("http")) {
     throw new Error("Open a regular dApp page with a connected wallet, then try again.")
   }
@@ -493,11 +512,47 @@ chrome.runtime.onInstalled.addListener(async () => {
   }
 })
 
-async function openSecurityCenter(sender) {
-  if (!chrome.sidePanel?.open) throw new Error("Chrome Security Center requires Chrome 116 or newer.")
-  const windowId = sender?.tab?.windowId ?? (await chrome.windows.getCurrent()).id
-  if (typeof windowId !== "number") throw new Error("Could not identify the active Chrome window.")
-  await chrome.sidePanel.open({ windowId })
+async function rememberSecurityCenterTarget(message, sender) {
+  const requestedTabId = Number(message?.tabId)
+  let tab = null
+  if (Number.isInteger(requestedTabId) && requestedTabId > 0) {
+    try {
+      tab = await chrome.tabs.get(requestedTabId)
+    } catch {
+      tab = null
+    }
+  }
+  if (!tab && sender?.tab?.id) tab = sender.tab
+  if (!tab) tab = await getActiveBrowserTab()
+  if (tab?.id) {
+    await chrome.storage.local.set({ [SECURITY_CENTER_TARGET_KEY]: { tabId: tab.id, windowId: tab.windowId } })
+  }
+  return tab
+}
+
+async function openSecurityCenter(message, sender) {
+  const tab = await rememberSecurityCenterTarget(message, sender)
+  const fallbackUrl = chrome.runtime.getURL("src/sidepanel.html")
+  const fallbackTab = async () => {
+    const createProperties = { url: fallbackUrl, active: true }
+    if (typeof tab?.windowId === "number") createProperties.windowId = tab.windowId
+    await chrome.tabs.create(createProperties)
+    return { presentation: "tab" }
+  }
+
+  if (!chrome.sidePanel?.open) return fallbackTab()
+  try {
+    if (typeof tab?.id === "number") {
+      await chrome.sidePanel.open({ tabId: tab.id })
+    } else if (typeof tab?.windowId === "number") {
+      await chrome.sidePanel.open({ windowId: tab.windowId })
+    } else {
+      return fallbackTab()
+    }
+    return { presentation: "side_panel" }
+  } catch {
+    return fallbackTab()
+  }
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -546,13 +601,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return
       }
       if (message?.type === "OPEN_SECURITY_CENTER") {
-        await openSecurityCenter(sender)
-        sendResponse({ ok: true })
+        sendResponse({ ok: true, ...(await openSecurityCenter(message, sender)) })
+        return
+      }
+      if (message?.type === "GET_SECURITY_CENTER_TAB") {
+        sendResponse({ ok: true, tab: await getSecurityCenterTargetTab() })
         return
       }
       if (message?.type === "GET_ACTIVE_TAB") {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-        sendResponse({ ok: true, tab })
+        sendResponse({ ok: true, tab: await getActiveBrowserTab() })
         return
       }
       sendResponse({ ok: false, error: "Unknown ScamGuard extension message" })
