@@ -1,0 +1,50 @@
+name: Telegram Guardian regression
+
+on:
+  pull_request:
+    paths:
+      - "app/api/telegram/**"
+      - "lib/telegram/**"
+      - "lib/scamguard/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/telegram-guardian-regression.yml"
+  push:
+    branches:
+      - fix/telegram-own-domain-false-positive
+    paths:
+      - "app/api/telegram/**"
+      - "lib/telegram/**"
+      - "lib/scamguard/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/telegram-guardian-regression.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  telegram-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run Telegram Guardian tests
+        run: node --import tsx --test lib/telegram/safe-update.test.ts lib/telegram/bot.test.ts
+
+      - name: Lint changed Telegram surfaces
+        run: npx eslint app/api/telegram/webhook/route.ts lib/telegram/safe-update.ts lib/telegram/safe-update.test.ts
