@@ -98,12 +98,7 @@ async function processCallback(update: TelegramUpdate, token: string) {
   if (callback.data.startsWith("sg_watch:")) {
     if (!userId || !chatId) return { ok: false, error: "Watchlist action is unavailable." }
     const watch = await addTelegramWatchFromEvent(callback.data.slice("sg_watch:".length), userId, chatId)
-    await answerTelegramCallbackQuery(
-      token,
-      callback.id,
-      watch ? "Target added to your watchlist." : "This scan cannot be added to your watchlist.",
-      !watch
-    )
+    await answerTelegramCallbackQuery(token, callback.id, watch ? "Target added to your watchlist." : "This scan cannot be added to your watchlist.", !watch)
     return { ok: Boolean(watch), watch }
   }
 
@@ -115,18 +110,8 @@ async function processCallback(update: TelegramUpdate, token: string) {
       await answerTelegramCallbackQuery(token, callback.id, "This feedback action is invalid.", true)
       return { ok: false, error: "Invalid feedback action" }
     }
-    const feedback = await saveTelegramScanFeedback({
-      eventId,
-      telegramUserId: userId,
-      telegramChatId: chatId,
-      verdict,
-    })
-    await answerTelegramCallbackQuery(
-      token,
-      callback.id,
-      feedback ? "Thanks. Your feedback is queued for review." : "This scan is no longer available.",
-      !feedback
-    )
+    const feedback = await saveTelegramScanFeedback({ eventId, telegramUserId: userId, telegramChatId: chatId, verdict })
+    await answerTelegramCallbackQuery(token, callback.id, feedback ? "Thanks. Your feedback is queued for review." : "This scan is no longer available.", !feedback)
     return { ok: Boolean(feedback), feedback }
   }
 
@@ -137,7 +122,6 @@ async function processCallback(update: TelegramUpdate, token: string) {
     const [eventId, requestedHours] = payload.split(":")
     const target = await getAdvancedTelegramModerationTarget(eventId)
     const admin = await isTelegramGroupAdmin(token, chatId, userId)
-
     if (!target || target.chatId !== chatId) {
       await answerTelegramCallbackQuery(token, callback.id, "This moderation action is no longer available.", true)
       return { ok: false, error: "Invalid moderation target" }
@@ -146,19 +130,16 @@ async function processCallback(update: TelegramUpdate, token: string) {
       await answerTelegramCallbackQuery(token, callback.id, "Only group administrators can moderate a sender.", true)
       return { ok: false, error: "Admin access required" }
     }
-
     if (deleting) {
       await deleteTelegramMessage(token, target.chatId, target.messageId)
       await answerTelegramCallbackQuery(token, callback.id, "Message deleted.")
       return { ok: true, moderation: "message_deleted" }
     }
-
     const muteHours = requestedHours === "24" ? 24 : 1
     await muteTelegramMember(token, target.chatId, target.userId, muteHours * 60 * 60)
     await answerTelegramCallbackQuery(token, callback.id, `Sender muted for ${muteHours} hour${muteHours === 1 ? "" : "s"}.`)
     return { ok: true, moderation: `muted_${muteHours}h` }
   }
-
   return null
 }
 
@@ -166,7 +147,6 @@ async function loadGroupSettings(update: TelegramUpdate): Promise<TelegramBotCon
   const message = update.message ?? update.edited_message
   const isGroup = message?.chat.type === "group" || message?.chat.type === "supergroup"
   if (!isGroup || !message) return undefined
-
   try {
     const stored = await ensureAdvancedTelegramGroup(message.chat, configuredGroupAlertLevel())
     return { ...stored, allowlisted: stored.allowlisted && environmentAllowsGroup(message.chat.id) }
@@ -208,7 +188,7 @@ async function buildActions(update: TelegramUpdate, token: string) {
       await muteTelegramMember(token, chatId, userId, seconds)
       return true
     },
-    claimGroup,
+    claimGroup: claimTelegramGroup,
     authorizeGroupManager: authorizeTelegramGuardianAdmin,
     loadHistory: getTelegramHistory,
     loadSummary: getTelegramGroupSummary,
@@ -259,14 +239,8 @@ async function deliverActions(update: TelegramUpdate, token: string, actions: Te
   let delivered = 0
   let skipped = 0
   const failures: string[] = []
-
   for (const [actionIndex, action] of actions.entries()) {
-    const prepared = await prepareTelegramDelivery({
-      updateId: update.update_id,
-      actionIndex,
-      method: action.method,
-      chatId: actionChatId(action),
-    })
+    const prepared = await prepareTelegramDelivery({ updateId: update.update_id, actionIndex, method: action.method, chatId: actionChatId(action) })
     if (prepared.skip) {
       skipped += 1
       continue
@@ -276,16 +250,10 @@ async function deliverActions(update: TelegramUpdate, token: string, actions: Te
       await markTelegramDeliveryDelivered({ updateId: update.update_id, actionIndex, attempts: result.attempts })
       delivered += 1
     } catch (error) {
-      await markTelegramDeliveryFailed({
-        updateId: update.update_id,
-        actionIndex,
-        attempts: deliveryAttempts(error),
-        error,
-      }).catch(() => undefined)
+      await markTelegramDeliveryFailed({ updateId: update.update_id, actionIndex, attempts: deliveryAttempts(error), error }).catch(() => undefined)
       failures.push(error instanceof Error ? error.message : "Telegram delivery failed")
     }
   }
-
   if (failures.length) throw new Error(`Telegram delivery failed after retries: ${failures.slice(0, 3).join(" | ")}`)
   return { delivered, skipped }
 }
@@ -299,22 +267,17 @@ async function processTelegramUpdate(update: TelegramUpdate, token: string) {
 
 export async function POST(request: Request) {
   const secret = validateWebhookSecret(request)
-  if (!secret.configured && process.env.NODE_ENV === "production") {
-    return json({ error: "Telegram webhook secret is not configured" }, 503)
-  }
+  if (!secret.configured && process.env.NODE_ENV === "production") return json({ error: "Telegram webhook secret is not configured" }, 503)
   if (!secret.valid) return json({ error: "Invalid Telegram webhook secret" }, 401)
 
   const update = (await request.json().catch(() => null)) as TelegramUpdate | null
   if (!update || typeof update.update_id !== "number") return json({ error: "Invalid Telegram update" }, 400)
-
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim()
   if (!token) return json({ error: "Telegram bot token is not configured" }, 503)
 
   try {
     const claim = await claimTelegramWebhookUpdate(update.update_id)
-    if (!claim.claimed) {
-      return json({ ok: true, duplicate: true, status: claim.status, attempts: claim.attempts })
-    }
+    if (!claim.claimed) return json({ ok: true, duplicate: true, status: claim.status, attempts: claim.attempts })
   } catch (error) {
     console.error("Telegram update idempotency claim failed", error)
     return json({ error: "Telegram update storage is unavailable" }, 503)
