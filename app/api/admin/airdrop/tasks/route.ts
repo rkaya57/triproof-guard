@@ -1,11 +1,13 @@
+import { Prisma, type AirdropTaskType } from "@prisma/client"
 import { NextResponse } from "next/server"
-import type { AirdropTaskType } from "@prisma/client"
 
 import { getAdminUser } from "@/lib/auth/admin"
 import { db } from "@/lib/db/prisma"
 import {
   AIRDROP_TASK_TYPES,
   airdropSchemaMissingResponse,
+  airdropTaskSlugBase,
+  airdropTaskSlugCandidate,
   ensureAirdropTasks,
   isAirdropSchemaMissing,
   isLikelyUrl,
@@ -23,15 +25,20 @@ function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: noStoreHeaders })
 }
 
-function slugify(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
+type ParsedTaskData = {
+  title: string
+  description: string
+  targetUrl: string | null
+  type: AirdropTaskType
+  points: number
+  proofRequired: boolean
+  active: boolean
+  sortOrder: number
 }
 
-function parseTaskBody(body: unknown) {
+function parseTaskBody(body: unknown):
+  | { error: string }
+  | { data: ParsedTaskData; id: string | undefined } {
   const input = body as {
     id?: string
     title?: string
@@ -77,6 +84,30 @@ function parseTaskBody(body: unknown) {
     },
     id: input?.id?.trim(),
   }
+}
+
+function isUniqueConstraintError(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002"
+}
+
+async function createTaskWithUniqueSlug(data: ParsedTaskData) {
+  const baseSlug = airdropTaskSlugBase(data.title, data.targetUrl)
+
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    try {
+      return await db.airdropTask.create({
+        data: {
+          ...data,
+          slug: airdropTaskSlugCandidate(baseSlug, attempt),
+        },
+      })
+    } catch (error) {
+      if (isUniqueConstraintError(error)) continue
+      throw error
+    }
+  }
+
+  throw new Error("Could not allocate a unique task identifier.")
 }
 
 export async function GET() {
@@ -125,13 +156,27 @@ export async function POST(request: Request) {
   if ("error" in parsed) return json({ error: parsed.error }, 400)
 
   try {
-    const task = await db.airdropTask.create({
-      data: {
-        ...parsed.data,
-        slug: slugify(parsed.data.title),
-      },
-    })
+    if (parsed.data.targetUrl) {
+      const duplicateTarget = await db.airdropTask.findFirst({
+        where: {
+          type: parsed.data.type,
+          targetUrl: parsed.data.targetUrl,
+        },
+        select: { id: true, title: true },
+      })
+      if (duplicateTarget) {
+        return json(
+          {
+            error: `A ${parsed.data.type} task for this exact link already exists: ${duplicateTarget.title}`,
+            code: "AIRDROP_TASK_LINK_EXISTS",
+            existingTaskId: duplicateTarget.id,
+          },
+          409
+        )
+      }
+    }
 
+    const task = await createTaskWithUniqueSlug(parsed.data)
     return json({ task }, 201)
   } catch (error) {
     if (isAirdropSchemaMissing(error)) {
@@ -139,7 +184,7 @@ export async function POST(request: Request) {
     }
 
     console.error("Airdrop task create failed", error)
-    return json({ error: "Could not create airdrop task. Check for duplicate titles." }, 500)
+    return json({ error: "Could not create the airdrop task." }, 500)
   }
 }
 
@@ -152,6 +197,27 @@ export async function PATCH(request: Request) {
   if (!parsed.id) return json({ error: "Task id is required." }, 400)
 
   try {
+    if (parsed.data.targetUrl) {
+      const duplicateTarget = await db.airdropTask.findFirst({
+        where: {
+          id: { not: parsed.id },
+          type: parsed.data.type,
+          targetUrl: parsed.data.targetUrl,
+        },
+        select: { id: true, title: true },
+      })
+      if (duplicateTarget) {
+        return json(
+          {
+            error: `Another ${parsed.data.type} task already uses this exact link: ${duplicateTarget.title}`,
+            code: "AIRDROP_TASK_LINK_EXISTS",
+            existingTaskId: duplicateTarget.id,
+          },
+          409
+        )
+      }
+    }
+
     const task = await db.airdropTask.update({
       where: { id: parsed.id },
       data: parsed.data,
@@ -164,6 +230,6 @@ export async function PATCH(request: Request) {
     }
 
     console.error("Airdrop task update failed", error)
-    return json({ error: "Could not update airdrop task." }, 500)
+    return json({ error: "Could not update the airdrop task." }, 500)
   }
 }

@@ -1,0 +1,55 @@
+name: Airdrop task regression
+
+on:
+  pull_request:
+    paths:
+      - "app/api/admin/airdrop/**"
+      - "app/api/airdrop/**"
+      - "components/admin/airdrop-review-console.tsx"
+      - "components/airdrop/**"
+      - "lib/airdrop/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/airdrop-task-regression.yml"
+  push:
+    branches:
+      - main
+      - "fix/**"
+    paths:
+      - "app/api/admin/airdrop/**"
+      - "app/api/airdrop/**"
+      - "components/admin/airdrop-review-console.tsx"
+      - "components/airdrop/**"
+      - "lib/airdrop/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/airdrop-task-regression.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  airdrop-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run airdrop tests
+        run: node --import tsx --test lib/airdrop/tasks.test.ts
+
+      - name: Lint airdrop task surfaces
+        run: npx eslint app/api/admin/airdrop/tasks/route.ts lib/airdrop/tasks.ts lib/airdrop/tasks.test.ts
