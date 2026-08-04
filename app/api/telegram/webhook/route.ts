@@ -46,9 +46,8 @@ import { enforceTelegramGroupPolicies } from "@/lib/team-policy/store"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const noStoreHeaders = {
-  "cache-control": "no-store, max-age=0",
-}
+const noStoreHeaders = { "cache-control": "no-store, max-age=0" }
+type GroupAlertLevel = "CAUTION" | "HIGH_RISK" | "CRITICAL"
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: noStoreHeaders })
@@ -60,7 +59,7 @@ function configuredPublicBaseUrl() {
   return undefined
 }
 
-function configuredGroupAlertLevel() {
+function configuredGroupAlertLevel(): GroupAlertLevel {
   const raw = process.env.TELEGRAM_GROUP_ALERT_LEVEL?.trim().toUpperCase()
   if (raw === "CAUTION" || raw === "HIGH_RISK" || raw === "CRITICAL") return raw
   return "HIGH_RISK"
@@ -68,12 +67,7 @@ function configuredGroupAlertLevel() {
 
 function validateWebhookSecret(request: Request) {
   const configured = process.env.TELEGRAM_WEBHOOK_SECRET?.trim()
-  if (!configured) {
-    return {
-      valid: process.env.NODE_ENV !== "production",
-      configured: false,
-    }
-  }
+  if (!configured) return { valid: process.env.NODE_ENV !== "production", configured: false }
   return {
     valid: request.headers.get("x-telegram-bot-api-secret-token") === configured,
     configured: true,
@@ -83,14 +77,12 @@ function validateWebhookSecret(request: Request) {
 function environmentAllowsGroup(chatId: number) {
   const configured = process.env.TELEGRAM_GROUP_ALLOWLIST?.trim()
   if (!configured) return true
-  const allowed = new Set(configured.split(",").map((value) => value.trim()).filter(Boolean))
-  return allowed.has(String(chatId))
+  return new Set(configured.split(",").map((value) => value.trim()).filter(Boolean)).has(String(chatId))
 }
 
 function actionChatId(action: TelegramBotAction) {
   if (action.method !== "sendMessage") return undefined
-  const value = action.payload.chat_id
-  return typeof value === "number" ? value : Number(value)
+  return Number(action.payload.chat_id)
 }
 
 function deliveryAttempts(error: unknown) {
@@ -105,11 +97,7 @@ async function processCallback(update: TelegramUpdate, token: string) {
 
   if (callback.data.startsWith("sg_watch:")) {
     if (!userId || !chatId) return { ok: false, error: "Watchlist action is unavailable." }
-    const watch = await addTelegramWatchFromEvent(
-      callback.data.slice("sg_watch:".length),
-      userId,
-      chatId
-    )
+    const watch = await addTelegramWatchFromEvent(callback.data.slice("sg_watch:".length), userId, chatId)
     await answerTelegramCallbackQuery(
       token,
       callback.id,
@@ -167,28 +155,21 @@ async function processCallback(update: TelegramUpdate, token: string) {
 
     const muteHours = requestedHours === "24" ? 24 : 1
     await muteTelegramMember(token, target.chatId, target.userId, muteHours * 60 * 60)
-    await answerTelegramCallbackQuery(
-      token,
-      callback.id,
-      `Sender muted for ${muteHours} hour${muteHours === 1 ? "" : "s"}.`
-    )
+    await answerTelegramCallbackQuery(token, callback.id, `Sender muted for ${muteHours} hour${muteHours === 1 ? "" : "s"}.`)
     return { ok: true, moderation: `muted_${muteHours}h` }
   }
 
   return null
 }
 
-async function loadGroupSettings(update: TelegramUpdate) {
+async function loadGroupSettings(update: TelegramUpdate): Promise<TelegramBotContext["groupSettings"]> {
   const message = update.message ?? update.edited_message
   const isGroup = message?.chat.type === "group" || message?.chat.type === "supergroup"
   if (!isGroup || !message) return undefined
 
   try {
     const stored = await ensureAdvancedTelegramGroup(message.chat, configuredGroupAlertLevel())
-    return {
-      ...stored,
-      allowlisted: stored.allowlisted && environmentAllowsGroup(message.chat.id),
-    }
+    return { ...stored, allowlisted: stored.allowlisted && environmentAllowsGroup(message.chat.id) }
   } catch (error) {
     console.error("Telegram group settings could not be loaded", error)
     return {
@@ -201,9 +182,9 @@ async function loadGroupSettings(update: TelegramUpdate) {
       alertLevel: configuredGroupAlertLevel(),
       dailySummary: false,
       autoMuteCritical: false,
-      safeMode: "SILENT" as const,
-      highRiskAction: "ADMIN_REVIEW" as const,
-      criticalAction: "ADMIN_REVIEW" as const,
+      safeMode: "SILENT",
+      highRiskAction: "ADMIN_REVIEW",
+      criticalAction: "ADMIN_REVIEW",
       permissionSnapshot: null,
       lastPermissionCheckAt: null,
     }
@@ -218,63 +199,58 @@ async function buildActions(update: TelegramUpdate, token: string) {
     groupAlertLevel: configuredGroupAlertLevel(),
     groupSettings,
     isGroupAdmin: (chatId, userId) => isTelegramGroupAdmin(token, chatId, userId),
-    updateAdvancedGroupSettings: (chatId, values) => updateAdvancedTelegramGroupByChatId(chatId, values),
+    updateAdvancedGroupSettings: updateAdvancedTelegramGroupByChatId,
     consumePersistentAllowance: consumePersistentTelegramScanAllowance,
-    deleteMessage: async (chatId, messageId) => deleteTelegramMessage(token, chatId, messageId),
+    deleteMessage: (chatId, messageId) => deleteTelegramMessage(token, chatId, messageId),
     getBotPermissions: (chatId) => getTelegramBotPermissions(token, chatId),
     savePermissionSnapshot: saveTelegramPermissionSnapshot,
     muteMember: async (chatId, userId, seconds) => {
       await muteTelegramMember(token, chatId, userId, seconds)
       return true
     },
-    claimGroup: (chatId, code) => claimTelegramGroup(chatId, code),
-    authorizeGroupManager: (chatId, userId) => authorizeTelegramGuardianAdmin(chatId, userId),
+    claimGroup,
+    authorizeGroupManager: authorizeTelegramGuardianAdmin,
     loadHistory: getTelegramHistory,
     loadSummary: getTelegramGroupSummary,
-    addWatch: ({ telegramUserId, telegramChatId, candidate, result }) =>
-      addTelegramWatch({
-        telegramUserId,
-        telegramChatId,
-        target: candidate.value,
-        domain: result.metadata.domain,
-        scanType: result.type,
-        chain: result.metadata.chain,
-        riskLevel: result.riskLevel,
-        score: result.score,
-      }),
+    addWatch: ({ telegramUserId, telegramChatId, candidate, result }) => addTelegramWatch({
+      telegramUserId,
+      telegramChatId,
+      target: candidate.value,
+      domain: result.metadata.domain,
+      scanType: result.type,
+      chain: result.metadata.chain,
+      riskLevel: result.riskLevel,
+      score: result.score,
+    }),
     addWatchFromEvent: addTelegramWatchFromEvent,
     listWatches: listTelegramWatches,
     removeWatch: removeTelegramWatch,
-    findWatchAlerts: ({ candidate, result, excludeTelegramUserId }) =>
-      getTelegramWatchAlertRecipients({
-        target: candidate.value,
-        riskLevel: result.riskLevel,
-        score: result.score,
-        excludeTelegramUserId,
-      }),
-    recordScan: ({ message: scanMessage, candidate, result, source, alerted }) =>
-      recordTelegramScan({
-        updateId: update.update_id,
-        chatId: scanMessage.chat.id,
-        messageId: scanMessage.message_id,
-        userId: scanMessage.from?.id,
-        group:
-          scanMessage.chat.type === "group" || scanMessage.chat.type === "supergroup"
-            ? { title: scanMessage.chat.title, username: scanMessage.chat.username }
-            : undefined,
-        target: candidate.value,
-        scanType: result.type,
-        source,
-        chain: result.metadata.chain,
-        riskLevel: result.riskLevel,
-        score: result.score,
-        confidence: result.confidence,
-        summary: result.summary,
-        domain: result.metadata.domain,
-        alerted,
-      }),
-    applyTeamPolicy: ({ candidate, result, chatId }) =>
-      enforceTelegramGroupPolicies(chatId, result, candidate.value),
+    findWatchAlerts: ({ candidate, result, excludeTelegramUserId }) => getTelegramWatchAlertRecipients({
+      target: candidate.value,
+      riskLevel: result.riskLevel,
+      score: result.score,
+      excludeTelegramUserId,
+    }),
+    recordScan: ({ message, candidate, result, source, alerted }) => recordTelegramScan({
+      updateId: update.update_id,
+      chatId: message.chat.id,
+      messageId: message.message_id,
+      userId: message.from?.id,
+      group: message.chat.type === "group" || message.chat.type === "supergroup"
+        ? { title: message.chat.title, username: message.chat.username }
+        : undefined,
+      target: candidate.value,
+      scanType: result.type,
+      source,
+      chain: result.metadata.chain,
+      riskLevel: result.riskLevel,
+      score: result.score,
+      confidence: result.confidence,
+      summary: result.summary,
+      domain: result.metadata.domain,
+      alerted,
+    }),
+    applyTeamPolicy: ({ candidate, result, chatId }) => enforceTelegramGroupPolicies(chatId, result, candidate.value),
   }
   return handleTelegramUpdate(update, context)
 }
@@ -295,14 +271,9 @@ async function deliverActions(update: TelegramUpdate, token: string, actions: Te
       skipped += 1
       continue
     }
-
     try {
       const result = await sendTelegramAction(token, action)
-      await markTelegramDeliveryDelivered({
-        updateId: update.update_id,
-        actionIndex,
-        attempts: result.attempts,
-      })
+      await markTelegramDeliveryDelivered({ updateId: update.update_id, actionIndex, attempts: result.attempts })
       delivered += 1
     } catch (error) {
       await markTelegramDeliveryFailed({
@@ -315,19 +286,15 @@ async function deliverActions(update: TelegramUpdate, token: string, actions: Te
     }
   }
 
-  if (failures.length) {
-    throw new Error(`Telegram delivery failed after retries: ${failures.slice(0, 3).join(" | ")}`)
-  }
+  if (failures.length) throw new Error(`Telegram delivery failed after retries: ${failures.slice(0, 3).join(" | ")}`)
   return { delivered, skipped }
 }
 
 async function processTelegramUpdate(update: TelegramUpdate, token: string) {
-  const callbackResult = await processCallback(update, token)
-  if (callbackResult) return { ...callbackResult, delivered: 0, skipped: 0 }
-
+  const callback = await processCallback(update, token)
+  if (callback) return { ...callback, delivered: 0, skipped: 0 }
   const actions = await buildActions(update, token)
-  const delivery = await deliverActions(update, token, actions)
-  return { ok: true, ...delivery, actions: actions.length }
+  return { ok: true, ...(await deliverActions(update, token, actions)), actions: actions.length }
 }
 
 export async function POST(request: Request) {
@@ -338,28 +305,19 @@ export async function POST(request: Request) {
   if (!secret.valid) return json({ error: "Invalid Telegram webhook secret" }, 401)
 
   const update = (await request.json().catch(() => null)) as TelegramUpdate | null
-  if (!update || typeof update.update_id !== "number") {
-    return json({ error: "Invalid Telegram update" }, 400)
-  }
+  if (!update || typeof update.update_id !== "number") return json({ error: "Invalid Telegram update" }, 400)
 
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim()
   if (!token) return json({ error: "Telegram bot token is not configured" }, 503)
 
-  let claim: Awaited<ReturnType<typeof claimTelegramWebhookUpdate>>
   try {
-    claim = await claimTelegramWebhookUpdate(update.update_id)
+    const claim = await claimTelegramWebhookUpdate(update.update_id)
+    if (!claim.claimed) {
+      return json({ ok: true, duplicate: true, status: claim.status, attempts: claim.attempts })
+    }
   } catch (error) {
     console.error("Telegram update idempotency claim failed", error)
     return json({ error: "Telegram update storage is unavailable" }, 503)
-  }
-
-  if (!claim.claimed) {
-    return json({
-      ok: true,
-      duplicate: true,
-      status: claim.status,
-      attempts: claim.attempts,
-    })
   }
 
   try {
@@ -369,14 +327,7 @@ export async function POST(request: Request) {
   } catch (error) {
     await markTelegramWebhookUpdateFailed(update.update_id, error).catch(() => undefined)
     console.error("Telegram update handling failed", error)
-    return json(
-      {
-        ok: false,
-        retryable: true,
-        error: error instanceof Error ? error.message : "Telegram update handling failed",
-      },
-      500
-    )
+    return json({ ok: false, retryable: true, error: error instanceof Error ? error.message : "Telegram update handling failed" }, 500)
   }
 }
 
