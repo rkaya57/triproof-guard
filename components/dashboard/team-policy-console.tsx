@@ -58,7 +58,12 @@ export function TeamPolicyConsole() {
     setSummary(body.summary ?? { total: 0, blocked: 0, reviewed: 0, last24Hours: 0, sources: [] })
   }
 
-  useEffect(() => { void load().catch((error) => setMessage(error.message)) }, [])
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void load().catch((error) => setMessage(error.message))
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [])
 
   async function create() {
     setPending(true)

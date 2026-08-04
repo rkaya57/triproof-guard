@@ -48,6 +48,14 @@ Pre-sign protection for Solana and EVM dApps, airdrops, token claims, and suspic
   - trusted domains
   - optional Team Policy Sync: paste a Tri-Proof B2B API key to apply the same active organization rules used by the API and Telegram Guardian. The key is stored only in `chrome.storage.local`, never synced with Chrome or included in shared reports. Policies refresh at most once every 10 minutes; a cached policy is used if the network is unavailable. Matched `BLOCK` and `REVIEW` rules are written to the Policy Activity Center and can trigger signed webhooks.
 
+## Account and plan access
+
+- Connect a Tri-Proof account from the popup using the displayed six-character pairing code.
+- The connection grants the browser only a revocable, scoped extension token. It never exposes an account password or wallet secret to the extension.
+- Free accounts receive the server-backed daily scan allowance. Builder and higher plans unlock Deep URL Sandbox and Scam DNA analysis, plus their higher daily limits.
+- Disconnect Browser revokes the device token server-side and removes it from local extension storage.
+- The official production API is fixed to `https://triproofprotocol.com`; `localhost` is allowed only for local development. This prevents accidental routing of wallet request data to an arbitrary endpoint.
+
 ## Local install
 
 1. Open Chrome.

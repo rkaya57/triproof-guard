@@ -14,7 +14,8 @@ export default function PrivacyPage() {
       <ul>
         <li><strong>Account information:</strong> name, email address, password hash, session details, subscription state, and account settings.</li>
         <li><strong>Analysis inputs and results:</strong> wallet addresses, chains, campaign names, CSV filenames, uploaded or submitted analysis data, risk signals, graph evidence, feedback, and reports.</li>
-        <li><strong>ScamGuard and extension activity:</strong> submitted URLs, domains, wallet addresses, token or contract identifiers, transaction data supplied for decoding, scan decisions, and feedback labels.</li>
+        <li><strong>ScamGuard and extension activity:</strong> submitted URLs, domains, wallet addresses, token or contract identifiers, transaction data supplied for decoding, scan decisions, and feedback labels. The extension stores its recent decision history, settings, and observed approval-request ledger locally in the browser unless you explicitly use a server-backed product feature.</li>
+        <li><strong>Extension account connection:</strong> a short-lived browser pairing request, device-access token metadata, connected account identifier, and plan entitlement. The extension never receives or stores your Tri-Proof password, wallet private key, seed phrase, or recovery phrase.</li>
         <li><strong>Telegram Guardian data:</strong> group and user identifiers supplied by Telegram, group metadata, scanned message targets, safety alerts, and group management settings.</li>
         <li><strong>API and operational data:</strong> API-key metadata such as a hash, prefix, last four characters, usage counters, request metadata, webhook endpoint configuration, delivery records, and security logs.</li>
         <li><strong>Payment references:</strong> selected plan, network, transaction hash, amount, confirmation state, and related product credits. Tri-Proof Guard does not take custody of assets.</li>

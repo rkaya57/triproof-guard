@@ -32,6 +32,9 @@ if (!manifest.background?.service_worker) problems.push("background.service_work
 if (!manifest.action?.default_popup) problems.push("action.default_popup is required")
 if (!manifest.side_panel?.default_path) problems.push("side_panel.default_path is required")
 if (!manifest.permissions?.includes("sidePanel")) problems.push("sidePanel permission is required")
+if (manifest.permissions?.includes("scripting")) problems.push("scripting permission is not allowed unless a feature uses chrome.scripting")
+if (manifest.minimum_chrome_version !== "114") problems.push("minimum_chrome_version must reflect the side panel requirement")
+if (JSON.stringify(manifest).includes("â")) problems.push("manifest contains mojibake characters")
 
 for (const file of requiredFiles) {
   try {
@@ -48,6 +51,7 @@ for (const file of textFiles) {
   if (/https:\/\/cdn\.|http:\/\/cdn\.|<script[^>]+src=["']https?:/i.test(content)) {
     problems.push(`${file} appears to load remote executable code`)
   }
+  if (/â€|â€”|â€¢/.test(content)) problems.push(`${file} contains mojibake characters`)
 }
 
 for (const file of ["src/background.js", "src/guard-utils.js", "src/content.js", "src/injected.js", "src/popup.js", "src/sidepanel.js"]) {

@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowRight, Code2, KeyRound, Webhook } from "lucide-react"
+import { ArrowRight, KeyRound, Webhook } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"

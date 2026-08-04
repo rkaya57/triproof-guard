@@ -29,7 +29,15 @@ const scanCache = new Map()
 function normalizeApiBaseUrl(value) {
   const fallback = DEFAULT_SETTINGS.apiBaseUrl
   if (!value || typeof value !== "string") return fallback
-  return value.trim().replace(/\/$/, "") || fallback
+  try {
+    const url = new URL(value.trim())
+    const hostname = url.hostname.toLowerCase()
+    const isOfficialApi = url.protocol === "https:" && hostname === "triproofprotocol.com"
+    const isLocalDevelopment = hostname === "localhost" && (url.protocol === "http:" || url.protocol === "https:")
+    return isOfficialApi || isLocalDevelopment ? url.origin : fallback
+  } catch {
+    return fallback
+  }
 }
 
 function cacheKey(type, value) {

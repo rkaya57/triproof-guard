@@ -166,7 +166,7 @@ function pageSafetySignals() {
     return frame.src && new URL(frame.src, window.location.href).origin !== window.location.origin && (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0 || frame.width <= 2 || frame.height <= 2)
   })
   if (hiddenFrame) signals.push({ code: "HIDDEN_CROSS_ORIGIN_IFRAME", detail: "A hidden cross-origin iframe is present in the rendered page." })
-  const clipboardHandler = Boolean(document.querySelector("[oncopy], [oncut], [onpaste]") || document.documentElement.innerHTML.includes("clipboard.writeText"))
+  const clipboardHandler = Boolean(document.querySelector("[oncopy], [oncut], [onpaste], [data-clipboard-text], [data-copy-to-clipboard]"))
   if (clipboardHandler) signals.push({ code: "CLIPBOARD_WRITE_HANDLER", detail: "The page includes clipboard-write behavior. Recheck pasted wallet addresses in your wallet prompt." })
   return signals.slice(0, 8)
 }
