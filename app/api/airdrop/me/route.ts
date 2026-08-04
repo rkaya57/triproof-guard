@@ -3,10 +3,12 @@ import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth/session"
 import { db } from "@/lib/db/prisma"
 import {
+  DAILY_THREAT_REPORT_POINTS,
   airdropSchemaMissingResponse,
   ensureAirdropTasks,
   isAirdropSchemaMissing,
 } from "@/lib/airdrop/tasks"
+import { utcRewardDate } from "@/lib/airdrop/threat-rewards"
 
 export const runtime = "nodejs"
 
@@ -16,8 +18,10 @@ export async function GET() {
 
   try {
     await ensureAirdropTasks(db)
+    const today = utcRewardDate(new Date())
+    const startOfToday = new Date(`${today}T00:00:00.000Z`)
 
-    const [profile, tasks, leaderboard] = await Promise.all([
+    const [profile, tasks, leaderboard, dailyThreatReward, pendingThreatReport] = await Promise.all([
       db.airdropProfile.findUnique({
         where: { userId: user.id },
         include: {
@@ -42,6 +46,14 @@ export async function GET() {
             select: { id: true },
           },
         },
+      }),
+      db.airdropThreatReportReward.findFirst({
+        where: { reporterId: user.id, rewardDate: today },
+        select: { points: true, creditedAt: true },
+      }),
+      db.communityThreatReport.findFirst({
+        where: { reporterId: user.id, status: "PENDING", createdAt: { gte: startOfToday } },
+        select: { id: true },
       }),
     ])
 
@@ -70,6 +82,12 @@ export async function GET() {
         pendingCount: pending.length,
         rejectedCount: rejected.length,
         registered: Boolean(profile),
+      },
+      dailyThreatPool: {
+        status: dailyThreatReward
+          ? dailyThreatReward.creditedAt ? "CREDITED" : "AWAITING_PROFILE"
+          : pendingThreatReport ? "PENDING_REVIEW" : "READY",
+        points: dailyThreatReward?.points ?? DAILY_THREAT_REPORT_POINTS,
       },
       leaderboard: leaderboard.map((entry, index) => ({
         rank: index + 1,

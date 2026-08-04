@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 
-type Report = { id: string; projectName: string; target: string; targetKind: string; chain: string | null; category: string; description: string; evidenceUrl: string | null; evidenceNote: string | null; status: string; reviewerNote: string | null; promotedIntelEntryId: string | null; createdAt: string; reporter: { name: string; email: string }; reviewer: { name: string; email: string } | null }
+type Report = { id: string; projectName: string; target: string; targetKind: string; chain: string | null; category: string; description: string; evidenceUrl: string | null; evidenceNote: string | null; status: string; reviewerNote: string | null; promotedIntelEntryId: string | null; createdAt: string; reporter: { name: string; email: string }; reviewer: { name: string; email: string } | null; airdropReward: { points: number; rewardDate: string; creditedAt: string | null } | null }
 
 export function CommunityThreatReportsConsole() {
   const [reports, setReports] = useState<Report[]>([])

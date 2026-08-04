@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth/session"
 import { db } from "@/lib/db/prisma"
 import { normalizeXHandle } from "@/lib/airdrop/tasks"
+import { creditPendingThreatRewards } from "@/lib/airdrop/threat-rewards"
 
 export const runtime = "nodejs"
 
@@ -36,14 +37,19 @@ export async function POST(request: Request) {
       eligibilityStatus: "registered",
     },
   })
+  const creditedThreatPoints = await creditPendingThreatRewards(user.id, profile.id)
+  const refreshedProfile = creditedThreatPoints
+    ? await db.airdropProfile.findUniqueOrThrow({ where: { id: profile.id } })
+    : profile
 
   return NextResponse.json({
     profile: {
-      id: profile.id,
-      xHandle: profile.xHandle,
-      rewardWallet: profile.rewardWallet,
-      totalPoints: profile.totalPoints,
-      eligibilityStatus: profile.eligibilityStatus,
+      id: refreshedProfile.id,
+      xHandle: refreshedProfile.xHandle,
+      rewardWallet: refreshedProfile.rewardWallet,
+      totalPoints: refreshedProfile.totalPoints,
+      eligibilityStatus: refreshedProfile.eligibilityStatus,
     },
+    creditedThreatPoints,
   })
 }

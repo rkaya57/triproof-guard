@@ -37,7 +37,7 @@ import { Progress } from "@/components/ui/progress"
 import { Textarea } from "@/components/ui/textarea"
 
 type SubmissionStatus = "PENDING" | "APPROVED" | "REJECTED"
-type TaskType = "X_FOLLOW" | "X_QUOTE" | "TELEGRAM_JOIN" | "HUMANITY_GATE_FEEDBACK"
+type TaskType = "X_FOLLOW" | "X_QUOTE" | "TELEGRAM_JOIN" | "THREAT_REPORT" | "HUMANITY_GATE_FEEDBACK"
 
 type ScamGuardResult = {
   completedAt: string
@@ -84,6 +84,10 @@ type AirdropResponse = {
     rejectedCount: number
     registered: boolean
   }
+  dailyThreatPool: {
+    status: "READY" | "PENDING_REVIEW" | "CREDITED" | "AWAITING_PROFILE"
+    points: number
+  }
   leaderboard: Array<{
     rank: number
     name: string
@@ -117,7 +121,15 @@ function taskIcon(type: TaskType) {
   if (type === "X_FOLLOW") return UserPlus
   if (type === "X_QUOTE") return MessageSquareText
   if (type === "TELEGRAM_JOIN") return Send
+  if (type === "THREAT_REPORT") return ShieldAlert
   return ShieldCheck
+}
+
+function dailyThreatPoolLabel(status: AirdropResponse["dailyThreatPool"]["status"], points: number) {
+  if (status === "CREDITED") return `Verified today: +${points} pts`
+  if (status === "PENDING_REVIEW") return "Report pending admin review"
+  if (status === "AWAITING_PROFILE") return `+${points} pts awaiting profile`
+  return `Up to +${points} pts today`
 }
 
 async function fileToDataUrl(file: File) {
@@ -446,6 +458,7 @@ export function AirdropTasksClient() {
           const locked = !profile
           const approved = submission?.status === "APPROVED"
           const scamGuardTask = task.type === "HUMANITY_GATE_FEEDBACK"
+          const threatPoolTask = task.type === "THREAT_REPORT"
           const testResult = scamGuardResult ?? submission?.humanityTestResult ?? null
 
           return (
@@ -455,8 +468,8 @@ export function AirdropTasksClient() {
                   <span className="glow-primary flex size-11 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
                     <Icon className="size-5" />
                   </span>
-                  <Badge variant="outline" className={statusTone(submission?.status)}>
-                    {statusLabel(submission?.status)}
+                  <Badge variant="outline" className={threatPoolTask ? "border-primary/30 bg-primary/10 text-primary" : statusTone(submission?.status)}>
+                    {threatPoolTask ? dailyThreatPoolLabel(data?.dailyThreatPool.status ?? "READY", data?.dailyThreatPool.points ?? task.points) : statusLabel(submission?.status)}
                   </Badge>
                 </div>
                 <CardTitle className="text-white">{task.title}</CardTitle>
@@ -509,7 +522,16 @@ export function AirdropTasksClient() {
                   </a>
                 )}
 
-                {!approved && (
+                {threatPoolTask && (
+                  <div className="space-y-3 rounded-xl border border-red-400/20 bg-red-400/5 p-3 text-sm text-slate-200">
+                    <p className="leading-6">One evidence-backed report can earn points each UTC day, only after a Threat Pool admin publishes it.</p>
+                    <Link href="/threat-reports" className={`${buttonVariants({ variant: "outline" })} w-full text-white`}>
+                      Report to Threat Pool <ArrowRight data-icon="inline-end" />
+                    </Link>
+                  </div>
+                )}
+
+                {!approved && !threatPoolTask && (
                   <form onSubmit={(event) => submitTask(event, task)} className="space-y-3">
                     {task.type === "X_QUOTE" && (
                       <label className="grid gap-2 text-sm text-slate-300">

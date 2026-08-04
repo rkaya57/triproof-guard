@@ -3,6 +3,7 @@ import type { AirdropTaskType, Prisma, PrismaClient } from "@prisma/client"
 export const AIRDROP_SEASON_NAME = "Season 0"
 export const TRIPROOF_X_URL = "https://x.com/TriProof_"
 export const TRIPROOF_TELEGRAM_URL = "https://t.me/+MuFX4GKruRU1YTRk"
+export const DAILY_THREAT_REPORT_POINTS = 150
 
 export type AirdropTaskDefinition = {
   slug: string
@@ -46,6 +47,16 @@ export const AIRDROP_TASK_DEFINITIONS: AirdropTaskDefinition[] = [
     sortOrder: 30,
   },
   {
+    slug: "daily-threat-pool-report",
+    title: "Submit a verified Threat Pool report",
+    description:
+      "Submit one evidence-backed scam report to the Threat Pool. If an admin verifies and publishes it, you earn 150 points once per UTC day.",
+    type: "THREAT_REPORT",
+    points: DAILY_THREAT_REPORT_POINTS,
+    proofRequired: false,
+    sortOrder: 40,
+  },
+  {
     slug: "scamguard-feedback",
     title: "Test ScamGuard and leave feedback",
     description:
@@ -53,7 +64,7 @@ export const AIRDROP_TASK_DEFINITIONS: AirdropTaskDefinition[] = [
     type: "HUMANITY_GATE_FEEDBACK",
     points: 250,
     proofRequired: false,
-    sortOrder: 40,
+    sortOrder: 50,
   },
 ]
 
@@ -61,6 +72,7 @@ export const AIRDROP_TASK_TYPES: AirdropTaskType[] = [
   "X_FOLLOW",
   "X_QUOTE",
   "TELEGRAM_JOIN",
+  "THREAT_REPORT",
   "HUMANITY_GATE_FEEDBACK",
 ]
 
@@ -136,6 +148,7 @@ export function isAirdropSchemaMissing(error: unknown) {
     message.includes("airdroptask") ||
     message.includes("airdropprofile") ||
     message.includes("airdropsubmission") ||
+    message.includes("airdropthreatreportreward") ||
     message.includes("does not exist")
   )
 }

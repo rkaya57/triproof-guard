@@ -1,5 +1,6 @@
 import { z } from "zod"
 
+import { awardVerifiedThreatReport } from "@/lib/airdrop/threat-rewards"
 import { db } from "@/lib/db/prisma"
 import { normalizeIntelValue, upsertScamGuardIntelEntry } from "@/lib/scamguard/intelligence"
 
@@ -100,6 +101,7 @@ export async function listCommunityThreatReportsForAdmin() {
     include: {
       reporter: { select: { name: true, email: true } },
       reviewer: { select: { name: true, email: true } },
+      airdropReward: { select: { points: true, rewardDate: true, creditedAt: true } },
     },
   })
 }
@@ -131,7 +133,7 @@ export async function reviewCommunityThreatReport(input: {
     promotedIntelEntryId = entry.id
   }
 
-  return db.communityThreatReport.update({
+  const reviewed = await db.communityThreatReport.update({
     where: { id: report.id },
     data: {
       status: input.status,
@@ -141,6 +143,12 @@ export async function reviewCommunityThreatReport(input: {
       publishedAt: input.status === "PUBLISHED" ? new Date() : null,
     },
   })
+
+  const airdropReward = input.status === "PUBLISHED"
+    ? await awardVerifiedThreatReport({ reportId: report.id, reporterId: report.reporterId, reportedAt: report.createdAt })
+    : null
+
+  return { ...reviewed, airdropReward }
 }
 
 export class CommunityThreatReportError extends Error {
