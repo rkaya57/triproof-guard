@@ -47,7 +47,10 @@ export async function PATCH(request: Request, { params }: Params) {
       include: { task: true, profile: true },
     })
 
-    if (!submission) throw new Error("Submission not found")
+    if (!submission) return { error: "Submission not found", status: 404 as const }
+    if (submission.status !== "PENDING") {
+      return { error: "This submission has already been reviewed and cannot be changed.", status: 409 as const }
+    }
 
     const nextStatus = action === "approve" ? "APPROVED" : "REJECTED"
     const pointsAwarded = action === "approve" ? submission.task.points : 0
@@ -71,6 +74,10 @@ export async function PATCH(request: Request, { params }: Params) {
       totalPoints,
     }
   })
+
+  if ("error" in result) {
+    return NextResponse.json({ error: result.error }, { status: result.status })
+  }
 
   return NextResponse.json({
     submission: {

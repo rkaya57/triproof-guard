@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
 type SubmissionStatus = "PENDING" | "APPROVED" | "REJECTED"
+type ReviewFilter = SubmissionStatus
 type TaskType = "X_FOLLOW" | "X_QUOTE" | "HUMANITY_GATE_FEEDBACK"
 
 type AdminSubmission = {
@@ -108,6 +109,7 @@ export function AirdropReviewConsole() {
   const [taskLoading, setTaskLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("PENDING")
   const [savingTask, setSavingTask] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -166,6 +168,7 @@ export function AirdropReviewConsole() {
   }, [data])
 
   const pendingSubmissions = data?.submissions.filter((submission) => submission.status === "PENDING") ?? []
+  const visibleSubmissions = data?.submissions.filter((submission) => submission.status === reviewFilter) ?? []
 
   function qualityFlags(submission: AdminSubmission) {
     const flags: string[] = []
@@ -472,6 +475,32 @@ export function AirdropReviewConsole() {
         ))}
       </section>
 
+      <Card className="glass-panel premium-card">
+        <CardHeader className="gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <CardTitle className="text-white">Proof decisions</CardTitle>
+            <CardDescription>Pending proof stays actionable. Reviewed proof is kept separately as a read-only audit record.</CardDescription>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {([
+              ["PENDING", "Pending", data?.totals.PENDING ?? 0],
+              ["APPROVED", "Approved", data?.totals.APPROVED ?? 0],
+              ["REJECTED", "Rejected", data?.totals.REJECTED ?? 0],
+            ] as const).map(([status, label, count]) => (
+              <Button
+                key={status}
+                type="button"
+                size="sm"
+                variant={reviewFilter === status ? "default" : "outline"}
+                onClick={() => { setReviewFilter(status); setSelectedIds([]) }}
+              >
+                {label} ({count})
+              </Button>
+            ))}
+          </div>
+        </CardHeader>
+      </Card>
+
       <Card className="glass-panel premium-card animated-border">
         <CardHeader className="gap-4 lg:grid lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
@@ -520,18 +549,18 @@ export function AirdropReviewConsole() {
 
       {loading ? (
         <Card className="glass-panel h-72 animate-pulse" />
-      ) : !data?.submissions.length ? (
+      ) : !visibleSubmissions.length ? (
         <Card className="glass-panel premium-card">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-white">
-              <Gift className="text-primary" /> No submissions yet
+              <Gift className="text-primary" /> No {reviewFilter.toLowerCase()} submissions
             </CardTitle>
-            <CardDescription>Community task proofs will appear here after users register and submit evidence.</CardDescription>
+            <CardDescription>{reviewFilter === "PENDING" ? "Community task proofs will appear here after users register and submit evidence." : "Reviewed submissions are retained here as an audit record."}</CardDescription>
           </CardHeader>
         </Card>
       ) : (
         <section className="grid gap-4">
-          {data.submissions.map((submission) => (
+          {visibleSubmissions.map((submission) => (
             <Card key={submission.id} className="glass-panel premium-card animated-border">
               <CardHeader className="gap-4 lg:grid lg:grid-cols-[1fr_auto]">
                 <div>
@@ -617,6 +646,18 @@ function ReviewPanel({
     "Screenshot does not clearly show account ownership or task completion.",
     "ScamGuard feedback reviewed and accepted.",
   ]
+
+  if (submission.status !== "PENDING") {
+    return (
+      <div className="rounded-xl border border-border bg-background/35 p-4 text-sm text-slate-300">
+        <p className="font-medium text-white">Review complete</p>
+        <p className="mt-2">Decision: <span className={submission.status === "APPROVED" ? "text-green-200" : "text-red-200"}>{submission.status}</span></p>
+        {submission.status === "APPROVED" && <p className="mt-1">Points credited: {submission.pointsAwarded}</p>}
+        {submission.adminNotes && <p className="mt-3 border-l-2 border-primary/50 pl-3 leading-6">{submission.adminNotes}</p>}
+        <p className="mt-3 flex items-center gap-2 text-xs text-slate-400"><ShieldCheck className="size-3.5" /> Reviewed by {submission.reviewedBy?.email ?? "Tri-Proof admin"}{submission.reviewedAt ? ` · ${new Date(submission.reviewedAt).toLocaleString()}` : ""}</p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-3">
