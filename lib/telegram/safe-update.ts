@@ -23,7 +23,7 @@ const bareDomainPattern = /^(?:www\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)
 const secretMaterialPattern = /\b(seed phrase|recovery phrase|secret phrase|private key|mnemonic)\b/gi
 const benignSecretPrefixPattern = /\b(?:never|do\s+not|don't|does\s+not|doesn't|will\s+not|won't|must\s+not|mustn't|should\s+not|shouldn't|cannot|can't|without|no\s+legitimate\s+(?:project|website|site|bot|admin|moderator|support(?:\s+agent)?)|asla|hiçbir\s+zaman|kesinlikle)\b[^.!?,;\n]{0,90}$/i
 const benignSecretSuffixPattern = /^(?:[^.!?,;\n]{0,24})\b(?:is\s+not\s+required|will\s+never\s+be\s+requested|is\s+never\s+requested|istemeyiz|istemiyoruz|istenmez|talep\s+etmeyiz|talep\s+etmiyoruz|paylaşmayın|vermeyin|girmeyin)\b/i
-const privateScanCommandPattern = /^\/(?:scan|wallet|token|tx|report|watch)(?:@[a-zA-Z0-9_]+)?(?:\s|$)/i
+const scanCommandPattern = /^\/(?:scan|wallet|token|tx|report|watch)(?:@[a-zA-Z0-9_]+)?(?:\s|$)/i
 const scanTargetPattern = /https?:\/\/|\b0x[a-fA-F0-9]{40}\b|\b[1-9A-HJ-NP-Za-km-z]{32,44}\b|\b[A-Za-z0-9+/_=-]{100,}\b/
 
 function cleanTelegramUrl(value: string) {
@@ -43,16 +43,10 @@ function normalizeEntity(entity: TelegramMessageEntity, sourceText: string): Tel
       ? sourceText.slice(entity.offset, entity.offset + entity.length)
       : null
   if (!raw) return entity
-
   const normalized = normalizeTelegramUrl(raw)
   if (!normalized) return entity
   if (entity.type === "text_link") return { ...entity, url: normalized }
-
-  return {
-    ...entity,
-    type: "text_link",
-    url: normalized,
-  }
+  return { ...entity, type: "text_link", url: normalized }
 }
 
 export function maskBenignSecretMaterialMentions(text: string) {
@@ -67,7 +61,6 @@ export function maskBenignSecretMaterialMentions(text: string) {
 function normalizeMessage(message: TelegramMessage): TelegramMessage {
   const text = message.text
   const caption = message.caption
-
   return {
     ...message,
     text: text === undefined ? undefined : maskBenignSecretMaterialMentions(text),
@@ -113,18 +106,15 @@ function rateLimitReply(message: TelegramMessage, seconds: number): TelegramBotA
     payload: {
       chat_id: message.chat.id,
       text: `ScamGuard scan limit reached. Please wait about ${Math.max(1, Math.ceil(seconds / 60))} minute(s), then try again.`,
-      reply_parameters: {
-        message_id: message.message_id,
-        allow_sending_without_reply: true,
-      },
+      reply_parameters: { message_id: message.message_id, allow_sending_without_reply: true },
       disable_web_page_preview: true,
     },
   }
 }
 
-function shouldLimitPrivateMessage(message: TelegramMessage) {
+function shouldLimitScanMessage(message: TelegramMessage) {
   const text = message.text ?? message.caption ?? ""
-  return privateScanCommandPattern.test(text.trim()) || scanTargetPattern.test(text)
+  return scanCommandPattern.test(text.trim()) || scanTargetPattern.test(text)
 }
 
 export async function handleTelegramUpdate(
@@ -141,15 +131,13 @@ export async function handleTelegramUpdate(
     if (advanced !== null) return advanced
   }
 
-  if (message.chat.type === "private" && shouldLimitPrivateMessage(message)) {
+  if (shouldLimitScanMessage(message)) {
     const allowance = await context.consumePersistentAllowance?.({
       chatId: message.chat.id,
       userId: message.from?.id,
-      group: false,
+      group: isGroup,
     })
-    if (allowance && !allowance.allowed) {
-      return [rateLimitReply(message, allowance.retryAfterSeconds)]
-    }
+    if (allowance && !allowance.allowed) return [rateLimitReply(message, allowance.retryAfterSeconds)]
   }
 
   return handleTelegramUpdateBase(normalized, baseContext(context))
