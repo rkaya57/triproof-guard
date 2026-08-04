@@ -25,7 +25,20 @@ function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: noStoreHeaders })
 }
 
-function parseTaskBody(body: unknown) {
+type ParsedTaskData = {
+  title: string
+  description: string
+  targetUrl: string | null
+  type: AirdropTaskType
+  points: number
+  proofRequired: boolean
+  active: boolean
+  sortOrder: number
+}
+
+function parseTaskBody(body: unknown):
+  | { error: string }
+  | { data: ParsedTaskData; id: string | undefined } {
   const input = body as {
     id?: string
     title?: string
@@ -77,7 +90,7 @@ function isUniqueConstraintError(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002"
 }
 
-async function createTaskWithUniqueSlug(data: ReturnType<typeof parseTaskBody> extends { data: infer T } ? T : never) {
+async function createTaskWithUniqueSlug(data: ParsedTaskData) {
   const baseSlug = airdropTaskSlugBase(data.title, data.targetUrl)
 
   for (let attempt = 0; attempt < 25; attempt += 1) {
