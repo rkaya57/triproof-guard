@@ -234,7 +234,33 @@ test("Group Guardian stays quiet when group protection is disabled", async () =>
       dailySummary: true,
     },
   })
-  assert.equal(actions.length, 0)
+  assert.equal(actions.length, 1)
+  assert.match(actions[0].payload.text, /GROUP GUARDIAN IS PAUSED/)
+})
+
+test("Group Guardian explains how to connect an unapproved group instead of silently dropping links", async () => {
+  const update: TelegramUpdate = {
+    update_id: 41,
+    message: {
+      message_id: 141,
+      text: "https://testnet.awarizon.com/node",
+      chat: { id: -104, type: "supergroup", title: "Unconnected group" },
+    },
+  }
+
+  const actions = await handleTelegramUpdate(update, {
+    groupSettings: {
+      guardianEnabled: true,
+      allowlisted: false,
+      alertLevel: "HIGH_RISK",
+      dailySummary: true,
+    },
+  })
+
+  assert.equal(actions.length, 1)
+  assert.match(actions[0].payload.text, /GROUP GUARDIAN NEEDS CONNECTION/)
+  assert.match(actions[0].payload.text, /\/guardian connect <group-code>/)
+  assert.equal(actions[0].payload.reply_markup?.inline_keyboard[0][0].text, "Open Guardian setup")
 })
 
 test("Group Guardian rejects settings changes from non-admin members", async () => {

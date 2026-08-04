@@ -170,6 +170,7 @@ const secretRequestRegex = /\b(seed phrase|recovery phrase|secret phrase|private
 const solanaSystemProgramId = "11111111111111111111111111111111"
 const splTokenProgramId = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 const token2022ProgramId = "TokenzQdBNbLqP5VEhdkAS6EPF1SMH1dbKqP6Xk6mN"
+const guardianSetupReminderUntil = new Map<number, number>()
 
 const riskRank: Record<ScamGuardRiskLevel, number> = {
   SAFE: 0,
@@ -627,6 +628,41 @@ function currentGroupSettings(context: TelegramBotContext) {
   )
 }
 
+function groupSetupReminder(message: TelegramMessage, context: TelegramBotContext, settings: ReturnType<typeof currentGroupSettings>) {
+  const now = Date.now()
+  const reminderUntil = guardianSetupReminderUntil.get(message.chat.id) ?? 0
+  if (reminderUntil > now) return null
+
+  guardianSetupReminderUntil.set(message.chat.id, now + 15 * 60 * 1000)
+
+  const text = settings.guardianEnabled
+    ? [
+        "GROUP GUARDIAN NEEDS CONNECTION",
+        "",
+        "This link reached ScamGuard, but automatic protection is not active for this group yet.",
+        "",
+        "A group admin can connect it from Dashboard > Developer > Telegram Guardian, then send:",
+        "/guardian connect <group-code>",
+        "",
+        "To scan this item immediately, reply with /scan followed by the link.",
+      ].join("\n")
+    : [
+        "GROUP GUARDIAN IS PAUSED",
+        "",
+        "This link reached ScamGuard, but automatic protection is switched off for this group.",
+        "",
+        "A verified group admin can restore it with /guardian on.",
+        "To scan this item immediately, reply with /scan followed by the link.",
+      ].join("\n")
+
+  return simpleReply(message, text, {
+    inline_keyboard: [[
+      { text: "Open Guardian setup", url: `${baseUrl(context)}/telegram` },
+      { text: "Open live scanner", url: `${baseUrl(context)}/scamguard` },
+    ]],
+  })
+}
+
 function guardianStatusText(context: TelegramBotContext) {
   const settings = currentGroupSettings(context)
   return [
@@ -917,14 +953,18 @@ async function handleGroupGuardian(message: TelegramMessage, context: TelegramBo
   if (command) return handlePrivateOrCommand(message, context)
 
   const settings = currentGroupSettings(context)
-  if (!settings.guardianEnabled || !settings.allowlisted) return []
-
-  const threshold = settings.alertLevel
   const urls = urlEntities(message).slice(0, 5)
   const candidates: Array<ScanCandidate & { secretMaterial?: boolean }> = urls.map((url) => ({ type: "url", value: url, chain: "unknown" }))
   if (secretRequestRegex.test(textOf(message))) {
     candidates.unshift({ type: "transaction", value: "Secret material request detected in Telegram message", chain: "unknown", secretMaterial: true })
   }
+
+  if (!settings.guardianEnabled || !settings.allowlisted) {
+    const reminder = candidates.length ? groupSetupReminder(message, context, settings) : null
+    return reminder ? [reminder] : []
+  }
+
+  const threshold = settings.alertLevel
   const actions: TelegramBotAction[] = []
   let autoMuted = false
 

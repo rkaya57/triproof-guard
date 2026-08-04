@@ -568,7 +568,7 @@ export function AirdropTasksClient() {
             <CardTitle className="flex items-center gap-2 text-white">
               <Trophy className="text-amber-300" /> Season leaderboard
             </CardTitle>
-            <CardDescription>Top approved contributors. Pending proofs do not count until admin approval.</CardDescription>
+            <CardDescription>Approved contributors ranked by points. Pending proofs do not count until admin approval.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
             {leaderboard.length ? (

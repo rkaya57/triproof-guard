@@ -34,7 +34,7 @@ export async function GET() {
       db.airdropProfile.findMany({
         where: { totalPoints: { gt: 0 } },
         orderBy: [{ totalPoints: "desc" }, { updatedAt: "asc" }],
-        take: 10,
+        take: 50,
         include: {
           user: { select: { id: true, name: true } },
           submissions: {
