@@ -11,7 +11,8 @@ on:
       - ".github/workflows/telegram-guardian-regression.yml"
   push:
     branches:
-      - fix/telegram-own-domain-false-positive
+      - main
+      - "fix/**"
     paths:
       - "app/api/telegram/**"
       - "lib/telegram/**"
@@ -43,8 +44,8 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
-      - name: Run Telegram Guardian tests
-        run: node --import tsx --test lib/telegram/safe-update.test.ts lib/telegram/bot.test.ts
+      - name: Run Telegram Guardian and ScamGuard tests
+        run: node --import tsx --test lib/telegram/safe-update.test.ts lib/telegram/bot.test.ts lib/scamguard/url-sandbox-limit.test.ts
 
-      - name: Lint changed Telegram surfaces
-        run: npx eslint app/api/telegram/webhook/route.ts lib/telegram/safe-update.ts lib/telegram/safe-update.test.ts
+      - name: Lint changed Telegram and ScamGuard surfaces
+        run: npx eslint app/api/telegram/webhook/route.ts lib/telegram/safe-update.ts lib/telegram/safe-update.test.ts lib/scamguard/url-sandbox.ts lib/scamguard/url-sandbox-limit.test.ts
