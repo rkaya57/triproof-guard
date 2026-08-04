@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Sparkles,
   Tags,
+  UsersRound,
 } from "lucide-react"
 
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -44,6 +45,7 @@ const adminNavItems = [
   { href: "/dashboard/admin/airdrop", label: "Airdrop Review", icon: Gift },
   { href: "/dashboard/admin/diagnostics", label: "Diagnostics", icon: HeartPulse },
   { href: "/dashboard/admin/payments", label: "Payments", icon: Tags },
+  { href: "/dashboard/admin/users", label: "Users", icon: UsersRound },
   { href: "/dashboard/net", label: "Tri Proof Net", icon: Landmark },
 ]
 
@@ -52,6 +54,7 @@ const routeTitles = [
   { href: "/dashboard/admin/scamguard", title: "Threat Review", eyebrow: "ScamGuard community moderation" },
   { href: "/dashboard/admin/diagnostics", title: "Diagnostics", eyebrow: "Production hardening checks" },
   { href: "/dashboard/admin/payments", title: "Payments", eyebrow: "Solana checkout operations" },
+  { href: "/dashboard/admin/users", title: "Users", eyebrow: "Admin-only account directory" },
   { href: "/dashboard/admin/analyses", title: "Analysis Admin", eyebrow: "Campaign operations" },
   { href: "/dashboard/admin/blog", title: "Blog Admin", eyebrow: "Content operations" },
   { href: "/dashboard/admin/bugs", title: "Issue Console", eyebrow: "Product feedback queue" },

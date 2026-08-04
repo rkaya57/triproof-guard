@@ -17,6 +17,7 @@ import {
   Sparkles,
   Wrench,
   XCircle,
+  UsersRound,
 } from "lucide-react"
 
 import {
@@ -268,6 +269,7 @@ export default async function Page() {
           [Bug, "Issue Tracker", "Track bugs, broken flows, visual issues and Codex tasks.", "/dashboard/admin/bugs"],
           [Activity, "Analysis Ops", "Review recent wallet analyses and failed jobs.", "/dashboard/admin/analyses"],
           [CreditCard, "Payments", "Verify SOL and USDC checkout readiness without exposing secrets.", "/dashboard/admin/payments"],
+          [UsersRound, "Users", "View registered names, email addresses, plan status and product footprint.", "/dashboard/admin/users"],
           [FileText, "Blog Studio", "Create SEO-ready Web3 security articles with cover images.", "/dashboard/admin/blog"],
           [Wrench, "Maintenance", "Run health checks and operational follow-up tasks.", "/dashboard/admin/diagnostics"],
         ].map(([Icon, title, text, href], index) => (
