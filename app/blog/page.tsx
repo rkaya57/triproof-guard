@@ -2,6 +2,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { ArrowRight, BookOpen, CalendarDays, ShieldCheck } from "lucide-react"
 
+import { AAdsUnit } from "@/components/ads/aads-unit"
 import { listPublishedPosts } from "@/lib/blog/db"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
@@ -103,6 +104,8 @@ export default async function Page() {
             </CardContent>
           </Card>
         )}
+
+        <AAdsUnit placement="blog-index-after-featured" className="my-12" />
 
         {rest.length > 0 && (
           <div className="mt-10 grid gap-5 lg:grid-cols-3">
