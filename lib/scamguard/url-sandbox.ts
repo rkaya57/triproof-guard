@@ -238,6 +238,24 @@ function redirectSignal(source: URL, finalUrl: URL, redirects: string[]): Sandbo
   return signals
 }
 
+export function sandboxBlockedSignal(message: string): SandboxStaticSignal {
+  if (/^Response exceeds the \d+-byte sandbox limit\.$/.test(message)) {
+    return {
+      code: "SANDBOX_RESPONSE_TOO_LARGE",
+      severity: "low",
+      title: "Page exceeds passive inspection limit",
+      detail: "The page is larger than ScamGuard's passive inspection limit. This means the content scan was incomplete; it is not a threat finding by itself.",
+    }
+  }
+
+  return {
+    code: "SANDBOX_TARGET_BLOCKED",
+    severity: "medium",
+    title: "Limited sandbox visibility",
+    detail: "ScamGuard could not complete its passive inspection of this target. This is not a threat finding by itself, but the scan is incomplete and should be reviewed before signing or connecting a wallet.",
+  }
+}
+
 export async function inspectUrlSandbox(
   value: string,
   options: { resolver?: SandboxResolver; enabled?: boolean } = {}
@@ -340,14 +358,7 @@ export async function inspectUrlSandbox(
       resolvedAddressCount,
       blockReason: blocked ? error.message : undefined,
       error: blocked ? undefined : error instanceof Error ? error.message : "Sandbox request failed.",
-      signals: blocked
-        ? [{
-            code: "SANDBOX_TARGET_BLOCKED",
-            severity: "medium",
-            title: "Limited sandbox visibility",
-            detail: "ScamGuard could not complete its passive inspection of this target. This is not a threat finding by itself, but the scan is incomplete and should be reviewed before signing or connecting a wallet.",
-          }]
-        : [],
+      signals: blocked ? [sandboxBlockedSignal(error.message)] : [],
     }
   }
 }
