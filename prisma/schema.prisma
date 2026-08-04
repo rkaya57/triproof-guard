@@ -121,6 +121,7 @@ enum HumanityDecision {
 enum AirdropTaskType {
   X_FOLLOW
   X_QUOTE
+  TELEGRAM_JOIN
   HUMANITY_GATE_FEEDBACK
 }
 

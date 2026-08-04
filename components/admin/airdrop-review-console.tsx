@@ -24,7 +24,7 @@ import { Textarea } from "@/components/ui/textarea"
 
 type SubmissionStatus = "PENDING" | "APPROVED" | "REJECTED"
 type ReviewFilter = SubmissionStatus
-type TaskType = "X_FOLLOW" | "X_QUOTE" | "HUMANITY_GATE_FEEDBACK"
+type TaskType = "X_FOLLOW" | "X_QUOTE" | "TELEGRAM_JOIN" | "HUMANITY_GATE_FEEDBACK"
 
 type AdminSubmission = {
   id: string
@@ -304,7 +304,7 @@ export function AirdropReviewConsole() {
             </Badge>
             <h1 className="text-gradient text-3xl font-semibold sm:text-5xl">Airdrop task review</h1>
             <p className="mt-3 max-w-3xl text-slate-300">
-              Review X screenshots, quote URLs and ScamGuard feedback. Approved submissions immediately credit points to the user profile.
+              Review X, Telegram and ScamGuard proofs. Approved submissions immediately credit points to the user profile.
             </p>
           </div>
           <Button
@@ -364,6 +364,7 @@ export function AirdropReviewConsole() {
                 >
                   <option value="X_FOLLOW">X follow</option>
                   <option value="X_QUOTE">X quote</option>
+                  <option value="TELEGRAM_JOIN">Telegram join</option>
                   <option value="HUMANITY_GATE_FEEDBACK">ScamGuard feedback</option>
                 </select>
               </label>

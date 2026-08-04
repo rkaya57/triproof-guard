@@ -2,6 +2,7 @@ import type { AirdropTaskType, Prisma, PrismaClient } from "@prisma/client"
 
 export const AIRDROP_SEASON_NAME = "Season 0"
 export const TRIPROOF_X_URL = "https://x.com/TriProof_"
+export const TRIPROOF_TELEGRAM_URL = "https://t.me/+MuFX4GKruRU1YTRk"
 
 export type AirdropTaskDefinition = {
   slug: string
@@ -35,6 +36,16 @@ export const AIRDROP_TASK_DEFINITIONS: AirdropTaskDefinition[] = [
     sortOrder: 20,
   },
   {
+    slug: "join-triproof-telegram",
+    title: "Join the Tri-Proof Protocol Telegram group",
+    description:
+      "Join the official Tri-Proof Protocol Telegram group at https://t.me/+MuFX4GKruRU1YTRk and submit a screenshot that clearly shows your membership.",
+    type: "TELEGRAM_JOIN",
+    points: 100,
+    proofRequired: true,
+    sortOrder: 30,
+  },
+  {
     slug: "scamguard-feedback",
     title: "Test ScamGuard and leave feedback",
     description:
@@ -42,13 +53,14 @@ export const AIRDROP_TASK_DEFINITIONS: AirdropTaskDefinition[] = [
     type: "HUMANITY_GATE_FEEDBACK",
     points: 250,
     proofRequired: false,
-    sortOrder: 30,
+    sortOrder: 40,
   },
 ]
 
 export const AIRDROP_TASK_TYPES: AirdropTaskType[] = [
   "X_FOLLOW",
   "X_QUOTE",
+  "TELEGRAM_JOIN",
   "HUMANITY_GATE_FEEDBACK",
 ]
 

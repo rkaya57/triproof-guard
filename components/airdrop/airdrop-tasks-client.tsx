@@ -37,7 +37,7 @@ import { Progress } from "@/components/ui/progress"
 import { Textarea } from "@/components/ui/textarea"
 
 type SubmissionStatus = "PENDING" | "APPROVED" | "REJECTED"
-type TaskType = "X_FOLLOW" | "X_QUOTE" | "HUMANITY_GATE_FEEDBACK"
+type TaskType = "X_FOLLOW" | "X_QUOTE" | "TELEGRAM_JOIN" | "HUMANITY_GATE_FEEDBACK"
 
 type ScamGuardResult = {
   completedAt: string
@@ -97,6 +97,7 @@ type AirdropResponse = {
 
 const triproofXUrl = "https://x.com/TriProof_"
 const quoteSearchUrl = "https://x.com/TriProof_"
+const triproofTelegramUrl = "https://t.me/+MuFX4GKruRU1YTRk"
 
 function statusTone(status?: SubmissionStatus | null) {
   if (status === "APPROVED") return "border-green-400/30 bg-green-400/10 text-green-200"
@@ -115,6 +116,7 @@ function statusLabel(status?: SubmissionStatus | null) {
 function taskIcon(type: TaskType) {
   if (type === "X_FOLLOW") return UserPlus
   if (type === "X_QUOTE") return MessageSquareText
+  if (type === "TELEGRAM_JOIN") return Send
   return ShieldCheck
 }
 
@@ -501,6 +503,12 @@ export function AirdropTasksClient() {
                   </div>
                 )}
 
+                {task.type === "TELEGRAM_JOIN" && (
+                  <a href={triproofTelegramUrl} target="_blank" rel="noreferrer" className={`${buttonVariants({ variant: "outline" })} w-full text-white`}>
+                    Join Tri-Proof Telegram <ExternalLink data-icon="inline-end" />
+                  </a>
+                )}
+
                 {!approved && (
                   <form onSubmit={(event) => submitTask(event, task)} className="space-y-3">
                     {task.type === "X_QUOTE" && (
@@ -626,10 +634,11 @@ export function AirdropTasksClient() {
             </CardTitle>
             <CardDescription>Admin approval is the only path that credits task points.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-3">
+          <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {[
               ["X follow", "Screenshot confirms @TriProof_ follow state."],
               ["Quote post", "X quote URL and screenshot prove the post is public."],
+              ["Telegram group", "Screenshot clearly shows that the account joined the official Tri-Proof Protocol group."],
               ["ScamGuard feedback", "One-time scanner result plus useful feedback is checked."],
             ].map(([title, text]) => (
               <div key={title} className="rounded-xl border border-primary/20 bg-primary/5 p-4">
