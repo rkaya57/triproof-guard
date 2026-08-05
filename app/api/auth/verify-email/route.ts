@@ -9,7 +9,6 @@ import {
 } from "@/lib/auth/security"
 import {
   consumeAuthToken,
-  findAuthUserById,
   markEmailVerified,
 } from "@/lib/auth/store"
 import { authTokenSchema } from "@/lib/validators/wallet"
