@@ -4,6 +4,7 @@ import {
   AccountSecurity,
   type AccountSecurityData,
 } from "@/components/auth/account-security"
+import { ChangePasswordCard } from "@/components/auth/change-password-card"
 import { getCurrentSession } from "@/lib/auth/session"
 import {
   findAuthUserById,
@@ -46,5 +47,10 @@ export default async function Page() {
     })),
   }
 
-  return <AccountSecurity initialData={initialData} />
+  return (
+    <div className="grid gap-5">
+      <AccountSecurity initialData={initialData} />
+      <ChangePasswordCard />
+    </div>
+  )
 }
