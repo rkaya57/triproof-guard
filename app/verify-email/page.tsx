@@ -27,6 +27,7 @@ export default async function Page({
         email={typeof params.email === "string" ? params.email : undefined}
         next={safePostAuthPath(params.next)}
         sent={params.sent === "true"}
+        siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || null}
       />
     </AuthShell>
   )
