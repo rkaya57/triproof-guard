@@ -5,6 +5,7 @@ on:
     paths:
       - "app/api/admin/airdrop/**"
       - "app/api/airdrop/**"
+      - "app/dashboard/airdrop/**"
       - "components/admin/airdrop-review-console.tsx"
       - "components/airdrop/**"
       - "lib/airdrop/**"
@@ -15,9 +16,11 @@ on:
     branches:
       - main
       - "fix/**"
+      - "feat/**"
     paths:
       - "app/api/admin/airdrop/**"
       - "app/api/airdrop/**"
+      - "app/dashboard/airdrop/**"
       - "components/admin/airdrop-review-console.tsx"
       - "components/airdrop/**"
       - "lib/airdrop/**"
@@ -49,7 +52,23 @@ jobs:
         run: npx prisma generate
 
       - name: Run airdrop tests
-        run: node --import tsx --test lib/airdrop/tasks.test.ts
+        run: node --import tsx --test lib/airdrop/tasks.test.ts lib/airdrop/daily-check-in.test.ts
+
+      - name: Type-check airdrop production surfaces
+        run: >-
+          npx tsc --noEmit --pretty false
+          2>&1 | tee /tmp/airdrop-tsc.log;
+          test ! -s /tmp/airdrop-tsc.log ||
+          ! grep -E "(app/api/airdrop/daily-check-in|app/dashboard/airdrop|components/airdrop/daily-check-in-card|lib/airdrop/daily-check-in)" /tmp/airdrop-tsc.log
 
       - name: Lint airdrop task surfaces
-        run: npx eslint app/api/admin/airdrop/tasks/route.ts lib/airdrop/tasks.ts lib/airdrop/tasks.test.ts
+        run: >-
+          npx eslint
+          app/api/admin/airdrop/tasks/route.ts
+          app/api/airdrop/daily-check-in/route.ts
+          app/dashboard/airdrop/page.tsx
+          components/airdrop/daily-check-in-card.tsx
+          lib/airdrop/tasks.ts
+          lib/airdrop/tasks.test.ts
+          lib/airdrop/daily-check-in.ts
+          lib/airdrop/daily-check-in.test.ts
