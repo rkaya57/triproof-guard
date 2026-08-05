@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 
 import { AuthShell } from "@/components/auth/auth-shell"
 import { ForgotPasswordForm } from "@/components/auth/recovery-forms"
+import { configuredTurnstileSiteKey } from "@/lib/auth/security"
 
 export const metadata: Metadata = {
   title: "Forgot password | Tri-Proof Protocol",
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
 export default function Page() {
   return (
     <AuthShell>
-      <ForgotPasswordForm siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || null} />
+      <ForgotPasswordForm siteKey={configuredTurnstileSiteKey()} />
     </AuthShell>
   )
 }
