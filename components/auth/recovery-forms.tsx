@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { FormEvent, useEffect, useState } from "react"
-import { CheckCircle2, Eye, EyeOff, Loader2, MailCheck } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2, MailCheck } from "lucide-react"
 
 import { Turnstile } from "@/components/auth/turnstile"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -11,6 +11,18 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+
+const emailDeliveryHint =
+  "Email not visible? Please check your spam or junk folder. Delivery can take a few minutes."
+
+function EmailDeliveryNotice() {
+  return (
+    <Alert className="border-amber-400/30 bg-amber-400/10 text-amber-100">
+      <AlertTriangle />
+      <AlertDescription>{emailDeliveryHint}</AlertDescription>
+    </Alert>
+  )
+}
 
 async function postJson(url: string, body: Record<string, unknown>) {
   const response = await fetch(url, {
@@ -59,10 +71,13 @@ export function ForgotPasswordForm({ siteKey }: { siteKey?: string | null }) {
       </CardHeader>
       <CardContent className="grid gap-5">
         {message ? (
-          <Alert className="border-emerald-400/30 bg-emerald-400/10 text-emerald-100">
-            <CheckCircle2 />
-            <AlertDescription>{message}</AlertDescription>
-          </Alert>
+          <div className="grid gap-3">
+            <Alert className="border-emerald-400/30 bg-emerald-400/10 text-emerald-100">
+              <CheckCircle2 />
+              <AlertDescription>{message}</AlertDescription>
+            </Alert>
+            <EmailDeliveryNotice />
+          </div>
         ) : (
           <form onSubmit={submit} className="grid gap-5">
             <Field>
@@ -217,7 +232,12 @@ export function VerifyEmailForm({
       </CardHeader>
       <CardContent className="grid gap-5">
         {pending && <div className="flex items-center gap-3 rounded-xl border border-border p-4 text-sm text-muted-foreground"><Loader2 className="animate-spin text-primary" /> Verifying your secure link…</div>}
-        {message && <Alert className="border-primary/30 bg-primary/10"><AlertDescription>{message}</AlertDescription></Alert>}
+        {message && (
+          <div className="grid gap-3">
+            <Alert className="border-primary/30 bg-primary/10"><AlertDescription>{message}</AlertDescription></Alert>
+            <EmailDeliveryNotice />
+          </div>
+        )}
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
         {!token && email && (
           <div className="grid gap-3">
