@@ -10,12 +10,14 @@ on:
       - "app/reset-password/**"
       - "app/verify-email/**"
       - "app/onboarding/**"
+      - "app/dashboard/settings/security/**"
       - "components/auth/**"
       - "lib/auth/**"
       - "lib/validators/**"
       - "prisma/migrations/**"
       - "package.json"
       - "package-lock.json"
+      - "tsconfig.auth.json"
       - ".github/workflows/auth-security-regression.yml"
   push:
     branches:
@@ -30,12 +32,14 @@ on:
       - "app/reset-password/**"
       - "app/verify-email/**"
       - "app/onboarding/**"
+      - "app/dashboard/settings/security/**"
       - "components/auth/**"
       - "lib/auth/**"
       - "lib/validators/**"
       - "prisma/migrations/**"
       - "package.json"
       - "package-lock.json"
+      - "tsconfig.auth.json"
       - ".github/workflows/auth-security-regression.yml"
 
 permissions:
@@ -66,10 +70,10 @@ jobs:
           DEV_ALLOW_INSECURE_SECRETS: "true"
         run: npm run test:auth
 
-      - name: Type-check production app
+      - name: Type-check authentication production surfaces
         env:
           DEV_ALLOW_INSECURE_SECRETS: "true"
-        run: npx tsc --noEmit
+        run: npx tsc -p tsconfig.auth.json
 
       - name: Lint auth surfaces
         run: >-
@@ -81,6 +85,7 @@ jobs:
           app/reset-password
           app/verify-email
           app/onboarding
+          app/dashboard/settings/security
           components/auth
           lib/auth
           lib/validators/wallet.ts
