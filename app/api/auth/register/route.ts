@@ -5,6 +5,7 @@ import { sendAuthEmail, isAuthEmailConfigured } from "@/lib/auth/email"
 import { hashPassword } from "@/lib/auth/password"
 import { attachSessionCookie } from "@/lib/auth/session"
 import {
+  AuthRequestError,
   assertTrustedAuthOrigin,
   authErrorResponse,
   authRateKeys,
@@ -66,6 +67,13 @@ export async function POST(request: Request) {
     }
 
     const verificationRequired = isEmailVerificationRequired()
+    if (verificationRequired && !isAuthEmailConfigured()) {
+      throw new AuthRequestError(
+        "Email verification is temporarily unavailable. Please try again later.",
+        503
+      )
+    }
+
     const referredByUserId = await findUserIdByReferralCode(parsed.data.referralCode)
     const now = new Date()
     const user = await createAuthUser({
@@ -89,28 +97,36 @@ export async function POST(request: Request) {
         expiresAt: new Date(Date.now() + 30 * 60 * 1000),
         metadata: { email: user.email },
       })
-      const delivery = await sendAuthEmail({
-        kind: "verify-email",
-        to: user.email,
-        name: user.name,
-        token,
-        redirectTo: "/onboarding",
-        idempotencyKey: `verify-${tokenId}`,
-      })
+
+      let emailDelivered = false
+      try {
+        const delivery = await sendAuthEmail({
+          kind: "verify-email",
+          to: user.email,
+          name: user.name,
+          token,
+          redirectTo: "/onboarding",
+          idempotencyKey: `verify-${tokenId}`,
+        })
+        emailDelivered = delivery.delivered
+      } catch {
+        emailDelivered = false
+      }
+
       await recordAuthSecurityEvent({
         request,
         type: "REGISTER_CREATED_UNVERIFIED",
-        success: delivery.delivered,
+        success: emailDelivered,
         userId: user.id,
         identifier: user.email,
-        metadata: { emailDelivered: delivery.delivered },
+        metadata: { emailDelivered },
       })
       return NextResponse.json(
         {
           verificationRequired: true,
           email: user.email,
-          emailDelivered: delivery.delivered,
-          emailConfigured: isAuthEmailConfigured(),
+          emailDelivered,
+          emailConfigured: true,
         },
         { status: 201 }
       )
