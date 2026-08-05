@@ -116,6 +116,29 @@ const strongPasswordSchema = z
     "Choose a less common password"
   )
 
+const optionalHttpUrlSchema = z
+  .string()
+  .trim()
+  .max(300)
+  .refine((value) => {
+    if (!value) return true
+    try {
+      const protocol = new URL(value).protocol
+      return protocol === "https:" || protocol === "http:"
+    } catch {
+      return false
+    }
+  }, "Use a valid HTTP or HTTPS website URL")
+
+const optionalSocialHandleSchema = z
+  .string()
+  .trim()
+  .max(64)
+  .refine(
+    (value) => !value || /^@?[A-Za-z0-9_]{1,32}$/.test(value),
+    "Use a valid public account handle"
+  )
+
 export const authSchema = z.object({
   email: emailSchema,
   password: loginPasswordSchema,
@@ -169,9 +192,9 @@ export const onboardingSchema = z.object({
   accountRole: z.enum(["FOUNDER", "COMMUNITY_MANAGER", "SECURITY_RESEARCHER", "DEVELOPER", "AIRDROP_PARTICIPANT", "OTHER"]),
   primaryUseCase: z.enum(["SCAMGUARD", "SYBIL_ANALYSIS", "TELEGRAM_GUARDIAN", "API", "MULTIPLE"]),
   projectName: z.string().trim().max(120).optional().or(z.literal("")),
-  projectWebsite: z.string().trim().url().max(300).optional().or(z.literal("")),
-  xHandle: z.string().trim().max(64).optional().or(z.literal("")),
-  telegramHandle: z.string().trim().max(64).optional().or(z.literal("")),
+  projectWebsite: optionalHttpUrlSchema.optional().or(z.literal("")),
+  xHandle: optionalSocialHandleSchema.optional().or(z.literal("")),
+  telegramHandle: optionalSocialHandleSchema.optional().or(z.literal("")),
 })
 
 export const walletChallengeSchema = z.object({
