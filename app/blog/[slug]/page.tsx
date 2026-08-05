@@ -3,7 +3,6 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowLeft, Home } from "lucide-react"
 
-import { AAdsUnit } from "@/components/ads/aads-unit"
 import { getPostBySlugFromDb } from "@/lib/blog/db"
 import { BlogEngagement } from "@/components/blog/blog-engagement"
 import { Badge } from "@/components/ui/badge"
@@ -100,8 +99,6 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
             return <p key={block} className="mb-5 text-lg leading-8 text-muted-foreground">{block}</p>
           })}
         </div>
-
-        <AAdsUnit placement={`blog-article-${post.slug}`} className="my-12" />
 
         <BlogEngagement slug={post.slug} title={post.title} />
 
