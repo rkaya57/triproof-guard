@@ -1,0 +1,26 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "noEmit": true
+  },
+  "include": [
+    "next-env.d.ts",
+    "app/api/auth/**/*.ts",
+    "app/login/**/*.tsx",
+    "app/register/**/*.tsx",
+    "app/forgot-password/**/*.tsx",
+    "app/reset-password/**/*.tsx",
+    "app/verify-email/**/*.tsx",
+    "app/onboarding/**/*.tsx",
+    "app/dashboard/settings/security/**/*.tsx",
+    "components/auth/**/*.tsx",
+    "lib/auth/**/*.ts",
+    "lib/validators/wallet.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ]
+}

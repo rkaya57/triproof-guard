@@ -103,13 +103,111 @@ export function parseCampaignContracts(input: string | null | undefined): string
   )
 }
 
+const emailSchema = z.string().trim().toLowerCase().email().max(254)
+const loginPasswordSchema = z.string().min(1).max(128)
+const strongPasswordSchema = z
+  .string()
+  .min(10, "Use at least 10 characters")
+  .max(128, "Password must be 128 characters or fewer")
+  .refine((value) => /[a-zA-Z]/.test(value), "Include at least one letter")
+  .refine((value) => /\d/.test(value), "Include at least one number")
+  .refine(
+    (value) => !["password", "password123", "123456789", "qwerty123", "triproof123"].includes(value.toLowerCase()),
+    "Choose a less common password"
+  )
+
+const optionalHttpUrlSchema = z
+  .string()
+  .trim()
+  .max(300)
+  .refine((value) => {
+    if (!value) return true
+    try {
+      const protocol = new URL(value).protocol
+      return protocol === "https:" || protocol === "http:"
+    } catch {
+      return false
+    }
+  }, "Use a valid HTTP or HTTPS website URL")
+
+const optionalSocialHandleSchema = z
+  .string()
+  .trim()
+  .max(64)
+  .refine(
+    (value) => !value || /^@?[A-Za-z0-9_]{1,32}$/.test(value),
+    "Use a valid public account handle"
+  )
+
 export const authSchema = z.object({
-  email: z.string().trim().email(),
-  password: z.string().min(8),
+  email: emailSchema,
+  password: loginPasswordSchema,
+  remember: z.boolean().optional().default(false),
+  turnstileToken: z.string().trim().max(4096).optional().nullable(),
 })
 
-export const registerSchema = authSchema.extend({
-  name: z.string().trim().min(2).max(80),
+export const registerSchema = z
+  .object({
+    name: z.string().trim().min(2).max(80),
+    email: emailSchema,
+    password: strongPasswordSchema,
+    confirmPassword: z.string().min(1).max(128),
+    acceptTerms: z.literal(true),
+    acceptPrivacy: z.literal(true),
+    referralCode: z.string().trim().max(32).optional().or(z.literal("")),
+    turnstileToken: z.string().trim().max(4096).optional().nullable(),
+  })
+  .refine((value) => value.password === value.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  })
+
+export const forgotPasswordSchema = z.object({
+  email: emailSchema,
+  turnstileToken: z.string().trim().max(4096).optional().nullable(),
+})
+
+export const resetPasswordSchema = z
+  .object({
+    token: z.string().trim().min(20).max(512),
+    password: strongPasswordSchema,
+    confirmPassword: z.string().min(1).max(128),
+  })
+  .refine((value) => value.password === value.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  })
+
+export const authTokenSchema = z.object({
+  token: z.string().trim().min(20).max(512),
+  remember: z.boolean().optional().default(false),
+})
+
+export const resendVerificationSchema = z.object({
+  email: emailSchema,
+  turnstileToken: z.string().trim().max(4096).optional().nullable(),
+})
+
+export const onboardingSchema = z.object({
+  accountRole: z.enum(["FOUNDER", "COMMUNITY_MANAGER", "SECURITY_RESEARCHER", "DEVELOPER", "AIRDROP_PARTICIPANT", "OTHER"]),
+  primaryUseCase: z.enum(["SCAMGUARD", "SYBIL_ANALYSIS", "TELEGRAM_GUARDIAN", "API", "MULTIPLE"]),
+  projectName: z.string().trim().max(120).optional().or(z.literal("")),
+  projectWebsite: optionalHttpUrlSchema.optional().or(z.literal("")),
+  xHandle: optionalSocialHandleSchema.optional().or(z.literal("")),
+  telegramHandle: optionalSocialHandleSchema.optional().or(z.literal("")),
+})
+
+export const walletChallengeSchema = z.object({
+  chain: z.enum(["EVM", "SOLANA"]),
+  address: z.string().trim().min(20).max(128),
+  purpose: z.enum(["LOGIN", "LINK"]),
+  redirectTo: z.string().trim().max(500).optional(),
+})
+
+export const walletVerifySchema = walletChallengeSchema.extend({
+  token: z.string().trim().min(20).max(512),
+  signature: z.string().trim().min(20).max(2048),
+  remember: z.boolean().optional().default(false),
 })
 
 export function isValidWalletAddress(address: string, chain: string) {
