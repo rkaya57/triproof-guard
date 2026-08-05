@@ -18,7 +18,7 @@ const base58Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwx
 const base58Values = new Map(Array.from(base58Alphabet, (character, index) => [character, index]))
 
 function decodeBase58(value: string) {
-  let bytes = [0]
+  const bytes = [0]
   for (const character of value) {
     const digit = base58Values.get(character)
     if (digit === undefined) throw new Error("Invalid base58 value.")
