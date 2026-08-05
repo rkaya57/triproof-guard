@@ -13,17 +13,17 @@ const siteUrl =
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: "Tri-Proof Guard | Web3 Wallet Risk Analysis",
+  title: "Tri-Proof Protocol | Web3 Security Platform",
   description:
-    "Upload wallets, detect suspicious Sybil clusters, and export clean reward winner lists.",
+    "Protect users before signatures, reward campaigns before distribution, and Telegram communities before scam risk spreads.",
   icons: {
     icon: "/logo.svg",
     apple: "/logo.svg",
   },
   openGraph: {
-    title: "Tri-Proof Guard | Web3 Wallet Risk Analysis",
+    title: "Tri-Proof Protocol | Web3 Security Platform",
     description:
-      "Upload wallets, detect suspicious Sybil clusters, and export clean reward winner lists.",
+      "ScamGuard, Sybil Analyst, and community protection in one explainable Web3 security platform.",
     images: ["/logo.svg"],
   },
 }
