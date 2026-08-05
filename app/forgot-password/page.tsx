@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export default function Page() {
   return (
     <AuthShell>
-      <ForgotPasswordForm />
+      <ForgotPasswordForm siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || null} />
     </AuthShell>
   )
 }
