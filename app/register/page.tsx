@@ -5,6 +5,7 @@ import { AuthForm } from "@/components/auth/auth-form"
 import { AuthShell } from "@/components/auth/auth-shell"
 import { configuredOAuthProviders } from "@/lib/auth/oauth"
 import { safePostAuthPath } from "@/lib/auth/redirects"
+import { configuredTurnstileSiteKey } from "@/lib/auth/security"
 import { getCurrentUser } from "@/lib/auth/session"
 
 export const metadata: Metadata = {
@@ -36,7 +37,7 @@ export default async function Page({
         mode="register"
         redirectTo={redirectTo}
         oauthProviders={configuredOAuthProviders()}
-        turnstileSiteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || null}
+        turnstileSiteKey={configuredTurnstileSiteKey()}
         referralCode={referralCode}
         initialError={oauthError}
       />
