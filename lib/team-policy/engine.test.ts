@@ -7,7 +7,7 @@ import { evaluateTeamPolicies, type TeamPolicyWithRules } from "./engine"
 
 function policy(rule: { type: TeamPolicyRuleType; value?: string | null; action?: TeamPolicyAction }): TeamPolicyWithRules {
   return {
-    id: "policy-1", userId: "user-1", name: "Treasury protection", active: true, createdAt: new Date(), updatedAt: new Date(), violations: [],
+    id: "policy-1", userId: "user-1", name: "Treasury protection", active: true, createdAt: new Date(), updatedAt: new Date(),
     rules: [{ id: "rule-1", policyId: "policy-1", type: rule.type, value: rule.value ?? null, action: rule.action ?? TeamPolicyAction.BLOCK, active: true, createdAt: new Date(), updatedAt: new Date() }],
   }
 }
