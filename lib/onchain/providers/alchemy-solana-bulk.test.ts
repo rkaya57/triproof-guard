@@ -314,10 +314,13 @@ describe("Alchemy-first Solana enrichment", () => {
       options: { deepHistory: false },
     })
     const result = output.results.get(wallet)
+    const rawData = result?.data.rawData as
+      | { historicalSignatureObserved?: boolean }
+      | undefined
 
     assert.equal(result?.status, "completed")
     assert.equal(result?.data.accountType, "historical_unresolved_account")
-    assert.equal(result?.data.rawData?.historicalSignatureObserved, true)
+    assert.equal(rawData?.historicalSignatureObserved, true)
     assert.ok(
       output.warnings.some((warning) => warning.includes("Historical signatures were confirmed"))
     )
