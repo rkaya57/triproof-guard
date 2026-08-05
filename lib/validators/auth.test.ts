@@ -54,3 +54,29 @@ test("onboarding keeps project information optional", () => {
     true
   )
 })
+
+test("onboarding accepts only HTTP(S) sites and public handle formats", () => {
+  assert.equal(
+    onboardingSchema.safeParse({
+      accountRole: "DEVELOPER",
+      primaryUseCase: "API",
+      projectName: "Tri-Proof",
+      projectWebsite: "https://triproofprotocol.com",
+      xHandle: "@TriProof_",
+      telegramHandle: "TriproofScamGuardBot",
+    }).success,
+    true
+  )
+
+  assert.equal(
+    onboardingSchema.safeParse({
+      accountRole: "DEVELOPER",
+      primaryUseCase: "API",
+      projectName: "Unsafe",
+      projectWebsite: "javascript:alert(1)",
+      xHandle: "valid_handle",
+      telegramHandle: "invalid handle with spaces",
+    }).success,
+    false
+  )
+})
