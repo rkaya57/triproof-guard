@@ -1,6 +1,6 @@
 "use client"
 
-import { FormEvent, useMemo, useState } from "react"
+import { FormEvent, useState } from "react"
 import { useRouter } from "next/navigation"
 import { CheckCircle2, Copy, Loader2, Rocket, ShieldCheck } from "lucide-react"
 
@@ -28,10 +28,7 @@ export function OnboardingForm({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [walletMessage, setWalletMessage] = useState("")
   const [copied, setCopied] = useState(false)
-  const referralUrl = useMemo(() => {
-    if (!referralCode || typeof window === "undefined") return ""
-    return `${window.location.origin}/register?ref=${encodeURIComponent(referralCode)}`
-  }, [referralCode])
+  const referralPath = referralCode ? `/register?ref=${encodeURIComponent(referralCode)}` : ""
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -64,8 +61,8 @@ export function OnboardingForm({
   }
 
   async function copyReferral() {
-    if (!referralUrl) return
-    await navigator.clipboard.writeText(referralUrl)
+    if (!referralPath) return
+    await navigator.clipboard.writeText(new URL(referralPath, window.location.origin).toString())
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1500)
   }
@@ -165,7 +162,7 @@ export function OnboardingForm({
                 <CardDescription>Share this link to attribute new account registrations to you.</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-3">
-                <code className="overflow-hidden text-ellipsis rounded-lg border border-border bg-background/60 p-3 text-xs text-primary">{referralUrl || referralCode}</code>
+                <code className="overflow-hidden text-ellipsis rounded-lg border border-border bg-background/60 p-3 text-xs text-primary">{referralPath}</code>
                 <Button type="button" variant="outline" onClick={copyReferral}>
                   {copied ? <CheckCircle2 /> : <Copy />}
                   {copied ? "Copied" : "Copy referral link"}
