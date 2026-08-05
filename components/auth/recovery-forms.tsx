@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { FormEvent, useEffect, useState } from "react"
 import { CheckCircle2, Eye, EyeOff, Loader2, MailCheck } from "lucide-react"
 
+import { Turnstile } from "@/components/auth/turnstile"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -26,10 +27,11 @@ async function postJson(url: string, body: Record<string, unknown>) {
   return { response, result }
 }
 
-export function ForgotPasswordForm() {
+export function ForgotPasswordForm({ siteKey }: { siteKey?: string | null }) {
   const [pending, setPending] = useState(false)
   const [message, setMessage] = useState("")
   const [error, setError] = useState("")
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -39,6 +41,7 @@ export function ForgotPasswordForm() {
     try {
       const { response, result } = await postJson("/api/auth/forgot-password", {
         email: String(form.get("email") ?? ""),
+        turnstileToken,
       })
       if (!response.ok) setError(result?.error || "Could not start password recovery.")
       else setMessage(result?.message || "Check your email for a password reset link.")
@@ -66,6 +69,7 @@ export function ForgotPasswordForm() {
               <FieldLabel htmlFor="email">Email</FieldLabel>
               <Input id="email" name="email" type="email" autoComplete="email" required maxLength={254} />
             </Field>
+            <Turnstile siteKey={siteKey} onToken={setTurnstileToken} />
             {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
             <Button type="submit" disabled={pending}>
               {pending && <Loader2 className="animate-spin" />}
@@ -156,17 +160,20 @@ export function VerifyEmailForm({
   email,
   next,
   sent,
+  siteKey,
 }: {
   token?: string
   email?: string
   next: string
   sent: boolean
+  siteKey?: string | null
 }) {
   const router = useRouter()
   const [pending, setPending] = useState(Boolean(token))
   const [error, setError] = useState("")
   const [message, setMessage] = useState(sent ? "A verification link was sent to your email." : "")
   const [resending, setResending] = useState(false)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
 
   useEffect(() => {
     if (!token) return
@@ -192,7 +199,10 @@ export function VerifyEmailForm({
     if (!email) return
     setResending(true)
     setError("")
-    const { response, result } = await postJson("/api/auth/resend-verification", { email })
+    const { response, result } = await postJson("/api/auth/resend-verification", {
+      email,
+      turnstileToken,
+    })
     if (response.ok) setMessage(result?.message || "Verification email sent.")
     else setError(result?.error || "Could not resend the verification email.")
     setResending(false)
@@ -210,10 +220,13 @@ export function VerifyEmailForm({
         {message && <Alert className="border-primary/30 bg-primary/10"><AlertDescription>{message}</AlertDescription></Alert>}
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
         {!token && email && (
-          <Button type="button" variant="outline" disabled={resending} onClick={resend}>
-            {resending && <Loader2 className="animate-spin" />}
-            Resend verification email
-          </Button>
+          <div className="grid gap-3">
+            <Turnstile siteKey={siteKey} onToken={setTurnstileToken} />
+            <Button type="button" variant="outline" disabled={resending} onClick={resend}>
+              {resending && <Loader2 className="animate-spin" />}
+              Resend verification email
+            </Button>
+          </div>
         )}
         <Link href="/login" className="text-center text-sm text-primary hover:underline">Back to sign in</Link>
       </CardContent>
