@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Copy, Laptop, Link2, Loader2, LogOut, ShieldCheck, Smartphone, Trash2, WalletCards } from "lucide-react"
 
@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
-type AccountData = {
+export type AccountSecurityData = {
   profile: {
     email: string
     emailVerifiedAt: string | null
@@ -35,7 +35,7 @@ type AccountData = {
 
 type ErrorResponse = { error?: string }
 
-function isAccountData(value: AccountData | ErrorResponse | null): value is AccountData {
+function isAccountData(value: AccountSecurityData | ErrorResponse | null): value is AccountSecurityData {
   return Boolean(value && "sessions" in value && Array.isArray(value.sessions) && "wallets" in value)
 }
 
@@ -50,16 +50,16 @@ function shortAddress(value: string) {
   return value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value
 }
 
-export function AccountSecurity() {
+export function AccountSecurity({ initialData }: { initialData: AccountSecurityData }) {
   const router = useRouter()
-  const [data, setData] = useState<AccountData | null>(null)
+  const [data, setData] = useState<AccountSecurityData>(initialData)
   const [error, setError] = useState("")
   const [message, setMessage] = useState("")
   const [pendingId, setPendingId] = useState("")
 
   async function load() {
     const response = await fetch("/api/auth/account", { cache: "no-store" })
-    const body = (await response.json().catch(() => null)) as AccountData | ErrorResponse | null
+    const body = (await response.json().catch(() => null)) as AccountSecurityData | ErrorResponse | null
     if (!response.ok || !isAccountData(body)) {
       const errorBody = body && "error" in body ? body : null
       setError(errorBody?.error || "Could not load account security.")
@@ -68,12 +68,10 @@ export function AccountSecurity() {
     setData(body)
   }
 
-  useEffect(() => {
-    void load()
-  }, [])
-
   async function revokeSession(id: string) {
     setPendingId(id)
+    setError("")
+    setMessage("")
     const response = await fetch(`/api/auth/sessions/${encodeURIComponent(id)}`, { method: "DELETE" })
     const body = (await response.json().catch(() => null)) as { error?: string; currentRevoked?: boolean } | null
     setPendingId("")
@@ -92,6 +90,8 @@ export function AccountSecurity() {
 
   async function logoutEverywhere() {
     setPendingId("all")
+    setError("")
+    setMessage("")
     const response = await fetch("/api/auth/logout-all", { method: "POST" })
     setPendingId("")
     if (!response.ok) {
@@ -103,15 +103,11 @@ export function AccountSecurity() {
   }
 
   async function copyReferral() {
-    const code = data?.profile?.referralCode
+    const code = data.profile?.referralCode
     if (!code) return
     const path = `/register?ref=${encodeURIComponent(code)}`
     await navigator.clipboard.writeText(new URL(path, window.location.origin).toString())
     setMessage("Referral link copied.")
-  }
-
-  if (!data) {
-    return <div className="flex min-h-48 items-center justify-center text-muted-foreground"><Loader2 className="mr-2 animate-spin" /> Loading account security…</div>
   }
 
   const referralPath = data.profile?.referralCode
@@ -139,7 +135,11 @@ export function AccountSecurity() {
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           <Badge variant="secondary">{data.profile?.email}</Badge>
-          <Badge className="border-emerald-400/30 bg-emerald-400/10 text-emerald-200">Email verified</Badge>
+          {data.profile?.emailVerifiedAt ? (
+            <Badge className="border-emerald-400/30 bg-emerald-400/10 text-emerald-200">Email verified</Badge>
+          ) : (
+            <Badge variant="destructive">Email verification pending</Badge>
+          )}
         </CardContent>
       </Card>
 
