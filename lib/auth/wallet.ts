@@ -66,7 +66,7 @@ function walletMessage(input: {
     "This request does not initiate a blockchain transaction and will never ask for a seed phrase or private key.",
     "",
     `URI: ${authAppUrl()}`,
-    `Version: 1`,
+    "Version: 1",
     `Chain: ${input.chain}`,
     `Nonce: ${input.nonce}`,
     `Issued At: ${input.issuedAt}`,
@@ -111,17 +111,42 @@ export async function createWalletChallenge(input: {
 }
 
 function verifySolanaMessage(input: { address: string; message: string; signature: string }) {
-  const rawPublicKey = decodeBase58(input.address)
-  if (rawPublicKey.length !== 32) return false
-  const signature = Buffer.from(input.signature, "base64")
-  if (signature.length !== 64) return false
-  const spkiPrefix = Buffer.from("302a300506032b6570032100", "hex")
-  const publicKey = createPublicKey({
-    key: Buffer.concat([spkiPrefix, rawPublicKey]),
-    format: "der",
-    type: "spki",
-  })
-  return verifySignature(null, Buffer.from(input.message, "utf8"), publicKey, signature)
+  try {
+    const rawPublicKey = decodeBase58(input.address)
+    if (rawPublicKey.length !== 32) return false
+    const signature = Buffer.from(input.signature, "base64")
+    if (signature.length !== 64) return false
+    const spkiPrefix = Buffer.from("302a300506032b6570032100", "hex")
+    const publicKey = createPublicKey({
+      key: Buffer.concat([spkiPrefix, rawPublicKey]),
+      format: "der",
+      type: "spki",
+    })
+    return verifySignature(null, Buffer.from(input.message, "utf8"), publicKey, signature)
+  } catch {
+    return false
+  }
+}
+
+export function verifyAuthWalletMessageSignature(input: {
+  chain: WalletChain
+  address: string
+  message: string
+  signature: string
+}) {
+  const normalizedAddress = normalizeAuthWalletAddress(input.chain, input.address)
+  if (input.chain === "SOLANA") {
+    return verifySolanaMessage({
+      address: normalizedAddress,
+      message: input.message,
+      signature: input.signature,
+    })
+  }
+  try {
+    return verifyMessage(input.message, input.signature).toLowerCase() === normalizedAddress
+  } catch {
+    return false
+  }
 }
 
 export async function verifyWalletChallenge(input: {
@@ -148,13 +173,12 @@ export async function verifyWalletChallenge(input: {
     throw new Error("Wallet challenge is invalid or expired.")
   }
 
-  const valid = input.chain === "EVM"
-    ? verifyMessage(metadata.message, input.signature).toLowerCase() === normalizedAddress
-    : verifySolanaMessage({
-        address: normalizedAddress,
-        message: metadata.message,
-        signature: input.signature,
-      })
+  const valid = verifyAuthWalletMessageSignature({
+    chain: input.chain,
+    address: normalizedAddress,
+    message: metadata.message,
+    signature: input.signature,
+  })
   if (!valid) throw new Error("Wallet signature could not be verified.")
 
   return {
