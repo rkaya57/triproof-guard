@@ -96,15 +96,20 @@ export function AccountSecurity() {
   }
 
   async function copyReferral() {
-    if (!data?.profile?.referralCode) return
-    const url = `${window.location.origin}/register?ref=${encodeURIComponent(data.profile.referralCode)}`
-    await navigator.clipboard.writeText(url)
+    const code = data?.profile?.referralCode
+    if (!code) return
+    const path = `/register?ref=${encodeURIComponent(code)}`
+    await navigator.clipboard.writeText(new URL(path, window.location.origin).toString())
     setMessage("Referral link copied.")
   }
 
   if (!data) {
     return <div className="flex min-h-48 items-center justify-center text-muted-foreground"><Loader2 className="mr-2 animate-spin" /> Loading account security…</div>
   }
+
+  const referralPath = data.profile?.referralCode
+    ? `/register?ref=${encodeURIComponent(data.profile.referralCode)}`
+    : ""
 
   return (
     <div className="grid gap-5">
@@ -182,7 +187,7 @@ export function AccountSecurity() {
             <CardDescription>New registrations created through your unique URL are attributed to your account.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <code className="min-w-0 flex-1 overflow-hidden text-ellipsis rounded-lg border border-border bg-background/60 p-3 text-xs text-primary">{`${typeof window === "undefined" ? "" : window.location.origin}/register?ref=${data.profile.referralCode}`}</code>
+            <code className="min-w-0 flex-1 overflow-hidden text-ellipsis rounded-lg border border-border bg-background/60 p-3 text-xs text-primary">{referralPath}</code>
             <Button type="button" variant="outline" onClick={copyReferral}><Copy /> Copy link</Button>
           </CardContent>
         </Card>
