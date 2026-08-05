@@ -16,7 +16,8 @@ import { resendVerificationSchema } from "@/lib/validators/wallet"
 
 export const runtime = "nodejs"
 
-const genericMessage = "If this address has an unverified account, a new verification email has been sent."
+const genericMessage =
+  "If this address has an unverified account, a new verification email has been sent. Please check your spam or junk folder if it is not visible in your inbox."
 
 export async function POST(request: Request) {
   try {
