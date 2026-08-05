@@ -37,7 +37,7 @@ export function normalizeAuthEmail(email: string) {
 }
 
 export function createReferralCode() {
-  return randomBytes(6).toString("base64url").toUpperCase()
+  return randomBytes(9).toString("base64url").toUpperCase()
 }
 
 export async function findAuthUserByEmail(email: string) {
@@ -97,29 +97,27 @@ export async function createAuthUser(input: {
   emailVerifiedAt: Date | null
   referredByUserId?: string | null
 }) {
-  const user = await db.user.create({
-    data: {
-      name: input.name.trim(),
-      email: normalizeAuthEmail(input.email),
-      passwordHash: input.passwordHash,
-    },
-    select: { id: true },
-  })
-
-  await db.$executeRaw(
+  const id = randomUUID()
+  const referralCode = createReferralCode()
+  const rows = await db.$queryRaw<AuthUserRecord[]>(
     Prisma.sql`
-      UPDATE "User"
-      SET
-        "termsAcceptedAt" = ${input.termsAcceptedAt},
-        "privacyAcceptedAt" = ${input.privacyAcceptedAt},
-        "emailVerifiedAt" = ${input.emailVerifiedAt},
-        "referredByUserId" = ${input.referredByUserId ?? null},
-        "updatedAt" = CURRENT_TIMESTAMP
-      WHERE "id" = ${user.id}
+      INSERT INTO "User" (
+        "id", "name", "email", "passwordHash",
+        "emailVerifiedAt", "termsAcceptedAt", "privacyAcceptedAt",
+        "sessionVersion", "referralCode", "referredByUserId",
+        "createdAt", "updatedAt"
+      ) VALUES (
+        ${id}, ${input.name.trim()}, ${normalizeAuthEmail(input.email)}, ${input.passwordHash},
+        ${input.emailVerifiedAt}, ${input.termsAcceptedAt}, ${input.privacyAcceptedAt},
+        1, ${referralCode}, ${input.referredByUserId ?? null},
+        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      )
+      RETURNING
+        "id", "name", "email", "passwordHash", "emailVerifiedAt",
+        "sessionVersion", "onboardingCompletedAt", "referralCode", "createdAt"
     `
   )
-  await ensureUserReferralCode(user.id)
-  return findAuthUserById(user.id)
+  return rows[0] ?? null
 }
 
 export async function markEmailVerified(userId: string) {
@@ -407,20 +405,42 @@ export async function upsertExternalAccount(input: {
   providerAccountId: string
   email?: string | null
 }) {
-  await db.$executeRaw(
-    Prisma.sql`
-      INSERT INTO "AuthExternalAccount" (
-        "id", "userId", "provider", "providerAccountId", "email", "createdAt", "updatedAt"
-      ) VALUES (
-        ${randomUUID()}, ${input.userId}, ${input.provider}, ${input.providerAccountId},
-        ${input.email ?? null}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+  await db.$transaction(async (tx) => {
+    const existing = await tx.$queryRaw<Array<{ userId: string }>>(
+      Prisma.sql`
+        SELECT "userId"
+        FROM "AuthExternalAccount"
+        WHERE "provider" = ${input.provider}
+          AND "providerAccountId" = ${input.providerAccountId}
+        FOR UPDATE
+      `
+    )
+    if (existing[0] && existing[0].userId !== input.userId) {
+      throw new Error("This external identity is already linked to another account.")
+    }
+    if (existing[0]) {
+      await tx.$executeRaw(
+        Prisma.sql`
+          UPDATE "AuthExternalAccount"
+          SET "email" = ${input.email ?? null}, "updatedAt" = CURRENT_TIMESTAMP
+          WHERE "provider" = ${input.provider}
+            AND "providerAccountId" = ${input.providerAccountId}
+            AND "userId" = ${input.userId}
+        `
       )
-      ON CONFLICT ("provider", "providerAccountId") DO UPDATE SET
-        "userId" = EXCLUDED."userId",
-        "email" = EXCLUDED."email",
-        "updatedAt" = CURRENT_TIMESTAMP
-    `
-  )
+      return
+    }
+    await tx.$executeRaw(
+      Prisma.sql`
+        INSERT INTO "AuthExternalAccount" (
+          "id", "userId", "provider", "providerAccountId", "email", "createdAt", "updatedAt"
+        ) VALUES (
+          ${randomUUID()}, ${input.userId}, ${input.provider}, ${input.providerAccountId},
+          ${input.email ?? null}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        )
+      `
+    )
+  })
 }
 
 export async function findUserByExternalAccount(provider: string, providerAccountId: string) {
@@ -436,15 +456,41 @@ export async function findUserByExternalAccount(provider: string, providerAccoun
 }
 
 export async function linkAuthWallet(input: { userId: string; chain: string; address: string }) {
-  await db.$executeRaw(
-    Prisma.sql`
-      INSERT INTO "AuthWallet" ("id", "userId", "chain", "address", "createdAt", "lastUsedAt")
-      VALUES (${randomUUID()}, ${input.userId}, ${input.chain}, ${input.address}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      ON CONFLICT ("chain", "address") DO UPDATE SET
-        "userId" = EXCLUDED."userId",
-        "lastUsedAt" = CURRENT_TIMESTAMP
-    `
-  )
+  await db.$transaction(async (tx) => {
+    const existing = await tx.$queryRaw<Array<{ userId: string }>>(
+      Prisma.sql`
+        SELECT "userId"
+        FROM "AuthWallet"
+        WHERE "chain" = ${input.chain} AND "address" = ${input.address}
+        FOR UPDATE
+      `
+    )
+    if (existing[0] && existing[0].userId !== input.userId) {
+      throw new Error("This wallet is already linked to another account.")
+    }
+    if (existing[0]) {
+      await tx.$executeRaw(
+        Prisma.sql`
+          UPDATE "AuthWallet"
+          SET "lastUsedAt" = CURRENT_TIMESTAMP
+          WHERE "chain" = ${input.chain}
+            AND "address" = ${input.address}
+            AND "userId" = ${input.userId}
+        `
+      )
+      return
+    }
+    await tx.$executeRaw(
+      Prisma.sql`
+        INSERT INTO "AuthWallet" (
+          "id", "userId", "chain", "address", "createdAt", "lastUsedAt"
+        ) VALUES (
+          ${randomUUID()}, ${input.userId}, ${input.chain}, ${input.address},
+          CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        )
+      `
+    )
+  })
 }
 
 export async function findUserByAuthWallet(chain: string, address: string) {
