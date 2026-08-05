@@ -5,17 +5,20 @@ import { Loader2, WalletCards } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 
-declare global {
-  interface Window {
-    ethereum?: {
-      request: (input: { method: string; params?: unknown[] }) => Promise<unknown>
-    }
-    solana?: {
-      isPhantom?: boolean
-      connect: () => Promise<{ publicKey: { toString: () => string } }>
-      signMessage: (message: Uint8Array, encoding?: string) => Promise<{ signature: Uint8Array }>
-    }
-  }
+type EvmSigningProvider = {
+  request: (input: { method: string; params?: unknown[] }) => Promise<unknown>
+}
+
+type SolanaSigningProvider = {
+  isPhantom?: boolean
+  connect: () => Promise<{ publicKey: { toString: () => string } }>
+  signMessage: (message: Uint8Array, encoding?: string) => Promise<{ signature: Uint8Array }>
+}
+
+type AuthWalletWindow = Window & {
+  ethereum?: EvmSigningProvider
+  solana?: SolanaSigningProvider
+  phantom?: { solana?: SolanaSigningProvider }
 }
 
 function toBase64(value: Uint8Array) {
@@ -55,24 +58,27 @@ export function WalletAuthButtons({
   async function authenticate(chain: "EVM" | "SOLANA") {
     setPending(chain)
     try {
+      const walletWindow = window as AuthWalletWindow
       let address = ""
       let sign: (message: string) => Promise<string>
 
       if (chain === "EVM") {
-        if (!window.ethereum) throw new Error("Install an EVM wallet such as MetaMask first.")
-        const accounts = (await window.ethereum.request({ method: "eth_requestAccounts" })) as string[]
+        const provider = walletWindow.ethereum
+        if (!provider) throw new Error("Install an EVM wallet such as MetaMask first.")
+        const accounts = (await provider.request({ method: "eth_requestAccounts" })) as string[]
         address = accounts[0] || ""
         if (!address) throw new Error("No EVM wallet account was selected.")
-        sign = async (message) => String(await window.ethereum?.request({
+        sign = async (message) => String(await provider.request({
           method: "personal_sign",
           params: [message, address],
         }))
       } else {
-        if (!window.solana) throw new Error("Install a Solana wallet such as Phantom first.")
-        const connected = await window.solana.connect()
+        const provider = walletWindow.solana ?? walletWindow.phantom?.solana
+        if (!provider) throw new Error("Install a Solana wallet such as Phantom first.")
+        const connected = await provider.connect()
         address = connected.publicKey.toString()
         sign = async (message) => {
-          const signed = await window.solana!.signMessage(new TextEncoder().encode(message), "utf8")
+          const signed = await provider.signMessage(new TextEncoder().encode(message), "utf8")
           return toBase64(signed.signature)
         }
       }
