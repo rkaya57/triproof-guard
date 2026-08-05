@@ -33,6 +33,12 @@ type AccountData = {
   }>
 }
 
+type ErrorResponse = { error?: string }
+
+function isAccountData(value: AccountData | ErrorResponse | null): value is AccountData {
+  return Boolean(value && "sessions" in value && Array.isArray(value.sessions) && "wallets" in value)
+}
+
 function deviceLabel(userAgent: string | null) {
   if (!userAgent) return "Unknown device"
   const browser = /Edg\//.test(userAgent) ? "Edge" : /Chrome\//.test(userAgent) ? "Chrome" : /Firefox\//.test(userAgent) ? "Firefox" : /Safari\//.test(userAgent) ? "Safari" : "Browser"
@@ -53,9 +59,10 @@ export function AccountSecurity() {
 
   async function load() {
     const response = await fetch("/api/auth/account", { cache: "no-store" })
-    const body = (await response.json().catch(() => null)) as AccountData | { error?: string } | null
-    if (!response.ok || !body || "error" in body) {
-      setError((body && "error" in body && body.error) || "Could not load account security.")
+    const body = (await response.json().catch(() => null)) as AccountData | ErrorResponse | null
+    if (!response.ok || !isAccountData(body)) {
+      const errorBody = body && "error" in body ? body : null
+      setError(errorBody?.error || "Could not load account security.")
       return
     }
     setData(body)
