@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server"
 
+import { isAuthEmailConfigured } from "@/lib/auth/email"
 import { issueEmailVerification } from "@/lib/auth/flows"
 import {
+  AuthRequestError,
   assertTrustedAuthOrigin,
   authErrorResponse,
   authRateKeys,
@@ -19,6 +21,13 @@ const genericMessage = "If this address has an unverified account, a new verific
 export async function POST(request: Request) {
   try {
     assertTrustedAuthOrigin(request)
+    if (!isAuthEmailConfigured()) {
+      throw new AuthRequestError(
+        "Verification email is temporarily unavailable. Please contact support.",
+        503
+      )
+    }
+
     const parsed = resendVerificationSchema.safeParse(await request.json().catch(() => null))
     if (!parsed.success) return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 })
 
@@ -34,10 +43,16 @@ export async function POST(request: Request) {
     const user = await findAuthUserByEmail(parsed.data.email)
     if (user && !user.emailVerifiedAt) {
       const delivery = await issueEmailVerification(user)
+      if (!delivery.delivered) {
+        throw new AuthRequestError(
+          "Verification email is temporarily unavailable. Please contact support.",
+          503
+        )
+      }
       await recordAuthSecurityEvent({
         request,
         type: "EMAIL_VERIFICATION_RESENT",
-        success: delivery.delivered,
+        success: true,
         userId: user.id,
         identifier: user.email,
       })
