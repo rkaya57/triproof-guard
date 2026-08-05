@@ -11,18 +11,21 @@ export function PublicTopNav() {
           <span className="flex size-9 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 transition-transform group-hover:scale-105">
             <Image src="/logo.svg" alt="Tri-Proof Protocol" width={24} height={24} className="rounded-md" />
           </span>
-          <span className="hidden text-sm font-semibold sm:inline">Tri-Proof Guard</span>
+          <span className="hidden flex-col sm:flex">
+            <span className="text-sm font-semibold">Tri-Proof Protocol</span>
+            <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-primary/80">Guard Platform</span>
+          </span>
         </Link>
-        <nav className="hidden items-center gap-5 text-sm text-muted-foreground md:flex">
-          <Link href="/#product" className="hover:text-primary">Product</Link>
+        <nav className="hidden items-center gap-5 text-sm text-muted-foreground lg:flex">
+          <Link href="/#solutions" className="hover:text-primary">Solutions</Link>
           <Link href="/scamguard" className="hover:text-primary">ScamGuard</Link>
           <Link href="/audit" className="hover:text-primary">Sybil Analyst</Link>
-          <Link href="/threat-reports" className="hover:text-primary">Threat Reports</Link>
-          <Link href="/learn" className="hover:text-primary">Learn</Link>
-          <Link href="/docs" className="hover:text-primary">Docs</Link>
+          <Link href="/telegram" className="hover:text-primary">Group Guardian</Link>
+          <Link href="/case-studies/public-demo" className="hover:text-primary">Proof</Link>
           <Link href="/pricing" className="hover:text-primary">Pricing</Link>
+          <Link href="/docs" className="hover:text-primary">Docs</Link>
         </nav>
-        <Link href="/scamguard" className={`${buttonVariants({ size: "sm" })} glow-primary shrink-0`}>Open Scanner</Link>
+        <Link href="/scamguard" className={`${buttonVariants({ size: "sm" })} glow-primary shrink-0`}>Sign in to scan</Link>
       </div>
     </header>
   )
