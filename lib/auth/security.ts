@@ -154,16 +154,31 @@ export function authAppUrl() {
   return (process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://triproofprotocol.com").replace(/\/$/, "")
 }
 
+export function turnstileConfiguration() {
+  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() || null
+  const secret = process.env.TURNSTILE_SECRET_KEY?.trim() || null
+  return {
+    siteKey: siteKey && secret ? siteKey : null,
+    secret: siteKey && secret ? secret : null,
+    configured: Boolean(siteKey && secret),
+    invalid: Boolean(siteKey) !== Boolean(secret),
+  }
+}
+
+export function configuredTurnstileSiteKey() {
+  return turnstileConfiguration().siteKey
+}
+
 export async function verifyTurnstileToken(input: {
   token?: string | null
   request: Request
   required: boolean
 }) {
-  const secret = process.env.TURNSTILE_SECRET_KEY?.trim()
-  if (!secret) {
-    if (input.required && process.env.NODE_ENV === "production") {
-      throw new AuthRequestError("Security verification is temporarily unavailable.", 503)
-    }
+  const configuration = turnstileConfiguration()
+  if (configuration.invalid) {
+    throw new AuthRequestError("Security verification is temporarily unavailable.", 503)
+  }
+  if (!configuration.configured || !configuration.secret) {
     return true
   }
   if (!input.token) {
@@ -172,7 +187,7 @@ export async function verifyTurnstileToken(input: {
   }
 
   const body = new URLSearchParams({
-    secret,
+    secret: configuration.secret,
     response: input.token,
     remoteip: requestClientIp(input.request),
   })
