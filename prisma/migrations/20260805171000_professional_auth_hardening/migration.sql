@@ -17,15 +17,24 @@ ALTER TABLE "User"
   ADD COLUMN IF NOT EXISTS "referralCode" TEXT,
   ADD COLUMN IF NOT EXISTS "referredByUserId" TEXT;
 
--- Existing accounts predate email verification. Preserve access while making all
--- newly-created accounts pass through the new verification policy when enabled.
+-- Existing accounts predate email verification, legal-consent recording, and
+-- onboarding. Preserve their current access while enforcing the new lifecycle for
+-- accounts created after this migration. Give every existing account a stable,
+-- non-identifying referral code.
 UPDATE "User"
 SET "emailVerifiedAt" = COALESCE("emailVerifiedAt", "createdAt"),
     "termsAcceptedAt" = COALESCE("termsAcceptedAt", "createdAt"),
-    "privacyAcceptedAt" = COALESCE("privacyAcceptedAt", "createdAt")
+    "privacyAcceptedAt" = COALESCE("privacyAcceptedAt", "createdAt"),
+    "onboardingCompletedAt" = COALESCE("onboardingCompletedAt", "createdAt"),
+    "referralCode" = COALESCE(
+      "referralCode",
+      UPPER(SUBSTRING(MD5("id" || ':triproof-referral-v1') FROM 1 FOR 16))
+    )
 WHERE "emailVerifiedAt" IS NULL
    OR "termsAcceptedAt" IS NULL
-   OR "privacyAcceptedAt" IS NULL;
+   OR "privacyAcceptedAt" IS NULL
+   OR "onboardingCompletedAt" IS NULL
+   OR "referralCode" IS NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS "User_referralCode_key" ON "User"("referralCode");
 CREATE INDEX IF NOT EXISTS "User_referredByUserId_idx" ON "User"("referredByUserId");
