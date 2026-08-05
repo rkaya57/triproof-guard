@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { AuthShell } from "@/components/auth/auth-shell"
 import { VerifyEmailForm } from "@/components/auth/recovery-forms"
 import { safePostAuthPath } from "@/lib/auth/redirects"
+import { configuredTurnstileSiteKey } from "@/lib/auth/security"
 
 export const metadata: Metadata = {
   title: "Verify email | Tri-Proof Protocol",
@@ -27,7 +28,7 @@ export default async function Page({
         email={typeof params.email === "string" ? params.email : undefined}
         next={safePostAuthPath(params.next)}
         sent={params.sent === "true"}
-        siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || null}
+        siteKey={configuredTurnstileSiteKey()}
       />
     </AuthShell>
   )
