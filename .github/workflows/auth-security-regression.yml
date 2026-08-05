@@ -1,0 +1,87 @@
+name: Authentication security regression
+
+on:
+  pull_request:
+    paths:
+      - "app/api/auth/**"
+      - "app/login/**"
+      - "app/register/**"
+      - "app/forgot-password/**"
+      - "app/reset-password/**"
+      - "app/verify-email/**"
+      - "app/onboarding/**"
+      - "components/auth/**"
+      - "lib/auth/**"
+      - "lib/validators/**"
+      - "prisma/migrations/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/auth-security-regression.yml"
+  push:
+    branches:
+      - main
+      - "feat/**"
+      - "fix/**"
+    paths:
+      - "app/api/auth/**"
+      - "app/login/**"
+      - "app/register/**"
+      - "app/forgot-password/**"
+      - "app/reset-password/**"
+      - "app/verify-email/**"
+      - "app/onboarding/**"
+      - "components/auth/**"
+      - "lib/auth/**"
+      - "lib/validators/**"
+      - "prisma/migrations/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/auth-security-regression.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  auth-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run auth regression tests
+        env:
+          DEV_ALLOW_INSECURE_SECRETS: "true"
+        run: npm run test:auth
+
+      - name: Type-check production app
+        env:
+          DEV_ALLOW_INSECURE_SECRETS: "true"
+        run: npx tsc --noEmit
+
+      - name: Lint auth surfaces
+        run: >-
+          npx eslint
+          app/api/auth
+          app/login
+          app/register
+          app/forgot-password
+          app/reset-password
+          app/verify-email
+          app/onboarding
+          components/auth
+          lib/auth
+          lib/validators/wallet.ts
+          lib/validators/auth.test.ts
