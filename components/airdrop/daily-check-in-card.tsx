@@ -72,7 +72,32 @@ export function AirdropDailyCheckInCard() {
   }
 
   useEffect(() => {
-    void load()
+    let cancelled = false
+
+    async function loadInitialState() {
+      try {
+        const response = await fetch(`/api/airdrop/daily-check-in?ts=${Date.now()}`, {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache" },
+        })
+        const body = await readBody(response)
+        if (!response.ok || !body?.dailyCheckIn) {
+          throw new Error(body?.error || "Could not load the daily check-in.")
+        }
+        if (!cancelled) setState(body.dailyCheckIn)
+      } catch (caught) {
+        if (!cancelled) {
+          setError(caught instanceof Error ? caught.message : "Could not load the daily check-in.")
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    void loadInitialState()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   async function claim() {
