@@ -23,7 +23,7 @@ export type TelegramStoredObservation = {
 }
 
 const evmAddressRegex = /0x[a-fA-F0-9]{40}/g
-const solanaAddressRegex = /[1-9A-HJ-NP-Za-km-z]{32,44}/g
+const solanaAddressRegex = /(?<![0-9A-Za-z])([1-9A-HJ-NP-Za-km-z]{32,44})(?![0-9A-Za-z])/g
 const directEvmAddressRegex = /^0x[a-fA-F0-9]{40}$/
 const directSolanaAddressRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
 const tokenContextRegex = /(?:^|[^a-z])(token|mint|asset|ca|coin)(?:[^a-z]|$)/i
@@ -50,6 +50,14 @@ function normalizeEntityValue(kind: TelegramOnchainEntityKind, value: string, ch
   return trimmed
 }
 
+function safeDecode(value: string) {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
 function addEntity(
   entities: Map<string, TelegramOnchainEntity>,
   entity: TelegramOnchainEntity
@@ -64,7 +72,6 @@ function addEntity(
 }
 
 function classifyAddress(
-  value: string,
   chain: "evm" | "solana",
   context: string,
   directScanType = ""
@@ -81,13 +88,13 @@ function classifyAddress(
 
 function urlContext(url: URL) {
   const pairs: Array<{ value: string; context: string }> = []
-  const decodedPath = decodeURIComponent(url.pathname)
+  const decodedPath = safeDecode(url.pathname)
   pairs.push({ value: decodedPath, context: decodedPath })
   for (const [key, value] of url.searchParams.entries()) {
     pairs.push({ value, context: `${key} ${value}` })
   }
   if (url.hash) {
-    const decodedHash = decodeURIComponent(url.hash.slice(1))
+    const decodedHash = safeDecode(url.hash.slice(1))
     pairs.push({ value: decodedHash, context: decodedHash })
   }
   return pairs
@@ -131,7 +138,7 @@ function extractFromUrl(
     for (const match of part.value.matchAll(evmAddressRegex)) {
       const address = match[0]
       addEntity(entities, {
-        kind: classifyAddress(address, "evm", part.context, scanType),
+        kind: classifyAddress("evm", part.context, scanType),
         value: address,
         chain: "evm",
         confidence: tokenContextRegex.test(part.context) || contractContextRegex.test(part.context) ? 95 : 82,
@@ -140,9 +147,10 @@ function extractFromUrl(
       })
     }
     for (const match of part.value.matchAll(solanaAddressRegex)) {
-      const address = match[0]
+      const address = match[1]
+      if (!address) continue
       addEntity(entities, {
-        kind: classifyAddress(address, "solana", part.context, scanType),
+        kind: classifyAddress("solana", part.context, scanType),
         value: address,
         chain: "solana",
         confidence: tokenContextRegex.test(part.context) || programContextRegex.test(part.context) ? 95 : 78,
@@ -165,7 +173,7 @@ export function extractTelegramOnchainEntities(
     extractFromUrl(entities, target, scanType)
   } else if (directEvmAddressRegex.test(target)) {
     addEntity(entities, {
-      kind: classifyAddress(target, "evm", "", scanType),
+      kind: classifyAddress("evm", "", scanType),
       value: target,
       chain: "evm",
       confidence: 100,
@@ -174,7 +182,7 @@ export function extractTelegramOnchainEntities(
     })
   } else if (directSolanaAddressRegex.test(target)) {
     addEntity(entities, {
-      kind: classifyAddress(target, "solana", "", scanType),
+      kind: classifyAddress("solana", "", scanType),
       value: target,
       chain: "solana",
       confidence: 100,
