@@ -144,3 +144,101 @@ test("records the campaign team review as a human override", () => {
   assert.equal(decision.humanReview?.finalStatus, "approved")
   assert.ok(decision.evidence.some((item) => item.effect === "human_override"))
 })
+
+test("does not count engine metadata as risk evidence", () => {
+  const decision = buildExplainableDecision(
+    wallet({
+      riskScore: 35,
+      reasons: [
+        "V1.8 risk policy: Balanced",
+        "On-chain verified via alchemy+helius-state",
+        "Decision category: approved",
+        "Engine version: 2.0.1",
+        "Ruleset version: 2026-08-06",
+      ],
+    })
+  )
+
+  assert.equal(decision.independentRiskFamilyCount, 0)
+  assert.equal(
+    decision.evidence.some((item) =>
+      /ENGINE_VERSION|RULESET_VERSION|DECISION_CATEGORY|RISK_POLICY/i.test(item.code)
+    ),
+    false
+  )
+  assert.ok(
+    decision.evidence.some(
+      (item) => item.code === "PROVIDER_VERIFIED" && item.effect === "neutralizing_context"
+    )
+  )
+})
+
+test("treats a program-owned Solana account as eligibility-only evidence", () => {
+  const decision = buildExplainableDecision(
+    wallet({
+      entityLabel: "Program-owned Solana Account",
+      entityType: "protocol",
+      accountType: "program_owned_account",
+      ownerProgram: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+      riskScore: 83,
+      riskLevel: "high",
+      status: "rejected",
+      recommendedAction: "reject",
+      statusExplanation:
+        "Rejected / Not Eligible: non-user Solana account detected (program_owned_account).",
+      reasons: [
+        "V1.8 risk policy: Balanced",
+        "On-chain verified via alchemy+helius-state",
+        "Solana account intelligence: program_owned_account",
+        "Solana owner program: TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+        "V1.5 eligibility: not a normal end-user wallet",
+        "On-chain evidence: wallet is younger than 90 days",
+        "V1.3 behavior intelligence: healthy behavior diversity",
+        "Decision category: ineligible_non_user_account",
+        "Engine version: 2.0.0",
+        "Ruleset version: 2026-08-01",
+      ],
+    })
+  )
+
+  assert.equal(decision.evidenceConfidence, "high")
+  assert.equal(decision.independentRiskFamilyCount, 0)
+  assert.ok(
+    decision.evidence.some(
+      (item) => item.effect === "eligibility_exclusion" && item.family === "account_state"
+    )
+  )
+  assert.equal(
+    decision.evidence.some(
+      (item) => item.effect === "risk_signal" || item.effect === "corroborating_signal"
+    ),
+    false
+  )
+})
+
+test("preserves explicit malicious evidence even on a non-user eligibility decision", () => {
+  const decision = buildExplainableDecision(
+    wallet({
+      entityLabel: "Program-owned Solana Account",
+      entityType: "protocol",
+      accountType: "program_owned_account",
+      riskScore: 95,
+      riskLevel: "critical",
+      status: "rejected",
+      recommendedAction: "reject",
+      statusExplanation: "Not eligible: non-user account.",
+      reasons: [
+        "V1.5 eligibility: not a normal end-user wallet",
+        "Graph evidence: known-bad funding source",
+        "Decision category: ineligible_non_user_account",
+      ],
+    })
+  )
+
+  assert.ok(decision.independentRiskFamilyCount >= 1)
+  assert.ok(
+    decision.evidence.some(
+      (item) => item.code === "KNOWN_BAD_FUNDER" && item.effect === "risk_signal"
+    )
+  )
+})

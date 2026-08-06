@@ -17,6 +17,7 @@ import {
   type CrossCampaignWalletSignal,
 } from "../risk-engine"
 import { analyzeWalletsScalable } from "@/lib/risk-engine/scalable"
+import { normalizeAnalysisSemantics } from "@/lib/risk-engine/semantic-safety"
 
 export {
   normalizeRiskPolicy,
@@ -45,12 +46,14 @@ export function analyzeWallets(
 ): AnalysisResult {
   const normalizedPolicy = normalizeRiskPolicy(riskPolicy)
   if (wallets.length >= scalableThreshold()) {
-    return analyzeWalletsScalable(
-      wallets,
-      enrichment,
-      normalizedPolicy,
-      graphContext,
-      crossCampaignContext
+    return normalizeAnalysisSemantics(
+      analyzeWalletsScalable(
+        wallets,
+        enrichment,
+        normalizedPolicy,
+        graphContext,
+        crossCampaignContext
+      )
     )
   }
 

@@ -15,6 +15,7 @@ import type {
   WalletStatus,
 } from "@/types"
 import { buildExplainableDecision } from "@/lib/campaign-security/decision-evidence"
+import { normalizeWalletRiskSemantics } from "@/lib/risk-engine/semantic-safety"
 
 type DbWallet = {
   walletAddress: string
@@ -190,24 +191,37 @@ export function serializeAnalysis(analysis: DbAnalysis): AnalysisDetail {
       teamReview: reviewMap.get(wallet.walletAddress) ?? null,
     }
 
+    const normalizedWallet = normalizeWalletRiskSemantics(serializedWallet)
     return {
-      ...serializedWallet,
-      decisionEvidence: buildExplainableDecision(serializedWallet),
+      ...normalizedWallet,
+      decisionEvidence: buildExplainableDecision(normalizedWallet),
     }
   })
 
-  const clusters: ClusterResult[] = analysis.clusters.map((cluster) => ({
-    clusterLabel: cluster.clusterLabel,
-    walletCount: cluster.walletCount,
-    averageRiskScore: cluster.averageRiskScore,
-    sharedFundingSource: cluster.sharedFundingSource,
-    behaviorSimilarityScore: cluster.behaviorSimilarityScore,
-    suggestedAction: cluster.suggestedAction as ClusterResult["suggestedAction"],
-    reasons: reasonsToStrings(cluster.reasons),
-    walletAddresses: wallets
-      .filter((wallet) => wallet.clusterId === cluster.clusterLabel)
-      .map((wallet) => wallet.walletAddress),
-  }))
+  const clusters: ClusterResult[] = analysis.clusters.map((cluster) => {
+    const clusterWallets = wallets.filter(
+      (wallet) => wallet.clusterId === cluster.clusterLabel
+    )
+    const averageRiskScore = clusterWallets.length
+      ? Number(
+          (
+            clusterWallets.reduce((sum, wallet) => sum + wallet.riskScore, 0) /
+            clusterWallets.length
+          ).toFixed(1)
+        )
+      : cluster.averageRiskScore
+
+    return {
+      clusterLabel: cluster.clusterLabel,
+      walletCount: cluster.walletCount,
+      averageRiskScore,
+      sharedFundingSource: cluster.sharedFundingSource,
+      behaviorSimilarityScore: cluster.behaviorSimilarityScore,
+      suggestedAction: cluster.suggestedAction as ClusterResult["suggestedAction"],
+      reasons: reasonsToStrings(cluster.reasons),
+      walletAddresses: clusterWallets.map((wallet) => wallet.walletAddress),
+    }
+  })
 
   const enrichment: EnrichmentMeta | null = analysis.enrichmentStatus
     ? {
@@ -258,14 +272,29 @@ export function serializeAnalysis(analysis: DbAnalysis): AnalysisDetail {
       }
     : null
 
+  const totalWallets = wallets.length
+  const approvedCount = wallets.filter((wallet) => wallet.status === "approved").length
+  const manualReviewCount = wallets.filter(
+    (wallet) => wallet.status === "manual_review"
+  ).length
+  const rejectedCount = wallets.filter((wallet) => wallet.status === "rejected").length
+  const averageRiskScore = totalWallets
+    ? Number(
+        (
+          wallets.reduce((sum, wallet) => sum + wallet.riskScore, 0) /
+          totalWallets
+        ).toFixed(1)
+      )
+    : 0
+
   return {
     id: analysis.id,
     status: analysis.status,
-    totalWallets: analysis.totalWallets,
-    approvedCount: analysis.approvedCount,
-    manualReviewCount: analysis.manualReviewCount,
-    rejectedCount: analysis.rejectedCount,
-    averageRiskScore: analysis.averageRiskScore,
+    totalWallets,
+    approvedCount,
+    manualReviewCount,
+    rejectedCount,
+    averageRiskScore,
     suspiciousClustersCount: analysis.suspiciousClustersCount,
     csvFileName: analysis.csvFileName,
     createdAt: analysis.createdAt.toISOString(),
