@@ -17,6 +17,10 @@
 /playwright-report/
 /test-results/
 
+# benchmark outputs and private review queues
+/artifacts/benchmark/
+/artifacts/benchmark-labeling/
+
 # next.js
 /.next/
 /out/
