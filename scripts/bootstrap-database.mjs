@@ -9,7 +9,8 @@ const { Client } = pg
 const root = process.cwd()
 const migrationsPath = path.join(root, "prisma", "migrations")
 const authMigrationName = "20260805171000_professional_auth_hardening"
-const authMigrationPath = path.join(migrationsPath, authMigrationName, "migration.sql")
+const postgrestMigrationName = "20260806180000_supabase_postgrest_hardening"
+const requiredBootstrapMigrations = [authMigrationName, postgrestMigrationName]
 const databaseUrl = process.env.DATABASE_URL?.trim()
 
 if (!databaseUrl) {
@@ -91,8 +92,9 @@ async function migrationNames() {
     .sort((left, right) => left.localeCompare(right))
 }
 
-async function applyAuthHardening() {
-  const sql = await readFile(authMigrationPath, "utf8")
+async function applySqlMigration(migrationName) {
+  const migrationPath = path.join(migrationsPath, migrationName, "migration.sql")
+  const sql = await readFile(migrationPath, "utf8")
   await withClient(async (client) => {
     await client.query("BEGIN")
     try {
@@ -111,9 +113,14 @@ async function baselineMigrationHistory(names) {
   }
 }
 
-async function verifyBootstrap() {
+async function runNodeScript(scriptName) {
   const executable = process.platform === "win32" ? "node.exe" : process.execPath
-  await run(executable, [path.join("scripts", "verify-auth-schema.mjs")])
+  await run(executable, [path.join("scripts", scriptName)])
+}
+
+async function verifyBootstrap() {
+  await runNodeScript("verify-auth-schema.mjs")
+  await runNodeScript("verify-postgrest-hardening.mjs")
 }
 
 async function main() {
@@ -140,11 +147,16 @@ async function main() {
   await runPrisma(["db", "push"])
 
   console.log("Applying the idempotent professional authentication schema.")
-  await applyAuthHardening()
+  await applySqlMigration(authMigrationName)
+
+  console.log("Applying deny-by-default Supabase PostgREST hardening.")
+  await applySqlMigration(postgrestMigrationName)
 
   const names = await migrationNames()
-  if (!names.includes(authMigrationName)) {
-    throw new Error(`Required auth migration ${authMigrationName} is missing.`)
+  for (const requiredMigration of requiredBootstrapMigrations) {
+    if (!names.includes(requiredMigration)) {
+      throw new Error(`Required bootstrap migration ${requiredMigration} is missing.`)
+    }
   }
 
   console.log(`Recording ${names.length} historical migrations as an explicit clean-database baseline.`)
