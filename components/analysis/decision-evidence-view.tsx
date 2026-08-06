@@ -124,15 +124,14 @@ function shortAddress(address: string) {
   return `${address.slice(0, 9)}…${address.slice(-7)}`
 }
 
-function statusIcon(status: WalletStatus) {
-  if (status === "approved") return CheckCircle2
-  if (status === "manual_review") return ShieldQuestion
-  return XCircle
+function WalletStatusIcon({ status }: { status: WalletStatus }) {
+  if (status === "approved") return <CheckCircle2 className="mr-1 size-3.5" />
+  if (status === "manual_review") return <ShieldQuestion className="mr-1 size-3.5" />
+  return <XCircle className="mr-1 size-3.5" />
 }
 
 function WalletEvidenceCard({ wallet }: { wallet: WalletRiskResult }) {
   const explanation = wallet.decisionEvidence
-  const StatusIcon = statusIcon(wallet.status)
 
   return (
     <details className="group rounded-xl border border-border bg-background/45 open:border-primary/35 open:bg-primary/[0.03]">
@@ -141,7 +140,7 @@ function WalletEvidenceCard({ wallet }: { wallet: WalletRiskResult }) {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className={statusClass(wallet.status)}>
-                <StatusIcon className="mr-1 size-3.5" />
+                <WalletStatusIcon status={wallet.status} />
                 {statusLabels[wallet.status]}
               </Badge>
               <Badge variant="outline">{wallet.riskScore} risk</Badge>
