@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { AlertTriangle, Loader2, RotateCcw } from "lucide-react"
+import { AlertTriangle, Loader2, RotateCcw, ShieldCheck } from "lucide-react"
 
 import { AnalysisDetail } from "@/components/analysis/analysis-detail"
 import { AnalysisProcessing, type AnalysisProcessingStatus } from "@/components/analysis/analysis-processing"
@@ -100,6 +100,30 @@ export function AnalysisRouteClient({ analysisId }: { analysisId: string }) {
   if (state.status === "completed") {
     return (
       <main className="premium-page min-h-screen bg-background text-foreground">
+        <div className="border-b border-border bg-background/85 px-4 py-3 backdrop-blur sm:px-8">
+          <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                Campaign security workspace
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Report results and inspect the evidence behind every wallet decision.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className={buttonVariants({ variant: "secondary", size: "sm" })}>
+                Analysis report
+              </span>
+              <Link
+                href={`/dashboard/analysis/${analysisId}/evidence`}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                <ShieldCheck data-icon="inline-start" />
+                Decision Evidence
+              </Link>
+            </div>
+          </div>
+        </div>
         <AnalysisDetail analysisId={analysisId} />
       </main>
     )
