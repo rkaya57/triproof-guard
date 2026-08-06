@@ -170,25 +170,31 @@ async function main() {
         )
       }
 
+      // Supabase owns separate default ACLs for managed storage/graphql roles.
+      // Tri-Proof migrations run as current_user, so future-object safety must be
+      // verified for that migration owner rather than unrelated Supabase roles.
       const defaultGrants = await client.query(
-        `SELECT COALESCE(role.rolname, 'PUBLIC') AS grantee,
+        `SELECT owner.rolname AS "ownerRole",
+                COALESCE(role.rolname, 'PUBLIC') AS grantee,
                 defaults.defaclobjtype AS "objectType",
                 acl.privilege_type AS privilege
          FROM pg_default_acl AS defaults
+         JOIN pg_roles AS owner ON owner.oid = defaults.defaclrole
          JOIN pg_namespace AS namespace ON namespace.oid = defaults.defaclnamespace
          CROSS JOIN LATERAL aclexplode(defaults.defaclacl) AS acl
          LEFT JOIN pg_roles AS role ON role.oid = acl.grantee
          WHERE namespace.nspname = 'public'
+           AND owner.rolname = current_user
            AND (
              role.rolname = ANY($1::text[])
              OR (acl.grantee = 0 AND defaults.defaclobjtype = 'f')
            )
-         ORDER BY grantee, defaults.defaclobjtype, acl.privilege_type`,
+         ORDER BY owner.rolname, grantee, defaults.defaclobjtype, acl.privilege_type`,
         [roleNames]
       )
       if (defaultGrants.rowCount > 0) {
         throw new Error(
-          `Unsafe future-object default grants remain: ${describeRows(defaultGrants.rows, ["grantee", "objectType", "privilege"])}`
+          `Unsafe migration-role future-object default grants remain: ${describeRows(defaultGrants.rows, ["ownerRole", "grantee", "objectType", "privilege"])}`
         )
       }
     } else {
