@@ -1,0 +1,57 @@
+name: Campaign policy engine
+
+on:
+  push:
+    branches:
+      - feat/campaign-policy-engine-v1
+    paths:
+      - "lib/campaign-policy/**"
+      - "app/api/campaigns/**/policy/**"
+      - "app/dashboard/campaigns/**/policy/**"
+      - "app/dashboard/campaigns/**/layout.tsx"
+      - "components/dashboard/campaign-policy-explorer.tsx"
+      - ".github/workflows/campaign-policy-engine.yml"
+  pull_request:
+    branches:
+      - feat/cross-campaign-risk-memory-v1
+      - main
+    paths:
+      - "lib/campaign-policy/**"
+      - "app/api/campaigns/**/policy/**"
+      - "app/dashboard/campaigns/**/policy/**"
+      - "app/dashboard/campaigns/**/layout.tsx"
+      - "components/dashboard/campaign-policy-explorer.tsx"
+      - ".github/workflows/campaign-policy-engine.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Campaign policy safeguard tests
+        run: node --import tsx --test lib/campaign-policy/engine.test.ts lib/campaign-security/decision-evidence.test.ts lib/risk-memory/builder.test.ts lib/telegram/intelligence.test.ts
+
+      - name: Full unit and regression tests
+        run: npm test
