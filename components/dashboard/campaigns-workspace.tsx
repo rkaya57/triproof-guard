@@ -1,5 +1,6 @@
 "use client"
 
+import type { ReactNode } from "react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import {
@@ -12,7 +13,6 @@ import {
   ShieldCheck,
   ShieldQuestion,
   Users,
-  XCircle,
 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -64,6 +64,8 @@ type LifecycleFilter =
   | "completed"
   | "no_analysis"
 
+type CampaignLifecycle = Exclude<LifecycleFilter, "all">
+
 const processingStatuses = new Set([
   "pending",
   "processing",
@@ -77,9 +79,7 @@ function titleCase(value: string) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
-function projectLifecycle(
-  project: CampaignWorkspaceProject
-): Exclude<LifecycleFilter, "all"> {
+function projectLifecycle(project: CampaignWorkspaceProject): CampaignLifecycle {
   const latest = project.analyses[0]
   if (!latest) return "no_analysis"
   if (processingStatuses.has(latest.status)) return "in_progress"
@@ -87,14 +87,14 @@ function projectLifecycle(
   return "completed"
 }
 
-function lifecycleLabel(lifecycle: Exclude<LifecycleFilter, "all">) {
+function lifecycleLabel(lifecycle: CampaignLifecycle) {
   if (lifecycle === "in_progress") return "In progress"
   if (lifecycle === "needs_review") return "Needs review"
   if (lifecycle === "completed") return "Completed"
   return "No analysis"
 }
 
-function lifecycleClass(lifecycle: Exclude<LifecycleFilter, "all">) {
+function lifecycleClass(lifecycle: CampaignLifecycle) {
   if (lifecycle === "completed") {
     return "border-green-400/35 bg-green-400/10 text-green-200"
   }
@@ -115,6 +115,37 @@ function analysisStatusClass(status: string) {
     return "border-red-400/30 bg-red-400/10 text-red-200"
   }
   return "border-primary/30 bg-primary/10 text-primary"
+}
+
+function SummaryCard({
+  label,
+  value,
+  description,
+  icon,
+}: {
+  label: string
+  value: number
+  description: string
+  icon: ReactNode
+}) {
+  return (
+    <Card className="glass-panel premium-card">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              {label}
+            </p>
+            <p className="mt-2 text-2xl font-semibold">{formatNumber(value)}</p>
+            <p className="mt-2 text-xs text-muted-foreground">{description}</p>
+          </div>
+          <div className="rounded-lg border border-primary/25 bg-primary/10 p-2 text-primary">
+            {icon}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
 }
 
 function CampaignCard({ project }: { project: CampaignWorkspaceProject }) {
@@ -187,28 +218,38 @@ function CampaignCard({ project }: { project: CampaignWorkspaceProject }) {
         {latest ? (
           <>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {[
-                ["Wallets", latest.totalWallets, "text-foreground"],
-                ["Approved", latest.approvedCount, "text-green-200"],
-                ["Gray Zone", latest.manualReviewCount, "text-amber-200"],
-                ["Not eligible", latest.rejectedCount, "text-red-200"],
-              ].map(([label, value, valueClass]) => (
-                <div
-                  key={String(label)}
-                  className="rounded-lg border border-border bg-background/45 p-3"
-                >
-                  <p className="text-xs text-muted-foreground">{String(label)}</p>
-                  <p className={cn("mt-1 text-xl font-semibold", String(valueClass))}>
-                    {formatNumber(Number(value))}
-                  </p>
-                </div>
-              ))}
+              <div className="rounded-lg border border-border bg-background/45 p-3">
+                <p className="text-xs text-muted-foreground">Wallets</p>
+                <p className="mt-1 text-xl font-semibold">
+                  {formatNumber(latest.totalWallets)}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-background/45 p-3">
+                <p className="text-xs text-muted-foreground">Approved</p>
+                <p className="mt-1 text-xl font-semibold text-green-200">
+                  {formatNumber(latest.approvedCount)}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-background/45 p-3">
+                <p className="text-xs text-muted-foreground">Gray Zone</p>
+                <p className="mt-1 text-xl font-semibold text-amber-200">
+                  {formatNumber(latest.manualReviewCount)}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-background/45 p-3">
+                <p className="text-xs text-muted-foreground">Not eligible</p>
+                <p className="mt-1 text-xl font-semibold text-red-200">
+                  {formatNumber(latest.rejectedCount)}
+                </p>
+              </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-lg border border-border bg-background/45 p-3">
                 <p className="text-xs text-muted-foreground">Average risk</p>
-                <p className="mt-1 font-semibold">{latest.averageRiskScore.toFixed(1)}</p>
+                <p className="mt-1 font-semibold">
+                  {latest.averageRiskScore.toFixed(1)}
+                </p>
               </div>
               <div className="rounded-lg border border-border bg-background/45 p-3">
                 <p className="text-xs text-muted-foreground">Suspicious clusters</p>
@@ -335,19 +376,23 @@ export function CampaignsWorkspace({
     .map((project) => project.analyses[0])
     .filter((analysis): analysis is CampaignWorkspaceAnalysis => Boolean(analysis))
 
-  const summary = {
-    campaigns: projects.length,
-    active: projects.filter(
-      (project) => projectLifecycle(project) === "in_progress"
-    ).length,
-    wallets: latestAnalyses.reduce(
-      (total, analysis) => total + analysis.totalWallets,
-      0
-    ),
-    grayZone: latestAnalyses.reduce(
-      (total, analysis) => total + analysis.manualReviewCount,
-      0
-    ),
+  const campaignCount = projects.length
+  const activeCount = projects.filter(
+    (project) => projectLifecycle(project) === "in_progress"
+  ).length
+  const walletCount = latestAnalyses.reduce(
+    (total, analysis) => total + analysis.totalWallets,
+    0
+  )
+  const grayZoneCount = latestAnalyses.reduce(
+    (total, analysis) => total + analysis.manualReviewCount,
+    0
+  )
+
+  function clearFilters() {
+    setQuery("")
+    setChainFilter("all")
+    setLifecycleFilter("all")
   }
 
   return (
@@ -386,33 +431,30 @@ export function CampaignsWorkspace({
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          ["Campaigns", summary.campaigns, BarChart3, "All owned projects"],
-          ["Active", summary.active, Clock3, "Latest analysis processing"],
-          ["Wallets", summary.wallets, CheckCircle2, "Latest campaign snapshots"],
-          ["Gray Zone", summary.grayZone, ShieldQuestion, "Human review required"],
-        ].map(([label, value, Icon, description]) => (
-          <Card key={String(label)} className="glass-panel premium-card">
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    {String(label)}
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold">
-                    {formatNumber(Number(value))}
-                  </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {String(description)}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-primary/25 bg-primary/10 p-2 text-primary">
-                  <Icon className="size-4" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        <SummaryCard
+          label="Campaigns"
+          value={campaignCount}
+          description="All owned projects"
+          icon={<BarChart3 className="size-4" />}
+        />
+        <SummaryCard
+          label="Active"
+          value={activeCount}
+          description="Latest analysis processing"
+          icon={<Clock3 className="size-4" />}
+        />
+        <SummaryCard
+          label="Wallets"
+          value={walletCount}
+          description="Latest campaign snapshots"
+          icon={<CheckCircle2 className="size-4" />}
+        />
+        <SummaryCard
+          label="Gray Zone"
+          value={grayZoneCount}
+          description="Human review required"
+          icon={<ShieldQuestion className="size-4" />}
+        />
       </section>
 
       <Card className="glass-panel">
@@ -437,8 +479,8 @@ export function CampaignsWorkspace({
             <select
               value={chainFilter}
               onChange={(event) => setChainFilter(event.target.value)}
-              className="h-9 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              aria-label="Filter by chain"
+              className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              aria-label="Filter campaigns by chain"
             >
               <option value="all">All chains</option>
               {chains.map((chain) => (
@@ -452,39 +494,26 @@ export function CampaignsWorkspace({
               onChange={(event) =>
                 setLifecycleFilter(event.target.value as LifecycleFilter)
               }
-              className="h-9 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              aria-label="Filter by lifecycle"
+              className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              aria-label="Filter campaigns by lifecycle"
             >
-              <option value="all">All lifecycle states</option>
+              <option value="all">All states</option>
               <option value="in_progress">In progress</option>
               <option value="needs_review">Needs review</option>
               <option value="completed">Completed</option>
               <option value="no_analysis">No analysis</option>
             </select>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setQuery("")
-                setChainFilter("all")
-                setLifecycleFilter("all")
-              }}
-            >
+            <Button type="button" variant="outline" onClick={clearFilters}>
               Clear
             </Button>
           </div>
-          <p className="mt-4 text-sm text-muted-foreground">
-            {formatNumber(filteredProjects.length)} matching campaigns
-          </p>
         </CardContent>
       </Card>
 
       {loadError && (
-        <Card className="glass-panel border-amber-400/30 bg-amber-400/5">
+        <Card className="glass-panel border-yellow-400/30 bg-yellow-400/5">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-amber-100">
-              <XCircle className="size-5" />
-              Campaigns are temporarily unavailable
-            </CardTitle>
+            <CardTitle>Campaigns are temporarily unavailable</CardTitle>
             <CardDescription>
               The workspace database could not be reached. Existing projects and
               analyses were not modified.
@@ -498,15 +527,11 @@ export function CampaignsWorkspace({
           <CardHeader>
             <CardTitle>No campaigns yet</CardTitle>
             <CardDescription>
-              Start the existing analysis flow to create your first campaign and its
-              explainable decision report.
+              Start the existing analysis flow to create the first campaign workspace.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-3">
-            <Link
-              href="/dashboard/new-analysis"
-              className={`${buttonVariants()} glow-primary`}
-            >
+            <Link href="/dashboard/new-analysis" className={buttonVariants()}>
               <FilePlus2 data-icon="inline-start" />
               Start analysis
             </Link>
@@ -514,7 +539,6 @@ export function CampaignsWorkspace({
               href="/dashboard/demo"
               className={buttonVariants({ variant: "outline" })}
             >
-              <BarChart3 data-icon="inline-start" />
               View demo
             </Link>
           </CardContent>
@@ -523,14 +547,22 @@ export function CampaignsWorkspace({
 
       {!loadError && projects.length > 0 && filteredProjects.length === 0 && (
         <Card className="glass-panel">
-          <CardContent className="p-8 text-center text-muted-foreground">
-            No campaign matches the selected filters.
+          <CardHeader>
+            <CardTitle>No matching campaigns</CardTitle>
+            <CardDescription>
+              Change the search or filters. No campaign data was removed.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button type="button" variant="outline" onClick={clearFilters}>
+              Clear filters
+            </Button>
           </CardContent>
         </Card>
       )}
 
       {!loadError && filteredProjects.length > 0 && (
-        <section className="grid gap-4">
+        <section className="grid gap-5">
           {filteredProjects.map((project) => (
             <CampaignCard key={project.id} project={project} />
           ))}
