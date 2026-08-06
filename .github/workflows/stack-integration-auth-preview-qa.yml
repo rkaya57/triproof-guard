@@ -15,11 +15,14 @@ on:
       - "lib/campaign-benchmark/**"
       - "lib/telegram/**"
       - "lib/db/**"
+      - "lib/auth/**"
       - "e2e/**"
       - "playwright.config.ts"
       - "package.json"
       - "package-lock.json"
-      - "prisma/migrations/20260805171000_professional_auth_hardening/**"
+      - "prisma/**"
+      - "scripts/bootstrap-database.mjs"
+      - "scripts/verify-auth-schema.mjs"
       - ".github/workflows/stack-integration-auth-preview-qa.yml"
   pull_request:
     branches:
@@ -36,11 +39,14 @@ on:
       - "lib/campaign-benchmark/**"
       - "lib/telegram/**"
       - "lib/db/**"
+      - "lib/auth/**"
       - "e2e/**"
       - "playwright.config.ts"
       - "package.json"
       - "package-lock.json"
-      - "prisma/migrations/20260805171000_professional_auth_hardening/**"
+      - "prisma/**"
+      - "scripts/bootstrap-database.mjs"
+      - "scripts/verify-auth-schema.mjs"
       - ".github/workflows/stack-integration-auth-preview-qa.yml"
 
 permissions:
@@ -49,7 +55,7 @@ permissions:
 jobs:
   validate-stack:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
 
     services:
       postgres:
@@ -86,20 +92,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build ephemeral QA database schema
-        run: npx prisma db push
+      - name: Bootstrap isolated QA database
+        run: npm run db:bootstrap
 
-      - name: Apply additive authentication schema in QA only
-        env:
-          PGPASSWORD: postgres
-        run: >-
-          psql
-          --host=localhost
-          --port=5432
-          --username=postgres
-          --dbname=tri_proof_guard
-          --set=ON_ERROR_STOP=1
-          --file=prisma/migrations/20260805171000_professional_auth_hardening/migration.sql
+      - name: Verify authentication schema without mutation
+        run: npm run db:verify-auth-schema
+
+      - name: Confirm Prisma migration status
+        run: npx prisma migrate status
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
