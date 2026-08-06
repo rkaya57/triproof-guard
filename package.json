@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run test:decision-safety && node scripts/vercel-provider-smoke.mjs && node scripts/vercel-migrate-deploy.mjs && prisma generate && next build",
+    "build": "npm run test:decision-safety && npm run benchmark:labeled && npm run lint:benchmark && node scripts/vercel-provider-smoke.mjs && node scripts/vercel-migrate-deploy.mjs && prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
+    "lint:benchmark": "eslint lib/benchmark scripts/benchmark-labeled-dataset.ts scripts/export-benchmark-labeling-queue.ts scripts/compile-reviewed-benchmark.ts",
     "extension:validate": "node scripts/validate-chrome-extension.mjs",
     "extension:test": "node --test scripts/extension-wallet-compat.test.mjs",
     "benchmark:sybil": "node --import tsx scripts/benchmark-sybil-engine.ts",
