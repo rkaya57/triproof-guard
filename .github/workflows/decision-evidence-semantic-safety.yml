@@ -1,0 +1,54 @@
+name: Decision evidence semantic safety
+
+on:
+  push:
+    branches:
+      - fix/decision-evidence-semantic-safety
+    paths:
+      - "lib/campaign-security/**"
+      - "lib/risk-engine.ts"
+      - "lib/risk-engine/**"
+      - ".github/workflows/decision-evidence-semantic-safety.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "lib/campaign-security/**"
+      - "lib/risk-engine.ts"
+      - "lib/risk-engine/**"
+      - ".github/workflows/decision-evidence-semantic-safety.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Semantic safety tests
+        run: >-
+          node --import tsx --test
+          lib/campaign-security/decision-evidence.test.ts
+          lib/risk-engine/semantic-safety.test.ts
+          lib/risk-engine/safety-regression.test.ts
+          lib/risk-engine/cross-campaign-safety.test.ts
