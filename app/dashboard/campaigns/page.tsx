@@ -1,7 +1,12 @@
+import Link from "next/link"
+
 import { CampaignsWorkspace, type CampaignWorkspaceProject } from "@/components/dashboard/campaigns-workspace"
+import { Badge } from "@/components/ui/badge"
+import { buttonVariants } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { requirePageUser } from "@/lib/auth/page"
-import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
+import { isDatabaseConnectionError } from "@/lib/db/errors"
 
 export default async function CampaignsPage() {
   const user = await requirePageUser("/dashboard/campaigns")
@@ -66,5 +71,31 @@ export default async function CampaignsPage() {
     loadError = true
   }
 
-  return <CampaignsWorkspace projects={projects} loadError={loadError} />
+  return (
+    <div className="flex flex-col gap-6">
+      {!loadError && projects.length > 0 && (
+        <Card className="glass-panel border-primary/20 bg-primary/5">
+          <CardHeader>
+            <CardTitle>Campaign intelligence pages</CardTitle>
+            <CardDescription>
+              Open campaign-level Gray Zone, evidence confidence and analysis history metrics.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            {projects.map((project) => (
+              <Link
+                key={project.id}
+                href={`/dashboard/campaigns/${project.id}`}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                {project.name}
+                <Badge variant="secondary" className="ml-1">{project.chain}</Badge>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+      <CampaignsWorkspace projects={projects} loadError={loadError} />
+    </div>
+  )
 }
