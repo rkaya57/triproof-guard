@@ -82,14 +82,21 @@ function checkScenario(
   }
 }
 
-function maliciousRiskFamilyCount(
+function maliciousSignalCount(
   decision: ReturnType<typeof buildExplainableDecision>
 ) {
-  return new Set(
-    decision.evidence
-      .filter((item) => item.effect === "risk_signal")
-      .map((item) => item.family)
-  ).size
+  return decision.evidence.filter((item) => {
+    if (item.code === "CORROBORATED_SYBIL") return true
+    if (item.effect !== "risk_signal") return false
+
+    if (item.code === "BOT_PATTERN") {
+      return /bot-script probability:\s*(?:very high|high)\b/i.test(
+        item.description
+      )
+    }
+
+    return true
+  }).length
 }
 
 export function runLabeledBenchmark(
@@ -133,7 +140,8 @@ export function runLabeledBenchmark(
         riskScore: prediction.riskScore,
         evidenceConfidence: explainableDecision.evidenceConfidence,
         independentRiskFamilyCount:
-          maliciousRiskFamilyCount(explainableDecision),
+          explainableDecision.independentRiskFamilyCount,
+        maliciousSignalCount: maliciousSignalCount(explainableDecision),
       })
     })
   })
