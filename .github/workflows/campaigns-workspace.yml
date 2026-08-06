@@ -8,6 +8,7 @@ on:
       - "components/dashboard/campaigns-workspace.tsx"
       - "components/dashboard/dashboard-shell.tsx"
       - "app/dashboard/campaigns/**"
+      - "lib/campaigns/**"
       - ".github/workflows/campaigns-workspace.yml"
   pull_request:
     branches:
@@ -17,6 +18,7 @@ on:
       - "components/dashboard/campaigns-workspace.tsx"
       - "components/dashboard/dashboard-shell.tsx"
       - "app/dashboard/campaigns/**"
+      - "lib/campaigns/**"
       - ".github/workflows/campaigns-workspace.yml"
 
 permissions:
