@@ -22,14 +22,25 @@ BEGIN
         target_role
       );
       EXECUTE format(
-        'REVOKE ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public FROM %I',
+        'REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM %I',
         target_role
       );
 
-      -- Prisma migrations run as the database owner. Prevent future tables and
-      -- sequences created by that role from silently restoring PostgREST access.
+      -- Remove both global and public-schema defaults. PostgreSQL combines
+      -- global default privileges with schema-specific additions, so a revoke
+      -- limited to IN SCHEMA public cannot neutralize a global grant.
+      EXECUTE format(
+        'ALTER DEFAULT PRIVILEGES FOR ROLE %I REVOKE ALL PRIVILEGES ON TABLES FROM %I',
+        current_user,
+        target_role
+      );
       EXECUTE format(
         'ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE ALL PRIVILEGES ON TABLES FROM %I',
+        current_user,
+        target_role
+      );
+      EXECUTE format(
+        'ALTER DEFAULT PRIVILEGES FOR ROLE %I REVOKE ALL PRIVILEGES ON SEQUENCES FROM %I',
         current_user,
         target_role
       );
@@ -39,19 +50,28 @@ BEGIN
         target_role
       );
       EXECUTE format(
-        'ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE ALL PRIVILEGES ON FUNCTIONS FROM %I',
+        'ALTER DEFAULT PRIVILEGES FOR ROLE %I REVOKE EXECUTE ON FUNCTIONS FROM %I',
+        current_user,
+        target_role
+      );
+      EXECUTE format(
+        'ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM %I',
         current_user,
         target_role
       );
     END IF;
   END LOOP;
 
-  -- PostgreSQL grants EXECUTE on new functions to PUBLIC by default. Tri-Proof
-  -- has no public PostgREST RPC contract, so functions must be explicitly opened
-  -- in a reviewed migration when one is intentionally introduced.
-  REVOKE ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC;
+  -- PostgreSQL grants EXECUTE on new functions to PUBLIC by default at the
+  -- global owner-default level. Revoke it globally as well as for public so a
+  -- future function cannot silently become a PostgREST RPC endpoint.
+  REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC;
   EXECUTE format(
-    'ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE ALL PRIVILEGES ON FUNCTIONS FROM PUBLIC',
+    'ALTER DEFAULT PRIVILEGES FOR ROLE %I REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC',
+    current_user
+  );
+  EXECUTE format(
+    'ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC',
     current_user
   );
 
