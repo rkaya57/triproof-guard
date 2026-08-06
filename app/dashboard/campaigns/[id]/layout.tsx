@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import Link from "next/link"
-import { BarChart3, Gavel, History, Network } from "lucide-react"
+import { Activity, BarChart3, Gavel, History, Network } from "lucide-react"
 
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -47,6 +47,13 @@ export default async function CampaignWorkspaceLayout({
         >
           <Gavel data-icon="inline-start" />
           Policy
+        </Link>
+        <Link
+          href={`/dashboard/campaigns/${id}/metrics`}
+          className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "justify-start")}
+        >
+          <Activity data-icon="inline-start" />
+          Metrics
         </Link>
       </nav>
       {children}
