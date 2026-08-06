@@ -30,7 +30,7 @@ test("extracts URL, domain and Solana mint without changing Base58 case", () => 
   )
 })
 
-test("extracts EVM contract from URL context and normalizes EVM casing", () => {
+test("extracts EVM contract without producing a false Solana identity", () => {
   const entities = extractTelegramOnchainEntities({
     target: `https://app.example.org/claim?contract=${evmContract.toUpperCase().replace("0X", "0x")}`,
     scanType: "url",
@@ -45,6 +45,7 @@ test("extracts EVM contract from URL context and normalizes EVM casing", () => {
         entity.value === evmContract
     )
   )
+  assert.equal(entities.some((entity) => entity.chain === "solana"), false)
 })
 
 test("direct token scans retain their semantic type", () => {
@@ -82,4 +83,14 @@ test("similar Solana addresses are never collapsed through lowercase matching", 
   })
 
   assert.equal(telegramObservationMatchesCampaign(entities, [solanaMint]), false)
+})
+
+test("malformed percent encoding does not interrupt graph extraction", () => {
+  const entities = extractTelegramOnchainEntities({
+    target: `https://claim.example.com/%E0%A4%A?mint=${solanaMint}`,
+    scanType: "url",
+  })
+
+  assert.ok(entities.some((entity) => entity.kind === "url"))
+  assert.ok(entities.some((entity) => entity.value === solanaMint))
 })
