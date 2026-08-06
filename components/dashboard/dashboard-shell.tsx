@@ -14,6 +14,7 @@ import {
   HeartPulse,
   Home,
   Landmark,
+  Layers3,
   LogOut,
   Menu,
   Settings,
@@ -30,6 +31,7 @@ import { cn } from "@/lib/utils"
 
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: Home },
+  { href: "/dashboard/campaigns", label: "Campaigns", icon: Layers3 },
   { href: "/dashboard/new-analysis", label: "New Analysis", icon: FilePlus2 },
   { href: "/scamguard", label: "ScamGuard", icon: ShieldAlert },
   { href: "/dashboard/demo", label: "Demo Report", icon: BarChart3 },
@@ -62,6 +64,7 @@ const routeTitles = [
   { href: "/dashboard/admin/blog", title: "Blog Admin", eyebrow: "Content operations" },
   { href: "/dashboard/admin/bugs", title: "Issue Console", eyebrow: "Product feedback queue" },
   { href: "/dashboard/admin", title: "Admin Center", eyebrow: "Operations command center" },
+  { href: "/dashboard/campaigns", title: "Campaigns", eyebrow: "Campaign security operations" },
   { href: "/dashboard/new-analysis", title: "New Analysis", eyebrow: "Upload and score wallet lists" },
   { href: "/dashboard/demo", title: "Demo Report", eyebrow: "Sample campaign intelligence" },
   { href: "/dashboard/airdrop", title: "Airdrop Tasks", eyebrow: "Community contribution season" },
