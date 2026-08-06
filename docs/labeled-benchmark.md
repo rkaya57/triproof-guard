@@ -21,6 +21,15 @@ Synthetic fixtures can pass the operational gate. They can never, by themselves,
 
 Ground truth also records the expected campaign decision and whether malicious risk should be present, absent, or unknown. This prevents a non-user eligibility exclusion from being counted as malicious risk.
 
+## Malicious-prediction definition
+
+A case is counted as a malicious prediction only when it is not approved and at least one of these conditions is met:
+
+- explicit strong malicious evidence exists, such as known-bad funding, self-referral, circular flow, high or very-high bot probability, or equivalent hard evidence;
+- the wallet is linked to a suspicious cluster and at least two independent evidence families support the relationship.
+
+Review-only evidence, such as moderate bot suspicion, young-wallet status, limited history, or low diversity, does not by itself become a malicious prediction. This prevents Gray Zone cases from inflating false-positive counts while preserving corroborated cluster detection.
+
 ## Provenance hierarchy
 
 Every scenario must declare one provenance kind:
@@ -97,6 +106,8 @@ The default operational gate requires:
 
 - at least 12 benchmark cases;
 - at least 95% acceptable-decision accuracy;
+- at least 90% malicious precision;
+- at least 90% malicious recall;
 - 100% containment of labeled malicious cases;
 - zero malicious wallets automatically approved;
 - no more than 3% organic false rejects;
