@@ -107,6 +107,14 @@ async function applySqlMigration(migrationName) {
   })
 }
 
+async function secureMigrationMetadataTable() {
+  await withClient(async (client) => {
+    await client.query(
+      `ALTER TABLE IF EXISTS public."_prisma_migrations" ENABLE ROW LEVEL SECURITY`
+    )
+  })
+}
+
 async function baselineMigrationHistory(names) {
   for (const name of names) {
     await runPrisma(["migrate", "resolve", "--applied", name])
@@ -129,6 +137,7 @@ async function main() {
   if (state.hasMigrationTable) {
     console.log("Existing Prisma migration history detected. Running normal migrate deploy only.")
     await runPrisma(["migrate", "deploy"])
+    await secureMigrationMetadataTable()
     await verifyBootstrap()
     return
   }
@@ -164,6 +173,11 @@ async function main() {
 
   console.log("Confirming that no migration remains pending.")
   await runPrisma(["migrate", "deploy"])
+
+  // Prisma creates its internal migration table while baseline records are being
+  // inserted, after the application-table hardening SQL has already run. Secure
+  // that single internal table explicitly so clean databases match production.
+  await secureMigrationMetadataTable()
   await verifyBootstrap()
 
   console.log("Clean database bootstrap completed successfully.")
