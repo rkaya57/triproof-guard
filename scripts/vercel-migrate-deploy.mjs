@@ -23,6 +23,28 @@ const runPrisma = (args, options = {}) =>
 
 const runDeploy = (options = {}) => runPrisma(["migrate", "deploy"], options)
 
+function verifyPostgrestHardening() {
+  console.log("Verifying Supabase PostgREST deny-by-default controls...")
+  const result = spawnSync(
+    process.execPath,
+    [join(process.cwd(), "scripts", "verify-postgrest-hardening.mjs")],
+    {
+      stdio: "inherit",
+      env: process.env,
+      shell: process.platform === "win32",
+    }
+  )
+  if (result.status !== 0) {
+    console.error("PostgREST hardening verification failed after migration deploy.")
+    process.exit(result.status ?? 1)
+  }
+}
+
+function finishSuccessfulDeploy() {
+  verifyPostgrestHardening()
+  process.exit(0)
+}
+
 const scamGuardIntelligenceRepairSql = String.raw`
 DO $$
 BEGIN
@@ -100,7 +122,7 @@ let result = runDeploy({ capture: true })
 if (result.status === 0) {
   process.stdout.write(result.stdout ?? "")
   process.stderr.write(result.stderr ?? "")
-  process.exit(0)
+  finishSuccessfulDeploy()
 }
 
 const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`
@@ -113,7 +135,7 @@ if (repairKnownFailedMigration(output)) {
   if (result.status !== 0) {
     process.exit(result.status ?? 1)
   }
-  process.exit(0)
+  finishSuccessfulDeploy()
 }
 
 if (!output.includes("P3005")) {
@@ -150,3 +172,5 @@ result = runDeploy()
 if (result.status !== 0) {
   process.exit(result.status ?? 1)
 }
+
+finishSuccessfulDeploy()
