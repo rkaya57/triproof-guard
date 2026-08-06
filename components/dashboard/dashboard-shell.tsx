@@ -1,25 +1,28 @@
 "use client"
 
+import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
   BarChart3,
   ChevronDown,
-  FileText,
-  FilePlus2,
   Code2,
+  FilePlus2,
+  FileText,
   Gift,
   HeartPulse,
   Home,
   Landmark,
   LogOut,
+  Menu,
   Settings,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
   Tags,
   UsersRound,
+  X,
 } from "lucide-react"
 
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -88,6 +91,7 @@ export function DashboardShell({
 }) {
   const pathname = usePathname()
   const router = useRouter()
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const items = isAdmin ? [...navItems, ...adminNavItems] : navItems
   const routeTitle = getRouteTitle(pathname)
 
@@ -99,66 +103,94 @@ export function DashboardShell({
 
   return (
     <div className="premium-page min-h-screen bg-background text-foreground lg:grid lg:grid-cols-[280px_1fr]">
-      <aside className="premium-sidebar border-b border-border bg-sidebar/95 backdrop-blur-xl lg:sticky lg:top-0 lg:min-h-screen lg:border-b-0 lg:border-r">
-        <div className="relative z-10 flex items-center justify-between px-5 py-4 lg:flex-col lg:items-stretch lg:gap-8 lg:px-4">
-          <Link href="/" className="group flex items-center gap-3 px-1">
-            <span className="glow-primary flex size-11 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 transition-transform group-hover:scale-105">
-              <Image
-                src="/logo.svg"
-                alt="Tri-Proof Guard"
-                width={32}
-                height={32}
-                priority
-                className="rounded-lg"
-              />
-            </span>
-            <div className="hidden flex-col lg:flex">
-              <span className="text-sm font-semibold">Tri-Proof Guard</span>
-              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-primary/75">
-                Risk console
+      <aside className="premium-sidebar sticky top-0 z-40 border-b border-border bg-sidebar/95 backdrop-blur-xl lg:min-h-screen lg:border-b-0 lg:border-r">
+        <div className="relative z-10 px-4 py-3 sm:px-5 lg:flex lg:min-h-screen lg:flex-col lg:gap-8 lg:px-4 lg:py-4">
+          <div className="flex items-center justify-between gap-3">
+            <Link href="/" className="group flex min-w-0 items-center gap-3 px-1">
+              <span className="glow-primary flex size-11 shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 transition-transform group-hover:scale-105">
+                <Image
+                  src="/logo.svg"
+                  alt="Tri-Proof Guard"
+                  width={32}
+                  height={32}
+                  priority
+                  className="rounded-lg"
+                />
               </span>
-            </div>
-          </Link>
-          <nav className="flex max-w-[calc(100vw-8rem)] gap-2 overflow-x-auto pb-1 lg:max-w-none lg:flex-col lg:overflow-visible lg:pb-0">
-            {items.map((item) => {
-              const active =
-                pathname === item.href ||
-                (item.href !== "/dashboard" && pathname.startsWith(item.href))
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    buttonVariants({ variant: active ? "secondary" : "ghost" }),
-                    "hover-lift min-w-[4.6rem] flex-col gap-1 px-2 py-2 text-[10px] leading-tight transition-all sm:min-w-0 sm:flex-row sm:justify-start sm:text-sm lg:w-full",
-                    active && "nav-glow-active border-primary/30 bg-primary/10 text-primary",
-                    item.href.startsWith("/dashboard/admin") &&
-                      "border-yellow-400/20 text-yellow-100 hover:bg-yellow-400/10 hover:text-yellow-100"
-                  )}
-                  title={item.label}
-                >
-                  <item.icon data-icon="inline-start" />
-                  <span className="max-w-[4.25rem] truncate sm:max-w-none">{item.label}</span>
-                </Link>
-              )
-            })}
-          </nav>
-          <div className="glass-panel premium-card hidden rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground lg:block">
-            <div className="mb-2 flex items-center gap-2 text-foreground">
-              <Sparkles className="text-primary" />
-              Guard Product
-            </div>
-            <p>Wallet risk analysis, clustering, Gray Zone review and exports.</p>
-            <div className="mt-4 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-primary/80">
-              <span className="pulse-dot" /> Batch queue ready
-            </div>
+              <div className="flex min-w-0 flex-col">
+                <span className="truncate text-sm font-semibold">Tri-Proof Guard</span>
+                <span className="truncate font-mono text-[10px] uppercase tracking-[0.22em] text-primary/75">
+                  Risk console
+                </span>
+              </div>
+            </Link>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-lg"
+              className="shrink-0 lg:hidden"
+              aria-expanded={mobileNavOpen}
+              aria-controls="dashboard-mobile-navigation"
+              onClick={() => setMobileNavOpen((open) => !open)}
+            >
+              {mobileNavOpen ? <X aria-hidden /> : <Menu aria-hidden />}
+              <span className="sr-only">Toggle dashboard navigation</span>
+            </Button>
           </div>
-          <Button variant="outline" onClick={logout} className="hover-lift">
-            <LogOut data-icon="inline-start" />
-            <span className="hidden sm:inline">Logout</span>
-          </Button>
+
+          <div
+            id="dashboard-mobile-navigation"
+            className={cn(
+              "mt-3 gap-3 lg:mt-0 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col",
+              mobileNavOpen ? "grid" : "hidden lg:flex"
+            )}
+          >
+            <nav className="grid max-h-[min(62vh,34rem)] grid-cols-2 gap-2 overflow-y-auto overscroll-contain pr-1 sm:grid-cols-3 lg:max-h-none lg:grid-cols-1 lg:overflow-visible lg:pr-0">
+              {items.map((item) => {
+                const active =
+                  pathname === item.href ||
+                  (item.href !== "/dashboard" && pathname.startsWith(item.href))
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileNavOpen(false)}
+                    className={cn(
+                      buttonVariants({ variant: active ? "secondary" : "ghost" }),
+                      "hover-lift h-auto min-w-0 flex-col items-start gap-2 whitespace-normal px-3 py-3 text-left text-xs leading-tight transition-all sm:text-sm lg:w-full lg:flex-row lg:items-center lg:justify-start lg:gap-2 lg:whitespace-nowrap lg:py-2",
+                      active && "nav-glow-active border-primary/30 bg-primary/10 text-primary",
+                      item.href.startsWith("/dashboard/admin") &&
+                        "border-yellow-400/20 text-yellow-100 hover:bg-yellow-400/10 hover:text-yellow-100"
+                    )}
+                    title={item.label}
+                  >
+                    <item.icon data-icon="inline-start" className="size-4" />
+                    <span className="break-words lg:truncate">{item.label}</span>
+                  </Link>
+                )
+              })}
+            </nav>
+
+            <div className="glass-panel premium-card hidden rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground lg:block">
+              <div className="mb-2 flex items-center gap-2 text-foreground">
+                <Sparkles className="text-primary" />
+                Guard Product
+              </div>
+              <p>Wallet risk analysis, clustering, Gray Zone review and exports.</p>
+              <div className="mt-4 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-primary/80">
+                <span className="pulse-dot" /> Batch queue ready
+              </div>
+            </div>
+
+            <Button variant="outline" onClick={logout} className="hover-lift w-full justify-center lg:mt-auto">
+              <LogOut data-icon="inline-start" />
+              <span>Logout</span>
+            </Button>
+          </div>
         </div>
       </aside>
+
       <div className="min-w-0">
         <header className="scan-accent border-b border-border bg-background/80 px-5 py-4 backdrop-blur-xl sm:px-8">
           <div className="flex flex-col gap-2 reveal-up">
