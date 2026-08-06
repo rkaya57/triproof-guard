@@ -173,6 +173,7 @@ export function RiskGraphExplorer({ graph, campaignName }: Props) {
     ["ScamGuard", graph.coverage.scamGuard],
     ["Scam DNA", graph.coverage.scamDna],
     ["Telegram", graph.coverage.telegramGuardian],
+    ["Telegram → Onchain", graph.coverage.telegramOnchain],
   ] as const
 
   return (
@@ -186,7 +187,7 @@ export function RiskGraphExplorer({ graph, campaignName }: Props) {
             <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">{campaignName}</h2>
             <p className="mt-3 max-w-3xl text-muted-foreground">
               Campaign wallets, funding and referral relationships, exact-match ScamGuard intelligence,
-              Telegram observations and Scam DNA links in one versioned graph contract.
+              Telegram URLs, domains and on-chain targets, plus Scam DNA links in one versioned graph contract.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
