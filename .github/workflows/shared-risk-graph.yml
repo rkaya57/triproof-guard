@@ -49,7 +49,7 @@ jobs:
         run: npm run lint
 
       - name: Shared graph contract tests
-        run: node --import tsx --test lib/risk-graph/adapters.test.ts
+        run: node --import tsx --test lib/risk-graph/*.test.ts
 
       - name: Full unit and regression tests
         run: npm test
