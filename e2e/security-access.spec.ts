@@ -124,7 +124,7 @@ test.describe("security access boundaries", () => {
     await registerWithBrowser(page, "/dashboard/demo")
     await expect(page).toHaveURL(/\/dashboard\/demo$/)
 
-    await expect(page.getByText("Referral Abuse Intelligence", { exact: true })).toBeVisible()
+    await expect(page.getByText("Campaign Integrity Intelligence", { exact: true })).toBeVisible()
     await expect(page.getByText("Integrity score", { exact: true })).toBeVisible()
     await expect(page.getByText("Priority referral cohorts", { exact: true })).toBeVisible()
     await expect(page.getByText("Referral evidence", { exact: true })).toBeVisible()
