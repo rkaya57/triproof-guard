@@ -19,6 +19,7 @@ on:
       - "playwright.config.ts"
       - "package.json"
       - "package-lock.json"
+      - "prisma/migrations/20260805171000_professional_auth_hardening/**"
       - ".github/workflows/stack-integration-auth-preview-qa.yml"
   pull_request:
     branches:
@@ -39,6 +40,7 @@ on:
       - "playwright.config.ts"
       - "package.json"
       - "package-lock.json"
+      - "prisma/migrations/20260805171000_professional_auth_hardening/**"
       - ".github/workflows/stack-integration-auth-preview-qa.yml"
 
 permissions:
@@ -86,6 +88,18 @@ jobs:
 
       - name: Build ephemeral QA database schema
         run: npx prisma db push
+
+      - name: Apply additive authentication schema in QA only
+        env:
+          PGPASSWORD: postgres
+        run: >-
+          psql
+          --host=localhost
+          --port=5432
+          --username=postgres
+          --dbname=tri_proof_guard
+          --set=ON_ERROR_STOP=1
+          --file=prisma/migrations/20260805171000_professional_auth_hardening/migration.sql
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
