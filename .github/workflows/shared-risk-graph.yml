@@ -1,0 +1,55 @@
+name: Shared risk graph
+
+on:
+  push:
+    branches:
+      - feat/shared-risk-graph-v1
+    paths:
+      - "lib/risk-graph/**"
+      - "app/api/campaigns/**/risk-graph/**"
+      - "app/dashboard/campaigns/**"
+      - "components/dashboard/risk-graph-explorer.tsx"
+      - ".github/workflows/shared-risk-graph.yml"
+  pull_request:
+    branches:
+      - feat/campaigns-workspace-v1
+      - main
+    paths:
+      - "lib/risk-graph/**"
+      - "app/api/campaigns/**/risk-graph/**"
+      - "app/dashboard/campaigns/**"
+      - "components/dashboard/risk-graph-explorer.tsx"
+      - ".github/workflows/shared-risk-graph.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Shared graph contract tests
+        run: node --import tsx --test lib/risk-graph/*.test.ts
+
+      - name: Full unit and regression tests
+        run: npm test

@@ -1,12 +1,30 @@
 import { expect, request as playwrightRequest, test, type Page } from "@playwright/test"
 
+const E2E_PASSWORD = "A-safe-e2e-password-123"
+let securityIpSequence = 20
+
+function nextSecurityTestIp() {
+  securityIpSequence = securityIpSequence >= 250 ? 20 : securityIpSequence + 1
+  return `198.51.100.${securityIpSequence}`
+}
+
 async function registerWithBrowser(page: Page, next = "/") {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  await page.setExtraHTTPHeaders({ "x-forwarded-for": nextSecurityTestIp() })
   await page.goto(`/register?next=${encodeURIComponent(next)}`)
-  await page.getByLabel("Name").fill("Security Test User")
-  await page.getByLabel("Email").fill(`security-${suffix}@example.test`)
-  await page.getByLabel("Password").fill("A-safe-e2e-password-123")
-  await page.getByRole("button", { name: "Create Account" }).click()
+  await page.getByLabel("Name", { exact: true }).fill("Security Test User")
+  await page.getByLabel("Email", { exact: true }).fill(`security-${suffix}@example.test`)
+  await page.getByLabel("Password", { exact: true }).fill(E2E_PASSWORD)
+  await page.getByLabel("Confirm password", { exact: true }).fill(E2E_PASSWORD)
+  const consents = page.getByRole("checkbox")
+  await consents.nth(0).check()
+  await consents.nth(1).check()
+  await page.getByRole("button", { name: "Create Account", exact: true }).click()
+  await expect(page).toHaveURL(
+    new RegExp(`/onboarding\\?next=${encodeURIComponent(next)}$`),
+    { timeout: 15_000 }
+  )
+  await page.goto(next)
   return suffix
 }
 
@@ -21,15 +39,21 @@ test.describe("security access boundaries", () => {
     const suffix = await registerWithBrowser(page)
     await expect(page).toHaveURL(/\/$/)
 
-    const api = await playwrightRequest.newContext({ baseURL: "http://127.0.0.1:3100" })
+    const api = await playwrightRequest.newContext({
+      baseURL: "http://localhost:3100",
+      extraHTTPHeaders: { "x-forwarded-for": nextSecurityTestIp() },
+    })
     const response = await api.post("/api/auth/register", {
       data: {
         name: "Session Security Test",
         email: `session-${suffix}@example.test`,
-        password: "A-safe-e2e-password-123",
+        password: E2E_PASSWORD,
+        confirmPassword: E2E_PASSWORD,
+        acceptTerms: true,
+        acceptPrivacy: true,
       },
     })
-    expect(response.status()).toBe(200)
+    expect(response.status()).toBe(201)
     const setCookie = response.headersArray().find((header) => header.name.toLowerCase() === "set-cookie")?.value ?? ""
     expect(setCookie).toContain("tri-proof-session=")
     expect(setCookie).toContain("HttpOnly")
@@ -39,8 +63,11 @@ test.describe("security access boundaries", () => {
     const token = /tri-proof-session=([^;]+)/.exec(setCookie)?.[1]
     expect(token).toBeTruthy()
     const authenticatedApi = await playwrightRequest.newContext({
-      baseURL: "http://127.0.0.1:3100",
-      extraHTTPHeaders: { Cookie: `tri-proof-session=${token}` },
+      baseURL: "http://localhost:3100",
+      extraHTTPHeaders: {
+        Cookie: `tri-proof-session=${token}`,
+        "x-forwarded-for": nextSecurityTestIp(),
+      },
     })
     const session = await authenticatedApi.get("/api/auth/me")
     expect(session.status()).toBe(200)
@@ -97,7 +124,7 @@ test.describe("security access boundaries", () => {
     await registerWithBrowser(page, "/dashboard/demo")
     await expect(page).toHaveURL(/\/dashboard\/demo$/)
 
-    await expect(page.getByText("Referral Abuse Intelligence", { exact: true })).toBeVisible()
+    await expect(page.getByText("Campaign Integrity Intelligence", { exact: true })).toBeVisible()
     await expect(page.getByText("Integrity score", { exact: true })).toBeVisible()
     await expect(page.getByText("Priority referral cohorts", { exact: true })).toBeVisible()
     await expect(page.getByText("Referral evidence", { exact: true })).toBeVisible()

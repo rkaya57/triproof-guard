@@ -1,0 +1,59 @@
+name: Campaign security core
+
+on:
+  push:
+    branches:
+      - feat/campaign-security-core-v1
+    paths:
+      - "lib/campaign-security/**"
+      - "lib/campaign-decision.ts"
+      - "lib/analysis/serializers.ts"
+      - "types/index.ts"
+      - "components/analysis/decision-evidence-view.tsx"
+      - "components/analysis/analysis-route-client.tsx"
+      - "app/dashboard/analysis/**"
+      - "app/api/v1/analysis/**"
+      - ".github/workflows/campaign-security-core.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "lib/campaign-security/**"
+      - "lib/campaign-decision.ts"
+      - "lib/analysis/serializers.ts"
+      - "types/index.ts"
+      - "components/analysis/decision-evidence-view.tsx"
+      - "components/analysis/analysis-route-client.tsx"
+      - "app/dashboard/analysis/**"
+      - "app/api/v1/analysis/**"
+      - ".github/workflows/campaign-security-core.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Campaign decision tests
+        run: node --import tsx --test lib/campaign-decision.test.ts lib/campaign-security/decision-evidence.test.ts

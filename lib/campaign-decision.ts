@@ -25,8 +25,19 @@ const policyRules: Record<RiskPolicy, PolicyRule[]> = {
 }
 
 const reasonCodeMap: Array<[RegExp, string]> = [
+  [/known-bad funding|known-bad source/i, "KNOWN_BAD_FUNDER"],
+  [/recognized service funding|service funding.*neutral|shared funding.*neutralized/i, "SERVICE_FUNDER_NEUTRALIZED"],
+  [/self[- ]referral/i, "SELF_REFERRAL"],
+  [/circular path|circular transfer|circular wallet/i, "CIRCULAR_PATH"],
+  [/referral evidence|referral fan[- ]out|shared referrer|referral cluster/i, "REFERRAL_LINKED"],
+  [/temporal evidence|timing cohort|task timing|completion time window/i, "TIMING_COHORT"],
+  [/participant fingerprint|privacy-preserving participant/i, "PARTICIPANT_COHORT"],
+  [/campaign evidence|matching task type|campaign event cohort/i, "CAMPAIGN_COORDINATION"],
+  [/behavior evidence|behavior cohort|activity shape|behavior similarity/i, "BEHAVIOR_COHORT"],
+  [/corroborated sybil cohort|two independent relationship signals/i, "CORROBORATED_SYBIL"],
+  [/risk score.*threshold|automatic exclusion threshold|very high risk score/i, "RISK_THRESHOLD_EXCEEDED"],
   [/known .*exchange|known .*service|known .*protocol|known public/i, "KNOWN_ENTITY"],
-  [/shared funding source|funding cluster/i, "SHARED_FUNDING"],
+  [/shared funding source|funding cluster|funding evidence/i, "SHARED_FUNDING"],
   [/suspicious cluster|behavior cluster|temporal cohort/i, "CLUSTER_LINKED"],
   [/younger than|brand-new|wallet age/i, "NEW_OR_LOW_AGE"],
   [/low transaction|limited transaction|no reliable|no on-chain/i, "LOW_HISTORY"],

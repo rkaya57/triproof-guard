@@ -61,6 +61,60 @@ export type TeamReviewState = {
   updatedAt: string
 }
 
+export type DecisionEvidenceFamily =
+  | "funding"
+  | "referral"
+  | "timing"
+  | "behavior"
+  | "activity_quality"
+  | "campaign_coordination"
+  | "graph"
+  | "known_entity"
+  | "account_state"
+  | "policy"
+  | "data_coverage"
+  | "manual_review"
+  | "other"
+
+export type DecisionEvidenceEffect =
+  | "risk_signal"
+  | "corroborating_signal"
+  | "eligibility_exclusion"
+  | "neutralizing_context"
+  | "coverage_limitation"
+  | "human_override"
+
+export type DecisionEvidenceSource =
+  | "risk_engine"
+  | "graph"
+  | "enrichment"
+  | "policy"
+  | "team_review"
+
+export type DecisionEvidenceConfidence = "low" | "medium" | "high"
+
+export type DecisionEvidenceItem = {
+  code: string
+  family: DecisionEvidenceFamily
+  effect: DecisionEvidenceEffect
+  title: string
+  description: string
+  source: DecisionEvidenceSource
+}
+
+export type ExplainableWalletDecision = {
+  schemaVersion: "campaign-security-explanation-v1"
+  decision: WalletStatus
+  recommendedAction: SuggestedAction
+  evidenceConfidence: DecisionEvidenceConfidence
+  evidenceFamilies: DecisionEvidenceFamily[]
+  independentRiskFamilyCount: number
+  evidence: DecisionEvidenceItem[]
+  limitations: string[]
+  requiresHumanReview: boolean
+  humanReview: TeamReviewState | null
+}
+
 export type ParsedWallet = {
   walletAddress: string
   chain: string
@@ -262,6 +316,7 @@ export type WalletRiskResult = {
   enrichmentProvider?: string | null
   enrichmentStatus?: EnrichmentStatus | null
   teamReview?: TeamReviewState | null
+  decisionEvidence?: ExplainableWalletDecision
 }
 
 export type EnrichmentMeta = {

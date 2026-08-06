@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test"
 
 const port = 3100
-const baseURL = `http://127.0.0.1:${port}`
+const baseURL = `http://localhost:${port}`
 
 export default defineConfig({
   testDir: "./e2e",
@@ -18,13 +18,12 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: `npm.cmd run start -- --port ${port}`,
+    command: `npm run start -- --port ${port}`,
     url: baseURL,
     reuseExistingServer: false,
     timeout: 120_000,
     env: {
       ...process.env,
-      DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:1/tri_proof_guard?schema=public",
       NEXTAUTH_SECRET: "e2e-only-session-secret-that-is-long-enough-for-local-tests",
       ACCESS_PASS_SIGNING_SECRET: "e2e-only-access-pass-secret-that-is-long-enough",
       E2E_TEST_MODE: "1",

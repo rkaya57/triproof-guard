@@ -1,0 +1,228 @@
+name: Supabase PostgREST hardening
+
+on:
+  push:
+    branches:
+      - fix/supabase-postgrest-hardening-v1
+    paths:
+      - "prisma/migrations/20260806180000_supabase_postgrest_hardening/**"
+      - "scripts/bootstrap-database.mjs"
+      - "scripts/verify-postgrest-hardening.mjs"
+      - "scripts/vercel-migrate-deploy.mjs"
+      - "docs/database-bootstrap.md"
+      - "package.json"
+      - ".github/workflows/supabase-postgrest-hardening.yml"
+  pull_request:
+    branches:
+      - feat/campaign-benchmark-outcomes-v1
+      - main
+    paths:
+      - "prisma/migrations/20260806180000_supabase_postgrest_hardening/**"
+      - "scripts/bootstrap-database.mjs"
+      - "scripts/verify-postgrest-hardening.mjs"
+      - "scripts/vercel-migrate-deploy.mjs"
+      - "docs/database-bootstrap.md"
+      - "package.json"
+      - ".github/workflows/supabase-postgrest-hardening.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-postgrest-deny-by-default:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tri_proof_guard
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d tri_proof_guard"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tri_proof_guard?schema=public
+      NEXTAUTH_SECRET: postgrest-hardening-session-secret-that-is-long-enough
+      ACCESS_PASS_SIGNING_SECRET: postgrest-hardening-access-secret-that-is-long-enough
+      DEV_ALLOW_INSECURE_SECRETS: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Simulate Supabase API roles and broad defaults
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql \
+            --host=localhost \
+            --port=5432 \
+            --username=postgres \
+            --dbname=tri_proof_guard \
+            --set=ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE ROLE service_role NOLOGIN;
+
+          GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+          ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+            GRANT ALL PRIVILEGES ON TABLES TO anon, authenticated, service_role;
+          ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+            GRANT ALL PRIVILEGES ON SEQUENCES TO anon, authenticated, service_role;
+          ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+            GRANT ALL PRIVILEGES ON FUNCTIONS TO anon, authenticated, service_role;
+
+          CREATE FUNCTION public.qa_existing_rpc_probe()
+          RETURNS integer
+          LANGUAGE sql
+          AS 'SELECT 1';
+          SQL
+
+      - name: Bootstrap isolated database with hardening
+        run: npm run db:bootstrap
+
+      - name: Verify deny-by-default controls
+        run: npm run db:verify-postgrest
+
+      - name: Prove anon and authenticated cannot use tables or RPC
+        shell: bash
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          for role in anon authenticated; do
+            if psql \
+              --host=localhost \
+              --port=5432 \
+              --username=postgres \
+              --dbname=tri_proof_guard \
+              --set=ON_ERROR_STOP=1 \
+              --command="SET ROLE ${role}; SELECT COUNT(*) FROM public.\"User\";"; then
+              echo "${role} unexpectedly read public.User"
+              exit 1
+            fi
+
+            if psql \
+              --host=localhost \
+              --port=5432 \
+              --username=postgres \
+              --dbname=tri_proof_guard \
+              --set=ON_ERROR_STOP=1 \
+              --command="SET ROLE ${role}; SELECT public.qa_existing_rpc_probe();"; then
+              echo "${role} unexpectedly executed a public RPC function"
+              exit 1
+            fi
+          done
+
+      - name: Prove service role remains available
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql \
+            --host=localhost \
+            --port=5432 \
+            --username=postgres \
+            --dbname=tri_proof_guard \
+            --set=ON_ERROR_STOP=1 \
+            --command='SET ROLE service_role; SELECT COUNT(*) FROM public."User"; SELECT public.qa_existing_rpc_probe();'
+
+      - name: Prove future object defaults stay closed
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql \
+            --host=localhost \
+            --port=5432 \
+            --username=postgres \
+            --dbname=tri_proof_guard \
+            --set=ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE public."FutureSecurityProbe" (
+            "id" integer PRIMARY KEY
+          );
+          CREATE FUNCTION public.qa_future_rpc_probe()
+          RETURNS integer
+          LANGUAGE sql
+          AS 'SELECT 2';
+
+          DO $$
+          BEGIN
+            IF EXISTS (
+              SELECT 1
+              FROM information_schema.role_table_grants
+              WHERE table_schema = 'public'
+                AND table_name = 'FutureSecurityProbe'
+                AND grantee IN ('anon', 'authenticated')
+            ) THEN
+              RAISE EXCEPTION 'Future table restored anon/authenticated privileges';
+            END IF;
+
+            IF EXISTS (
+              SELECT 1
+              FROM pg_proc AS procedure
+              JOIN pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
+              CROSS JOIN LATERAL aclexplode(
+                COALESCE(procedure.proacl, acldefault('f'::"char", procedure.proowner))
+              ) AS acl
+              LEFT JOIN pg_roles AS role ON role.oid = acl.grantee
+              WHERE namespace.nspname = 'public'
+                AND procedure.proname = 'qa_future_rpc_probe'
+                AND acl.privilege_type = 'EXECUTE'
+                AND (acl.grantee = 0 OR role.rolname IN ('anon', 'authenticated'))
+            ) THEN
+              RAISE EXCEPTION 'Future function restored public PostgREST execution';
+            END IF;
+          END
+          $$;
+          SQL
+
+      - name: Prove missing future-table RLS blocks verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          if npm run db:verify-postgrest; then
+            echo "Verification unexpectedly accepted a future table without RLS"
+            exit 1
+          fi
+          echo "Verification correctly rejected the RLS-free future table"
+
+      - name: Restore future-table RLS and re-verify
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql \
+            --host=localhost \
+            --port=5432 \
+            --username=postgres \
+            --dbname=tri_proof_guard \
+            --set=ON_ERROR_STOP=1 \
+            --command='ALTER TABLE public."FutureSecurityProbe" ENABLE ROW LEVEL SECURITY;'
+          npm run db:verify-postgrest
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Run full unit and regression suite
+        run: npm test
+
+      - name: Build production bundle
+        run: npm run build

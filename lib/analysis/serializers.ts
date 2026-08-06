@@ -14,6 +14,7 @@ import type {
   WalletRiskResult,
   WalletStatus,
 } from "@/types"
+import { buildExplainableDecision } from "@/lib/campaign-security/decision-evidence"
 
 type DbWallet = {
   walletAddress: string
@@ -152,41 +153,48 @@ export function serializeAnalysis(analysis: DbAnalysis): AnalysisDetail {
     })
   })
 
-  const wallets: WalletRiskResult[] = analysis.wallets.map((wallet) => ({
-    walletAddress: wallet.walletAddress,
-    chain: wallet.chain,
-    entityLabel: wallet.entityLabel,
-    entityType: (wallet.entityType ?? "user") as WalletRiskResult["entityType"],
-    entityRiskReason: wallet.entityRiskReason,
-    riskScore: wallet.riskScore,
-    riskLevel: wallet.riskLevel as WalletRiskResult["riskLevel"],
-    status: wallet.status as WalletRiskResult["status"],
-    recommendedAction:
-      (wallet.recommendedAction ?? "manual_review") as WalletRiskResult["recommendedAction"],
-    statusExplanation:
-      wallet.statusExplanation ??
-      "Status is based on risk score and contextual wallet signals.",
-    fundingSource: wallet.fundingSource,
-    txCount: wallet.txCount,
-    walletAgeDays: wallet.walletAgeDays,
-    totalVolume: wallet.totalVolume,
-    contractsCount: wallet.contractsCount,
-    campaignActionsCount: wallet.campaignActionsCount,
-    clusterId: wallet.clusterId,
-    graphComponentId: wallet.graphComponentId ?? null,
-    graphRiskScore: wallet.graphRiskScore ?? null,
-    reasons: reasonsToStrings(wallet.reasons),
-    firstSeen: wallet.firstSeen ? wallet.firstSeen.toISOString() : null,
-    lastSeen: wallet.lastSeen ? wallet.lastSeen.toISOString() : null,
-    nativeBalance: wallet.nativeBalance ?? null,
-    tokenCount: wallet.tokenCount ?? null,
-    uniqueCounterparties: wallet.uniqueCounterparties ?? null,
-    lastActiveDaysAgo: wallet.lastActiveDaysAgo ?? null,
-    isContract: wallet.isContract ?? null,
-    enrichmentProvider: wallet.enrichmentProvider ?? null,
-    enrichmentStatus: (wallet.enrichmentStatus ?? null) as EnrichmentStatus | null,
-    teamReview: reviewMap.get(wallet.walletAddress) ?? null,
-  }))
+  const wallets: WalletRiskResult[] = analysis.wallets.map((wallet) => {
+    const serializedWallet: WalletRiskResult = {
+      walletAddress: wallet.walletAddress,
+      chain: wallet.chain,
+      entityLabel: wallet.entityLabel,
+      entityType: (wallet.entityType ?? "user") as WalletRiskResult["entityType"],
+      entityRiskReason: wallet.entityRiskReason,
+      riskScore: wallet.riskScore,
+      riskLevel: wallet.riskLevel as WalletRiskResult["riskLevel"],
+      status: wallet.status as WalletRiskResult["status"],
+      recommendedAction:
+        (wallet.recommendedAction ?? "manual_review") as WalletRiskResult["recommendedAction"],
+      statusExplanation:
+        wallet.statusExplanation ??
+        "Status is based on risk score and contextual wallet signals.",
+      fundingSource: wallet.fundingSource,
+      txCount: wallet.txCount,
+      walletAgeDays: wallet.walletAgeDays,
+      totalVolume: wallet.totalVolume,
+      contractsCount: wallet.contractsCount,
+      campaignActionsCount: wallet.campaignActionsCount,
+      clusterId: wallet.clusterId,
+      graphComponentId: wallet.graphComponentId ?? null,
+      graphRiskScore: wallet.graphRiskScore ?? null,
+      reasons: reasonsToStrings(wallet.reasons),
+      firstSeen: wallet.firstSeen ? wallet.firstSeen.toISOString() : null,
+      lastSeen: wallet.lastSeen ? wallet.lastSeen.toISOString() : null,
+      nativeBalance: wallet.nativeBalance ?? null,
+      tokenCount: wallet.tokenCount ?? null,
+      uniqueCounterparties: wallet.uniqueCounterparties ?? null,
+      lastActiveDaysAgo: wallet.lastActiveDaysAgo ?? null,
+      isContract: wallet.isContract ?? null,
+      enrichmentProvider: wallet.enrichmentProvider ?? null,
+      enrichmentStatus: (wallet.enrichmentStatus ?? null) as EnrichmentStatus | null,
+      teamReview: reviewMap.get(wallet.walletAddress) ?? null,
+    }
+
+    return {
+      ...serializedWallet,
+      decisionEvidence: buildExplainableDecision(serializedWallet),
+    }
+  })
 
   const clusters: ClusterResult[] = analysis.clusters.map((cluster) => ({
     clusterLabel: cluster.clusterLabel,
