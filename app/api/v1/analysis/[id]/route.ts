@@ -73,7 +73,8 @@ export async function GET(
         graphComponentId: wallet.graphComponentId,
         graphRiskScore: wallet.graphRiskScore,
         reasons: wallet.reasons.slice(0, 6),
-        explainableDecision: buildExplainableDecision(wallet),
+        explainableDecision:
+          wallet.decisionEvidence ?? buildExplainableDecision(wallet),
       })),
       clusters: serialized.clusters.slice(0, 20),
       graphIntelligence: serialized.graph,
