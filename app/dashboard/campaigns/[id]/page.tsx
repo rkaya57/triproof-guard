@@ -122,6 +122,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   const limited = wallets.filter(
     (wallet) => (wallet.decisionEvidence?.limitations.length ?? 0) > 0
   ).length
+  const pendingHumanDecisions = latestAnalysis.teamReviewSummary?.pendingReview ?? 0
 
   return (
     <div className="flex flex-col gap-6">
@@ -223,7 +224,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
             {[
               ["Two or more risk families", corroborated],
               ["Evidence limitations", limited],
-              ["Pending human decisions", latestAnalysis.teamReviewSummary.pendingReview],
+              ["Pending human decisions", pendingHumanDecisions],
               ["Suspicious clusters", latestAnalysis.suspiciousClustersCount],
             ].map(([name, value]) => (
               <div key={String(name)} className="flex justify-between rounded-lg border border-border bg-background/45 p-3">
