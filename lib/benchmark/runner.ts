@@ -82,6 +82,16 @@ function checkScenario(
   }
 }
 
+function maliciousRiskFamilyCount(
+  decision: ReturnType<typeof buildExplainableDecision>
+) {
+  return new Set(
+    decision.evidence
+      .filter((item) => item.effect === "risk_signal")
+      .map((item) => item.family)
+  ).size
+}
+
 export function runLabeledBenchmark(
   dataset: LabeledBenchmarkDataset,
   thresholds: BenchmarkMetricThresholds = DEFAULT_BENCHMARK_THRESHOLDS
@@ -123,7 +133,7 @@ export function runLabeledBenchmark(
         riskScore: prediction.riskScore,
         evidenceConfidence: explainableDecision.evidenceConfidence,
         independentRiskFamilyCount:
-          explainableDecision.independentRiskFamilyCount,
+          maliciousRiskFamilyCount(explainableDecision),
       })
     })
   })
