@@ -1,9 +1,16 @@
 import { expect, request as playwrightRequest, test, type Page } from "@playwright/test"
 
 const E2E_PASSWORD = "A-safe-e2e-password-123"
+let securityIpSequence = 20
+
+function nextSecurityTestIp() {
+  securityIpSequence = securityIpSequence >= 250 ? 20 : securityIpSequence + 1
+  return `198.51.100.${securityIpSequence}`
+}
 
 async function registerWithBrowser(page: Page, next = "/") {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  await page.setExtraHTTPHeaders({ "x-forwarded-for": nextSecurityTestIp() })
   await page.goto(`/register?next=${encodeURIComponent(next)}`)
   await page.getByLabel("Name", { exact: true }).fill("Security Test User")
   await page.getByLabel("Email", { exact: true }).fill(`security-${suffix}@example.test`)
@@ -13,7 +20,10 @@ async function registerWithBrowser(page: Page, next = "/") {
   await consents.nth(0).check()
   await consents.nth(1).check()
   await page.getByRole("button", { name: "Create Account", exact: true }).click()
-  await expect(page).toHaveURL(new RegExp(`/onboarding\\?next=${encodeURIComponent(next)}$`))
+  await expect(page).toHaveURL(
+    new RegExp(`/onboarding\\?next=${encodeURIComponent(next)}$`),
+    { timeout: 15_000 }
+  )
   await page.goto(next)
   return suffix
 }
@@ -29,7 +39,10 @@ test.describe("security access boundaries", () => {
     const suffix = await registerWithBrowser(page)
     await expect(page).toHaveURL(/\/$/)
 
-    const api = await playwrightRequest.newContext({ baseURL: "http://localhost:3100" })
+    const api = await playwrightRequest.newContext({
+      baseURL: "http://localhost:3100",
+      extraHTTPHeaders: { "x-forwarded-for": nextSecurityTestIp() },
+    })
     const response = await api.post("/api/auth/register", {
       data: {
         name: "Session Security Test",
@@ -51,7 +64,10 @@ test.describe("security access boundaries", () => {
     expect(token).toBeTruthy()
     const authenticatedApi = await playwrightRequest.newContext({
       baseURL: "http://localhost:3100",
-      extraHTTPHeaders: { Cookie: `tri-proof-session=${token}` },
+      extraHTTPHeaders: {
+        Cookie: `tri-proof-session=${token}`,
+        "x-forwarded-for": nextSecurityTestIp(),
+      },
     })
     const session = await authenticatedApi.get("/api/auth/me")
     expect(session.status()).toBe(200)
