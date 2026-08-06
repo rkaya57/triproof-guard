@@ -23,6 +23,7 @@ export type BenchmarkObservation = {
   riskScore: number
   evidenceConfidence: DecisionEvidenceConfidence
   independentRiskFamilyCount: number
+  maliciousSignalCount: number
 }
 
 export type BenchmarkMetricThresholds = {
@@ -128,7 +129,7 @@ function isRealWorldProvenance(kind: BenchmarkProvenanceKind) {
 function predictedMalicious(observation: BenchmarkObservation) {
   return (
     observation.predictedDecision !== "approved" &&
-    observation.independentRiskFamilyCount > 0
+    observation.maliciousSignalCount > 0
   )
 }
 
@@ -387,15 +388,13 @@ export function calculateBenchmarkMetrics(
     (observation) =>
       observation.label === "non_user_entity" &&
       observation.maliciousRiskExpectation === "absent" &&
-      (observation.riskScore > 0 ||
-        observation.independentRiskFamilyCount > 0)
+      (observation.riskScore > 0 || observation.maliciousSignalCount > 0)
   ).length
   const insufficientDataRiskLeakageCases = observations.filter(
     (observation) =>
       observation.label === "insufficient_data" &&
       observation.maliciousRiskExpectation === "absent" &&
-      (observation.riskScore > 0 ||
-        observation.independentRiskFamilyCount > 0)
+      (observation.riskScore > 0 || observation.maliciousSignalCount > 0)
   ).length
 
   const byChain = Object.fromEntries(
