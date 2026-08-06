@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import Link from "next/link"
-import { BarChart3, Network } from "lucide-react"
+import { BarChart3, History, Network } from "lucide-react"
 
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -33,6 +33,13 @@ export default async function CampaignWorkspaceLayout({
         >
           <Network data-icon="inline-start" />
           Risk Graph
+        </Link>
+        <Link
+          href={`/dashboard/campaigns/${id}/risk-memory`}
+          className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "justify-start")}
+        >
+          <History data-icon="inline-start" />
+          Risk Memory
         </Link>
       </nav>
       {children}
