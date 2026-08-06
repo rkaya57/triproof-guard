@@ -40,7 +40,21 @@ export async function GET() {
       }),
       db.analysis.findMany({
         where: { project: { userId: user.id } },
-        include: { project: true },
+        select: {
+          id: true,
+          status: true,
+          totalWallets: true,
+          averageRiskScore: true,
+          rejectedCount: true,
+          createdAt: true,
+          project: {
+            select: {
+              name: true,
+              campaignType: true,
+              chain: true,
+            },
+          },
+        },
         orderBy: { createdAt: "desc" },
         take: 6,
       }),
@@ -50,7 +64,8 @@ export async function GET() {
       return NextResponse.json(await getDevDashboard(user))
     }
 
-    throw error
+    console.error("[dashboard] Failed to load dashboard data", error)
+    return NextResponse.json({ error: "Dashboard could not be loaded" }, { status: 500 })
   }
 
   const totalWallets = aggregate._sum.totalWallets ?? 0
