@@ -25,12 +25,24 @@ const verdictRank: Record<SharedRiskGraphVerdict, number> = {
   known_bad: 3,
 }
 
+const chainAddressKinds = new Set<SharedRiskGraphNodeKind>([
+  "wallet",
+  "funder",
+  "referrer",
+  "service",
+  "token",
+  "contract",
+  "program",
+])
+
 function unique<T>(values: T[]) {
   return Array.from(new Set(values))
 }
 
-function normalizedPart(value: string) {
-  return value.trim().toLowerCase().replace(/[^a-z0-9._:-]+/g, "-").slice(0, 180)
+function normalizedPart(value: string, caseSensitive = false) {
+  const trimmed = value.trim()
+  const normalized = caseSensitive ? trimmed : trimmed.toLowerCase()
+  return normalized.replace(/[^a-zA-Z0-9._:-]+/g, "-").slice(0, 180)
 }
 
 export function sharedRiskGraphNodeKey(
@@ -38,8 +50,10 @@ export function sharedRiskGraphNodeKey(
   value: string,
   chain: string | null = null
 ) {
-  const chainPart = chain ? `${normalizedPart(chain)}:` : ""
-  return `${kind}:${chainPart}${normalizedPart(value)}`
+  const normalizedChain = chain?.trim().toLowerCase() ?? ""
+  const chainPart = normalizedChain ? `${normalizedPart(normalizedChain)}:` : ""
+  const caseSensitive = normalizedChain === "solana" && chainAddressKinds.has(kind)
+  return `${kind}:${chainPart}${normalizedPart(value, caseSensitive)}`
 }
 
 export function normalizeSharedRiskLevel(value: string | null | undefined) {
