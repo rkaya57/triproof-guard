@@ -1,6 +1,9 @@
 import { PrismaClient } from "@prisma/client"
 import { PrismaPg } from "@prisma/adapter-pg"
-import { databaseConnectionUrl } from "@/lib/db/connection-url"
+import {
+  databaseConnectionUrl,
+  databaseConnectionUsesTls,
+} from "@/lib/db/connection-url"
 
 function envNumber(name: string, fallback: number) {
   const raw = process.env[name]
@@ -16,7 +19,9 @@ const connectionString = databaseConnectionUrl(
 
 const adapter = new PrismaPg({
   connectionString,
-  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
+  ssl: databaseConnectionUsesTls(connectionString)
+    ? { rejectUnauthorized: false }
+    : undefined,
   max: process.env.NODE_ENV === "production" ? envNumber("DATABASE_POOL_MAX", 1) : undefined,
 })
 
