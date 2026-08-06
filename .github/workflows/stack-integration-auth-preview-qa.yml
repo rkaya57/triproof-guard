@@ -47,8 +47,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tri_proof_guard
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d tri_proof_guard"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     env:
-      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:1/tri_proof_guard?schema=public
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tri_proof_guard?schema=public
       NEXTAUTH_SECRET: e2e-only-session-secret-that-is-long-enough-for-local-tests
       ACCESS_PASS_SIGNING_SECRET: e2e-only-access-pass-secret-that-is-long-enough
       DEV_ALLOW_INSECURE_SECRETS: "true"
@@ -66,6 +81,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Apply isolated QA database migrations
+        run: npx prisma migrate deploy
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
