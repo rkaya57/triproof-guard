@@ -142,6 +142,7 @@ export function runLabeledBenchmark(
         independentRiskFamilyCount:
           explainableDecision.independentRiskFamilyCount,
         maliciousSignalCount: maliciousSignalCount(explainableDecision),
+        clusterLinked: Boolean(prediction.clusterId),
       })
     })
   })
