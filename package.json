@@ -21,6 +21,9 @@
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:bootstrap": "node scripts/bootstrap-database.mjs",
+    "db:verify-auth-schema": "node scripts/verify-auth-schema.mjs",
     "db:studio": "prisma studio"
   },
   "dependencies": {
