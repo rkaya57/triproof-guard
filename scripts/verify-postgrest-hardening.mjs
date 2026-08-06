@@ -19,9 +19,19 @@ function isLoopbackHost(hostname) {
 function clientOptions() {
   try {
     const parsed = new URL(databaseUrl)
+    const loopback = isLoopbackHost(parsed.hostname)
+
+    // node-postgres lets sslmode/sslcert/sslkey/sslrootcert in the connection
+    // string replace the explicit `ssl` object below. Remove those URL options so
+    // hosted Supabase connections keep TLS enabled without rejecting the pooler's
+    // managed certificate chain, while local loopback databases remain non-TLS.
+    for (const key of ["sslmode", "sslcert", "sslkey", "sslrootcert", "uselibpqcompat"]) {
+      parsed.searchParams.delete(key)
+    }
+
     return {
-      connectionString: databaseUrl,
-      ssl: isLoopbackHost(parsed.hostname) ? undefined : { rejectUnauthorized: false },
+      connectionString: parsed.toString(),
+      ssl: loopback ? undefined : { rejectUnauthorized: false },
     }
   } catch {
     return { connectionString: databaseUrl }
