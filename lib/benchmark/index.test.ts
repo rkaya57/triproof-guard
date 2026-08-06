@@ -54,6 +54,7 @@ describe("labeled benchmark framework", () => {
     assert.equal(report.metrics.acceptableDecisionAccuracy, 1)
     assert.equal(report.metrics.maliciousPrecision, 1)
     assert.equal(report.metrics.maliciousRecall, 1)
+    assert.equal(report.metrics.maliciousF1, 1)
     assert.equal(report.metrics.maliciousContainmentRate, 1)
     assert.equal(report.metrics.claimReadiness.ready, false)
     assert.ok(report.metrics.claimReadiness.reasons.length > 0)
@@ -77,11 +78,37 @@ describe("labeled benchmark framework", () => {
         evidenceConfidence: "medium" as const,
         independentRiskFamilyCount: 2,
         maliciousSignalCount: 0,
+        clusterLinked: false,
       }))
     )
 
     assert.equal(report.maliciousPrecision, null)
     assert.equal(report.criticalFalseApprovals, 0)
+  })
+
+  it("counts a linked cluster with two independent families as malicious evidence", () => {
+    const observations = Array.from({ length: 12 }, (_, index) => ({
+      scenarioId: "corroborated-cluster",
+      caseId: `cluster-${index}`,
+      chain: "Base",
+      split: "development" as const,
+      provenanceKind: "synthetic_adversarial" as const,
+      label: "sybil" as const,
+      expectedDecision: "manual_review" as const,
+      acceptableDecisions: ["manual_review" as const, "rejected" as const],
+      maliciousRiskExpectation: "present" as const,
+      predictedDecision: "manual_review" as const,
+      riskScore: 55,
+      evidenceConfidence: "medium" as const,
+      independentRiskFamilyCount: 2,
+      maliciousSignalCount: 0,
+      clusterLinked: true,
+    }))
+
+    const report = calculateBenchmarkMetrics(observations)
+    assert.equal(report.maliciousPrecision, 1)
+    assert.equal(report.maliciousRecall, 1)
+    assert.equal(report.operationalGate.passed, true)
   })
 
   it("rejects a human-verified label without reviewer provenance", () => {
@@ -116,6 +143,7 @@ describe("labeled benchmark framework", () => {
         evidenceConfidence: "low",
         independentRiskFamilyCount: 0,
         maliciousSignalCount: 0,
+        clusterLinked: false,
       },
       ...Array.from({ length: 11 }, (_, index) => ({
         scenarioId: "safe-control",
@@ -132,6 +160,7 @@ describe("labeled benchmark framework", () => {
         evidenceConfidence: "high" as const,
         independentRiskFamilyCount: 0,
         maliciousSignalCount: 0,
+        clusterLinked: false,
       })),
     ])
 
@@ -155,6 +184,7 @@ describe("labeled benchmark framework", () => {
       evidenceConfidence: "high" as const,
       independentRiskFamilyCount: index === 0 ? 2 : 0,
       maliciousSignalCount: index === 0 ? 1 : 0,
+      clusterLinked: false,
     }))
 
     const report = calculateBenchmarkMetrics(observations)
