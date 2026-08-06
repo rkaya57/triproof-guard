@@ -1,0 +1,57 @@
+name: Cross-campaign risk memory
+
+on:
+  push:
+    branches:
+      - feat/cross-campaign-risk-memory-v1
+    paths:
+      - "lib/risk-memory/**"
+      - "app/api/campaigns/**/risk-memory/**"
+      - "app/dashboard/campaigns/**/risk-memory/**"
+      - "app/dashboard/campaigns/**/layout.tsx"
+      - "components/dashboard/risk-memory-explorer.tsx"
+      - ".github/workflows/cross-campaign-risk-memory.yml"
+  pull_request:
+    branches:
+      - feat/telegram-onchain-intelligence-v1
+      - main
+    paths:
+      - "lib/risk-memory/**"
+      - "app/api/campaigns/**/risk-memory/**"
+      - "app/dashboard/campaigns/**/risk-memory/**"
+      - "app/dashboard/campaigns/**/layout.tsx"
+      - "components/dashboard/risk-memory-explorer.tsx"
+      - ".github/workflows/cross-campaign-risk-memory.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Risk memory contract tests
+        run: node --import tsx --test lib/risk-memory/builder.test.ts lib/telegram/intelligence.test.ts
+
+      - name: Full unit and regression tests
+        run: npm test
