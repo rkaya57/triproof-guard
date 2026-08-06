@@ -59,7 +59,7 @@ export type ExplainableWalletDecision = {
 
 type EvidenceDescriptor = Omit<DecisionEvidenceItem, "description">
 
-const decisiveCodes = new Set([
+const highConfidenceDecisionCodes = new Set([
   "KNOWN_BAD_FUNDER",
   "SELF_REFERRAL",
   "CIRCULAR_PATH",
@@ -67,6 +67,32 @@ const decisiveCodes = new Set([
   "NON_USER_ACCOUNT",
   "POLICY_OVERRIDE",
 ])
+
+const hardMaliciousCodes = new Set([
+  "KNOWN_BAD_FUNDER",
+  "SELF_REFERRAL",
+  "CIRCULAR_PATH",
+  "BOT_PATTERN",
+  "CORROBORATED_SYBIL",
+])
+
+function isNonUserAccount(wallet: WalletRiskResult) {
+  return Boolean(
+    wallet.accountType &&
+      wallet.accountType !== "system_user_wallet" &&
+      wallet.accountType !== "historical_unresolved_account"
+  )
+}
+
+function isEligibilityOnlyDecision(wallet: WalletRiskResult) {
+  return (
+    wallet.status === "rejected" &&
+    (isNonUserAccount(wallet) ||
+      /ineligible_non_user_account|non-user .*account|not a normal end-user wallet/i.test(
+        `${wallet.statusExplanation} ${wallet.reasons.join(" ")}`
+      ))
+  )
+}
 
 function descriptorForCode(
   code: string,
@@ -226,7 +252,7 @@ function descriptorForCode(
       effect: "eligibility_exclusion",
       title: wallet.entityLabel
         ? `Known non-participant entity: ${wallet.entityLabel}`
-        : "Known non-participant entity",
+        : `Known non-participant ${wallet.entityType} address`,
       source: "risk_engine",
     }
   }
@@ -236,7 +262,9 @@ function descriptorForCode(
       code,
       family: "account_state",
       effect: "eligibility_exclusion",
-      title: "Non-user account type",
+      title: wallet.entityLabel
+        ? `Non-user account: ${wallet.entityLabel}`
+        : "Non-user account type",
       source: "enrichment",
     }
   }
@@ -305,24 +333,194 @@ function descriptorForCode(
   return null
 }
 
-function evidenceForText(
+function explicitContextForReason(
   text: string,
-  wallet: WalletRiskResult,
-  allowFallback: boolean
-): DecisionEvidenceItem | null {
+  wallet: WalletRiskResult
+): DecisionEvidenceItem | null | undefined {
+  if (/^(Engine version|Ruleset version|Decision category):/i.test(text)) return null
+  if (/^(V\d+\.\d+ |High-volume )?risk policy:/i.test(text)) return null
+
+  if (/^On-chain verified via /i.test(text)) {
+    return {
+      code: "PROVIDER_VERIFIED",
+      family: "data_coverage",
+      effect: "neutralizing_context",
+      title: "Provider-backed verification",
+      description: text,
+      source: "enrichment",
+    }
+  }
+
+  if (/^Solana account intelligence:/i.test(text)) {
+    const nonUser = isNonUserAccount(wallet)
+    const unresolved = /historical_unresolved|missing_or_closed|unreadable/i.test(text)
+    return {
+      code: "SOLANA_ACCOUNT_STATE",
+      family: unresolved ? "data_coverage" : "account_state",
+      effect: unresolved
+        ? "coverage_limitation"
+        : nonUser
+          ? "eligibility_exclusion"
+          : "neutralizing_context",
+      title: unresolved
+        ? "Unresolved Solana account state"
+        : nonUser
+          ? "Non-user Solana account state"
+          : "Solana user-account state",
+      description: text,
+      source: "enrichment",
+    }
+  }
+
+  if (/^Solana owner program:/i.test(text)) {
+    return {
+      code: "SOLANA_OWNER_PROGRAM",
+      family: "account_state",
+      effect: isNonUserAccount(wallet)
+        ? "eligibility_exclusion"
+        : "neutralizing_context",
+      title: "Solana account owner program",
+      description: text,
+      source: "enrichment",
+    }
+  }
+
+  if (/Customer-provided context retained without overriding/i.test(text)) {
+    return {
+      code: "CUSTOMER_CONTEXT_NON_OVERRIDE",
+      family: "policy",
+      effect: "neutralizing_context",
+      title: "Customer context retained without override",
+      description: text,
+      source: "policy",
+    }
+  }
+
+  if (/Cross-campaign conflict:/i.test(text)) {
+    return {
+      code: "CROSS_CAMPAIGN_CONFLICT",
+      family: "manual_review",
+      effect: "coverage_limitation",
+      title: "Conflicting prior review context",
+      description: text,
+      source: "policy",
+    }
+  }
+
+  if (
+    /history confidence|bounded real transaction samples|lower bound and is not used as negative evidence|omitted history is not treated as negative evidence/i.test(
+      text
+    )
+  ) {
+    return {
+      code: "HISTORY_COVERAGE_LIMIT",
+      family: "data_coverage",
+      effect: "coverage_limitation",
+      title: "Bounded transaction-history coverage",
+      description: text,
+      source: "enrichment",
+    }
+  }
+
+  if (
+    /healthy behavior diversity|bot-script probability: low|strong organic wallet profile|no major risk signals detected/i.test(
+      text
+    )
+  ) {
+    return {
+      code: normalizeReasonCode(text),
+      family: "behavior",
+      effect: "neutralizing_context",
+      title: "Healthy wallet context",
+      description: text,
+      source: "risk_engine",
+    }
+  }
+
+  if (/evidence weighting: correlated .* capped|evidence boundary:/i.test(text)) {
+    return {
+      code: normalizeReasonCode(text),
+      family: "policy",
+      effect: "neutralizing_context",
+      title: "Evidence-safety boundary",
+      description: text,
+      source: "policy",
+    }
+  }
+
+  return undefined
+}
+
+function fallbackEvidence(text: string, wallet: WalletRiskResult): DecisionEvidenceItem {
   const code = normalizeReasonCode(text)
-  const descriptor = descriptorForCode(code, text, wallet)
-  if (descriptor) return { ...descriptor, description: text }
-  if (!allowFallback) return null
+
+  if (/provider|unavailable|unreadable|missing|insufficient|no reliable|no on-chain/i.test(text)) {
+    return {
+      code,
+      family: "data_coverage",
+      effect: "coverage_limitation",
+      title: "Data coverage limitation",
+      description: text,
+      source: "enrichment",
+    }
+  }
+
+  if (/not eligible|not a normal end-user|non-user account|excluded from normal user reward/i.test(text)) {
+    return {
+      code,
+      family: "account_state",
+      effect: "eligibility_exclusion",
+      title: "Campaign eligibility exclusion",
+      description: text,
+      source: "enrichment",
+    }
+  }
+
+  const hardRisk =
+    /known-bad|self[- ]referral|circular|high-confidence sybil|corroborated sybil|very high bot|bot-script probability: very high/i.test(
+      text
+    )
+  const contextualRisk =
+    /suspicious|cluster|cohort|shared funding|referral|timing|campaign-only|low transaction|limited transaction|low .*diversity|new wallet|younger than|dormant wallet|few unique counterparties|weak organic|confirmed-risk|reviewer-rejection|risk threshold/i.test(
+      text
+    )
+
+  if (hardRisk || contextualRisk) {
+    return {
+      code,
+      family: "other",
+      effect: hardRisk ? "risk_signal" : "corroborating_signal",
+      title: hardRisk ? "Additional risk evidence" : "Additional corroborating evidence",
+      description: text,
+      source: "risk_engine",
+    }
+  }
 
   return {
     code,
     family: "other",
-    effect: wallet.status === "approved" ? "neutralizing_context" : "risk_signal",
-    title: "Additional decision evidence",
+    effect: "neutralizing_context",
+    title: "Additional decision context",
     description: text,
     source: "risk_engine",
   }
+}
+
+function evidenceForText(
+  text: string,
+  wallet: WalletRiskResult
+): DecisionEvidenceItem | null {
+  const normalizedText = text.trim()
+  if (!normalizedText) return null
+
+  const explicit = explicitContextForReason(normalizedText, wallet)
+  if (explicit !== undefined) return explicit
+
+  const code = normalizeReasonCode(normalizedText)
+  const descriptor = descriptorForCode(code, normalizedText, wallet)
+  if (descriptor) return { ...descriptor, description: normalizedText }
+
+  return fallbackEvidence(normalizedText, wallet)
 }
 
 function syntheticDescription(code: string, wallet: WalletRiskResult) {
@@ -333,8 +531,13 @@ function syntheticDescription(code: string, wallet: WalletRiskResult) {
   }
   if (code === "KNOWN_ENTITY") {
     return wallet.entityLabel
-      ? `${wallet.entityLabel} is a known ${wallet.entityType} address and is not treated as a normal individual campaign participant.`
+      ? `${wallet.entityLabel} is classified as a ${wallet.entityType} account and is not treated as a normal individual campaign participant.`
       : `Known ${wallet.entityType} address is not treated as a normal individual campaign participant.`
+  }
+  if (code === "NON_USER_ACCOUNT") {
+    return wallet.accountType
+      ? `Account type ${wallet.accountType} is not a normal end-user wallet and is excluded from individual reward eligibility.`
+      : "The address is not a normal end-user wallet and is excluded from individual reward eligibility."
   }
   return wallet.statusExplanation
 }
@@ -360,6 +563,13 @@ function uniqueEvidence(items: DecisionEvidenceItem[]) {
     seen.add(key)
     return true
   })
+}
+
+function shouldKeepForEligibilityDecision(item: DecisionEvidenceItem) {
+  if (item.effect !== "risk_signal" && item.effect !== "corroborating_signal") {
+    return true
+  }
+  return hardMaliciousCodes.has(item.code)
 }
 
 function collectLimitations(wallet: WalletRiskResult, evidence: DecisionEvidenceItem[]) {
@@ -403,7 +613,9 @@ function confidenceForDecision(
   const hasEligibilityExclusion = evidence.some(
     (item) => item.effect === "eligibility_exclusion"
   )
-  const hasDecisiveSignal = evidence.some((item) => decisiveCodes.has(item.code))
+  const hasDecisiveSignal = evidence.some((item) =>
+    highConfidenceDecisionCodes.has(item.code)
+  )
 
   if (wallet.teamReview) {
     return wallet.teamReview.finalStatus === "manual_review" ? "medium" : "high"
@@ -439,21 +651,33 @@ function confidenceForDecision(
 export function buildExplainableDecision(
   wallet: WalletRiskResult
 ): ExplainableWalletDecision {
+  const eligibilityOnly = isEligibilityOnlyDecision(wallet)
   const evidence: DecisionEvidenceItem[] = []
 
   wallet.reasons.forEach((reason) => {
-    const item = evidenceForText(reason, wallet, true)
-    if (item) evidence.push(item)
+    const item = evidenceForText(reason, wallet)
+    if (!item) return
+    if (eligibilityOnly && !shouldKeepForEligibilityDecision(item)) return
+    evidence.push(item)
   })
 
   getWalletReasonCodes(wallet).forEach((code) => {
+    if (eligibilityOnly && code === "KNOWN_ENTITY" && isNonUserAccount(wallet)) return
     if (evidence.some((item) => item.code === code)) return
     const description = syntheticDescription(code, wallet)
     const descriptor = descriptorForCode(code, description, wallet)
-    if (descriptor) evidence.push({ ...descriptor, description })
+    if (!descriptor) return
+    const item = { ...descriptor, description }
+    if (eligibilityOnly && !shouldKeepForEligibilityDecision(item)) return
+    evidence.push(item)
   })
 
-  if (wallet.graphRiskScore && wallet.graphRiskScore > 0 && !evidence.some((item) => item.family === "graph")) {
+  if (
+    wallet.graphRiskScore &&
+    wallet.graphRiskScore > 0 &&
+    !evidence.some((item) => item.family === "graph") &&
+    !eligibilityOnly
+  ) {
     evidence.push({
       code: "GRAPH_RISK_CONTEXT",
       family: "graph",
