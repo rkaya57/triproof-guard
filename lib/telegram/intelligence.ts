@@ -39,9 +39,7 @@ function normalizeEntityValue(kind: TelegramOnchainEntityKind, value: string, ch
   if (kind === "domain") return normalizeDomain(trimmed)
   if (kind === "url") {
     try {
-      const url = new URL(trimmed)
-      url.hash = ""
-      return url.toString()
+      return new URL(trimmed).toString()
     } catch {
       return trimmed
     }
