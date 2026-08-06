@@ -7,7 +7,7 @@ on:
     paths:
       - "lib/risk-graph/**"
       - "app/api/campaigns/**/risk-graph/**"
-      - "app/dashboard/campaigns/**/risk-graph/**"
+      - "app/dashboard/campaigns/**"
       - "components/dashboard/risk-graph-explorer.tsx"
       - ".github/workflows/shared-risk-graph.yml"
   pull_request:
@@ -17,7 +17,7 @@ on:
     paths:
       - "lib/risk-graph/**"
       - "app/api/campaigns/**/risk-graph/**"
-      - "app/dashboard/campaigns/**/risk-graph/**"
+      - "app/dashboard/campaigns/**"
       - "components/dashboard/risk-graph-explorer.tsx"
       - ".github/workflows/shared-risk-graph.yml"
 
