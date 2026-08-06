@@ -50,6 +50,9 @@ function isNonUserEligibility(wallet: WalletRiskResult, category: string | null)
     nonUserAccount ||
     /not eligible:.*(?:service|exchange|contract|program|token|non-user)|not a normal end-user wallet/i.test(
       wallet.statusExplanation
+    ) ||
+    /non-user .*account detected|excluded from normal user reward lists/i.test(
+      wallet.statusExplanation
     )
   )
 }
@@ -67,7 +70,9 @@ function interpretationReason(kind: "coverage" | "eligibility") {
     : "Risk score interpretation: no malicious-risk score was assigned because the decision is an eligibility exclusion for a non-user account."
 }
 
-function normalizeWallet(wallet: WalletRiskResult): WalletRiskResult {
+export function normalizeWalletRiskSemantics(
+  wallet: WalletRiskResult
+): WalletRiskResult {
   const category = decisionCategory(wallet)
   const hardMaliciousEvidence = hasHardMaliciousEvidence(wallet)
   const coverageOnly =
@@ -133,7 +138,7 @@ function recomputeClusters(
 }
 
 export function normalizeAnalysisSemantics(result: AnalysisResult): AnalysisResult {
-  const wallets = result.wallets.map(normalizeWallet)
+  const wallets = result.wallets.map(normalizeWalletRiskSemantics)
   const clusters = recomputeClusters(result, wallets)
   const totalWallets = wallets.length
   const averageRiskScore = totalWallets
