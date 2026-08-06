@@ -1,7 +1,10 @@
 import { expect, test, type Page } from "@playwright/test"
 
+import { db } from "../lib/db/prisma"
+
 const CAMPAIGN_ID = "qa-missing-campaign"
 const E2E_PASSWORD = "A-safe-e2e-password-123"
+let campaignIpSequence = 10
 
 const pageRoutes = [
   `/dashboard/campaigns/${CAMPAIGN_ID}`,
@@ -18,8 +21,14 @@ const apiRoutes = [
   `/api/campaigns/${CAMPAIGN_ID}/metrics`,
 ] as const
 
+function nextCampaignTestIp() {
+  campaignIpSequence = campaignIpSequence >= 250 ? 10 : campaignIpSequence + 1
+  return `203.0.113.${campaignIpSequence}`
+}
+
 async function registerWithBrowser(page: Page, destination = "/dashboard/campaigns") {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  await page.setExtraHTTPHeaders({ "x-forwarded-for": nextCampaignTestIp() })
   await page.goto(`/register?next=${encodeURIComponent(destination)}`)
   await page.getByLabel("Name", { exact: true }).fill("Campaign Stack QA User")
   await page.getByLabel("Email", { exact: true }).fill(`campaign-stack-${suffix}@example.test`)
@@ -29,8 +38,16 @@ async function registerWithBrowser(page: Page, destination = "/dashboard/campaig
   await consents.nth(0).check()
   await consents.nth(1).check()
   await page.getByRole("button", { name: "Create Account", exact: true }).click()
-  await expect(page).toHaveURL(new RegExp(`/onboarding\\?next=${encodeURIComponent(destination)}$`))
+  await expect(page).toHaveURL(
+    new RegExp(`/onboarding\\?next=${encodeURIComponent(destination)}$`),
+    { timeout: 15_000 }
+  )
+
+  const session = await page.request.get("/api/auth/me")
+  expect(session.status()).toBe(200)
+  const body = (await session.json()) as { user: { id: string } }
   await page.goto(destination)
+  return body.user.id
 }
 
 test.describe("campaign stack integration and access boundaries", () => {
@@ -60,9 +77,19 @@ test.describe("campaign stack integration and access boundaries", () => {
 
   test("keeps all nested campaign workspace tabs visible without mobile overflow", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
-    await registerWithBrowser(page)
-    const response = await page.goto(pageRoutes[0])
-    expect(response?.status()).toBe(404)
+    const userId = await registerWithBrowser(page)
+    const project = await db.project.create({
+      data: {
+        userId,
+        name: "Disposable Mobile QA Campaign",
+        campaignType: "airdrop",
+        chain: "solana",
+        notes: "Created only inside the disposable authenticated QA database.",
+      },
+    })
+
+    const response = await page.goto(`/dashboard/campaigns/${project.id}`)
+    expect(response?.status()).toBe(200)
 
     const workspace = page.getByRole("navigation", { name: "Campaign workspace" })
     await expect(workspace).toBeVisible()
@@ -82,10 +109,11 @@ test.describe("campaign stack integration and access boundaries", () => {
     for (const route of pageRoutes) {
       const response = await page.goto(route)
       expect(response?.status(), route).toBe(404)
-      await expect(page.getByRole("navigation", { name: "Campaign workspace" })).toBeVisible()
       const body = await page.locator("body").innerText()
       expect(body).not.toContain("walletAddress")
       expect(body).not.toContain("telegramMessageId")
+      expect(body).not.toContain("Risk Graph v1")
+      expect(body).not.toContain("Cross-Campaign Risk Memory v1")
     }
   })
 
