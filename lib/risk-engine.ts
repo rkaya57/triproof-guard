@@ -12,6 +12,7 @@ import {
   normalizeGraphAddress,
   type WalletGraphContext,
 } from "@/lib/graph-intelligence"
+import { normalizeAnalysisSemantics } from "@/lib/risk-engine/semantic-safety"
 import {
   analyzeWallets as analyzeWalletsLegacy,
   normalizeRiskPolicy,
@@ -23,8 +24,8 @@ import {
 export { normalizeRiskPolicy, riskPolicyFromNotes }
 export type { CrossCampaignContext, CrossCampaignWalletSignal }
 
-export const SYBIL_ENGINE_VERSION = "2.0.0"
-export const SYBIL_RULESET_VERSION = "2026-08-01"
+export const SYBIL_ENGINE_VERSION = "2.0.1"
+export const SYBIL_RULESET_VERSION = "2026-08-06"
 export const RISK_POLICY_VERSION = "2"
 
 type SafetyPolicy = {
@@ -184,8 +185,6 @@ function prepareCrossCampaignContext(context: CrossCampaignContext | null) {
         hasConflict
           ? {
               ...signal,
-              // Preserve prior risk as capped context. A prior trusted label must
-              // not silently erase later confirmed-risk or rejection evidence.
               trustedUserCount: 0,
             }
           : signal,
@@ -441,7 +440,7 @@ export function analyzeWallets(
   ).length
   const rejectedCount = safeWallets.filter((wallet) => wallet.status === "rejected").length
 
-  return {
+  return normalizeAnalysisSemantics({
     ...legacyResult,
     wallets: safeWallets,
     clusters: safeClusters,
@@ -449,5 +448,5 @@ export function analyzeWallets(
     approvedCount,
     manualReviewCount,
     rejectedCount,
-  }
+  })
 }
