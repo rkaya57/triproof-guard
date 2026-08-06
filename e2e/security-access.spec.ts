@@ -13,6 +13,8 @@ async function registerWithBrowser(page: Page, next = "/") {
   await consents.nth(0).check()
   await consents.nth(1).check()
   await page.getByRole("button", { name: "Create Account", exact: true }).click()
+  await expect(page).toHaveURL(new RegExp(`/onboarding\\?next=${encodeURIComponent(next)}$`))
+  await page.goto(next)
   return suffix
 }
 
@@ -27,7 +29,7 @@ test.describe("security access boundaries", () => {
     const suffix = await registerWithBrowser(page)
     await expect(page).toHaveURL(/\/$/)
 
-    const api = await playwrightRequest.newContext({ baseURL: "http://127.0.0.1:3100" })
+    const api = await playwrightRequest.newContext({ baseURL: "http://localhost:3100" })
     const response = await api.post("/api/auth/register", {
       data: {
         name: "Session Security Test",
@@ -38,7 +40,7 @@ test.describe("security access boundaries", () => {
         acceptPrivacy: true,
       },
     })
-    expect(response.status()).toBe(200)
+    expect(response.status()).toBe(201)
     const setCookie = response.headersArray().find((header) => header.name.toLowerCase() === "set-cookie")?.value ?? ""
     expect(setCookie).toContain("tri-proof-session=")
     expect(setCookie).toContain("HttpOnly")
@@ -48,7 +50,7 @@ test.describe("security access boundaries", () => {
     const token = /tri-proof-session=([^;]+)/.exec(setCookie)?.[1]
     expect(token).toBeTruthy()
     const authenticatedApi = await playwrightRequest.newContext({
-      baseURL: "http://127.0.0.1:3100",
+      baseURL: "http://localhost:3100",
       extraHTTPHeaders: { Cookie: `tri-proof-session=${token}` },
     })
     const session = await authenticatedApi.get("/api/auth/me")
