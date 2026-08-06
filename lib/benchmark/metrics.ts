@@ -24,11 +24,14 @@ export type BenchmarkObservation = {
   evidenceConfidence: DecisionEvidenceConfidence
   independentRiskFamilyCount: number
   maliciousSignalCount: number
+  clusterLinked: boolean
 }
 
 export type BenchmarkMetricThresholds = {
   minimumCases: number
   minimumAcceptableDecisionAccuracy: number
+  minimumMaliciousPrecision: number
+  minimumMaliciousRecall: number
   minimumMaliciousContainmentRate: number
   maximumOrganicFalseRejectRate: number
   minimumHighConfidenceAccuracy: number
@@ -42,6 +45,8 @@ export type BenchmarkMetricThresholds = {
 export const DEFAULT_BENCHMARK_THRESHOLDS: BenchmarkMetricThresholds = {
   minimumCases: 12,
   minimumAcceptableDecisionAccuracy: 0.95,
+  minimumMaliciousPrecision: 0.9,
+  minimumMaliciousRecall: 0.9,
   minimumMaliciousContainmentRate: 1,
   maximumOrganicFalseRejectRate: 0.03,
   minimumHighConfidenceAccuracy: 1,
@@ -129,7 +134,9 @@ function isRealWorldProvenance(kind: BenchmarkProvenanceKind) {
 function predictedMalicious(observation: BenchmarkObservation) {
   return (
     observation.predictedDecision !== "approved" &&
-    observation.maliciousSignalCount > 0
+    (observation.maliciousSignalCount > 0 ||
+      (observation.clusterLinked &&
+        observation.independentRiskFamilyCount >= 2))
   )
 }
 
@@ -231,6 +238,21 @@ function buildOperationalGate(
         thresholds.minimumAcceptableDecisionAccuracy,
       actual: report.acceptableDecisionAccuracy,
       required: `>= ${thresholds.minimumAcceptableDecisionAccuracy}`,
+    },
+    {
+      name: "malicious_precision",
+      passed:
+        (report.maliciousPrecision ?? 0) >=
+        thresholds.minimumMaliciousPrecision,
+      actual: report.maliciousPrecision ?? 0,
+      required: `>= ${thresholds.minimumMaliciousPrecision}`,
+    },
+    {
+      name: "malicious_recall",
+      passed:
+        (report.maliciousRecall ?? 0) >= thresholds.minimumMaliciousRecall,
+      actual: report.maliciousRecall ?? 0,
+      required: `>= ${thresholds.minimumMaliciousRecall}`,
     },
     {
       name: "malicious_containment_rate",
