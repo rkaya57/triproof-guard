@@ -1,12 +1,18 @@
 import { expect, request as playwrightRequest, test, type Page } from "@playwright/test"
 
+const E2E_PASSWORD = "A-safe-e2e-password-123"
+
 async function registerWithBrowser(page: Page, next = "/") {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`
   await page.goto(`/register?next=${encodeURIComponent(next)}`)
-  await page.getByLabel("Name").fill("Security Test User")
-  await page.getByLabel("Email").fill(`security-${suffix}@example.test`)
-  await page.getByLabel("Password").fill("A-safe-e2e-password-123")
-  await page.getByRole("button", { name: "Create Account" }).click()
+  await page.getByLabel("Name", { exact: true }).fill("Security Test User")
+  await page.getByLabel("Email", { exact: true }).fill(`security-${suffix}@example.test`)
+  await page.getByLabel("Password", { exact: true }).fill(E2E_PASSWORD)
+  await page.getByLabel("Confirm password", { exact: true }).fill(E2E_PASSWORD)
+  const consents = page.getByRole("checkbox")
+  await consents.nth(0).check()
+  await consents.nth(1).check()
+  await page.getByRole("button", { name: "Create Account", exact: true }).click()
   return suffix
 }
 
@@ -26,7 +32,10 @@ test.describe("security access boundaries", () => {
       data: {
         name: "Session Security Test",
         email: `session-${suffix}@example.test`,
-        password: "A-safe-e2e-password-123",
+        password: E2E_PASSWORD,
+        confirmPassword: E2E_PASSWORD,
+        acceptTerms: true,
+        acceptPrivacy: true,
       },
     })
     expect(response.status()).toBe(200)
