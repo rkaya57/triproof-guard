@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import { getV1ApiUser, apiError } from "@/lib/api/v1-auth"
 import { serializeAnalysis } from "@/lib/analysis/serializers"
+import { buildExplainableDecision } from "@/lib/campaign-security/decision-evidence"
 import { apiDecisionValue, decisionExplanation, decisionLabel, decisionLegendForApi } from "@/lib/decision-labels"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
@@ -72,6 +73,7 @@ export async function GET(
         graphComponentId: wallet.graphComponentId,
         graphRiskScore: wallet.graphRiskScore,
         reasons: wallet.reasons.slice(0, 6),
+        explainableDecision: buildExplainableDecision(wallet),
       })),
       clusters: serialized.clusters.slice(0, 20),
       graphIntelligence: serialized.graph,
