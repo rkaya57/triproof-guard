@@ -86,6 +86,7 @@ export class SharedRiskGraphBuilder {
     scamGuard: false,
     scamDna: false,
     telegramGuardian: false,
+    telegramOnchain: false,
   }
 
   constructor(private readonly campaign: SharedRiskGraphCampaignContext) {
@@ -133,7 +134,14 @@ export class SharedRiskGraphBuilder {
     }
   }
 
-  markCoverage(source: "walletGraph" | "scamGuard" | "scamDna" | "telegramGuardian") {
+  markCoverage(
+    source:
+      | "walletGraph"
+      | "scamGuard"
+      | "scamDna"
+      | "telegramGuardian"
+      | "telegramOnchain"
+  ) {
     this.coverage[source] = true
   }
 

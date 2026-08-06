@@ -1,0 +1,55 @@
+name: Telegram onchain intelligence
+
+on:
+  push:
+    branches:
+      - feat/telegram-onchain-intelligence-v1
+    paths:
+      - "lib/telegram/intelligence.ts"
+      - "lib/telegram/intelligence.test.ts"
+      - "lib/risk-graph/**"
+      - "components/dashboard/risk-graph-explorer.tsx"
+      - ".github/workflows/telegram-onchain-intelligence.yml"
+  pull_request:
+    branches:
+      - feat/shared-risk-graph-v1
+      - main
+    paths:
+      - "lib/telegram/intelligence.ts"
+      - "lib/telegram/intelligence.test.ts"
+      - "lib/risk-graph/**"
+      - "components/dashboard/risk-graph-explorer.tsx"
+      - ".github/workflows/telegram-onchain-intelligence.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Telegram intelligence tests
+        run: node --import tsx --test lib/telegram/intelligence.test.ts lib/risk-graph/telegram-onchain.test.ts lib/risk-graph/adapters.test.ts lib/risk-graph/builder.test.ts
+
+      - name: Full unit and regression tests
+        run: npm test

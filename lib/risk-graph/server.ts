@@ -12,6 +12,12 @@ import {
   addWalletGraphSource,
 } from "@/lib/risk-graph/adapters"
 import { SharedRiskGraphBuilder } from "@/lib/risk-graph/builder"
+import { addTelegramOnchainSource } from "@/lib/risk-graph/telegram-onchain"
+import {
+  loadCampaignTelegramObservations,
+  telegramDomains,
+  telegramIntelCandidates,
+} from "@/lib/risk-graph/telegram-server"
 import type {
   SharedRiskGraph,
   SharedRiskGraphScamDnaObservation,
@@ -203,77 +209,41 @@ export async function loadCampaignRiskGraph(
   )
 
   if (addressCandidates.length > 0) {
-    const intel = await db.scamGuardIntelEntry.findMany({
-      where: { active: true, normalized: { in: addressCandidates } },
-      select: {
-        id: true,
-        kind: true,
-        normalized: true,
-        chain: true,
-        verdict: true,
-        label: true,
-        source: true,
-      },
-      take: 200,
-    })
-    addScamGuardIntelSource(
-      builder,
-      intel.map((item) => ({
-        ...item,
-        kind: String(item.kind),
-        verdict: String(item.verdict),
-      }))
+    const telegramObservations = await loadCampaignTelegramObservations(
+      userId,
+      addressCandidates
     )
+    addTelegramSource(builder, telegramObservations)
+    addTelegramOnchainSource(builder, telegramObservations)
 
-    const telegramScans = await db.telegramScanEvent.findMany({
-      where: {
-        target: { in: addressCandidates },
-        group: { ownerId: userId },
-      },
-      select: {
-        id: true,
-        groupId: true,
-        telegramMessageId: true,
-        target: true,
-        domain: true,
-        scanType: true,
-        chain: true,
-        riskLevel: true,
-        score: true,
-        confidence: true,
-        summary: true,
-        createdAt: true,
-        group: { select: { title: true } },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 200,
-    })
-    addTelegramSource(
-      builder,
-      telegramScans.map((scan) => ({
-        id: scan.id,
-        groupId: scan.groupId,
-        groupTitle: scan.group?.title ?? null,
-        messageId: scan.telegramMessageId,
-        target: scan.target,
-        domain: scan.domain,
-        scanType: scan.scanType,
-        chain: scan.chain,
-        riskLevel: scan.riskLevel,
-        score: scan.score,
-        confidence: scan.confidence,
-        summary: scan.summary,
-        createdAt: scan.createdAt.toISOString(),
-      }))
+    const intelCandidates = Array.from(
+      new Set([...addressCandidates, ...telegramIntelCandidates(telegramObservations)])
     )
-
-    const domains = Array.from(
-      new Set(
-        telegramScans
-          .map((scan) => scan.domain)
-          .filter((domain): domain is string => Boolean(domain))
+    if (intelCandidates.length > 0) {
+      const intel = await db.scamGuardIntelEntry.findMany({
+        where: { active: true, normalized: { in: intelCandidates } },
+        select: {
+          id: true,
+          kind: true,
+          normalized: true,
+          chain: true,
+          verdict: true,
+          label: true,
+          source: true,
+        },
+        take: 300,
+      })
+      addScamGuardIntelSource(
+        builder,
+        intel.map((item) => ({
+          ...item,
+          kind: String(item.kind),
+          verdict: String(item.verdict),
+        }))
       )
-    )
+    }
+
+    const domains = telegramDomains(telegramObservations)
     if (domains.length > 0) {
       const fingerprints = await db.scamDnaFingerprint.findMany({
         where: { domain: { in: domains }, campaignId: { not: null } },

@@ -39,6 +39,7 @@ export type SharedRiskGraphEdgeKind =
   | "BELONGS_TO_CLUSTER"
   | "SHARED_IN"
   | "OBSERVED_IN"
+  | "HOSTED_ON"
   | "REDIRECTS_TO"
   | "TARGETS"
   | "INTERACTED_WITH"
@@ -91,6 +92,7 @@ export type SharedRiskGraphCoverage = {
   scamGuard: boolean
   scamDna: boolean
   telegramGuardian: boolean
+  telegramOnchain: boolean
 }
 
 export type SharedRiskGraphSummary = {
@@ -123,6 +125,15 @@ export type SharedRiskGraphCampaignContext = {
   analysisId?: string | null
 }
 
+export type SharedRiskGraphTelegramEntityObservation = {
+  kind: "url" | "domain" | "wallet" | "token" | "contract" | "program"
+  value: string
+  chain: string | null
+  confidence: number
+  evidence: string
+  parentUrl: string | null
+}
+
 export type SharedRiskGraphTelegramObservation = {
   id: string
   groupId: string | null
@@ -137,6 +148,7 @@ export type SharedRiskGraphTelegramObservation = {
   confidence: string
   summary: string
   createdAt: string
+  extractedEntities?: SharedRiskGraphTelegramEntityObservation[]
 }
 
 export type SharedRiskGraphIntelObservation = {
