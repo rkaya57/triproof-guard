@@ -4,6 +4,7 @@ import { CampaignBenchmarkDashboard } from "@/components/dashboard/campaign-benc
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { requirePageUser } from "@/lib/auth/page"
 import { loadCampaignBenchmarkReport } from "@/lib/campaign-benchmark/server"
+import type { CampaignBenchmarkLoadResult } from "@/lib/campaign-benchmark/server"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 
 export default async function CampaignMetricsPage({
@@ -13,25 +14,17 @@ export default async function CampaignMetricsPage({
 }) {
   const { id } = await params
   const user = await requirePageUser(`/dashboard/campaigns/${id}/metrics`)
+  let result: CampaignBenchmarkLoadResult | null = null
+  let unavailable = false
 
   try {
-    const result = await loadCampaignBenchmarkReport(id, user.id)
-    if (!result) notFound()
-    if (!result.report) {
-      return (
-        <Card className="glass-panel premium-card">
-          <CardHeader>
-            <CardTitle>No completed campaign analysis</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            Run or complete an analysis before benchmark and outcome metrics can be calculated.
-          </CardContent>
-        </Card>
-      )
-    }
-    return <CampaignBenchmarkDashboard report={result.report} />
+    result = await loadCampaignBenchmarkReport(id, user.id)
   } catch (error) {
     if (!isDatabaseConnectionError(error)) throw error
+    unavailable = true
+  }
+
+  if (unavailable) {
     return (
       <Card className="glass-panel premium-card border-amber-400/30">
         <CardHeader>
@@ -43,4 +36,20 @@ export default async function CampaignMetricsPage({
       </Card>
     )
   }
+
+  if (!result) notFound()
+  if (!result.report) {
+    return (
+      <Card className="glass-panel premium-card">
+        <CardHeader>
+          <CardTitle>No completed campaign analysis</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          Run or complete an analysis before benchmark and outcome metrics can be calculated.
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return <CampaignBenchmarkDashboard report={result.report} />
 }
