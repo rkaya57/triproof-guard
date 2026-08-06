@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { requirePageUser } from "@/lib/auth/page"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { loadCampaignRiskGraph } from "@/lib/risk-graph/server"
+import type { SharedRiskGraph } from "@/lib/risk-graph/types"
 
 export default async function CampaignRiskGraphPage({
   params,
@@ -13,15 +14,17 @@ export default async function CampaignRiskGraphPage({
 }) {
   const { id } = await params
   const user = await requirePageUser(`/dashboard/campaigns/${id}/risk-graph`)
+  let graph: SharedRiskGraph | null = null
+  let unavailable = false
 
   try {
-    const graph = await loadCampaignRiskGraph(id, user.id)
-    if (!graph) notFound()
-    const campaignName =
-      graph.nodes.find((node) => node.kind === "campaign")?.label ?? "Campaign"
-    return <RiskGraphExplorer graph={graph} campaignName={campaignName} />
+    graph = await loadCampaignRiskGraph(id, user.id)
   } catch (error) {
     if (!isDatabaseConnectionError(error)) throw error
+    unavailable = true
+  }
+
+  if (unavailable) {
     return (
       <Card className="glass-panel premium-card border-amber-400/30">
         <CardHeader>
@@ -33,4 +36,9 @@ export default async function CampaignRiskGraphPage({
       </Card>
     )
   }
+
+  if (!graph) notFound()
+  const campaignName =
+    graph.nodes.find((node) => node.kind === "campaign")?.label ?? "Campaign"
+  return <RiskGraphExplorer graph={graph} campaignName={campaignName} />
 }
