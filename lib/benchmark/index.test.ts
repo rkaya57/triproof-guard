@@ -52,10 +52,36 @@ describe("labeled benchmark framework", () => {
     assert.equal(report.metrics.criticalFalseApprovals, 0)
     assert.equal(report.metrics.semanticRiskLeakageCases, 0)
     assert.equal(report.metrics.acceptableDecisionAccuracy, 1)
+    assert.equal(report.metrics.maliciousPrecision, 1)
+    assert.equal(report.metrics.maliciousRecall, 1)
     assert.equal(report.metrics.maliciousContainmentRate, 1)
     assert.equal(report.metrics.claimReadiness.ready, false)
     assert.ok(report.metrics.claimReadiness.reasons.length > 0)
     assert.ok(report.scenarioChecks.every((check) => check.passed))
+  })
+
+  it("does not count review-only evidence as a malicious prediction", () => {
+    const report = calculateBenchmarkMetrics(
+      Array.from({ length: 12 }, (_, index) => ({
+        scenarioId: "review-only-control",
+        caseId: `review-${index}`,
+        chain: "Base",
+        split: "development" as const,
+        provenanceKind: "synthetic_regression" as const,
+        label: "organic_user" as const,
+        expectedDecision: "manual_review" as const,
+        acceptableDecisions: ["manual_review" as const],
+        maliciousRiskExpectation: "unknown" as const,
+        predictedDecision: "manual_review" as const,
+        riskScore: 42,
+        evidenceConfidence: "medium" as const,
+        independentRiskFamilyCount: 2,
+        maliciousSignalCount: 0,
+      }))
+    )
+
+    assert.equal(report.maliciousPrecision, null)
+    assert.equal(report.criticalFalseApprovals, 0)
   })
 
   it("rejects a human-verified label without reviewer provenance", () => {
@@ -89,6 +115,7 @@ describe("labeled benchmark framework", () => {
         riskScore: 0,
         evidenceConfidence: "low",
         independentRiskFamilyCount: 0,
+        maliciousSignalCount: 0,
       },
       ...Array.from({ length: 11 }, (_, index) => ({
         scenarioId: "safe-control",
@@ -104,6 +131,7 @@ describe("labeled benchmark framework", () => {
         riskScore: 0,
         evidenceConfidence: "high" as const,
         independentRiskFamilyCount: 0,
+        maliciousSignalCount: 0,
       })),
     ])
 
@@ -126,6 +154,7 @@ describe("labeled benchmark framework", () => {
       riskScore: index === 0 ? 75 : 0,
       evidenceConfidence: "high" as const,
       independentRiskFamilyCount: index === 0 ? 2 : 0,
+      maliciousSignalCount: index === 0 ? 1 : 0,
     }))
 
     const report = calculateBenchmarkMetrics(observations)
