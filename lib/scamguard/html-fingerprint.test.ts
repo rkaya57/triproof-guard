@@ -51,6 +51,50 @@ test("fingerprintHtml produces deterministic Scam DNA and static danger signals"
   assert.ok(first.signals.some((signal) => signal.code === "SANDBOX_EXTERNAL_SECRET_FORM" && signal.severity === "critical"))
 })
 
+test("fingerprintHtml does not treat protective wallet-safety copy as a secret request", () => {
+  const result = fingerprintHtml({
+    html: `
+      <html>
+        <body>
+          <main>
+            <h1>Secure workspace access</h1>
+            <p>Wallet signatures stay non-custodial.</p>
+            <p>Tri-Proof never asks for seed phrases or private keys.</p>
+            <form>
+              <input type="email" name="email">
+              <input type="password" name="password">
+            </form>
+            <p>Tri-Proof will never ask for your seed phrase, recovery phrase, or private key.</p>
+          </main>
+          <script>self.__next_f.push([1,"Tri-Proof will never ask for your seed phrase or private key."])</script>
+        </body>
+      </html>
+    `,
+    sourceUrl: "https://triproofprotocol.com/dashboard/airdrop",
+    finalUrl: "https://triproofprotocol.com/login?next=%2Fdashboard",
+    redirectChain: [
+      "https://triproofprotocol.com/dashboard/airdrop",
+      "https://triproofprotocol.com/login?next=%2Fdashboard",
+    ],
+  })
+
+  assert.equal(result.fingerprint.behaviorFlags.includes("secret_material_request"), false)
+  assert.equal(result.fingerprint.behaviorFlags.includes("secret_input_field"), false)
+  assert.equal(result.signals.some((signal) => signal.code === "SANDBOX_SECRET_REQUEST"), false)
+})
+
+test("fingerprintHtml still treats an explicit visible secret request as critical", () => {
+  const result = fingerprintHtml({
+    html: "<html><body><h1>Verify wallet</h1><p>Enter your seed phrase to continue.</p></body></html>",
+    sourceUrl: "https://claim.example/verify",
+    finalUrl: "https://claim.example/verify",
+    redirectChain: ["https://claim.example/verify"],
+  })
+
+  assert.ok(result.fingerprint.behaviorFlags.includes("secret_material_request"))
+  assert.ok(result.signals.some((signal) => signal.code === "SANDBOX_SECRET_REQUEST" && signal.severity === "critical"))
+})
+
 test("fingerprintHtml keeps Solana and EVM integration hints distinct", () => {
   const result = fingerprintHtml({
     html: '<script>window.solana.connect(); window.ethereum.request({ method: "eth_requestAccounts" })</script>',
