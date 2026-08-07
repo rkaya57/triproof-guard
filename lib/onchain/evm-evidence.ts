@@ -108,6 +108,7 @@ export function summarizeEvmActivity({
       (activity.nativeValue ?? 0) > 0
     )
   })
+  const fundingProvenanceReliable = !historyTruncated && Boolean(firstIncomingNative)
 
   const counterparties = new Set<string>()
   activities.forEach((activity) => {
@@ -178,14 +179,18 @@ export function summarizeEvmActivity({
     campaignActionsCount,
     campaignOnlyRatio,
     uniqueCounterparties: counterparties.size,
-    fundingSource: firstIncomingNative
-      ? normalize(firstIncomingNative.activity.from)
-      : null,
+    fundingSource:
+      fundingProvenanceReliable && firstIncomingNative
+        ? normalize(firstIncomingNative.activity.from)
+        : null,
     firstFundingAt:
-      firstIncomingNative?.timestamp !== null && firstIncomingNative?.timestamp !== undefined
+      fundingProvenanceReliable &&
+      firstIncomingNative?.timestamp !== null &&
+      firstIncomingNative?.timestamp !== undefined
         ? new Date(firstIncomingNative.timestamp).toISOString()
         : null,
-    firstFundingAmount: firstIncomingNative?.activity.nativeValue ?? null,
+    firstFundingAmount:
+      fundingProvenanceReliable ? firstIncomingNative?.activity.nativeValue ?? null : null,
     behaviorFingerprint: features.length ? features : null,
     historyTruncated,
   }
