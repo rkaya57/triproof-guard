@@ -4,11 +4,8 @@ import test from "node:test"
 
 import Papa from "papaparse"
 
+import { runInternalCalibration } from "@/lib/benchmark/internal-calibration"
 import {
-  runInternalCalibration,
-} from "@/lib/benchmark/internal-calibration"
-import {
-  REVIEWER_EXPORT_HEADERS,
   reviewerRowsToCsv,
   type BlindReviewerRow,
 } from "@/lib/benchmark/reviewer-export"
@@ -79,7 +76,7 @@ function auditCsv(rows: BlindReviewerRow[]) {
   const cell = (value: string) => `"${value.replaceAll('"', '""')}"`
   const lines = [headers.map(cell).join(",")]
 
-  rows.forEach((row, index) => {
+  rows.forEach((row) => {
     const isSybil = row.ground_truth_label === "sybil"
     const input = {
       walletAddress: row.wallet_address,
@@ -108,7 +105,7 @@ function auditCsv(rows: BlindReviewerRow[]) {
       campaignQualityScore: isSybil ? 0 : 100,
       campaignOnlyRatio: null,
       behaviorDiversityScore: isSybil ? 0 : 100,
-      botScriptScore: isSybil ? 0 : 0,
+      botScriptScore: 0,
       policyAction: null,
       reputationLabel: null,
       policyReason: null,
@@ -134,7 +131,6 @@ function auditCsv(rows: BlindReviewerRow[]) {
       JSON.stringify(input),
     ]
     lines.push(values.map(cell).join(","))
-    assert.equal(index >= 0, true)
   })
 
   return `${lines.join("\n")}\n`
