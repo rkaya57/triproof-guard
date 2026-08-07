@@ -88,7 +88,7 @@ describe("EVM evidence summarizer", () => {
     assert.ok((result.walletAgeDays ?? 0) > 200)
   })
 
-  it("does not treat a sampled history window as proof of wallet age", () => {
+  it("does not treat a sampled history window as proof of wallet age or funding provenance", () => {
     const result = summarizeEvmActivity({
       address: wallet,
       now: Date.parse("2026-08-07T00:00:00.000Z"),
@@ -108,7 +108,9 @@ describe("EVM evidence summarizer", () => {
     assert.equal(result.historyTruncated, true)
     assert.equal(result.walletAgeDays, null)
     assert.equal(result.firstSeen, "2026-08-01T00:00:00.000Z")
-    assert.equal(result.fundingSource, funder)
+    assert.equal(result.fundingSource, null)
+    assert.equal(result.firstFundingAt, null)
+    assert.equal(result.firstFundingAmount, null)
   })
 
   it("keeps ERC-20 values out of native-volume and funding-amount semantics", () => {
