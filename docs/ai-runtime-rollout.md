@@ -1,0 +1,1 @@
+Rollout order: corrected provider probe -> corrected live AI sidecar benchmark -> review audit/gate behavior -> freeze AI/deterministic stack -> Independent Holdout Validation v1. Normal production AI decision support remains disabled until the benchmark gate is accepted.
