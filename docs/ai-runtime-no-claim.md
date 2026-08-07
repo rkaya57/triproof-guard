@@ -1,0 +1,1 @@
+The AI Sidecar Benchmark is synthetic and claim-ineligible. It validates provider/schema reliability and safety invariants only. It must never be cited as real-world accuracy, malicious precision, malicious recall, or independent validation evidence.
