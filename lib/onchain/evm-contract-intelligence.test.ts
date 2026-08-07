@@ -3,6 +3,7 @@ import { describe, it } from "node:test"
 
 import {
   classifyEvmContractSource,
+  evmParticipantEntityType,
   normalizeEvmCreationProvenance,
   normalizeEvmProvenanceAddress,
 } from "@/lib/onchain/evm-contract-intelligence"
@@ -49,8 +50,11 @@ describe("EVM contract provenance intelligence", () => {
 
     assert.equal(safe.subtype, "safe_multisig")
     assert.equal(safe.safe, true)
+    assert.equal(evmParticipantEntityType(safe), "user")
     assert.equal(multisig.subtype, "multisig")
+    assert.equal(evmParticipantEntityType(multisig), "contract")
     assert.equal(proxy.subtype, "proxy")
+    assert.equal(evmParticipantEntityType(proxy), "contract")
   })
 
   it("keeps bridge classification ahead of proxy/multisig heuristics", () => {
@@ -60,5 +64,6 @@ describe("EVM contract provenance intelligence", () => {
       Implementation: "0x5555555555555555555555555555555555555555",
     })
     assert.equal(bridge.subtype, "bridge")
+    assert.equal(evmParticipantEntityType(bridge), "bridge")
   })
 })
