@@ -1,0 +1,1 @@
+Stop condition: if the corrected live benchmark still returns provider fallback, do not enable AI or begin holdout validation. Re-run provider diagnostics and address the exact HTTP/schema/quota cause first.
