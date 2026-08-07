@@ -1,0 +1,32 @@
+name: Gemini structured runtime safety
+
+on:
+  pull_request:
+    paths:
+      - "lib/ai/gemini-structured-runtime.ts"
+      - "lib/ai/gemini-structured-runtime.test.ts"
+      - "lib/benchmark/ai-sidecar-live.ts"
+      - "app/api/admin/benchmark/ai-sidecar/route.ts"
+      - "lib/ai/gemini-provider-probe.ts"
+      - ".github/workflows/gemini-structured-runtime.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Lint changed AI runtime
+        run: npx eslint lib/ai/gemini-structured-runtime.ts lib/ai/gemini-structured-runtime.test.ts lib/benchmark/ai-sidecar-live.ts lib/ai/gemini-provider-probe.ts app/api/admin/benchmark/ai-sidecar/route.ts
+      - name: Structured runtime tests
+        run: node --import tsx --test lib/ai/gemini-structured-runtime.test.ts lib/benchmark/ai-sidecar.test.ts
