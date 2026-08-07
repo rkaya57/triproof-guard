@@ -14,12 +14,14 @@ type EtherscanResponse<T> = {
 }
 
 const API_URL = "https://api.etherscan.io/v2/api"
-// Etherscan's contract-creation endpoint does not index every factory-created
-// Safe consistently. Use a stable Ethereum creation record for the live gate;
-// factory/non-factory separation is covered deterministically by the EVM
-// provenance regression suite and any live factory value is still shape-checked.
-const CREATION_SAMPLE = "0xcbdcd3815b5f975e1a2c840cbd8a3621fada74c8"
-const EXPECTED_CREATOR = "0x36cb391b0e7779238356daa9ae901afe659a22ca"
+// Use Etherscan's current documented Ethereum response fixture so the live gate
+// validates the provider contract rather than relying on a third-party address
+// that may not be indexed by getcontractcreation. Factory/non-factory semantics
+// remain covered by deterministic EVM provenance regressions; any live factory
+// value is still validated when present.
+const CREATION_SAMPLE = "0xcbdcd3815b5f975e1a2c944a9b2cd1c985a1cb7f"
+const EXPECTED_CREATOR = "0x3d080421c9dd5fb387d6e3124f7e1c241ade9568"
+const EXPECTED_CREATION_TX = "0xdce495a9261c4a2a5d4e879cfb55c060b4616a846d3425c441a9e31aa34c956f"
 const USDC_PROXY = "0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
 
 function sleep(ms: number) {
@@ -77,13 +79,22 @@ async function main() {
     "Ethereum contract creation provenance missing"
   )
   const rawCreation = creationResult[0] ?? null
+  assert.equal(
+    rawCreation?.contractAddress?.trim().toLowerCase(),
+    CREATION_SAMPLE,
+    "Etherscan creation response returned an unexpected contract"
+  )
   const creation = normalizeEvmCreationProvenance(rawCreation)
   assert.equal(
     creation.deployerAddress,
     EXPECTED_CREATOR,
     "Etherscan creation sample resolved to an unexpected creator"
   )
-  assert.match(creation.transactionHash ?? "", /^0x[0-9a-f]{64}$/)
+  assert.equal(
+    creation.transactionHash,
+    EXPECTED_CREATION_TX,
+    "Etherscan creation sample resolved to an unexpected creation transaction"
+  )
   assert.match(creation.blockNumber ?? "", /^\d+$/)
   assert.match(creation.timestamp ?? "", /^\d+$/)
   if (creation.factoryAddress !== null) {
