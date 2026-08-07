@@ -129,7 +129,7 @@ export function summarizeEvmActivity({
 
   const campaignHashes = new Set<string>()
   let campaignRows = 0
-  activities.forEach((activity, index) => {
+  activities.forEach((activity) => {
     if (
       normalize(activity.from) !== wallet ||
       !campaignSet.has(normalize(activity.to))
