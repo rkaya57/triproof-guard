@@ -24,11 +24,20 @@ const secretMaterialPattern = /\b(seed phrase|recovery phrase|secret phrase|priv
 const secretRequestVerbPattern = /\b(?:ask(?:s|ed)?|request(?:s|ed)?|require(?:s|d)?|need(?:s|ed)?|enter|paste|type|submit|provide|send|share|import|restore|verify|confirm|reveal|input|upload)\b/gi
 const secretRequestNegationPattern = /\b(?:never|not|no|do\s+not|don't|does\s+not|doesn't|will\s+not|won't|should\s+not|shouldn't|must\s+not|mustn't|cannot|can't|without)\b/i
 const benignSecretFallbackPattern = /\b(?:asla|hiçbir\s+zaman|kesinlikle|paylaşmayın|vermeyin|girmeyin|istemeyiz|istemiyoruz|istenmez|talep\s+etmeyiz|talep\s+etmiyoruz|is\s+not\s+required|will\s+never\s+be\s+requested|is\s+never\s+requested)\b/i
+const telegramTransportNoisePattern = /[\p{Cf}\uFFFD]/gu
 const scanCommandPattern = /^\/(?:scan|wallet|token|tx|report|watch)(?:@[a-zA-Z0-9_]+)?(?:\s|$)/i
 const scanTargetPattern = /https?:\/\/|\b0x[a-fA-F0-9]{40}\b|\b[1-9A-HJ-NP-Za-km-z]{32,44}\b|\b[A-Za-z0-9+/_=-]{100,}\b/
 
+function stripTelegramTransportNoise(value: string) {
+  return value.replace(telegramTransportNoisePattern, "")
+}
+
+function maskTelegramTransportNoise(text: string) {
+  return text.replace(telegramTransportNoisePattern, (match) => " ".repeat(match.length))
+}
+
 function cleanTelegramUrl(value: string) {
-  return value.trim().replace(/[.,!?;:]+$/, "")
+  return stripTelegramTransportNoise(value).trim().replace(/[.,!?;:]+$/, "")
 }
 
 export function normalizeTelegramUrl(value: string) {
@@ -119,12 +128,14 @@ export function maskBenignSecretMaterialMentions(text: string) {
 function normalizeMessage(message: TelegramMessage): TelegramMessage {
   const text = message.text
   const caption = message.caption
+  const transportSafeText = text === undefined ? undefined : maskTelegramTransportNoise(text)
+  const transportSafeCaption = caption === undefined ? undefined : maskTelegramTransportNoise(caption)
   return {
     ...message,
-    text: text === undefined ? undefined : maskBenignSecretMaterialMentions(text),
-    caption: caption === undefined ? undefined : maskBenignSecretMaterialMentions(caption),
-    entities: message.entities?.map((entity) => normalizeEntity(entity, text ?? "")),
-    caption_entities: message.caption_entities?.map((entity) => normalizeEntity(entity, caption ?? "")),
+    text: transportSafeText === undefined ? undefined : maskBenignSecretMaterialMentions(transportSafeText),
+    caption: transportSafeCaption === undefined ? undefined : maskBenignSecretMaterialMentions(transportSafeCaption),
+    entities: message.entities?.map((entity) => normalizeEntity(entity, transportSafeText ?? "")),
+    caption_entities: message.caption_entities?.map((entity) => normalizeEntity(entity, transportSafeCaption ?? "")),
   }
 }
 
