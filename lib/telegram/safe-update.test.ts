@@ -39,6 +39,53 @@ test("masks educational secret-material warnings without hiding real requests", 
   assert.equal(maskBenignSecretMaterialMentions(malicious), malicious)
 })
 
+test("masks every secret term in a comma-separated protective list", () => {
+  const educational = "Security reminder: Tri-Proof will never ask for your seed phrase, recovery phrase, or private key."
+  const masked = maskBenignSecretMaterialMentions(educational)
+
+  assert.equal(/\bseed phrase\b/i.test(masked), false)
+  assert.equal(/\brecovery phrase\b/i.test(masked), false)
+  assert.equal(/\bprivate key\b/i.test(masked), false)
+  assert.equal(masked.length, educational.length)
+})
+
+test("does not let nearby safety copy hide a real secret-material request", () => {
+  const mixed = "Never share your seed phrase with strangers, but enter your private key here to verify the wallet."
+  const masked = maskBenignSecretMaterialMentions(mixed)
+
+  assert.equal(/\bseed phrase\b/i.test(masked), false)
+  assert.equal(/\bprivate key\b/i.test(masked), true)
+})
+
+test("normalizes the exact Tri-Proof group test message without creating a secret target", async () => {
+  const actions = await handleTelegramUpdate({
+    update_id: 44,
+    message: {
+      message_id: 244,
+      text: [
+        "🛡 Tri-Proof Security Test",
+        "",
+        "Tri-Proof Points:",
+        "https://triproofprotocol.com/dashboard/airdrop",
+        "",
+        "Security reminder: Tri-Proof will never ask for your seed phrase, recovery phrase, or private key.",
+      ].join("\n"),
+      chat: { id: -144, type: "supergroup", title: "Tri-Proof Test" },
+    },
+  }, {
+    groupSettings: {
+      guardianEnabled: true,
+      allowlisted: true,
+      alertLevel: "HIGH_RISK",
+      dailySummary: true,
+      autoMuteCritical: false,
+    },
+  })
+
+  assert.ok(actions.length >= 1)
+  assert.ok(actions.every((action) => !/Secret material request/i.test(action.payload.text)))
+})
+
 test("masks Turkish safety wording around secret material", () => {
   const educational = "Asla seed phrase paylaşmayın; Tri-Proof bunu istemez."
   assert.equal(/\bseed phrase\b/i.test(maskBenignSecretMaterialMentions(educational)), false)
