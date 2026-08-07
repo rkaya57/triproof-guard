@@ -8,6 +8,12 @@ import {
   summarizeEvmActivity,
   type EvmActivityObservation,
 } from "@/lib/onchain/evm-evidence"
+import {
+  classifyEvmContractSource,
+  normalizeEvmCreationProvenance,
+  type EvmContractCreationLike,
+  type EvmContractSourceLike,
+} from "@/lib/onchain/evm-contract-intelligence"
 import { detectKnownEntity } from "@/lib/risk-engine/known-entities"
 import { RateLimitError } from "@/lib/onchain/rate-limit"
 import { heliusProvider } from "@/lib/onchain/providers/helius"
@@ -38,21 +44,11 @@ type TokenTx = {
   contractAddress: string
 }
 
-type ContractSource = {
-  ContractName?: string
-  ABI?: string
-  Proxy?: string
-  Implementation?: string
-}
-
-type ContractCreation = {
-  contractAddress?: string
-  contractCreator?: string
-  txHash?: string
-}
-
 const ETHERSCAN_V2_BASE_URL = "https://api.etherscan.io/v2/api"
-const ETHERSCAN_PAGE_LIMIT = 10_000
+// Etherscan reduced the free-tier account/history record ceiling to 1,000 in
+// July 2026. Requesting a larger page can silently manufacture full-history
+// confidence, so Tri-Proof intentionally caps the sample at the public ceiling.
+const ETHERSCAN_PAGE_LIMIT = 1_000
 
 function apiKeyForChain(chain: string) {
   const config = getEvmChainConfig(chain)
@@ -159,7 +155,7 @@ async function getContractCheck(address: string, chain: string) {
 
 async function getContractSource(address: string, chain: string) {
   try {
-    const result = await call<ContractSource[] | string>(chain, {
+    const result = await call<EvmContractSourceLike[] | string>(chain, {
       module: "contract",
       action: "getsourcecode",
       address,
@@ -172,7 +168,7 @@ async function getContractSource(address: string, chain: string) {
 
 async function getContractCreation(address: string, chain: string) {
   try {
-    const result = await call<ContractCreation[] | string>(chain, {
+    const result = await call<EvmContractCreationLike[] | string>(chain, {
       module: "contract",
       action: "getcontractcreation",
       contractaddresses: address,
@@ -180,24 +176,6 @@ async function getContractCreation(address: string, chain: string) {
     return Array.isArray(result) ? result[0] ?? null : null
   } catch {
     return null
-  }
-}
-
-function classifyContract(source: ContractSource | null) {
-  const name = source?.ContractName?.trim() ?? ""
-  const abi = source?.ABI ?? ""
-  const proxy = source?.Proxy === "1" || Boolean(source?.Implementation?.trim())
-  const multisig =
-    /multisig|gnosis.?safe|safeproxy|safe$/i.test(name) ||
-    (/getOwners/i.test(abi) && /getThreshold|execTransaction/i.test(abi))
-  const bridge = /bridge|portal|inbox|outbox|gateway/i.test(name)
-  return {
-    name: name || null,
-    proxy,
-    implementation: source?.Implementation?.trim().toLowerCase() || null,
-    multisig,
-    bridge,
-    subtype: bridge ? "bridge" : multisig ? "multisig" : proxy ? "proxy" : "contract",
   }
 }
 
@@ -223,7 +201,7 @@ async function enrichWallet(
         getContractCreation(address, chain),
       ])
     : [null, null]
-  const contractInfo = classifyContract(contractSource)
+  const contractInfo = classifyEvmContractSource(contractSource)
 
   const activities: EvmActivityObservation[] = [
     ...normalTxs
@@ -280,8 +258,15 @@ async function enrichWallet(
     data.knownEntityLabel = knownEntity.label
     data.knownEntityType = knownEntity.type
   } else if (isContract) {
+    const subtypeSuffix = contractInfo.safe
+      ? " (Safe smart account)"
+      : contractInfo.multisig
+        ? " (multisig)"
+        : contractInfo.proxy
+          ? " (proxy)"
+          : ""
     data.knownEntityLabel = contractInfo.name
-      ? `${contractInfo.name}${contractInfo.multisig ? " (multisig)" : contractInfo.proxy ? " (proxy)" : ""}`
+      ? `${contractInfo.name}${subtypeSuffix}`
       : null
     data.knownEntityType = contractInfo.bridge ? "bridge" : "contract"
   }
@@ -289,25 +274,31 @@ async function enrichWallet(
   const creationTxFallback = normalTxs.find(
     (tx) => tx.contractAddress?.toLowerCase() === lowerAddress
   )
-  data.evmDeployerAddress =
-    contractCreation?.contractCreator?.trim().toLowerCase() ||
-    creationTxFallback?.from?.toLowerCase() ||
-    null
+  const creationProvenance = normalizeEvmCreationProvenance(
+    contractCreation,
+    creationTxFallback?.from
+  )
+  data.evmDeployerAddress = creationProvenance.deployerAddress
+  data.evmFactoryAddress = creationProvenance.factoryAddress
   data.evmImplementationAddress = contractInfo.implementation
   data.evmContractKind = isContract ? contractInfo.subtype : null
   data.rawData = {
-    evmEvidenceVersion: 2,
+    evmEvidenceVersion: 3,
     normalTxCount: normalTxs.length,
     tokenTxCount: tokenTxs.length,
     historyTruncated,
     deployerAddress: data.evmDeployerAddress,
-    deploymentTransactionHash: contractCreation?.txHash?.trim().toLowerCase() || null,
+    factoryAddress: data.evmFactoryAddress,
+    deploymentTransactionHash: creationProvenance.transactionHash,
+    deploymentBlockNumber: creationProvenance.blockNumber,
+    deploymentTimestamp: creationProvenance.timestamp,
     contract: isContract
       ? {
           name: contractInfo.name,
           subtype: contractInfo.subtype,
           proxy: contractInfo.proxy,
           implementation: data.evmImplementationAddress,
+          safe: contractInfo.safe,
           multisig: contractInfo.multisig,
           bridge: contractInfo.bridge,
         }
