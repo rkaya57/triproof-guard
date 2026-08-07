@@ -48,6 +48,8 @@ const nodeColors: Record<WalletGraphNode["kind"], string> = {
   referrer: "#a78bfa",
   referral_code: "#c084fc",
   service: "var(--guard-green)",
+  deployer: "#22d3ee",
+  implementation: "#38bdf8",
 }
 
 function shortValue(value: string | null, fallback: string) {
@@ -85,11 +87,12 @@ function GraphCanvas({
   return (
     <div className="relative aspect-[16/10] min-h-[330px] overflow-hidden rounded-lg border border-primary/20 bg-background/55">
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,color-mix(in_srgb,var(--primary)_9%,transparent)_1px,transparent_1px),linear-gradient(to_bottom,color-mix(in_srgb,var(--primary)_9%,transparent)_1px,transparent_1px)] bg-[size:32px_32px]" />
-      <svg viewBox="0 0 100 100" className="absolute inset-0 size-full" role="img" aria-label="Funding and referral evidence graph">
+      <svg viewBox="0 0 100 100" className="absolute inset-0 size-full" role="img" aria-label="Funding, referral, and EVM provenance evidence graph">
         {edges.map((edge) => {
           const source = positions.get(edge.sourceKey)
           const target = positions.get(edge.targetKey)
           if (!source || !target) return null
+          const provenanceEdge = edge.kind === "deployed" || edge.kind === "proxy_implementation"
           return (
             <line
               key={edge.edgeKey}
@@ -97,10 +100,10 @@ function GraphCanvas({
               y1={source.y}
               x2={target.x}
               y2={target.y}
-              stroke={edge.isRiskBearing ? "var(--guard-red)" : edge.kind === "funded" ? "var(--primary)" : "#a78bfa"}
+              stroke={edge.isRiskBearing ? "var(--guard-red)" : edge.kind === "funded" ? "var(--primary)" : provenanceEdge ? "#22d3ee" : "#a78bfa"}
               strokeWidth={edge.isRiskBearing ? 0.8 : 0.45}
               strokeOpacity={edge.isRiskBearing ? 0.9 : 0.52}
-              strokeDasharray={edge.kind === "referred" ? "2 1.5" : undefined}
+              strokeDasharray={edge.kind === "referred" || provenanceEdge ? "2 1.5" : undefined}
             >
               <title>{`${edge.kind.replace("_", " ")} - ${edge.confidence}% confidence`}</title>
             </line>
@@ -219,7 +222,7 @@ export function WalletGraphIntelligencePanel({
             </div>
             <CardTitle>Wallet, Referral & Funding Intelligence</CardTitle>
             <CardDescription className="mt-2 max-w-3xl leading-6">
-              Correlates first funding origins, explicit campaign referrals, timing, and known service labels. A shared exchange source is neutral; coordinated multi-signal paths carry risk.
+              Correlates first funding origins, explicit campaign referrals, timing, known service labels, and EVM contract provenance. Shared deployers and proxy implementations are context only unless independent risk evidence exists.
             </CardDescription>
           </div>
           {summary && (
@@ -335,6 +338,8 @@ export function WalletGraphIntelligencePanel({
                       ["Funder", nodeColors.funder],
                       ["Referrer", nodeColors.referrer],
                       ["Known service", nodeColors.service],
+                      ["Deployer", nodeColors.deployer],
+                      ["Implementation", nodeColors.implementation],
                     ].map(([label, color]) => (
                       <span key={label} className="flex items-center gap-2">
                         <span className="size-2.5 rounded-full" style={{ backgroundColor: color }} />

@@ -14,6 +14,7 @@ import {
   normalizeGraphAddress,
   type WalletGraphContext,
 } from "@/lib/graph-intelligence"
+import { augmentEvmContractProvenanceGraph } from "@/lib/graph-intelligence/evm-contract-provenance"
 import { normalizeAnalysisSemantics } from "@/lib/risk-engine/semantic-safety"
 import {
   analyzeWallets as analyzeWalletsLegacy,
@@ -541,6 +542,10 @@ export function analyzeWallets(
     graphContext,
     preparedCrossCampaign.context
   )
+  const provenanceGraph = augmentEvmContractProvenanceGraph(
+    legacyResult.graph,
+    sanitizedWallets
+  )
   const adversarialFundingTime = buildAdversarialFundingTimeClusters({
     wallets: sanitizedWallets,
     walletResults: legacyResult.wallets,
@@ -631,6 +636,7 @@ export function analyzeWallets(
 
   return normalizeAnalysisSemantics({
     ...legacyResult,
+    graph: provenanceGraph,
     wallets: safeWallets,
     clusters: safeClusters,
     totalWallets,

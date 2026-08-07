@@ -138,6 +138,12 @@ export type ParsedWallet = {
   knownEntityType?: EntityType | null
   accountType?: string | null
   ownerProgram?: string | null
+  /** EVM contract creation provenance. Informational unless corroborated by independent risk evidence. */
+  evmDeployerAddress?: string | null
+  /** Verified proxy implementation address when exposed by the EVM explorer. */
+  evmImplementationAddress?: string | null
+  /** Best-effort EVM contract subtype such as contract, proxy, multisig, or bridge. */
+  evmContractKind?: string | null
   behaviorFingerprint?: string[] | null
   campaignQualityScore?: number | null
   campaignOnlyRatio?: number | null
@@ -166,8 +172,15 @@ export type WalletGraphNodeKind =
   | "referrer"
   | "referral_code"
   | "service"
+  | "deployer"
+  | "implementation"
 
-export type WalletGraphEdgeKind = "funded" | "referred" | "self_referral"
+export type WalletGraphEdgeKind =
+  | "funded"
+  | "referred"
+  | "self_referral"
+  | "deployed"
+  | "proxy_implementation"
 
 export type WalletGraphSeverity = "info" | "caution" | "high" | "critical"
 
@@ -304,6 +317,9 @@ export type WalletRiskResult = {
   isContract?: boolean | null
   accountType?: string | null
   ownerProgram?: string | null
+  evmDeployerAddress?: string | null
+  evmImplementationAddress?: string | null
+  evmContractKind?: string | null
   behaviorFingerprint?: string[] | null
   campaignQualityScore?: number | null
   campaignOnlyRatio?: number | null
