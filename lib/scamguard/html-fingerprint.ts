@@ -238,6 +238,47 @@ function addBehavior(flags: Set<string>, condition: boolean, flag: string) {
   if (condition) flags.add(flag)
 }
 
+const secretMaterialTerms = ["seed phrase", "recovery phrase", "secret phrase", "private key", "mnemonic"]
+const secretRequestVerbPattern = /\b(?:ask(?:s|ed)?|request(?:s|ed)?|require(?:s|d)?|enter|paste|type|submit|provide|send|share|import|restore|verify|confirm|reveal|input|upload)\b/gi
+const secretRequestNegationPattern = /\b(?:never|not|no|do not|don't|will not|won't|should not|must not|no need to|without)\b/i
+
+function hasExplicitSecretMaterialRequest(text: string) {
+  const normalized = text.replace(/\s+/g, " ").trim().toLowerCase()
+  for (const term of secretMaterialTerms) {
+    let termIndex = normalized.indexOf(term)
+    while (termIndex !== -1) {
+      const start = Math.max(0, termIndex - 120)
+      const end = Math.min(normalized.length, termIndex + term.length + 120)
+      const context = normalized.slice(start, end)
+      const termStart = termIndex - start
+      const termEnd = termStart + term.length
+      secretRequestVerbPattern.lastIndex = 0
+      let verb = secretRequestVerbPattern.exec(context)
+      while (verb) {
+        const verbStart = verb.index
+        const verbEnd = verb.index + verb[0].length
+        const distance = verbEnd <= termStart
+          ? termStart - verbEnd
+          : verbStart >= termEnd
+            ? verbStart - termEnd
+            : 0
+        if (distance <= 80) {
+          const beforeVerb = context.slice(Math.max(0, verbStart - 45), verbStart)
+          const between = verbEnd <= termStart
+            ? context.slice(verbEnd, termStart)
+            : context.slice(termEnd, verbStart)
+          if (!secretRequestNegationPattern.test(beforeVerb) && !secretRequestNegationPattern.test(between)) {
+            return true
+          }
+        }
+        verb = secretRequestVerbPattern.exec(context)
+      }
+      termIndex = normalized.indexOf(term, termIndex + term.length)
+    }
+  }
+  return false
+}
+
 export function fingerprintHtml(input: {
   html: string
   sourceUrl: string
@@ -286,7 +327,7 @@ export function fingerprintHtml(input: {
   addBehavior(behaviorFlags, /navigator\.clipboard|document\.execcommand\s*\(\s*["']copy/i.test(searchableHtml), "clipboard_access")
   addBehavior(behaviorFlags, /eth_requestaccounts|solana\.connect\s*\(|window\.ethereum\.request/i.test(searchableHtml), "wallet_connect_request")
   addBehavior(behaviorFlags, /signtransaction|signalltransactions|signmessage|personal_sign|eth_sendtransaction|setapprovalforall|wallet_switchethereumchain/i.test(searchableHtml), "wallet_signing_api")
-  addBehavior(behaviorFlags, /\b(?:seed|recovery|secret)\s+phrase\b|\bprivate\s+key\b|\bmnemonic\b/i.test(searchableHtml), "secret_material_request")
+  addBehavior(behaviorFlags, hasExplicitSecretMaterialRequest(visibleText), "secret_material_request")
   addBehavior(behaviorFlags, /\beval\s*\(|new\s+function\s*\(|\batob\s*\(|fromcharcode\s*\(|(?:[A-Za-z0-9+/]{400,}={0,2})/i.test(searchableHtml), "obfuscated_script")
   addBehavior(
     behaviorFlags,

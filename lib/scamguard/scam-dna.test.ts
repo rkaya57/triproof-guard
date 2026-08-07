@@ -85,3 +85,71 @@ test("Scam DNA does not escalate a same-domain repeat or a generic one-part matc
   assert.equal(sameDomain.actionable, false)
   assert.equal(generic.actionable, false)
 })
+
+test("unreviewed text-only secret wording cannot seed an actionable cross-domain clone", () => {
+  const current: ScamDnaFingerprintData = {
+    ...fingerprint,
+    contentHash: "login-content",
+    domHash: "login-dom",
+    scriptHash: "login-script",
+    textHash: "login-text",
+    behaviorHash: "secret-text-behavior",
+    behaviorFlags: ["secret_material_request"],
+    walletTargets: [],
+    featureTokens: ["behavior:secret_material_request"],
+  }
+
+  const match = compareScamDna(current, {
+    domain: "trusted-login.example",
+    contentHash: "login-content",
+    domHash: "login-dom",
+    scriptHash: "login-script",
+    textHash: "login-text",
+    styleHash: current.styleHash,
+    faviconUrlHash: current.faviconUrlHash,
+    redirectHash: current.redirectHash,
+    behaviorHash: "secret-text-behavior",
+    behaviorFlags: ["secret_material_request"],
+    walletTargets: [],
+    programTargets: [],
+    riskLevel: "CRITICAL",
+    campaign: { id: "campaign-stale", verdict: "UNKNOWN", label: null },
+  }, "another-login.example")
+
+  assert.equal(match.matched, true)
+  assert.equal(match.actionable, false)
+  assert.equal(match.verdict, "unknown")
+  assert.ok(match.evidence.some((item) => item.includes("context-only")))
+})
+
+test("reviewed malicious campaigns remain actionable even without automated behavior flags", () => {
+  const current: ScamDnaFingerprintData = {
+    ...fingerprint,
+    contentHash: "reviewed-content",
+    domHash: "reviewed-dom",
+    scriptHash: "reviewed-script",
+    behaviorHash: "reviewed-behavior",
+    behaviorFlags: ["secret_material_request"],
+    walletTargets: [],
+  }
+
+  const match = compareScamDna(current, {
+    domain: "reviewed-bad.example",
+    contentHash: "reviewed-content",
+    domHash: "reviewed-dom",
+    scriptHash: "reviewed-script",
+    textHash: current.textHash,
+    styleHash: current.styleHash,
+    faviconUrlHash: current.faviconUrlHash,
+    redirectHash: current.redirectHash,
+    behaviorHash: "reviewed-behavior",
+    behaviorFlags: ["secret_material_request"],
+    walletTargets: [],
+    programTargets: [],
+    riskLevel: "CRITICAL",
+    campaign: { id: "campaign-reviewed", verdict: "KNOWN_BAD", label: "Reviewed phishing kit" },
+  }, "clone.example")
+
+  assert.equal(match.actionable, true)
+  assert.equal(match.verdict, "known_bad")
+})
