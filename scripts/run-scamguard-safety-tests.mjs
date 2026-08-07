@@ -36,6 +36,7 @@ const testFiles = [
   "lib/scamguard/url-sandbox.test.ts",
   "lib/scamguard/engine.test.ts",
   "lib/telegram/bot.test.ts",
+  "lib/telegram/safe-update.test.ts",
 ]
 
 const result = spawnSync(
