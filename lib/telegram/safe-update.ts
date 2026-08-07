@@ -21,8 +21,9 @@ export type {
 
 const bareDomainPattern = /^(?:www\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}(?::\d{2,5})?(?:[/?#][^\s<>]*)?$/i
 const secretMaterialPattern = /\b(seed phrase|recovery phrase|secret phrase|private key|mnemonic)\b/gi
-const benignSecretPrefixPattern = /\b(?:never|do\s+not|don't|does\s+not|doesn't|will\s+not|won't|must\s+not|mustn't|should\s+not|shouldn't|cannot|can't|without|no\s+legitimate\s+(?:project|website|site|bot|admin|moderator|support(?:\s+agent)?)|asla|hiçbir\s+zaman|kesinlikle)\b[^.!?,;\n]{0,90}$/i
-const benignSecretSuffixPattern = /^(?:[^.!?,;\n]{0,24})\b(?:is\s+not\s+required|will\s+never\s+be\s+requested|is\s+never\s+requested|istemeyiz|istemiyoruz|istenmez|talep\s+etmeyiz|talep\s+etmiyoruz|paylaşmayın|vermeyin|girmeyin)\b/i
+const secretRequestVerbPattern = /\b(?:ask(?:s|ed)?|request(?:s|ed)?|require(?:s|d)?|need(?:s|ed)?|enter|paste|type|submit|provide|send|share|import|restore|verify|confirm|reveal|input|upload)\b/gi
+const secretRequestNegationPattern = /\b(?:never|not|no|do\s+not|don't|does\s+not|doesn't|will\s+not|won't|should\s+not|shouldn't|must\s+not|mustn't|cannot|can't|without)\b/i
+const benignSecretFallbackPattern = /\b(?:asla|hiçbir\s+zaman|kesinlikle|paylaşmayın|vermeyin|girmeyin|istemeyiz|istemiyoruz|istenmez|talep\s+etmeyiz|talep\s+etmiyoruz|is\s+not\s+required|will\s+never\s+be\s+requested|is\s+never\s+requested)\b/i
 const scanCommandPattern = /^\/(?:scan|wallet|token|tx|report|watch)(?:@[a-zA-Z0-9_]+)?(?:\s|$)/i
 const scanTargetPattern = /https?:\/\/|\b0x[a-fA-F0-9]{40}\b|\b[1-9A-HJ-NP-Za-km-z]{32,44}\b|\b[A-Za-z0-9+/_=-]{100,}\b/
 
@@ -49,11 +50,68 @@ function normalizeEntity(entity: TelegramMessageEntity, sourceText: string): Tel
   return { ...entity, type: "text_link", url: normalized }
 }
 
+function clauseAround(text: string, offset: number, length: number) {
+  const left = text.slice(0, offset)
+  const right = text.slice(offset + length)
+  const previousBoundary = Math.max(
+    left.lastIndexOf("."),
+    left.lastIndexOf("!"),
+    left.lastIndexOf("?"),
+    left.lastIndexOf(";"),
+    left.lastIndexOf("\n")
+  )
+  const boundaryMatch = /[.!?;\n]/.exec(right)
+  const start = previousBoundary + 1
+  const end = boundaryMatch ? offset + length + boundaryMatch.index : text.length
+  return {
+    text: text.slice(start, end),
+    termStart: offset - start,
+    termEnd: offset - start + length,
+  }
+}
+
+function isBenignSecretMaterialMention(text: string, offset: number, length: number) {
+  const clause = clauseAround(text, offset, length)
+  const candidates: Array<{ distance: number; negated: boolean }> = []
+  secretRequestVerbPattern.lastIndex = 0
+  let verb = secretRequestVerbPattern.exec(clause.text)
+
+  while (verb) {
+    const verbStart = verb.index
+    const verbEnd = verb.index + verb[0].length
+    const distance = verbEnd <= clause.termStart
+      ? clause.termStart - verbEnd
+      : verbStart >= clause.termEnd
+        ? verbStart - clause.termEnd
+        : 0
+
+    if (distance <= 90) {
+      const beforeVerb = clause.text.slice(Math.max(0, verbStart - 24), verbStart)
+      const between = verbEnd <= clause.termStart
+        ? clause.text.slice(verbEnd, clause.termStart)
+        : clause.text.slice(clause.termEnd, verbStart)
+      candidates.push({
+        distance,
+        negated:
+          secretRequestNegationPattern.test(beforeVerb) ||
+          secretRequestNegationPattern.test(between),
+      })
+    }
+
+    verb = secretRequestVerbPattern.exec(clause.text)
+  }
+
+  if (candidates.length) {
+    candidates.sort((left, right) => left.distance - right.distance)
+    return candidates[0].negated
+  }
+
+  return benignSecretFallbackPattern.test(clause.text)
+}
+
 export function maskBenignSecretMaterialMentions(text: string) {
   return text.replace(secretMaterialPattern, (match, _term: string, offset: number) => {
-    const before = text.slice(Math.max(0, offset - 120), offset)
-    const after = text.slice(offset + match.length, offset + match.length + 100)
-    if (!benignSecretPrefixPattern.test(before) && !benignSecretSuffixPattern.test(after)) return match
+    if (!isBenignSecretMaterialMention(text, offset, match.length)) return match
     return " ".repeat(match.length)
   })
 }
