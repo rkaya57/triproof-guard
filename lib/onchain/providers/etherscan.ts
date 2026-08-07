@@ -45,6 +45,12 @@ type ContractSource = {
   Implementation?: string
 }
 
+type ContractCreation = {
+  contractAddress?: string
+  contractCreator?: string
+  txHash?: string
+}
+
 const ETHERSCAN_V2_BASE_URL = "https://api.etherscan.io/v2/api"
 const ETHERSCAN_PAGE_LIMIT = 10_000
 
@@ -164,6 +170,19 @@ async function getContractSource(address: string, chain: string) {
   }
 }
 
+async function getContractCreation(address: string, chain: string) {
+  try {
+    const result = await call<ContractCreation[] | string>(chain, {
+      module: "contract",
+      action: "getcontractcreation",
+      contractaddresses: address,
+    })
+    return Array.isArray(result) ? result[0] ?? null : null
+  } catch {
+    return null
+  }
+}
+
 function classifyContract(source: ContractSource | null) {
   const name = source?.ContractName?.trim() ?? ""
   const abi = source?.ABI ?? ""
@@ -198,7 +217,12 @@ async function enrichWallet(
     getAddressBalance(address, chain).catch(() => "0"),
     getContractCheck(address, chain),
   ])
-  const contractSource = isContract ? await getContractSource(address, chain) : null
+  const [contractSource, contractCreation] = isContract
+    ? await Promise.all([
+        getContractSource(address, chain),
+        getContractCreation(address, chain),
+      ])
+    : [null, null]
   const contractInfo = classifyContract(contractSource)
 
   const activities: EvmActivityObservation[] = [
@@ -262,10 +286,13 @@ async function enrichWallet(
     data.knownEntityType = contractInfo.bridge ? "bridge" : "contract"
   }
 
-  const creationTx = normalTxs.find(
+  const creationTxFallback = normalTxs.find(
     (tx) => tx.contractAddress?.toLowerCase() === lowerAddress
   )
-  data.evmDeployerAddress = creationTx?.from?.toLowerCase() ?? null
+  data.evmDeployerAddress =
+    contractCreation?.contractCreator?.trim().toLowerCase() ||
+    creationTxFallback?.from?.toLowerCase() ||
+    null
   data.evmImplementationAddress = contractInfo.implementation
   data.evmContractKind = isContract ? contractInfo.subtype : null
   data.rawData = {
@@ -274,6 +301,7 @@ async function enrichWallet(
     tokenTxCount: tokenTxs.length,
     historyTruncated,
     deployerAddress: data.evmDeployerAddress,
+    deploymentTransactionHash: contractCreation?.txHash?.trim().toLowerCase() || null,
     contract: isContract
       ? {
           name: contractInfo.name,
