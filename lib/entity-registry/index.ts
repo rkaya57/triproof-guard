@@ -543,7 +543,7 @@ export function entityRegistrySummary() {
   const types = new Map<EntityType, number>()
   for (const item of ENTITY_REGISTRY) {
     types.set(item.type, (types.get(item.type) ?? 0) + 1)
-    for (const role of item.roles) roles.set(role, (roles.get(item.roles) ?? 0) + 1)
+    for (const role of item.roles) roles.set(role, (roles.get(role) ?? 0) + 1)
   }
   return {
     schemaVersion: ENTITY_REGISTRY_SCHEMA_VERSION,
