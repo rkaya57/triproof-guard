@@ -42,6 +42,23 @@ describe("versioned entity registry", () => {
     assert.equal(entity.riskEffect, "neutral_context")
   })
 
+  it("tracks KuCoin 1 as provider-verified neutral exchange infrastructure", () => {
+    const entity = detectKnownEntity(
+      "0x2B5634C42055806A59E9107ED44D43C426E58258",
+      "Ethereum"
+    )
+
+    assert.ok(entity)
+    assert.equal(entity.id, "kucoin-1")
+    assert.equal(entity.label, "KuCoin 1")
+    assert.equal(entity.type, "exchange")
+    assert.ok(entity.roles.includes("exchange_hot_wallet"))
+    assert.equal(entity.provenance.kind, "provider_verified")
+    assert.ok(entity.provenance.reference.includes("etherscan.io/address/0x2b5634c"))
+    assert.equal(entity.introducedIn, ENTITY_REGISTRY_DATASET_VERSION)
+    assert.equal(entity.riskEffect, "neutral_context")
+  })
+
   it("keeps Solana addresses case-sensitive instead of manufacturing aliases", () => {
     const exact = lookupEntityRegistry(
       "cammczo5yl8w4vff8kvhrk22ggusp5vtaw7grrkgrwqk",
@@ -92,7 +109,7 @@ describe("versioned entity registry", () => {
     assert.equal(summary.datasetVersion, ENTITY_REGISTRY_DATASET_VERSION)
     assert.equal(summary.records, ENTITY_REGISTRY.length)
     assert.ok((summary.byRole.smart_account_factory ?? 0) >= 2)
-    assert.ok((summary.byType.exchange ?? 0) >= 5)
+    assert.ok((summary.byType.exchange ?? 0) >= 6)
   })
 
   it("rejects duplicate address scopes in registry validation", () => {
