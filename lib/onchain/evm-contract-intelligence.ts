@@ -15,6 +15,8 @@ export type EvmContractCreationLike = {
   creationBytecode?: string
 }
 
+export type EvmContractClassification = ReturnType<typeof classifyEvmContractSource>
+
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 export function normalizeEvmProvenanceAddress(value: string | null | undefined) {
@@ -50,6 +52,19 @@ export function classifyEvmContractSource(source: EvmContractSourceLike | null) 
             ? "proxy"
             : "contract",
   }
+}
+
+/**
+ * A verified Safe is a smart account controlled by users, not protocol
+ * infrastructure. It therefore stays eligible for normal wallet analysis.
+ * Bridges and generic contracts remain non-user entities.
+ */
+export function evmParticipantEntityType(
+  contract: EvmContractClassification
+): "user" | "bridge" | "contract" {
+  if (contract.bridge) return "bridge"
+  if (contract.safe) return "user"
+  return "contract"
 }
 
 export function normalizeEvmCreationProvenance(
