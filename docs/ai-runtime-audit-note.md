@@ -1,0 +1,1 @@
+Successful AI benchmark calls must be persisted to the server-only `AiEvidenceAudit` ledger with model, prompt/evidence/assessment schema versions, input/result hashes, latency, recommendation and privacy-reduced payload. Failed provider calls remain no-ops on deterministic decisions.
