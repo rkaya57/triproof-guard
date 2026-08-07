@@ -14,6 +14,7 @@ import {
   asParsedWallet,
   asRiskPolicy,
   type BenchmarkScenario,
+  type BenchmarkWalletInput,
   type LabeledBenchmarkDataset,
 } from "./schema"
 
@@ -33,6 +34,34 @@ export type LabeledBenchmarkRunReport = {
   observations: BenchmarkObservation[]
   scenarioChecks: BenchmarkScenarioCheck[]
   metrics: BenchmarkMetricsReport
+}
+
+const LEGACY_HELIUS_SIGNATURE_SAMPLE_CAP = 1000
+
+/**
+ * Internal calibration can replay sealed snapshots produced by older provider
+ * implementations. The legacy Solana Helius path returned at most 1,000
+ * signatures but did not persist historyTruncated. Treat that exact legacy
+ * shape as truncated so the current engine does not interpret the observed
+ * firstSeen/walletAgeDays as complete history.
+ *
+ * This normalization is intentionally scoped to claim-ineligible internal
+ * calibration datasets. Production enrichment and ordinary benchmark inputs
+ * are never rewritten here.
+ */
+export function normalizeBenchmarkInputForReplay(
+  datasetVersion: string,
+  input: BenchmarkWalletInput
+): BenchmarkWalletInput {
+  if (!datasetVersion.startsWith("internal-calibration-")) return input
+
+  const legacyHeliusCap =
+    input.chain.trim().toLowerCase() === "solana" &&
+    input.enrichmentProvider?.trim().toLowerCase() === "helius" &&
+    input.txCount === LEGACY_HELIUS_SIGNATURE_SAMPLE_CAP &&
+    (input.historyTruncated === null || input.historyTruncated === undefined)
+
+  return legacyHeliusCap ? { ...input, historyTruncated: true } : input
 }
 
 function comparableAddress(address: string) {
@@ -109,9 +138,16 @@ export function runLabeledBenchmark(
   dataset.scenarios.forEach((scenario) => {
     const rawResult = analyzeWallets(
       [
-        ...scenario.contextInputs.map((input) => asParsedWallet(input)),
+        ...scenario.contextInputs.map((input) =>
+          asParsedWallet(normalizeBenchmarkInputForReplay(dataset.datasetVersion, input))
+        ),
         ...scenario.cases.map((benchmarkCase) =>
-          asParsedWallet(benchmarkCase.input)
+          asParsedWallet(
+            normalizeBenchmarkInputForReplay(
+              dataset.datasetVersion,
+              benchmarkCase.input
+            )
+          )
         ),
       ],
       null,
