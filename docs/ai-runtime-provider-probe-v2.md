@@ -1,0 +1,1 @@
+Provider Probe v2 uses a larger basic output budget with minimal thinking and the generateContent structured-output fields `responseMimeType` and `responseJsonSchema`. It tests Gemini 3.6 Flash and Gemini 3.5 Flash-Lite without exposing secrets.
