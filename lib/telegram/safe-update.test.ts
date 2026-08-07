@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
+import { extractAdvancedScanCandidates } from "@/lib/telegram/guardian-v2"
 import {
   handleTelegramUpdate,
   maskBenignSecretMaterialMentions,
@@ -11,6 +12,13 @@ import {
 test("normalizes bare Telegram domains before ScamGuard scans them", () => {
   assert.equal(normalizeTelegramUrl("triproofprotocol.com"), "https://triproofprotocol.com")
   assert.equal(normalizeTelegramUrl("triproofprotocol.com/dashboard/airdrop"), "https://triproofprotocol.com/dashboard/airdrop")
+})
+
+test("strips invisible Telegram transport noise from URLs", () => {
+  assert.equal(
+    normalizeTelegramUrl("https://triproofprotocol.com/dashboard/airdrop\u2060\uFFFD"),
+    "https://triproofprotocol.com/dashboard/airdrop"
+  )
 })
 
 test("converts Telegram URL entities into normalized text links", () => {
@@ -27,6 +35,27 @@ test("converts Telegram URL entities into normalized text links", () => {
   assert.deepEqual(update.message?.entities, [
     { type: "text_link", offset: 0, length: 20, url: "https://triproofprotocol.com" },
   ])
+})
+
+test("collapses a clean entity URL and Unicode-contaminated text URL into one scan candidate", () => {
+  const cleanUrl = "https://triproofprotocol.com/dashboard/airdrop"
+  const noisyUrl = `${cleanUrl}\u2060\uFFFD`
+  const text = `Tri-Proof Points:\n${noisyUrl}`
+  const offset = text.indexOf(noisyUrl)
+  const normalized = normalizeTelegramUpdate({
+    update_id: 99,
+    message: {
+      message_id: 199,
+      text,
+      chat: { id: -100, type: "supergroup" },
+      entities: [{ type: "text_link", offset, length: noisyUrl.length, url: cleanUrl }],
+    },
+  })
+
+  assert.equal(normalized.message?.text?.length, text.length)
+  const urlCandidates = extractAdvancedScanCandidates(normalized.message!).filter((candidate) => candidate.source === "url")
+  assert.equal(urlCandidates.length, 1)
+  assert.equal(urlCandidates[0].value, cleanUrl)
 })
 
 test("masks educational secret-material warnings without hiding real requests", () => {
