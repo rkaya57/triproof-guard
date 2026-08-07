@@ -30,28 +30,30 @@ function contractWallet(index: number): ParsedWallet {
   }
 }
 
+function buildSharedGraph(wallet: ParsedWallet) {
+  const walletGraph = augmentEvmContractProvenanceGraph(
+    buildWalletGraphIntelligence([wallet]).graph,
+    [wallet]
+  )
+  const builder = new SharedRiskGraphBuilder({
+    id: "campaign-evm-provenance",
+    name: "EVM Provenance Test",
+    chain: "Base",
+    campaignType: "Airdrop",
+    analysisId: "analysis-evm-provenance",
+  })
+  addWalletGraphSource(builder, walletGraph)
+  return builder.finalize()
+}
+
 describe("shared risk graph EVM provenance adapter", () => {
   it("keeps deployer and implementation semantics instead of referral/service fallbacks", () => {
-    const wallet = {
+    const graph = buildSharedGraph({
       ...contractWallet(1),
       evmDeployerAddress: address(900),
       evmImplementationAddress: address(901),
       evmContractKind: "proxy",
-    }
-    const walletGraph = augmentEvmContractProvenanceGraph(
-      buildWalletGraphIntelligence([wallet]).graph,
-      [wallet]
-    )
-    const builder = new SharedRiskGraphBuilder({
-      id: "campaign-evm-provenance",
-      name: "EVM Provenance Test",
-      chain: "Base",
-      campaignType: "Airdrop",
-      analysisId: "analysis-evm-provenance",
     })
-
-    addWalletGraphSource(builder, walletGraph)
-    const graph = builder.finalize()
 
     assert.ok(graph.nodes.some((node) => node.kind === "deployer"))
     assert.ok(graph.nodes.some((node) => node.kind === "implementation"))
@@ -72,5 +74,25 @@ describe("shared risk graph EVM provenance adapter", () => {
     )
     assert.equal(deployerNode?.kind, "deployer")
     assert.equal(implementationNode?.kind, "implementation")
+  })
+
+  it("keeps factory provenance as CREATED_BY_FACTORY and non-risk-bearing", () => {
+    const graph = buildSharedGraph({
+      ...contractWallet(2),
+      evmDeployerAddress: address(910),
+      evmFactoryAddress: address(911),
+      evmContractKind: "safe_multisig",
+    })
+
+    const createdByFactory = graph.edges.find(
+      (edge) => edge.kind === "CREATED_BY_FACTORY"
+    )
+    assert.ok(createdByFactory)
+    assert.equal(createdByFactory.riskBearing, false)
+    assert.equal(
+      graph.nodes.find((node) => node.key === createdByFactory.target)?.kind,
+      "factory"
+    )
+    assert.equal(graph.edges.some((edge) => edge.kind === "DEPLOYED_BY"), false)
   })
 })
