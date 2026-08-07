@@ -1,0 +1,1 @@
+This corrective change is limited to Gemini provider compatibility, benchmark runtime model selection, provider diagnostics, and test coverage. It does not change deterministic wallet risk thresholds, policy decisions, entity classification, or public validation claims.
