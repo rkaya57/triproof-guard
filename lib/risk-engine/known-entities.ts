@@ -7,8 +7,9 @@ type KnownEntity = {
   reason: string
 }
 
-const knownEntityReason = "Known public exchange/service/protocol address. Not a typical individual reward campaign participant."
+const knownEntityReason = "Known public exchange/service/bridge/protocol address. Not a typical individual reward campaign participant."
 const solanaProgramReason = "Known Solana program, sysvar, token mint, or protocol account. Exclude or manually review before reward inclusion because it is not an end-user wallet."
+const bridgeReason = "Known canonical bridge or cross-domain messaging contract. It is infrastructure, not an individual campaign participant, and shared funding through it must not be treated as Sybil evidence by itself."
 
 export const KNOWN_ENTITIES: Record<string, KnownEntity> = {
   "0xbe0eb53f46cd790cd13851d5eff43d12404d33e8": {
@@ -40,6 +41,42 @@ export const KNOWN_ENTITIES: Record<string, KnownEntity> = {
     type: "exchange",
     action: "manual_review",
     reason: knownEntityReason,
+  },
+  "0xbeb5fc579115071764c7423a4f12edde41f106ed": {
+    label: "OP Mainnet OptimismPortal",
+    type: "bridge",
+    action: "manual_review",
+    reason: bridgeReason,
+  },
+  "0x99c9fc46f92e8a1c0dec1b1747d010903e884be1": {
+    label: "OP Mainnet L1StandardBridge",
+    type: "bridge",
+    action: "manual_review",
+    reason: bridgeReason,
+  },
+  "0x49048044d57e1c92a77f79988d21fa8faf74e97e": {
+    label: "Base OptimismPortal",
+    type: "bridge",
+    action: "manual_review",
+    reason: bridgeReason,
+  },
+  "0xa0c68c638235ee32657e8f720a23cec1bfc77c77": {
+    label: "Polygon PoS RootChainManager",
+    type: "bridge",
+    action: "manual_review",
+    reason: bridgeReason,
+  },
+  "0x40ec5b33f54e0e8a33a975908c5ba1c14e5bbbdf": {
+    label: "Polygon PoS ERC20 Predicate",
+    type: "bridge",
+    action: "manual_review",
+    reason: bridgeReason,
+  },
+  "0xa6fa4fb5f76172d178d61b04b0ecd319c5d1c0aa": {
+    label: "Polygon PoS ChildChainManager",
+    type: "bridge",
+    action: "manual_review",
+    reason: bridgeReason,
   },
   "11111111111111111111111111111111": {
     label: "Solana System Program",
@@ -165,8 +202,6 @@ export function normalizeEntityAddress(walletAddress: string) {
 }
 
 export function detectKnownEntity(walletAddress: string) {
-  // EVM addresses are case-insensitive. Solana base58 addresses are not, so
-  // non-EVM identifiers are matched exactly instead of being lower-cased.
   return KNOWN_ENTITIES[normalizeEntityAddress(walletAddress)] ?? null
 }
 

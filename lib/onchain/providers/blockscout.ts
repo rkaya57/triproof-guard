@@ -4,6 +4,10 @@ import {
   type EnrichedWalletData,
   type EnrichWalletOptions,
 } from "@/lib/onchain/enrichment-types"
+import {
+  summarizeEvmActivity,
+  type EvmActivityObservation,
+} from "@/lib/onchain/evm-evidence"
 import { detectKnownEntity } from "@/lib/risk-engine/known-entities"
 import { RateLimitError } from "@/lib/onchain/rate-limit"
 import type { OnChainProvider } from "@/lib/onchain/providers/provider"
@@ -11,10 +15,9 @@ import type { OnChainProvider } from "@/lib/onchain/providers/provider"
 /**
  * Blockscout provider.
  *
- * Blockscout exposes an Etherscan-compatible REST API, so this adapter reuses
- * the same `module=account&action=txlist` shape but points at a self-hosted /
- * public Blockscout instance via BLOCKSCOUT_API_URL. Active only when that URL
- * is configured; otherwise the router skips it.
+ * Blockscout exposes an Etherscan-compatible REST API. The adapter uses the
+ * same confidence semantics as the primary EVM providers so first-funding and
+ * sampled-history evidence cannot silently change meaning during fallback.
  */
 
 type EtherscanLikeResponse<T> = {
@@ -24,12 +27,16 @@ type EtherscanLikeResponse<T> = {
 }
 
 type NormalTx = {
+  hash: string
   timeStamp: string
   from: string
   to: string
   value: string
   input: string
+  isError?: string
 }
+
+const BLOCKSCOUT_PAGE_LIMIT = 10_000
 
 function baseUrl() {
   return process.env.BLOCKSCOUT_API_URL?.trim() ?? ""
@@ -60,6 +67,27 @@ function toEther(wei: string, decimals = 18) {
   }
 }
 
+function timestampIso(seconds: string) {
+  const milliseconds = Number(seconds) * 1000
+  return Number.isFinite(milliseconds) && milliseconds > 0
+    ? new Date(milliseconds).toISOString()
+    : null
+}
+
+async function getContractCheck(address: string) {
+  try {
+    const result = await call<string>({
+      module: "proxy",
+      action: "eth_getCode",
+      address,
+      tag: "latest",
+    })
+    return typeof result === "string" && result !== "0x" && result.length > 2
+  } catch {
+    return null
+  }
+}
+
 async function enrichWallet(
   address: string,
   chain: string,
@@ -67,75 +95,74 @@ async function enrichWallet(
 ): Promise<EnrichedWalletData> {
   const config = getEvmChainConfig(chain)
   const data = emptyEnrichedData(address, chain, "blockscout")
-  const lowerAddress = address.toLowerCase()
 
-  const txResult = await call<NormalTx[] | string>({
-    module: "account",
-    action: "txlist",
-    address,
-    sort: "asc",
-  })
+  const [txResult, balanceWei, isContract] = await Promise.all([
+    call<NormalTx[] | string>({
+      module: "account",
+      action: "txlist",
+      address,
+      startblock: "0",
+      endblock: "99999999",
+      page: "1",
+      offset: String(BLOCKSCOUT_PAGE_LIMIT),
+      sort: "asc",
+    }),
+    call<string>({
+      module: "account",
+      action: "balance",
+      address,
+    }).catch(() => "0"),
+    getContractCheck(address),
+  ])
   const normalTxs = Array.isArray(txResult) ? txResult : []
-
-  const balanceWei = await call<string>({
-    module: "account",
-    action: "balance",
+  const historyTruncated = normalTxs.length >= BLOCKSCOUT_PAGE_LIMIT
+  const activities: EvmActivityObservation[] = normalTxs
+    .filter((tx) => tx.isError !== "1")
+    .map((tx) => ({
+      hash: tx.hash,
+      timestamp: timestampIso(tx.timeStamp),
+      from: tx.from,
+      to: tx.to,
+      nativeValue: toEther(tx.value || "0", config?.nativeDecimals ?? 18),
+      input: tx.input,
+      category: "external",
+    }))
+  const summary = summarizeEvmActivity({
     address,
-  }).catch(() => "0")
-
-  data.txCount = normalTxs.length
-  data.nativeBalance = toEther(balanceWei, config?.nativeDecimals ?? 18)
-
-  const timestamps = normalTxs
-    .map((tx) => Number(tx.timeStamp) * 1000)
-    .filter((value) => Number.isFinite(value) && value > 0)
-    .sort((left, right) => left - right)
-
-  if (timestamps.length) {
-    data.firstSeen = new Date(timestamps[0]).toISOString()
-    data.lastSeen = new Date(timestamps[timestamps.length - 1]).toISOString()
-    data.walletAgeDays = Math.max(
-      0,
-      Math.floor((Date.now() - timestamps[0]) / (24 * 60 * 60 * 1000))
-    )
-  }
-
-  const firstIncoming = normalTxs.find(
-    (tx) => tx.to?.toLowerCase() === lowerAddress && BigInt(tx.value || "0") > BigInt(0)
-  )
-  if (firstIncoming) {
-    data.fundingSource = firstIncoming.from.toLowerCase()
-  }
-
-  data.totalVolume = Number(
-    normalTxs
-      .reduce((sum, tx) => sum + toEther(tx.value || "0", config?.nativeDecimals ?? 18), 0)
-      .toFixed(4)
-  )
-
-  const contractTargets = new Set(
-    normalTxs.filter((tx) => tx.input && tx.input !== "0x" && tx.to).map((tx) => tx.to.toLowerCase())
-  )
-  data.contractsCount = contractTargets.size
-
-  const counterparties = new Set<string>()
-  normalTxs.forEach((tx) => {
-    if (tx.from && tx.from.toLowerCase() !== lowerAddress) counterparties.add(tx.from.toLowerCase())
-    if (tx.to && tx.to.toLowerCase() !== lowerAddress) counterparties.add(tx.to.toLowerCase())
+    activities,
+    campaignContracts: options?.campaignContracts,
+    historyTruncated,
   })
-  data.uniqueCounterparties = counterparties.size
 
-  if (options?.campaignContracts && options.campaignContracts.length) {
-    const campaignSet = new Set(options.campaignContracts.map((value) => value.toLowerCase()))
-    data.campaignActionsCount = normalTxs.filter(
-      (tx) => tx.to && campaignSet.has(tx.to.toLowerCase())
-    ).length
-  }
+  data.txCount = summary.txCount
+  data.nativeBalance = toEther(balanceWei, config?.nativeDecimals ?? 18)
+  data.firstSeen = summary.firstSeen
+  data.lastSeen = summary.lastSeen
+  data.walletAgeDays = summary.walletAgeDays
+  data.fundingSource = summary.fundingSource
+  data.firstFundingAt = summary.firstFundingAt
+  data.firstFundingAmount = summary.firstFundingAmount
+  data.historyTruncated = summary.historyTruncated
+  data.totalVolume = summary.totalVolume
+  data.contractsCount = summary.contractsCount
+  data.campaignActionsCount = summary.campaignActionsCount
+  data.campaignOnlyRatio = summary.campaignOnlyRatio
+  data.uniqueCounterparties = summary.uniqueCounterparties
+  data.behaviorFingerprint = summary.behaviorFingerprint
+  data.isContract = isContract
 
   const knownEntity = detectKnownEntity(address)
   if (knownEntity) {
     data.knownEntityLabel = knownEntity.label
     data.knownEntityType = knownEntity.type
+  } else if (isContract) {
+    data.knownEntityType = "contract"
+  }
+
+  data.rawData = {
+    evmEvidenceVersion: 1,
+    normalTxCount: normalTxs.length,
+    historyTruncated,
   }
 
   return data

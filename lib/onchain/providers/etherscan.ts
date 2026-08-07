@@ -4,6 +4,10 @@ import {
   type EnrichedWalletData,
   type EnrichWalletOptions,
 } from "@/lib/onchain/enrichment-types"
+import {
+  summarizeEvmActivity,
+  type EvmActivityObservation,
+} from "@/lib/onchain/evm-evidence"
 import { detectKnownEntity } from "@/lib/risk-engine/known-entities"
 import { RateLimitError } from "@/lib/onchain/rate-limit"
 import { heliusProvider } from "@/lib/onchain/providers/helius"
@@ -40,23 +44,30 @@ type NormalTx = {
 }
 
 type TokenTx = {
+  hash: string
   timeStamp: string
   from: string
   to: string
   contractAddress: string
 }
 
+type ContractSource = {
+  ContractName?: string
+  ABI?: string
+  Proxy?: string
+  Implementation?: string
+}
+
 const ETHERSCAN_V2_BASE_URL = "https://api.etherscan.io/v2/api"
+const ETHERSCAN_PAGE_LIMIT = 10_000
 
 function apiKeyForChain(chain: string) {
   const config = getEvmChainConfig(chain)
   if (!config) return ""
 
-  // Etherscan V2: one key works across supported EVM chains.
   const globalKey = process.env.ETHERSCAN_API_KEY?.trim()
   if (globalKey) return globalKey
 
-  // Backward compatibility with the older per-explorer configuration.
   return process.env[config.etherscanKeyEnv]?.trim() ?? ""
 }
 
@@ -86,13 +97,11 @@ async function call<T>(
 
   const body = (await response.json()) as EtherscanResponse<T>
 
-  // Etherscan signals rate limiting through the message field with status "0".
   if (body.status === "0" && typeof body.result === "string") {
     const message = `${body.message} ${body.result}`.toLowerCase()
     if (message.includes("rate limit") || message.includes("max calls")) {
       throw new RateLimitError(body.result)
     }
-    // "No transactions found" is a normal empty result, not an error.
   }
 
   return body.result
@@ -110,6 +119,13 @@ function toEther(wei: string, decimals = 18) {
   }
 }
 
+function timestampIso(seconds: string) {
+  const milliseconds = Number(seconds) * 1000
+  return Number.isFinite(milliseconds) && milliseconds > 0
+    ? new Date(milliseconds).toISOString()
+    : null
+}
+
 async function getNormalTransactions(address: string, chain: string) {
   const result = await call<NormalTx[] | string>(chain, {
     module: "account",
@@ -118,7 +134,7 @@ async function getNormalTransactions(address: string, chain: string) {
     startblock: "0",
     endblock: "99999999",
     page: "1",
-    offset: "10000",
+    offset: String(ETHERSCAN_PAGE_LIMIT),
     sort: "asc",
   })
   return Array.isArray(result) ? result : []
@@ -132,7 +148,7 @@ async function getTokenTransfers(address: string, chain: string) {
     startblock: "0",
     endblock: "99999999",
     page: "1",
-    offset: "10000",
+    offset: String(ETHERSCAN_PAGE_LIMIT),
     sort: "asc",
   })
   return Array.isArray(result) ? result : []
@@ -162,6 +178,38 @@ async function getContractCheck(address: string, chain: string) {
   }
 }
 
+async function getContractSource(address: string, chain: string) {
+  try {
+    const result = await call<ContractSource[] | string>(chain, {
+      module: "contract",
+      action: "getsourcecode",
+      address,
+    })
+    return Array.isArray(result) ? result[0] ?? null : null
+  } catch {
+    return null
+  }
+}
+
+function classifyContract(source: ContractSource | null) {
+  const name = source?.ContractName?.trim() ?? ""
+  const abi = source?.ABI ?? ""
+  const proxy = source?.Proxy === "1" || Boolean(source?.Implementation?.trim())
+  const multisig =
+    /multisig|gnosis.?safe|safeproxy|safe$/i.test(name) ||
+    (/getOwners/i.test(abi) && /getThreshold|execTransaction/i.test(abi))
+  const bridge = /bridge|portal|inbox|outbox|gateway/i.test(name)
+
+  return {
+    name: name || null,
+    proxy,
+    implementation: source?.Implementation?.trim() || null,
+    multisig,
+    bridge,
+    subtype: bridge ? "bridge" : multisig ? "multisig" : proxy ? "proxy" : "contract",
+  }
+}
+
 async function enrichWallet(
   address: string,
   chain: string,
@@ -181,78 +229,92 @@ async function enrichWallet(
     getAddressBalance(address, chain).catch(() => "0"),
     getContractCheck(address, chain),
   ])
+  const contractSource = isContract
+    ? await getContractSource(address, chain)
+    : null
+  const contractInfo = classifyContract(contractSource)
+
+  const activities: EvmActivityObservation[] = [
+    ...normalTxs
+      .filter((tx) => tx.isError !== "1")
+      .map((tx) => ({
+        hash: tx.hash,
+        timestamp: timestampIso(tx.timeStamp),
+        from: tx.from,
+        to: tx.to,
+        nativeValue: toEther(tx.value || "0", config?.nativeDecimals ?? 18),
+        input: tx.input,
+        category: "external",
+      })),
+    ...tokenTxs.map((tx) => ({
+      hash: tx.hash,
+      timestamp: timestampIso(tx.timeStamp),
+      from: tx.from,
+      to: tx.to,
+      nativeValue: null,
+      tokenContract: tx.contractAddress,
+      input: null,
+      category: "erc20",
+    })),
+  ]
+  const historyTruncated =
+    normalTxs.length >= ETHERSCAN_PAGE_LIMIT ||
+    tokenTxs.length >= ETHERSCAN_PAGE_LIMIT
+  const summary = summarizeEvmActivity({
+    address,
+    activities,
+    campaignContracts: options?.campaignContracts,
+    historyTruncated,
+  })
 
   data.isContract = isContract
   data.nativeBalance = toEther(balanceWei, config?.nativeDecimals ?? 18)
-  data.txCount = normalTxs.length
-  data.tokenCount = new Set(tokenTxs.map((tx) => tx.contractAddress.toLowerCase())).size
+  data.txCount = summary.txCount
+  data.tokenCount = summary.tokenCount
+  data.firstSeen = summary.firstSeen
+  data.lastSeen = summary.lastSeen
+  data.walletAgeDays = summary.walletAgeDays
+  data.fundingSource = summary.fundingSource
+  data.firstFundingAt = summary.firstFundingAt
+  data.firstFundingAmount = summary.firstFundingAmount
+  data.historyTruncated = summary.historyTruncated
+  data.totalVolume = summary.totalVolume
+  data.contractsCount = summary.contractsCount
+  data.uniqueCounterparties = summary.uniqueCounterparties
+  data.campaignActionsCount = summary.campaignActionsCount
+  data.campaignOnlyRatio = summary.campaignOnlyRatio
+  data.behaviorFingerprint = summary.behaviorFingerprint
 
-  // Timestamps across normal + token activity.
-  const timestamps = [...normalTxs, ...tokenTxs]
-    .map((tx) => Number(tx.timeStamp) * 1000)
-    .filter((value) => Number.isFinite(value) && value > 0)
-    .sort((left, right) => left - right)
-
-  if (timestamps.length) {
-    data.firstSeen = new Date(timestamps[0]).toISOString()
-    data.lastSeen = new Date(timestamps[timestamps.length - 1]).toISOString()
-    data.walletAgeDays = Math.max(
-      0,
-      Math.floor((Date.now() - timestamps[0]) / (24 * 60 * 60 * 1000))
-    )
-  }
-
-  // First incoming native transfer determines the funding source.
-  const firstIncoming = normalTxs.find(
-    (tx) => tx.to?.toLowerCase() === lowerAddress && BigInt(tx.value || "0") > BigInt(0)
-  )
-  if (firstIncoming) {
-    data.fundingSource = firstIncoming.from.toLowerCase()
-  }
-
-  // Total native volume (best-effort, value moved in/out by this wallet).
-  data.totalVolume = Number(
-    normalTxs
-      .reduce((sum, tx) => sum + toEther(tx.value || "0", config?.nativeDecimals ?? 18), 0)
-      .toFixed(4)
-  )
-
-  // Contract interaction diversity: distinct `to` addresses on calls with data.
-  const contractTargets = new Set(
-    normalTxs
-      .filter((tx) => tx.input && tx.input !== "0x" && tx.to)
-      .map((tx) => tx.to.toLowerCase())
-  )
-  data.contractsCount = contractTargets.size
-
-  // Unique counterparties across normal transfers (excluding self).
-  const counterparties = new Set<string>()
-  normalTxs.forEach((tx) => {
-    if (tx.from && tx.from.toLowerCase() !== lowerAddress) counterparties.add(tx.from.toLowerCase())
-    if (tx.to && tx.to.toLowerCase() !== lowerAddress) counterparties.add(tx.to.toLowerCase())
-  })
-  data.uniqueCounterparties = counterparties.size
-
-  // Campaign actions, if campaign contracts were supplied.
-  if (options?.campaignContracts && options.campaignContracts.length) {
-    const campaignSet = new Set(options.campaignContracts.map((value) => value.toLowerCase()))
-    data.campaignActionsCount = normalTxs.filter(
-      (tx) => tx.to && campaignSet.has(tx.to.toLowerCase())
-    ).length
-  }
-
-  // Known entity: static registry first, then contract heuristic.
   const knownEntity = detectKnownEntity(address)
   if (knownEntity) {
     data.knownEntityLabel = knownEntity.label
     data.knownEntityType = knownEntity.type
   } else if (isContract) {
-    data.knownEntityType = "contract"
+    data.knownEntityLabel = contractInfo.name
+      ? `${contractInfo.name}${contractInfo.multisig ? " (multisig)" : contractInfo.proxy ? " (proxy)" : ""}`
+      : null
+    data.knownEntityType = contractInfo.bridge ? "bridge" : "contract"
   }
 
+  const creationTx = normalTxs.find(
+    (tx) => tx.contractAddress?.toLowerCase() === lowerAddress
+  )
   data.rawData = {
+    evmEvidenceVersion: 1,
     normalTxCount: normalTxs.length,
     tokenTxCount: tokenTxs.length,
+    historyTruncated,
+    deployerAddress: creationTx?.from?.toLowerCase() ?? null,
+    contract: isContract
+      ? {
+          name: contractInfo.name,
+          subtype: contractInfo.subtype,
+          proxy: contractInfo.proxy,
+          implementation: contractInfo.implementation,
+          multisig: contractInfo.multisig,
+          bridge: contractInfo.bridge,
+        }
+      : null,
   }
 
   return data

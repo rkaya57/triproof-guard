@@ -5,7 +5,7 @@ const isProductionDeployment =
 
 if (!isProductionDeployment) {
   console.log(
-    "Skipping real Helius and Alchemy provider smoke outside Vercel production."
+    "Skipping real Helius, Alchemy Solana, and Alchemy EVM provider smoke outside Vercel production."
   )
   process.exit(0)
 }
@@ -19,7 +19,7 @@ if (!process.env.HELIUS_API_KEY && !process.env.SOLANA_RPC_URL) {
 
 if (!process.env.ALCHEMY_API_KEY) {
   console.error(
-    "Production deployment blocked: ALCHEMY_API_KEY is required for the primary Solana history provider."
+    "Production deployment blocked: ALCHEMY_API_KEY is required for Solana history and live EVM provider validation."
   )
   process.exit(1)
 }
@@ -60,5 +60,13 @@ runSmoke(
     ALCHEMY_SOLANA_WALLET_CONCURRENCY:
       process.env.ALCHEMY_SOLANA_WALLET_CONCURRENCY ?? "2",
     HELIUS_STATE_RPS: process.env.HELIUS_STATE_RPS ?? "8",
+  }
+)
+
+runSmoke(
+  "real-data Alchemy Ethereum evidence smoke",
+  "scripts/test-alchemy-evm-real-smoke.ts",
+  {
+    ALCHEMY_EVM_MAX_TRANSFER_PAGES: "1",
   }
 )
