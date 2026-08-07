@@ -1,7 +1,12 @@
 import type { EntityType, WalletStatus } from "@/types"
 
 export const ENTITY_REGISTRY_SCHEMA_VERSION = "entity-registry-v1" as const
-export const ENTITY_REGISTRY_DATASET_VERSION = "2026-08-07.1" as const
+export const ENTITY_REGISTRY_DATASET_VERSION = "2026-08-07.2" as const
+const ENTITY_REGISTRY_LEGACY_DATASET_VERSION = "2026-08-07.1" as const
+
+type EntityRegistryDatasetVersion =
+  | typeof ENTITY_REGISTRY_LEGACY_DATASET_VERSION
+  | typeof ENTITY_REGISTRY_DATASET_VERSION
 
 export type EntityRegistryNetwork = "evm" | "solana"
 export type EntityRegistryStatus = "active" | "deprecated"
@@ -41,7 +46,7 @@ export type EntityRegistryRecord = {
   riskEffect: "neutral_context"
   /** Shared use of this infrastructure cannot become Sybil evidence by itself. */
   sharedInfrastructureEffect: "neutral_context"
-  introducedIn: typeof ENTITY_REGISTRY_DATASET_VERSION
+  introducedIn: EntityRegistryDatasetVersion
   provenance: {
     kind: EntityRegistrySourceKind
     reference: string
@@ -73,16 +78,27 @@ function record(input: {
   type: EntityType
   roles: EntityRegistryRole[]
   reason: string
+  introducedIn?: EntityRegistryDatasetVersion
+  provenance?: {
+    kind: EntityRegistrySourceKind
+    reference: string
+  }
 }): EntityRegistryRecord {
   return {
-    ...input,
+    id: input.id,
+    address: input.address,
+    network: input.network,
     chain: input.chain ?? null,
+    label: input.label,
+    type: input.type,
+    roles: input.roles,
     action: "manual_review",
+    reason: input.reason,
     status: "active",
     riskEffect: "neutral_context",
     sharedInfrastructureEffect: "neutral_context",
-    introducedIn: ENTITY_REGISTRY_DATASET_VERSION,
-    provenance: {
+    introducedIn: input.introducedIn ?? ENTITY_REGISTRY_LEGACY_DATASET_VERSION,
+    provenance: input.provenance ?? {
       kind: "legacy_curated",
       reference: legacyReference,
     },
@@ -90,9 +106,9 @@ function record(input: {
 }
 
 /**
- * Registry v1 intentionally migrates the pre-existing curated list without
- * adding new unverified entity claims. New records require explicit provenance
- * and a dataset version bump.
+ * Registry v1 starts from the pre-existing curated list. New records require
+ * explicit provenance and a dataset version bump; historical introducedIn
+ * versions are preserved when the dataset advances.
  */
 export const ENTITY_REGISTRY: readonly EntityRegistryRecord[] = [
   record({
@@ -139,6 +155,20 @@ export const ENTITY_REGISTRY: readonly EntityRegistryRecord[] = [
     type: "exchange",
     roles: ["exchange_hot_wallet"],
     reason: knownEntityReason,
+  }),
+  record({
+    id: "kucoin-1",
+    address: "0x2b5634c42055806a59e9107ed44d43c426e58258",
+    network: "evm",
+    label: "KuCoin 1",
+    type: "exchange",
+    roles: ["exchange_hot_wallet"],
+    reason: knownEntityReason,
+    introducedIn: ENTITY_REGISTRY_DATASET_VERSION,
+    provenance: {
+      kind: "provider_verified",
+      reference: "https://etherscan.io/address/0x2b5634c42055806a59e9107ed44d43c426e58258",
+    },
   }),
   record({
     id: "safe-proxy-factory-eip155",

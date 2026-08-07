@@ -101,6 +101,41 @@ function downloadText(fileName: string, text: string, type = "text/csv;charset=u
   URL.revokeObjectURL(url)
 }
 
+function csvCell(value: string | number) {
+  const text = String(value)
+  return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
+}
+
+function mismatchesToCsv(items: CalibrationMismatch[]) {
+  const headers = [
+    "case_id",
+    "category",
+    "chain",
+    "wallet_address",
+    "human_label",
+    "expected_decision",
+    "predicted_decision",
+    "risk_score",
+    "split",
+  ]
+  const rows = items.map((item) =>
+    [
+      item.caseId,
+      item.category,
+      item.chain,
+      item.walletAddress,
+      item.label,
+      item.expectedDecision,
+      item.predictedDecision,
+      item.riskScore,
+      item.split,
+    ]
+      .map(csvCell)
+      .join(",")
+  )
+  return `${headers.join(",")}\n${rows.join("\n")}\n`
+}
+
 function mismatchLabel(category: string) {
   if (category === "malicious_false_approval") return "Malicious → approved"
   if (category === "organic_false_reject") return "Organic → rejected"
@@ -142,9 +177,28 @@ export function CalibrationUpload() {
         method: "POST",
         body: formData,
       })
-      const payload = (await response.json()) as CalibrationResponse | { error?: string }
+      const responseText = await response.text()
+      let payload: CalibrationResponse | { error?: string }
+
+      try {
+        payload = JSON.parse(responseText) as CalibrationResponse | { error?: string }
+      } catch {
+        if (response.status === 413) {
+          throw new Error(
+            "Upload too large (HTTP 413). Use the gzip-compressed .json.gz private seal."
+          )
+        }
+        throw new Error(
+          responseText.trim() || `Calibration returned an invalid response (HTTP ${response.status}).`
+        )
+      }
+
       if (!response.ok) {
-        throw new Error("error" in payload ? payload.error : "Calibration failed")
+        throw new Error(
+          "error" in payload && payload.error
+            ? payload.error
+            : `Calibration failed (HTTP ${response.status}).`
+        )
       }
       setResult(payload as CalibrationResponse)
     } catch (caught) {
@@ -287,9 +341,14 @@ export function CalibrationUpload() {
 
             {result.mismatches.length ? (
               <div className="overflow-hidden rounded-xl border border-border">
-                <div className="flex items-center gap-2 border-b border-border bg-background/50 px-4 py-3 text-sm font-semibold text-white">
-                  <ShieldAlert className="size-4 text-yellow-300" />
-                  Highest-priority decision mismatches
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-background/50 px-4 py-3 text-sm text-white">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <ShieldAlert className="size-4 text-yellow-300" />
+                    Highest-priority decision mismatches
+                  </div>
+                  <span className="text-xs font-normal text-slate-400">
+                    Showing {Math.min(50, result.mismatches.length)} of {result.mismatches.length}
+                  </span>
                 </div>
                 <div className="max-h-80 overflow-auto">
                   <table className="w-full text-left text-xs">
@@ -332,6 +391,18 @@ export function CalibrationUpload() {
               >
                 <Download className="mr-2 size-4" />
                 Download normalized calibration CSV
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  downloadText(
+                    `tri-proof-internal-calibration-${result.batchId}-mismatches.csv`,
+                    mismatchesToCsv(result.mismatches)
+                  )
+                }
+              >
+                <Download className="mr-2 size-4" />
+                Download all mismatch CSV ({result.mismatches.length})
               </Button>
               <Button
                 variant="outline"
