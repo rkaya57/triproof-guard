@@ -6,6 +6,7 @@ import {
   SharedRiskGraphBuilder,
 } from "@/lib/risk-graph/builder"
 import type {
+  SharedRiskGraphEdgeKind,
   SharedRiskGraphIntelObservation,
   SharedRiskGraphNodeKind,
   SharedRiskGraphScamDnaObservation,
@@ -17,6 +18,8 @@ function walletGraphKind(kind: WalletGraphNodeKind): SharedRiskGraphNodeKind {
   if (kind === "funder") return "funder"
   if (kind === "referrer") return "referrer"
   if (kind === "referral_code") return "referral_code"
+  if (kind === "deployer") return "deployer"
+  if (kind === "implementation") return "implementation"
   return "service"
 }
 
@@ -46,6 +49,24 @@ function targetLabel(kind: SharedRiskGraphNodeKind, value: string) {
   return `${kind.replaceAll("_", " ")} ${value.slice(0, 10)}${value.length > 10 ? "…" : ""}`
 }
 
+function walletGraphRelation(
+  edgeKind: WalletGraphData["edges"][number]["kind"],
+  sourceNodeKind: WalletGraphNodeKind | null
+): {
+  relation: SharedRiskGraphEdgeKind
+  reverse: boolean
+} {
+  if (edgeKind === "funded") return { relation: "FUNDED_BY", reverse: true }
+  if (edgeKind === "deployed") return { relation: "DEPLOYED_BY", reverse: true }
+  if (edgeKind === "proxy_implementation") {
+    return { relation: "USES_IMPLEMENTATION", reverse: false }
+  }
+  if (sourceNodeKind === "referral_code") {
+    return { relation: "USES_REFERRAL_CODE", reverse: true }
+  }
+  return { relation: "REFERRED_BY", reverse: true }
+}
+
 export function addWalletGraphSource(
   builder: SharedRiskGraphBuilder,
   graph: WalletGraphData | null | undefined
@@ -53,6 +74,7 @@ export function addWalletGraphSource(
   if (!graph) return
   builder.markCoverage("walletGraph")
   const keyMap = new Map<string, string>()
+  const sourceKinds = new Map(graph.nodes.map((node) => [node.nodeKey, node.kind]))
 
   graph.nodes.forEach((node) => {
     const kind = walletGraphKind(node.kind)
@@ -83,17 +105,12 @@ export function addWalletGraphSource(
     const originalTarget = keyMap.get(edge.targetKey)
     if (!originalSource || !originalTarget) return
 
-    const isFunding = edge.kind === "funded"
-    const isCode = graph.nodes.find((node) => node.nodeKey === edge.sourceKey)?.kind === "referral_code"
-    const source = isFunding || edge.kind === "referred" || edge.kind === "self_referral"
-      ? originalTarget
-      : originalSource
-    const target = source === originalTarget ? originalSource : originalTarget
-    const relation = isFunding
-      ? "FUNDED_BY"
-      : isCode
-        ? "USES_REFERRAL_CODE"
-        : "REFERRED_BY"
+    const { relation, reverse } = walletGraphRelation(
+      edge.kind,
+      sourceKinds.get(edge.sourceKey) ?? null
+    )
+    const source = reverse ? originalTarget : originalSource
+    const target = reverse ? originalSource : originalTarget
 
     builder.addEdge({
       key: `${relation.toLowerCase()}:${source}:${target}`,
