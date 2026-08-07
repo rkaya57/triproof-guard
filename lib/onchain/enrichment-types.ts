@@ -41,6 +41,12 @@ export type EnrichedWalletData = {
   knownEntityType: string | null
   accountType?: string | null
   ownerProgram?: string | null
+  /** EVM contract creation provenance. Informational unless corroborated elsewhere. */
+  evmDeployerAddress?: string | null
+  /** Verified proxy implementation address when an explorer exposes it. */
+  evmImplementationAddress?: string | null
+  /** Best-effort EVM contract subtype such as contract, proxy, multisig, or bridge. */
+  evmContractKind?: string | null
   behaviorFingerprint?: string[] | null
   campaignQualityScore?: number | null
   campaignOnlyRatio?: number | null
@@ -251,6 +257,9 @@ export function emptyEnrichedData(
     knownEntityType: null,
     accountType: null,
     ownerProgram: null,
+    evmDeployerAddress: null,
+    evmImplementationAddress: null,
+    evmContractKind: null,
     behaviorFingerprint: null,
     campaignQualityScore: null,
     campaignOnlyRatio: null,
