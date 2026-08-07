@@ -1,0 +1,1 @@
+Evidence-sidecar model selection is intentionally isolated from legacy Gemini summarization settings. The default evidence model is Gemini 3.6 Flash; explicit evidence/cluster overrides are allowed only through their dedicated environment variables.
