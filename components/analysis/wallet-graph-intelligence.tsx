@@ -49,6 +49,7 @@ const nodeColors: Record<WalletGraphNode["kind"], string> = {
   referral_code: "#c084fc",
   service: "var(--guard-green)",
   deployer: "#22d3ee",
+  factory: "#67e8f9",
   implementation: "#38bdf8",
 }
 
@@ -92,7 +93,10 @@ function GraphCanvas({
           const source = positions.get(edge.sourceKey)
           const target = positions.get(edge.targetKey)
           if (!source || !target) return null
-          const provenanceEdge = edge.kind === "deployed" || edge.kind === "proxy_implementation"
+          const provenanceEdge =
+            edge.kind === "deployed" ||
+            edge.kind === "created_by_factory" ||
+            edge.kind === "proxy_implementation"
           return (
             <line
               key={edge.edgeKey}
@@ -222,7 +226,7 @@ export function WalletGraphIntelligencePanel({
             </div>
             <CardTitle>Wallet, Referral & Funding Intelligence</CardTitle>
             <CardDescription className="mt-2 max-w-3xl leading-6">
-              Correlates first funding origins, explicit campaign referrals, timing, known service labels, and EVM contract provenance. Shared deployers and proxy implementations are context only unless independent risk evidence exists.
+              Correlates first funding origins, explicit campaign referrals, timing, known service labels, and EVM contract provenance. Shared deployers, factories, and proxy implementations are context only unless independent risk evidence exists.
             </CardDescription>
           </div>
           {summary && (
@@ -339,6 +343,7 @@ export function WalletGraphIntelligencePanel({
                       ["Referrer", nodeColors.referrer],
                       ["Known service", nodeColors.service],
                       ["Deployer", nodeColors.deployer],
+                      ["Factory", nodeColors.factory],
                       ["Implementation", nodeColors.implementation],
                     ].map(([label, color]) => (
                       <span key={label} className="flex items-center gap-2">
