@@ -1,0 +1,1 @@
+Provider correction summary: use Gemini 3.6 Flash by default for evidence analysis, use generateContent `responseMimeType` plus `responseJsonSchema`, retain medium thinking for real benchmark analysis, and use minimal thinking with a sufficient output budget for provider health probes.
