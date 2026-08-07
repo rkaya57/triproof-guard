@@ -103,11 +103,20 @@ test("normalizes the exact Tri-Proof group test message without creating a secre
     },
   }, {
     groupSettings: {
+      id: "test-group",
+      telegramChatId: "-144",
+      title: "Tri-Proof Test",
+      username: null,
       guardianEnabled: true,
       allowlisted: true,
       alertLevel: "HIGH_RISK",
       dailySummary: true,
       autoMuteCritical: false,
+      safeMode: "FULL",
+      highRiskAction: "WARN_ONLY",
+      criticalAction: "ADMIN_REVIEW",
+      permissionSnapshot: null,
+      lastPermissionCheckAt: null,
     },
   })
 

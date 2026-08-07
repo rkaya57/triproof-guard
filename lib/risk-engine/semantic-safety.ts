@@ -21,6 +21,9 @@ const HARD_MALICIOUS_EVIDENCE = [
   /bot-script probability: very high/i,
 ]
 
+const providerCompletedInsufficientReason =
+  "V1.9 evidence sufficiency: provider enrichment completed, but returned no substantive wallet history. Provider completion alone cannot support automatic approval."
+
 function riskLevelFromScore(score: number): RiskLevel {
   if (score <= 30) return "low"
   if (score <= 60) return "medium"
@@ -64,6 +67,51 @@ function hasHardMaliciousEvidence(wallet: WalletRiskResult) {
   )
 }
 
+function isPositiveNumber(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+}
+
+/**
+ * Provider success is transport/data-access metadata, not evidence that an
+ * address is an established organic participant. Auto-approval requires at
+ * least one substantive wallet-history observation beyond a completed lookup.
+ */
+function hasSubstantiveWalletHistory(wallet: WalletRiskResult) {
+  return (
+    isPositiveNumber(wallet.txCount) ||
+    Boolean(wallet.fundingSource?.trim()) ||
+    Boolean(wallet.firstFundingAt) ||
+    isPositiveNumber(wallet.firstFundingAmount) ||
+    Boolean(wallet.firstSeen) ||
+    Boolean(wallet.lastSeen) ||
+    isPositiveNumber(wallet.totalVolume) ||
+    isPositiveNumber(wallet.contractsCount) ||
+    isPositiveNumber(wallet.campaignActionsCount) ||
+    isPositiveNumber(wallet.nativeBalance) ||
+    isPositiveNumber(wallet.tokenCount) ||
+    isPositiveNumber(wallet.uniqueCounterparties) ||
+    Boolean(wallet.behaviorFingerprint?.length)
+  )
+}
+
+function isProviderCompletedInsufficientApproval(
+  wallet: WalletRiskResult,
+  hardMaliciousEvidence: boolean
+) {
+  const userLikeAccount =
+    wallet.entityType === "user" &&
+    !wallet.entityLabel &&
+    (!wallet.accountType || wallet.accountType === "system_user_wallet")
+
+  return (
+    wallet.status === "approved" &&
+    wallet.enrichmentStatus === "completed" &&
+    userLikeAccount &&
+    !hardMaliciousEvidence &&
+    !hasSubstantiveWalletHistory(wallet)
+  )
+}
+
 function interpretationReason(kind: "coverage" | "eligibility") {
   return kind === "coverage"
     ? "Risk score interpretation: no malicious-risk score was assigned because the decision is based on data coverage, not wallet misconduct."
@@ -75,7 +123,10 @@ export function normalizeWalletRiskSemantics(
 ): WalletRiskResult {
   const category = decisionCategory(wallet)
   const hardMaliciousEvidence = hasHardMaliciousEvidence(wallet)
+  const providerCompletedInsufficientData =
+    isProviderCompletedInsufficientApproval(wallet, hardMaliciousEvidence)
   const coverageOnly =
+    providerCompletedInsufficientData ||
     COVERAGE_ONLY_CATEGORIES.has(category ?? "") ||
     (wallet.status === "manual_review" && wallet.enrichmentStatus === "failed") ||
     /insufficient reliable on-chain evidence|provider access .*unavailable|current account state is unresolved/i.test(
@@ -84,26 +135,49 @@ export function normalizeWalletRiskSemantics(
   const eligibilityOnly = isNonUserEligibility(wallet, category)
 
   let normalizedRiskScore = wallet.riskScore
-  let reason: string | null = null
+  let normalizedStatus = wallet.status
+  let normalizedAction = wallet.recommendedAction
+  let normalizedExplanation = wallet.statusExplanation
+  const semanticReasons: string[] = []
+
+  if (providerCompletedInsufficientData) {
+    normalizedStatus = "manual_review"
+    normalizedAction = "manual_review"
+    normalizedExplanation =
+      "Gray Zone: the provider completed enrichment, but returned insufficient substantive wallet history to support automatic approval. Retry enrichment or review eligibility manually."
+    semanticReasons.push(providerCompletedInsufficientReason)
+    semanticReasons.push("Decision category: insufficient_data")
+  }
 
   if (coverageOnly && !hardMaliciousEvidence) {
     normalizedRiskScore = 0
-    reason = interpretationReason("coverage")
+    semanticReasons.push(interpretationReason("coverage"))
   } else if (eligibilityOnly && !hardMaliciousEvidence) {
     normalizedRiskScore = 0
-    reason = interpretationReason("eligibility")
+    semanticReasons.push(interpretationReason("eligibility"))
   }
 
-  if (normalizedRiskScore === wallet.riskScore && !reason) return wallet
+  const reasons = [...wallet.reasons]
+  semanticReasons.forEach((reason) => {
+    if (!reasons.includes(reason)) reasons.push(reason)
+  })
 
-  const reasons = reason && !wallet.reasons.includes(reason)
-    ? [...wallet.reasons, reason]
-    : wallet.reasons
+  const unchanged =
+    normalizedRiskScore === wallet.riskScore &&
+    normalizedStatus === wallet.status &&
+    normalizedAction === wallet.recommendedAction &&
+    normalizedExplanation === wallet.statusExplanation &&
+    reasons.length === wallet.reasons.length
+
+  if (unchanged) return wallet
 
   return {
     ...wallet,
     riskScore: normalizedRiskScore,
     riskLevel: riskLevelFromScore(normalizedRiskScore),
+    status: normalizedStatus,
+    recommendedAction: normalizedAction,
+    statusExplanation: normalizedExplanation,
     reasons,
   }
 }

@@ -81,6 +81,111 @@ test("removes malicious-risk scoring from insufficient-data decisions", () => {
   )
 })
 
+test("does not auto-approve a completed provider lookup with no substantive wallet history", () => {
+  const normalized = normalizeAnalysisSemantics(
+    result([
+      wallet({
+        riskScore: 0,
+        riskLevel: "low",
+        status: "approved",
+        recommendedAction: "approve",
+        statusExplanation: "Approved under Balanced policy.",
+        reasons: [
+          "On-chain verified via helius",
+          "Decision category: approved",
+        ],
+        enrichmentProvider: "helius",
+        enrichmentStatus: "completed",
+      }),
+    ])
+  )
+
+  const normalizedWallet = normalized.wallets[0]
+  assert.equal(normalizedWallet?.status, "manual_review")
+  assert.equal(normalizedWallet?.recommendedAction, "manual_review")
+  assert.equal(normalizedWallet?.riskScore, 0)
+  assert.equal(normalized.manualReviewCount, 1)
+  assert.equal(normalized.approvedCount, 0)
+  assert.ok(
+    normalizedWallet?.reasons.some((reason) =>
+      reason.includes("Provider completion alone cannot support automatic approval")
+    )
+  )
+  assert.equal(
+    normalizedWallet?.reasons.filter((reason) =>
+      reason.startsWith("Decision category:")
+    ).at(-1),
+    "Decision category: insufficient_data"
+  )
+})
+
+test("treats explicit zero-activity provider results as insufficient for auto-approval", () => {
+  const normalized = normalizeAnalysisSemantics(
+    result([
+      wallet({
+        walletAddress: "0x3d2e397f94e415d7773e72ff41b42f80db2fca66",
+        chain: "Ethereum",
+        riskScore: 35,
+        riskLevel: "medium",
+        status: "approved",
+        recommendedAction: "approve",
+        statusExplanation: "Approved under Balanced policy.",
+        reasons: [
+          "On-chain verified via etherscan",
+          "Decision category: approved",
+        ],
+        txCount: 0,
+        totalVolume: 0,
+        contractsCount: 0,
+        nativeBalance: 0,
+        tokenCount: 0,
+        uniqueCounterparties: 0,
+        isContract: false,
+        enrichmentProvider: "etherscan",
+        enrichmentStatus: "completed",
+      }),
+    ])
+  )
+
+  const normalizedWallet = normalized.wallets[0]
+  assert.equal(normalizedWallet?.status, "manual_review")
+  assert.equal(normalizedWallet?.recommendedAction, "manual_review")
+  assert.equal(normalizedWallet?.riskScore, 0)
+  assert.equal(normalizedWallet?.riskLevel, "low")
+})
+
+test("preserves an approved provider result when substantive wallet history exists", () => {
+  const normalized = normalizeAnalysisSemantics(
+    result([
+      wallet({
+        riskScore: 12,
+        riskLevel: "low",
+        status: "approved",
+        recommendedAction: "approve",
+        statusExplanation: "Approved under Balanced policy.",
+        reasons: [
+          "On-chain verified via helius",
+          "Decision category: approved",
+        ],
+        txCount: 48,
+        walletAgeDays: 420,
+        totalVolume: 1250,
+        contractsCount: 9,
+        uniqueCounterparties: 23,
+        enrichmentProvider: "helius",
+        enrichmentStatus: "completed",
+      }),
+    ])
+  )
+
+  const normalizedWallet = normalized.wallets[0]
+  assert.equal(normalizedWallet?.status, "approved")
+  assert.equal(normalizedWallet?.recommendedAction, "approve")
+  assert.equal(normalizedWallet?.riskScore, 12)
+  assert.equal(normalized.approvedCount, 1)
+  assert.equal(normalized.manualReviewCount, 0)
+})
+
 test("removes malicious-risk scoring from pure non-user eligibility exclusions", () => {
   const normalized = normalizeAnalysisSemantics(
     result([
