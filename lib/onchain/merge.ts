@@ -6,9 +6,7 @@ function pickNumber(
   apiValue: number | null | undefined,
   apiWins: boolean
 ): number | null {
-  if (apiWins) {
-    return apiValue ?? csvValue ?? null
-  }
+  if (apiWins) return apiValue ?? csvValue ?? null
   return csvValue ?? apiValue ?? null
 }
 
@@ -17,9 +15,7 @@ function pickString(
   apiValue: string | null | undefined,
   apiWins: boolean
 ): string | null {
-  if (apiWins) {
-    return apiValue ?? csvValue ?? null
-  }
+  if (apiWins) return apiValue ?? csvValue ?? null
   return csvValue ?? apiValue ?? null
 }
 
@@ -95,6 +91,21 @@ export function mergeEnrichment(
       knownEntityType: pickEntityType(data.knownEntityType) ?? wallet.knownEntityType ?? null,
       accountType: pickString(wallet.accountType, data.accountType, apiWins),
       ownerProgram: pickString(wallet.ownerProgram, data.ownerProgram, apiWins),
+      evmDeployerAddress: pickString(
+        wallet.evmDeployerAddress,
+        data.evmDeployerAddress,
+        apiWins
+      ),
+      evmImplementationAddress: pickString(
+        wallet.evmImplementationAddress,
+        data.evmImplementationAddress,
+        apiWins
+      ),
+      evmContractKind: pickString(
+        wallet.evmContractKind,
+        data.evmContractKind,
+        apiWins
+      ),
       behaviorFingerprint: pickArray(wallet.behaviorFingerprint, data.behaviorFingerprint, apiWins),
       campaignQualityScore: pickNumber(wallet.campaignQualityScore, data.campaignQualityScore, apiWins),
       campaignOnlyRatio: pickNumber(wallet.campaignOnlyRatio, data.campaignOnlyRatio, apiWins),
