@@ -1,0 +1,57 @@
+name: AI Sidecar Benchmark safety
+
+on:
+  push:
+    branches:
+      - feat/ai-benchmark-v1
+    paths:
+      - "lib/benchmark/ai-sidecar.ts"
+      - "lib/benchmark/ai-sidecar.test.ts"
+      - "app/api/admin/benchmark/ai-sidecar/route.ts"
+      - "app/dashboard/admin/benchmark/ai/**"
+      - ".github/workflows/ai-sidecar-benchmark.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "lib/benchmark/ai-sidecar.ts"
+      - "lib/benchmark/ai-sidecar.test.ts"
+      - "app/api/admin/benchmark/ai-sidecar/route.ts"
+      - "app/dashboard/admin/benchmark/ai/**"
+      - ".github/workflows/ai-sidecar-benchmark.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint AI benchmark
+        run: >-
+          npx eslint
+          lib/benchmark/ai-sidecar.ts
+          lib/benchmark/ai-sidecar.test.ts
+          app/api/admin/benchmark/ai-sidecar/route.ts
+          app/dashboard/admin/benchmark/ai/page.tsx
+          app/dashboard/admin/benchmark/ai/ai-benchmark-runner.tsx
+
+      - name: AI benchmark safety tests
+        run: node --import tsx --test lib/benchmark/ai-sidecar.test.ts
