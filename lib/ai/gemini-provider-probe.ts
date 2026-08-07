@@ -1,8 +1,9 @@
 const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models"
 
-export const GEMINI_PROVIDER_PROBE_VERSION = "2026-08-08.1" as const
+export const GEMINI_PROVIDER_PROBE_VERSION = "2026-08-08.2" as const
 
-const MODELS = ["gemini-3.6-flash", "gemini-3.5-flash"] as const
+const DEFAULT_MODEL = "gemini-3.6-flash" as const
+const MODELS = [DEFAULT_MODEL, "gemini-3.5-flash-lite"] as const
 
 type ProbeMode = "basic" | "structured"
 
@@ -28,11 +29,10 @@ export type GeminiProviderProbeResult = {
 }
 
 function configuredModel() {
-  return (
-    process.env.GEMINI_EVIDENCE_MODEL?.trim() ||
-    process.env.GEMINI_MODEL?.trim() ||
-    null
-  )
+  const requested = process.env.GEMINI_EVIDENCE_MODEL?.trim()
+  return requested && /^[a-zA-Z0-9._-]{1,80}$/.test(requested)
+    ? requested
+    : DEFAULT_MODEL
 }
 
 function sanitizeDetail(value: string) {
@@ -93,7 +93,10 @@ function requestBody(mode: ProbeMode) {
           parts: [{ text: "Reply with exactly OK." }],
         },
       ],
-      generationConfig: { maxOutputTokens: 32 },
+      generationConfig: {
+        maxOutputTokens: 256,
+        thinkingConfig: { thinkingLevel: "minimal" },
+      },
     }
   }
 
@@ -105,17 +108,14 @@ function requestBody(mode: ProbeMode) {
       },
     ],
     generationConfig: {
-      maxOutputTokens: 64,
-      responseFormat: {
-        text: {
-          mimeType: "application/json",
-          schema: {
-            type: "object",
-            properties: { ok: { type: "boolean" } },
-            required: ["ok"],
-            additionalProperties: false,
-          },
-        },
+      maxOutputTokens: 256,
+      thinkingConfig: { thinkingLevel: "minimal" },
+      responseMimeType: "application/json",
+      responseJsonSchema: {
+        type: "object",
+        properties: { ok: { type: "boolean" } },
+        required: ["ok"],
+        additionalProperties: false,
       },
     },
   }
