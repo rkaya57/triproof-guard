@@ -108,9 +108,12 @@ export function runLabeledBenchmark(
 
   dataset.scenarios.forEach((scenario) => {
     const rawResult = analyzeWallets(
-      scenario.cases.map((benchmarkCase) =>
-        asParsedWallet(benchmarkCase.input)
-      ),
+      [
+        ...scenario.contextInputs.map((input) => asParsedWallet(input)),
+        ...scenario.cases.map((benchmarkCase) =>
+          asParsedWallet(benchmarkCase.input)
+        ),
+      ],
       null,
       asRiskPolicy(scenario.riskPolicy)
     )
