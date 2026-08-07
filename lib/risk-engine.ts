@@ -404,6 +404,7 @@ function buildAdversarialFundingTimeClusters({
 }): {
   clusters: ClusterResult[]
   clusterByWalletKey: Map<string, ClusterResult>
+  subsumedLegacyClusterIds: Set<string>
 } {
   const resultByKey = new Map(
     walletResults.map((wallet) => [
@@ -435,28 +436,41 @@ function buildAdversarialFundingTimeClusters({
 
   const clusters: ClusterResult[] = []
   const clusterByWalletKey = new Map<string, ClusterResult>()
+  const subsumedLegacyClusterIds = new Set<string>()
 
   Array.from(groups.values()).forEach((group) => {
     if (group.length < 3) return
-    const unassigned = group.filter((wallet) => {
-      const result = resultByKey.get(`${wallet.chain}:${wallet.walletAddress}`)
-      return Boolean(result && !result.clusterId)
-    })
-    if (unassigned.length < 3) return
 
-    const timestamps = unassigned
+    const members = group
+      .map((wallet) => resultByKey.get(`${wallet.chain}:${wallet.walletAddress}`))
+      .filter((wallet): wallet is WalletRiskResult => Boolean(wallet))
+    if (members.length < 3) return
+
+    const timestamps = group
       .map(parsedObservedFundingTime)
       .filter((value): value is number => value !== null)
-    if (timestamps.length < Math.ceil(unassigned.length * 0.7)) return
+    if (timestamps.length < Math.ceil(group.length * 0.7)) return
 
     const spreadHours =
       (Math.max(...timestamps) - Math.min(...timestamps)) / 3_600_000
     if (spreadHours > 24) return
 
-    const members = unassigned
-      .map((wallet) => resultByKey.get(`${wallet.chain}:${wallet.walletAddress}`))
-      .filter((wallet): wallet is WalletRiskResult => Boolean(wallet))
-    if (members.length < 3) return
+    const existingClusterIds = new Set(
+      members
+        .map((wallet) => wallet.clusterId)
+        .filter((clusterId): clusterId is string => Boolean(clusterId))
+    )
+    const [onlyExistingClusterId] = Array.from(existingClusterIds)
+    const alreadyFullyCovered =
+      existingClusterIds.size === 1 &&
+      Boolean(onlyExistingClusterId) &&
+      members.every((wallet) => wallet.clusterId === onlyExistingClusterId)
+
+    if (alreadyFullyCovered) return
+
+    existingClusterIds.forEach((clusterId) => {
+      subsumedLegacyClusterIds.add(clusterId)
+    })
 
     const label = `SC-${String(clusters.length + 1).padStart(3, "0")}`
     const averageRiskScore = Math.max(
@@ -469,8 +483,8 @@ function buildAdversarialFundingTimeClusters({
       walletCount: members.length,
       averageRiskScore: Number(averageRiskScore.toFixed(1)),
       sharedFundingSource: normalizeGraphAddress(
-        unassigned[0]?.fundingSource ?? "",
-        unassigned[0]?.chain ?? ""
+        group[0]?.fundingSource ?? "",
+        group[0]?.chain ?? ""
       ),
       behaviorSimilarityScore: Math.min(88, 64 + members.length * 4),
       suggestedAction: "manual_review",
@@ -488,7 +502,7 @@ function buildAdversarialFundingTimeClusters({
     })
   })
 
-  return { clusters, clusterByWalletKey }
+  return { clusters, clusterByWalletKey, subsumedLegacyClusterIds }
 }
 
 export function analyzeWallets(
@@ -533,7 +547,10 @@ export function analyzeWallets(
     graphContext,
   })
   const effectiveClusters = [
-    ...legacyResult.clusters,
+    ...legacyResult.clusters.filter(
+      (cluster) =>
+        !adversarialFundingTime.subsumedLegacyClusterIds.has(cluster.clusterLabel)
+    ),
     ...adversarialFundingTime.clusters,
   ]
   const clusterById = new Map(
@@ -544,7 +561,7 @@ export function analyzeWallets(
     const walletKey = `${wallet.chain}:${wallet.walletAddress}`
     const context = customerContext.get(walletKey)
     const safetyCluster = adversarialFundingTime.clusterByWalletKey.get(walletKey)
-    const effectiveClusterId = wallet.clusterId ?? safetyCluster?.clusterLabel ?? null
+    const effectiveClusterId = safetyCluster?.clusterLabel ?? wallet.clusterId ?? null
     const cluster = effectiveClusterId
       ? clusterById.get(effectiveClusterId) ?? null
       : null
