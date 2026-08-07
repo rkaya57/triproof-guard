@@ -94,6 +94,67 @@ describe("Sybil engine safety boundary", () => {
     assert.equal(result.manualReviewCount, 4)
   })
 
+  it("does not let transaction-count jitter hide tight unknown-funder coordination", () => {
+    const sharedFunder = address(7100)
+    const wallets = Array.from({ length: 5 }, (_, index) =>
+      wallet(150 + index, {
+        fundingSource: sharedFunder,
+        firstFundingAt: `2026-07-30T09:${String(index * 4).padStart(2, "0")}:00.000Z`,
+        txCount: 220 + index * 17,
+        walletAgeDays: 600 + index * 20,
+        contractsCount: 35 + index,
+        tokenCount: 20 + index,
+        uniqueCounterparties: 100 + index * 5,
+        behaviorFingerprint: ["swap", "lp", "stake", "bridge", "claim"],
+        campaignQualityScore: 92,
+        campaignOnlyRatio: 0.08,
+        behaviorDiversityScore: 90,
+        botScriptScore: 5,
+      })
+    )
+
+    const result = analyzeWallets(wallets)
+
+    assert.equal(result.clusters.length, 1)
+    assert.equal(result.clusters[0]?.walletCount, 5)
+    assert.equal(result.clusters[0]?.suggestedAction, "manual_review")
+    assert.equal(result.approvedCount, 0)
+    assert.equal(result.rejectedCount, 0)
+    assert.equal(result.manualReviewCount, 5)
+    assert.ok(
+      result.wallets.every((item) =>
+        item.reasons.some((reason) => reason.includes("transaction-count variation"))
+      )
+    )
+  })
+
+  it("keeps high-history bot camouflage in manual review instead of auto-approving", () => {
+    const camouflagedBot = wallet(250, {
+      txCount: 220,
+      walletAgeDays: 500,
+      totalVolume: 5200,
+      contractsCount: 28,
+      uniqueCounterparties: 70,
+      campaignActionsCount: 18,
+      campaignOnlyRatio: 0.82,
+      campaignQualityScore: 28,
+      behaviorDiversityScore: 24,
+      botScriptScore: 96,
+      behaviorFingerprint: ["claim", "swap", "claim", "claim"],
+    })
+
+    const analyzed = analyzeWallets([camouflagedBot]).wallets[0]
+
+    assert.equal(analyzed?.status, "manual_review")
+    assert.equal(analyzed?.recommendedAction, "manual_review")
+    assert.match(analyzed?.statusExplanation ?? "", /bot-likelihood/i)
+    assert.ok(
+      analyzed?.reasons.some((reason) =>
+        reason.includes("strong_behavior_review_evidence")
+      )
+    )
+  })
+
   it("treats imported policy labels as context instead of engine overrides", () => {
     const cleanButCustomerRejected = wallet(300, {
       policyAction: "reject",
