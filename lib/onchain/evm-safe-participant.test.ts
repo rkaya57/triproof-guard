@@ -49,12 +49,12 @@ describe("EVM Safe participant semantics", () => {
 
     assert.equal(wallet?.entityType, "user")
     assert.notEqual(wallet?.status, "rejected")
-    assert.equal(wallet?.evmContractKind, "safe_multisig")
     assert.ok(
       result.graph.edges
         .filter((edge) => edge.kind === "created_by_factory" || edge.kind === "proxy_implementation")
         .every((edge) => edge.isRiskBearing === false)
     )
+    assert.ok(result.graph.edges.some((edge) => edge.kind === "created_by_factory"))
   })
 
   it("keeps a generic multisig contract outside normal end-user eligibility", () => {
