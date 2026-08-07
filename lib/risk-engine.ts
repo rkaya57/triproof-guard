@@ -3,12 +3,14 @@ import type {
   ClusterResult,
   EnrichmentMeta,
   ParsedWallet,
+  RiskLevel,
   RiskPolicy,
   SuggestedAction,
   WalletRiskResult,
   WalletStatus,
 } from "@/types"
 import {
+  isNeutralServiceAddress,
   normalizeGraphAddress,
   type WalletGraphContext,
 } from "@/lib/graph-intelligence"
@@ -24,8 +26,8 @@ import {
 export { normalizeRiskPolicy, riskPolicyFromNotes }
 export type { CrossCampaignContext, CrossCampaignWalletSignal }
 
-export const SYBIL_ENGINE_VERSION = "2.0.1"
-export const SYBIL_RULESET_VERSION = "2026-08-06"
+export const SYBIL_ENGINE_VERSION = "2.1.0"
+export const SYBIL_RULESET_VERSION = "2026-08-07"
 export const RISK_POLICY_VERSION = "2"
 
 type SafetyPolicy = {
@@ -157,6 +159,20 @@ function hasHardEvidence(wallet: WalletRiskResult) {
   )
 }
 
+function hasStrongStandaloneBehaviorReviewEvidence(wallet: WalletRiskResult) {
+  const highBotProbability = (wallet.botScriptScore ?? 0) >= 80
+  const corroboratingBehavior =
+    (wallet.campaignOnlyRatio ?? 0) >= 0.5 ||
+    (wallet.behaviorDiversityScore !== null &&
+      wallet.behaviorDiversityScore !== undefined &&
+      wallet.behaviorDiversityScore < 45) ||
+    (wallet.campaignQualityScore !== null &&
+      wallet.campaignQualityScore !== undefined &&
+      wallet.campaignQualityScore < 50)
+
+  return highBotProbability && corroboratingBehavior
+}
+
 function contextOnlyReason(wallet: ParsedWallet) {
   if (!wallet.policyAction && !wallet.reputationLabel && !wallet.customerLabel) return null
   const label = wallet.reputationLabel ?? wallet.customerLabel ?? wallet.policyAction
@@ -210,6 +226,8 @@ function decideWallet({
   const policy = SAFETY_POLICY[riskPolicy]
   const hardEvidence = hasHardEvidence(wallet)
   const strongClusterEvidence = clusterHasAutomaticExclusionEvidence(cluster)
+  const strongBehaviorReviewEvidence =
+    hasStrongStandaloneBehaviorReviewEvidence(wallet)
   const clusterSize = cluster?.walletCount ?? 0
 
   if (wallet.enrichmentStatus === "failed") {
@@ -256,7 +274,8 @@ function decideWallet({
   if (
     wallet.riskScore <= policy.approveMax &&
     !cluster &&
-    !hardEvidence
+    !hardEvidence &&
+    !strongBehaviorReviewEvidence
   ) {
     return {
       status: "approved",
@@ -297,6 +316,16 @@ function decideWallet({
       statusExplanation:
         `Rejected under ${policy.label} policy: the automatic exclusion threshold was crossed with corroborated high-confidence evidence.`,
       decisionReason: "rejected_sybil",
+    }
+  }
+
+  if (strongBehaviorReviewEvidence) {
+    return {
+      status: "manual_review",
+      recommendedAction: "manual_review",
+      statusExplanation:
+        `Gray Zone under ${policy.label} policy: very high bot-likelihood is corroborated by concentrated or low-diversity campaign behavior. Behavioral evidence alone does not trigger automatic Sybil rejection, but it blocks automatic approval.`,
+      decisionReason: "strong_behavior_review_evidence",
     }
   }
 
@@ -342,6 +371,140 @@ function safeClusterAction(
   return "manual_review"
 }
 
+function parsedObservedFundingTime(wallet: ParsedWallet) {
+  const value = wallet.firstFundingAt ?? (wallet.historyTruncated ? null : wallet.firstSeen)
+  if (!value) return null
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function isUserLikeInput(wallet: ParsedWallet) {
+  return (
+    !wallet.accountType ||
+    wallet.accountType === "system_user_wallet" ||
+    wallet.accountType === "historical_unresolved_account"
+  )
+}
+
+function riskLevelFromScore(score: number): RiskLevel {
+  if (score <= 30) return "low"
+  if (score <= 60) return "medium"
+  if (score <= 85) return "high"
+  return "critical"
+}
+
+function buildAdversarialFundingTimeClusters({
+  wallets,
+  walletResults,
+  graphContext,
+}: {
+  wallets: ParsedWallet[]
+  walletResults: WalletRiskResult[]
+  graphContext: WalletGraphContext | null
+}): {
+  clusters: ClusterResult[]
+  clusterByWalletKey: Map<string, ClusterResult>
+  subsumedLegacyClusterIds: Set<string>
+} {
+  const resultByKey = new Map(
+    walletResults.map((wallet) => [
+      `${wallet.chain}:${wallet.walletAddress}`,
+      wallet,
+    ])
+  )
+  const groups = new Map<string, ParsedWallet[]>()
+
+  wallets.forEach((wallet) => {
+    if (!isUserLikeInput(wallet) || !wallet.fundingSource) return
+    if (
+      isNeutralServiceAddress(
+        wallet.fundingSource,
+        wallet.chain,
+        graphContext
+      )
+    ) {
+      return
+    }
+    const observedAt = parsedObservedFundingTime(wallet)
+    if (observedAt === null) return
+    const key = `${wallet.chain}:${normalizeGraphAddress(
+      wallet.fundingSource,
+      wallet.chain
+    )}`
+    groups.set(key, [...(groups.get(key) ?? []), wallet])
+  })
+
+  const clusters: ClusterResult[] = []
+  const clusterByWalletKey = new Map<string, ClusterResult>()
+  const subsumedLegacyClusterIds = new Set<string>()
+
+  Array.from(groups.values()).forEach((group) => {
+    if (group.length < 3) return
+
+    const members = group
+      .map((wallet) => resultByKey.get(`${wallet.chain}:${wallet.walletAddress}`))
+      .filter((wallet): wallet is WalletRiskResult => Boolean(wallet))
+    if (members.length < 3) return
+
+    const timestamps = group
+      .map(parsedObservedFundingTime)
+      .filter((value): value is number => value !== null)
+    if (timestamps.length < Math.ceil(group.length * 0.7)) return
+
+    const spreadHours =
+      (Math.max(...timestamps) - Math.min(...timestamps)) / 3_600_000
+    if (spreadHours > 24) return
+
+    const existingClusterIds = new Set(
+      members
+        .map((wallet) => wallet.clusterId)
+        .filter((clusterId): clusterId is string => Boolean(clusterId))
+    )
+    const [onlyExistingClusterId] = Array.from(existingClusterIds)
+    const alreadyFullyCovered =
+      existingClusterIds.size === 1 &&
+      Boolean(onlyExistingClusterId) &&
+      members.every((wallet) => wallet.clusterId === onlyExistingClusterId)
+
+    if (alreadyFullyCovered) return
+
+    existingClusterIds.forEach((clusterId) => {
+      subsumedLegacyClusterIds.add(clusterId)
+    })
+
+    const label = `SC-${String(clusters.length + 1).padStart(3, "0")}`
+    const averageRiskScore = Math.max(
+      30,
+      members.reduce((sum, wallet) => sum + wallet.riskScore, 0) /
+        members.length
+    )
+    const cluster: ClusterResult = {
+      clusterLabel: label,
+      walletCount: members.length,
+      averageRiskScore: Number(averageRiskScore.toFixed(1)),
+      sharedFundingSource: normalizeGraphAddress(
+        group[0]?.fundingSource ?? "",
+        group[0]?.chain ?? ""
+      ),
+      behaviorSimilarityScore: Math.min(88, 64 + members.length * 4),
+      suggestedAction: "manual_review",
+      reasons: [
+        "V2.1 adversarial guard: coordinated funding timing survived transaction-count and activity-history jitter",
+        "Funding evidence: shared first observed funding source",
+        "Temporal evidence: tightly aligned first funding or first observed activity window",
+        "Anti-evasion evidence: transaction-count variation does not neutralize same-source funding coordination.",
+      ],
+      walletAddresses: members.map((wallet) => wallet.walletAddress),
+    }
+    clusters.push(cluster)
+    members.forEach((wallet) => {
+      clusterByWalletKey.set(`${wallet.chain}:${wallet.walletAddress}`, cluster)
+    })
+  })
+
+  return { clusters, clusterByWalletKey, subsumedLegacyClusterIds }
+}
+
 export function analyzeWallets(
   wallets: ParsedWallet[],
   enrichment: EnrichmentMeta | null = null,
@@ -378,17 +541,42 @@ export function analyzeWallets(
     graphContext,
     preparedCrossCampaign.context
   )
+  const adversarialFundingTime = buildAdversarialFundingTimeClusters({
+    wallets: sanitizedWallets,
+    walletResults: legacyResult.wallets,
+    graphContext,
+  })
+  const effectiveClusters = [
+    ...legacyResult.clusters.filter(
+      (cluster) =>
+        !adversarialFundingTime.subsumedLegacyClusterIds.has(cluster.clusterLabel)
+    ),
+    ...adversarialFundingTime.clusters,
+  ]
   const clusterById = new Map(
-    legacyResult.clusters.map((cluster) => [cluster.clusterLabel, cluster])
+    effectiveClusters.map((cluster) => [cluster.clusterLabel, cluster])
   )
 
   const safeWallets = legacyResult.wallets.map((wallet) => {
     const walletKey = `${wallet.chain}:${wallet.walletAddress}`
     const context = customerContext.get(walletKey)
-    const cluster = wallet.clusterId ? clusterById.get(wallet.clusterId) ?? null : null
+    const safetyCluster = adversarialFundingTime.clusterByWalletKey.get(walletKey)
+    const effectiveClusterId = safetyCluster?.clusterLabel ?? wallet.clusterId ?? null
+    const cluster = effectiveClusterId
+      ? clusterById.get(effectiveClusterId) ?? null
+      : null
+    const safetyRiskScore = safetyCluster
+      ? Math.max(wallet.riskScore, 30)
+      : wallet.riskScore
+    const decisionWallet: WalletRiskResult = {
+      ...wallet,
+      clusterId: effectiveClusterId,
+      riskScore: safetyRiskScore,
+      riskLevel: riskLevelFromScore(safetyRiskScore),
+    }
     const crossCampaignKey = normalizeGraphAddress(wallet.walletAddress, wallet.chain)
     const baseDecision = decideWallet({
-      wallet,
+      wallet: decisionWallet,
       cluster,
       riskPolicy: normalizedPolicy,
     })
@@ -404,6 +592,7 @@ export function analyzeWallets(
           !reason.startsWith("V1.4 reputation/policy signal:") &&
           !reason.startsWith("V1.4 policy reason:")
       ),
+      ...(safetyCluster ? safetyCluster.reasons : []),
       ...(preparedCrossCampaign.conflictKeys.has(crossCampaignKey)
         ? [
             "Cross-campaign conflict: prior trusted-user and confirmed-risk/reviewer-rejection labels coexist; manual review is required.",
@@ -416,7 +605,7 @@ export function analyzeWallets(
     ]
 
     return {
-      ...wallet,
+      ...decisionWallet,
       status: decision.status,
       recommendedAction: decision.recommendedAction,
       statusExplanation: decision.statusExplanation,
@@ -428,7 +617,7 @@ export function analyzeWallets(
     }
   })
 
-  const safeClusters = legacyResult.clusters.map((cluster) => ({
+  const safeClusters = effectiveClusters.map((cluster) => ({
     ...cluster,
     suggestedAction: safeClusterAction(cluster, safeWallets, normalizedPolicy),
   }))
