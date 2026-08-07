@@ -200,6 +200,12 @@ export const benchmarkScenarioSchema = z
     riskPolicy: riskPolicySchema,
     split: benchmarkSplitSchema,
     provenance: benchmarkProvenanceSchema,
+    /**
+     * Unlabeled wallets from the same real campaign. They are supplied to the
+     * engine so funding/timing/referral/graph relationships are reconstructed,
+     * but they never contribute to benchmark metrics.
+     */
+    contextInputs: z.array(benchmarkWalletInputSchema).default([]),
     cases: z.array(benchmarkCaseSchema).min(1),
     expectations: z
       .object({
@@ -214,6 +220,32 @@ export const benchmarkScenarioSchema = z
     const ids = new Set<string>()
     const addresses = new Set<string>()
 
+    const comparable = (address: string) =>
+      address.startsWith("0x") ? address.toLowerCase() : address
+
+    scenario.contextInputs.forEach((input, index) => {
+      const address = comparable(input.walletAddress)
+      if (addresses.has(address)) {
+        context.addIssue({
+          code: "custom",
+          message: `Duplicate wallet address in scenario context: ${input.walletAddress}`,
+          path: ["contextInputs", index, "walletAddress"],
+        })
+      }
+      addresses.add(address)
+
+      if (
+        input.chain.trim().toLowerCase() !==
+        scenario.chain.trim().toLowerCase()
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "Context wallet chain must match scenario chain",
+          path: ["contextInputs", index, "chain"],
+        })
+      }
+    })
+
     scenario.cases.forEach((benchmarkCase, index) => {
       if (ids.has(benchmarkCase.id)) {
         context.addIssue({
@@ -224,17 +256,15 @@ export const benchmarkScenarioSchema = z
       }
       ids.add(benchmarkCase.id)
 
-      const comparableAddress = benchmarkCase.input.walletAddress.startsWith("0x")
-        ? benchmarkCase.input.walletAddress.toLowerCase()
-        : benchmarkCase.input.walletAddress
-      if (addresses.has(comparableAddress)) {
+      const address = comparable(benchmarkCase.input.walletAddress)
+      if (addresses.has(address)) {
         context.addIssue({
           code: "custom",
-          message: `Duplicate wallet address in scenario: ${benchmarkCase.input.walletAddress}`,
+          message: `Duplicate wallet address across context/cases: ${benchmarkCase.input.walletAddress}`,
           path: ["cases", index, "input", "walletAddress"],
         })
       }
-      addresses.add(comparableAddress)
+      addresses.add(address)
 
       if (
         benchmarkCase.input.chain.trim().toLowerCase() !==
@@ -256,7 +286,7 @@ export const benchmarkScenarioSchema = z
       context.addIssue({
         code: "custom",
         message: "minClusters cannot exceed maxClusters",
-        path: ["expectations"],
+        path: ["expectations"]
       })
     }
   })
@@ -277,7 +307,7 @@ export const labeledBenchmarkDatasetSchema = z
         context.addIssue({
           code: "custom",
           message: `Duplicate scenario id: ${scenario.id}`,
-          path: ["scenarios", index, "id"],
+          path: ["scenarios", index, "id"]
         })
       }
       scenarioIds.add(scenario.id)
