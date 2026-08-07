@@ -239,19 +239,41 @@ function addBehavior(flags: Set<string>, condition: boolean, flag: string) {
 }
 
 const secretMaterialTerms = ["seed phrase", "recovery phrase", "secret phrase", "private key", "mnemonic"]
-const secretRequestLanguage = /\b(?:ask|asks|request|requests|required|enter|paste|type|submit|provide|send|share|import|restore|verify|confirm|reveal|input|upload)\b/i
-const protectiveSecretLanguage = /\b(?:never|do not|don't|will not|won't|should not|must not|no need to|without sharing)\b/i
+const secretRequestVerbPattern = /\b(?:ask(?:s|ed)?|request(?:s|ed)?|require(?:s|d)?|enter|paste|type|submit|provide|send|share|import|restore|verify|confirm|reveal|input|upload)\b/gi
+const secretRequestNegationPattern = /\b(?:never|not|no|do not|don't|will not|won't|should not|must not|no need to|without)\b/i
 
 function hasExplicitSecretMaterialRequest(text: string) {
   const normalized = text.replace(/\s+/g, " ").trim().toLowerCase()
   for (const term of secretMaterialTerms) {
-    let index = normalized.indexOf(term)
-    while (index !== -1) {
-      const start = Math.max(0, index - 120)
-      const end = Math.min(normalized.length, index + term.length + 120)
+    let termIndex = normalized.indexOf(term)
+    while (termIndex !== -1) {
+      const start = Math.max(0, termIndex - 120)
+      const end = Math.min(normalized.length, termIndex + term.length + 120)
       const context = normalized.slice(start, end)
-      if (secretRequestLanguage.test(context) && !protectiveSecretLanguage.test(context)) return true
-      index = normalized.indexOf(term, index + term.length)
+      const termStart = termIndex - start
+      const termEnd = termStart + term.length
+      secretRequestVerbPattern.lastIndex = 0
+      let verb = secretRequestVerbPattern.exec(context)
+      while (verb) {
+        const verbStart = verb.index
+        const verbEnd = verb.index + verb[0].length
+        const distance = verbEnd <= termStart
+          ? termStart - verbEnd
+          : verbStart >= termEnd
+            ? verbStart - termEnd
+            : 0
+        if (distance <= 80) {
+          const beforeVerb = context.slice(Math.max(0, verbStart - 45), verbStart)
+          const between = verbEnd <= termStart
+            ? context.slice(verbEnd, termStart)
+            : context.slice(termEnd, verbStart)
+          if (!secretRequestNegationPattern.test(beforeVerb) && !secretRequestNegationPattern.test(between)) {
+            return true
+          }
+        }
+        verb = secretRequestVerbPattern.exec(context)
+      }
+      termIndex = normalized.indexOf(term, termIndex + term.length)
     }
   }
   return false
