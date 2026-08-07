@@ -1,0 +1,1 @@
+The Gemini evidence runtime receives privacy-reduced packets. Raw wallet and funder addresses are redacted or replaced by opaque references before model calls and audit persistence. Provider diagnostics never return or log the Gemini API key.
