@@ -5,7 +5,7 @@ const isProductionDeployment =
 
 if (!isProductionDeployment) {
   console.log(
-    "Skipping real Helius, Alchemy Solana, and Alchemy EVM provider smoke outside Vercel production."
+    "Skipping real Helius, Alchemy Solana, Alchemy EVM, and Etherscan provenance smokes outside Vercel production."
   )
   process.exit(0)
 }
@@ -20,6 +20,13 @@ if (!process.env.HELIUS_API_KEY && !process.env.SOLANA_RPC_URL) {
 if (!process.env.ALCHEMY_API_KEY) {
   console.error(
     "Production deployment blocked: ALCHEMY_API_KEY is required for Solana history and live EVM provider validation."
+  )
+  process.exit(1)
+}
+
+if (!process.env.ETHERSCAN_API_KEY) {
+  console.error(
+    "Production deployment blocked: ETHERSCAN_API_KEY is required for live EVM deployer/factory/proxy provenance validation."
   )
   process.exit(1)
 }
@@ -69,4 +76,9 @@ runSmoke(
   {
     ALCHEMY_EVM_MAX_TRANSFER_PAGES: "1",
   }
+)
+
+runSmoke(
+  "real-data Etherscan Ethereum provenance smoke",
+  "scripts/test-etherscan-evm-provenance-smoke.ts"
 )

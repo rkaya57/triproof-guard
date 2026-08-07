@@ -19,6 +19,7 @@ function walletGraphKind(kind: WalletGraphNodeKind): SharedRiskGraphNodeKind {
   if (kind === "referrer") return "referrer"
   if (kind === "referral_code") return "referral_code"
   if (kind === "deployer") return "deployer"
+  if (kind === "factory") return "factory"
   if (kind === "implementation") return "implementation"
   return "service"
 }
@@ -58,6 +59,9 @@ function walletGraphRelation(
 } {
   if (edgeKind === "funded") return { relation: "FUNDED_BY", reverse: true }
   if (edgeKind === "deployed") return { relation: "DEPLOYED_BY", reverse: true }
+  if (edgeKind === "created_by_factory") {
+    return { relation: "CREATED_BY_FACTORY", reverse: true }
+  }
   if (edgeKind === "proxy_implementation") {
     return { relation: "USES_IMPLEMENTATION", reverse: false }
   }

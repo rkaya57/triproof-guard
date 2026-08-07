@@ -60,7 +60,7 @@ describe("EVM contract provenance graph", () => {
     )
   })
 
-  it("reports shared deployers as provenance context without changing graph risk", () => {
+  it("reports shared direct deployers as provenance context without changing graph risk", () => {
     const deployer = address(950)
     const wallets = Array.from({ length: 5 }, (_, index) =>
       contractWallet(index + 10, {
@@ -80,6 +80,56 @@ describe("EVM contract provenance graph", () => {
     assert.equal(finding.severity, "caution")
     assert.equal(graph.maxComponentRisk, beforeRisk)
     assert.ok(graph.edges.filter((edge) => edge.kind === "deployed").every((edge) => !edge.isRiskBearing))
+  })
+
+  it("keeps factory fan-out separate from direct deployer clustering", () => {
+    const factory = address(970)
+    const initiator = address(971)
+    const wallets = Array.from({ length: 5 }, (_, index) =>
+      contractWallet(index + 30, {
+        evmDeployerAddress: initiator,
+        evmFactoryAddress: factory,
+        evmContractKind: "proxy",
+      })
+    )
+    const base = buildWalletGraphIntelligence(wallets).graph
+    const graph = augmentEvmContractProvenanceGraph(base, wallets)
+
+    assert.equal(graph.edges.filter((edge) => edge.kind === "deployed").length, 0)
+    assert.equal(graph.edges.filter((edge) => edge.kind === "created_by_factory").length, 5)
+    assert.ok(
+      graph.edges
+        .filter((edge) => edge.kind === "created_by_factory")
+        .every((edge) => edge.isRiskBearing === false)
+    )
+    assert.ok(graph.findings.some((finding) => finding.code === "SHARED_CONTRACT_FACTORY"))
+    assert.equal(
+      graph.findings.some((finding) => finding.code === "SHARED_CONTRACT_DEPLOYER"),
+      false
+    )
+    assert.equal(graph.maxComponentRisk, base.maxComponentRisk)
+  })
+
+  it("marks canonical Safe factory reuse as known neutral infrastructure", () => {
+    const safeFactory = "0xc22834581ebc8527d974f8a1c97e1bea4ef910bc"
+    const wallets = [
+      contractWallet(50, { evmFactoryAddress: safeFactory, evmContractKind: "safe_multisig" }),
+      contractWallet(51, { evmFactoryAddress: safeFactory, evmContractKind: "safe_multisig" }),
+    ]
+    const graph = augmentEvmContractProvenanceGraph(
+      buildWalletGraphIntelligence(wallets).graph,
+      wallets
+    )
+    const factoryNode = graph.nodes.find((node) => node.address === safeFactory)
+    const finding = graph.findings.find((item) => item.code === "SHARED_CONTRACT_FACTORY")
+
+    assert.ok(factoryNode)
+    assert.equal(factoryNode.kind, "factory")
+    assert.equal(factoryNode.metadata.knownInfrastructure, true)
+    assert.match(String(factoryNode.label), /Safe Proxy Factory/)
+    assert.ok(finding)
+    assert.equal(finding.severity, "info")
+    assert.match(finding.description, /neutralized as standalone Sybil evidence/)
   })
 
   it("reports shared proxy implementations as non-risk provenance", () => {

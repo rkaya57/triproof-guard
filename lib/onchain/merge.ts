@@ -96,6 +96,11 @@ export function mergeEnrichment(
         data.evmDeployerAddress,
         apiWins
       ),
+      evmFactoryAddress: pickString(
+        wallet.evmFactoryAddress,
+        data.evmFactoryAddress,
+        apiWins
+      ),
       evmImplementationAddress: pickString(
         wallet.evmImplementationAddress,
         data.evmImplementationAddress,

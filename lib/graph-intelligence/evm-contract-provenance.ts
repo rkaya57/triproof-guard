@@ -6,6 +6,7 @@ import type {
   WalletGraphNode,
   WalletGraphNodeKind,
 } from "@/types"
+import { detectKnownEntity } from "@/lib/risk-engine/known-entities"
 
 function normalize(address: string, chain: string) {
   const trimmed = address.trim()
@@ -14,6 +15,16 @@ function normalize(address: string, chain: string) {
 
 function addressNodeKey(address: string, chain: string) {
   return `address:${chain.toLowerCase()}:${normalize(address, chain)}`
+}
+
+function provenanceMetadata(address: string, role: string) {
+  const known = detectKnownEntity(address)
+  return {
+    provenanceRole: role,
+    knownEntityLabel: known?.label ?? null,
+    knownEntityType: known?.type ?? null,
+    knownInfrastructure: Boolean(known),
+  }
 }
 
 function ensureNode(
@@ -72,9 +83,9 @@ function pushUniqueFinding(
 
 /**
  * Adds contract provenance to the visual/audit graph without altering wallet
- * risk scores. A shared deployer or implementation can be common for legitimate
- * factories, Safe deployments, proxies, launchpads, and protocol contracts, so
- * these relationships are informational until independent risk evidence exists.
+ * risk scores. Shared deployers, factories, Safe infrastructure, or proxy
+ * implementations are common legitimate patterns, so these relationships are
+ * informational until an independent risk family corroborates them.
  */
 export function augmentEvmContractProvenanceGraph(
   graph: WalletGraphData,
@@ -87,29 +98,78 @@ export function augmentEvmContractProvenanceGraph(
     walletAddresses: [...finding.walletAddresses],
   }))
   const deployerGroups = new Map<string, ParsedWallet[]>()
+  const factoryGroups = new Map<string, ParsedWallet[]>()
   const implementationGroups = new Map<string, ParsedWallet[]>()
 
   wallets.forEach((wallet) => {
     if (wallet.chain.toLowerCase() === "solana") return
     const targetKey = addressNodeKey(wallet.walletAddress, wallet.chain)
     const targetNode = nodes.get(targetKey)
-    if (targetNode && (wallet.evmContractKind || wallet.evmDeployerAddress || wallet.evmImplementationAddress)) {
+    if (
+      targetNode &&
+      (wallet.evmContractKind ||
+        wallet.evmDeployerAddress ||
+        wallet.evmFactoryAddress ||
+        wallet.evmImplementationAddress)
+    ) {
       targetNode.metadata = {
         ...targetNode.metadata,
         evmContractKind: wallet.evmContractKind ?? null,
         evmDeployerAddress: wallet.evmDeployerAddress ?? null,
+        evmFactoryAddress: wallet.evmFactoryAddress ?? null,
         evmImplementationAddress: wallet.evmImplementationAddress ?? null,
       }
     }
 
-    if (wallet.evmDeployerAddress) {
+    // Factory-mediated deployments get their own relation. The transaction
+    // initiator remains metadata rather than being mislabeled as the direct
+    // CREATE deployer, which prevents factory fan-out from becoming a false
+    // shared-deployer signal.
+    if (wallet.evmFactoryAddress) {
+      const factory = normalize(wallet.evmFactoryAddress, wallet.chain)
+      const knownFactory = detectKnownEntity(factory)
+      const factoryNode = ensureNode(nodes, {
+        address: factory,
+        chain: wallet.chain,
+        kind: "factory",
+        label: knownFactory?.label ?? "EVM contract factory",
+        metadata: provenanceMetadata(factory, "contract_factory"),
+      })
+      pushUniqueEdge(edges, {
+        edgeKey: `created-by-factory:${factoryNode.nodeKey}:${targetKey}`,
+        sourceKey: factoryNode.nodeKey,
+        targetKey,
+        kind: "created_by_factory",
+        confidence: wallet.enrichmentProvider === "etherscan" ? 98 : 88,
+        isRiskBearing: false,
+        componentId: targetNode?.componentId ?? null,
+        observedAt: wallet.firstSeen ?? null,
+        transactionId: null,
+        amount: null,
+        evidence: [
+          `Contract factory provenance observed by ${wallet.enrichmentProvider ?? "the EVM provider"}`,
+          "Factory reuse is normal for Safe smart accounts, launchpads, proxies, and protocol deployments and does not raise Sybil risk by itself.",
+        ],
+        metadata: {
+          contractKind: wallet.evmContractKind ?? null,
+          transactionCreator: wallet.evmDeployerAddress ?? null,
+          knownInfrastructure: Boolean(knownFactory),
+          knownEntityLabel: knownFactory?.label ?? null,
+          knownEntityType: knownFactory?.type ?? null,
+          provenanceOnly: true,
+        },
+      })
+      const groupKey = `${wallet.chain.toLowerCase()}:${factory}`
+      factoryGroups.set(groupKey, [...(factoryGroups.get(groupKey) ?? []), wallet])
+    } else if (wallet.evmDeployerAddress) {
       const deployer = normalize(wallet.evmDeployerAddress, wallet.chain)
+      const knownDeployer = detectKnownEntity(deployer)
       const deployerNode = ensureNode(nodes, {
         address: deployer,
         chain: wallet.chain,
         kind: "deployer",
-        label: "EVM contract deployer",
-        metadata: { provenanceRole: "deployer" },
+        label: knownDeployer?.label ?? "EVM contract deployer",
+        metadata: provenanceMetadata(deployer, "deployer"),
       })
       pushUniqueEdge(edges, {
         edgeKey: `deployed:${deployerNode.nodeKey}:${targetKey}`,
@@ -123,11 +183,14 @@ export function augmentEvmContractProvenanceGraph(
         transactionId: null,
         amount: null,
         evidence: [
-          `Contract creation provenance observed by ${wallet.enrichmentProvider ?? "the EVM provider"}`,
-          "Shared deployer provenance is informational and does not raise Sybil risk by itself.",
+          `Direct contract creation provenance observed by ${wallet.enrichmentProvider ?? "the EVM provider"}`,
+          "Shared direct-deployer provenance is informational and does not raise Sybil risk by itself.",
         ],
         metadata: {
           contractKind: wallet.evmContractKind ?? null,
+          knownInfrastructure: Boolean(knownDeployer),
+          knownEntityLabel: knownDeployer?.label ?? null,
+          knownEntityType: knownDeployer?.type ?? null,
           provenanceOnly: true,
         },
       })
@@ -137,12 +200,13 @@ export function augmentEvmContractProvenanceGraph(
 
     if (wallet.evmImplementationAddress) {
       const implementation = normalize(wallet.evmImplementationAddress, wallet.chain)
+      const knownImplementation = detectKnownEntity(implementation)
       const implementationNode = ensureNode(nodes, {
         address: implementation,
         chain: wallet.chain,
         kind: "implementation",
-        label: "EVM proxy implementation",
-        metadata: { provenanceRole: "proxy_implementation" },
+        label: knownImplementation?.label ?? "EVM proxy implementation",
+        metadata: provenanceMetadata(implementation, "proxy_implementation"),
       })
       pushUniqueEdge(edges, {
         edgeKey: `proxy-implementation:${targetKey}:${implementationNode.nodeKey}`,
@@ -161,6 +225,9 @@ export function augmentEvmContractProvenanceGraph(
         ],
         metadata: {
           contractKind: wallet.evmContractKind ?? "proxy",
+          knownInfrastructure: Boolean(knownImplementation),
+          knownEntityLabel: knownImplementation?.label ?? null,
+          knownEntityType: knownImplementation?.type ?? null,
           provenanceOnly: true,
         },
       })
@@ -178,9 +245,27 @@ export function augmentEvmContractProvenanceGraph(
     const nodeKey = addressNodeKey(deployer ?? "", chain ?? "")
     pushUniqueFinding(findings, {
       code: "SHARED_CONTRACT_DEPLOYER",
-      title: "Shared EVM contract deployer",
-      description: `${members.length} analyzed contract addresses share the same deployer. This is contract-provenance context and is not treated as Sybil evidence without an independent risk family.`,
+      title: "Shared direct EVM contract deployer",
+      description: `${members.length} analyzed contracts were directly created by the same deployer with no factory provenance observed. This remains provenance context and is not treated as Sybil evidence without an independent risk family.`,
       severity: members.length >= 5 ? "caution" : "info",
+      evidenceCount: members.length,
+      walletAddresses: members.map((wallet) => wallet.walletAddress),
+      nodeKey,
+    })
+  })
+
+  factoryGroups.forEach((members, groupKey) => {
+    if (members.length < 2) return
+    const [chain, factory] = groupKey.split(":", 2)
+    const nodeKey = addressNodeKey(factory ?? "", chain ?? "")
+    const knownFactory = detectKnownEntity(factory ?? "")
+    pushUniqueFinding(findings, {
+      code: "SHARED_CONTRACT_FACTORY",
+      title: "Shared EVM contract factory",
+      description: knownFactory
+        ? `${members.length} analyzed contracts were created by ${knownFactory.label}. This is known protocol infrastructure and is explicitly neutralized as standalone Sybil evidence.`
+        : `${members.length} analyzed contracts share the same factory. Factory reuse is common infrastructure and does not raise Sybil risk without independent corroboration.`,
+      severity: "info",
       evidenceCount: members.length,
       walletAddresses: members.map((wallet) => wallet.walletAddress),
       nodeKey,

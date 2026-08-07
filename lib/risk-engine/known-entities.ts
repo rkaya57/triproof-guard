@@ -10,6 +10,7 @@ type KnownEntity = {
 const knownEntityReason = "Known public exchange/service/bridge/protocol address. Not a typical individual reward campaign participant."
 const solanaProgramReason = "Known Solana program, sysvar, token mint, or protocol account. Exclude or manually review before reward inclusion because it is not an end-user wallet."
 const bridgeReason = "Known canonical bridge or cross-domain messaging contract. It is infrastructure, not an individual campaign participant, and shared funding through it must not be treated as Sybil evidence by itself."
+const factoryReason = "Known canonical smart-account factory infrastructure. Factory reuse is normal protocol behavior and must not be treated as Sybil evidence by itself."
 
 export const KNOWN_ENTITIES: Record<string, KnownEntity> = {
   "0xbe0eb53f46cd790cd13851d5eff43d12404d33e8": {
@@ -41,6 +42,18 @@ export const KNOWN_ENTITIES: Record<string, KnownEntity> = {
     type: "exchange",
     action: "manual_review",
     reason: knownEntityReason,
+  },
+  "0xc22834581ebc8527d974f8a1c97e1bea4ef910bc": {
+    label: "Safe Proxy Factory (EIP-155 deployment)",
+    type: "protocol",
+    action: "manual_review",
+    reason: factoryReason,
+  },
+  "0xa6b71e26c5e0845f74c812102ca7114b6a896ab2": {
+    label: "Safe Proxy Factory (canonical deployment)",
+    type: "protocol",
+    action: "manual_review",
+    reason: factoryReason,
   },
   "0xbeb5fc579115071764c7423a4f12edde41f106ed": {
     label: "OP Mainnet OptimismPortal",
