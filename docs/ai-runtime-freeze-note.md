@@ -1,0 +1,1 @@
+Independent Holdout Validation v1 must not begin until the Gemini provider probe and AI Sidecar Benchmark both pass on the frozen evidence runtime. Any later change to the AI evidence runtime, disagreement gate, prompt, schema, or deterministic risk engine requires a new holdout version for claim-eligible validation.
