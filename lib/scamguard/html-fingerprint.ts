@@ -238,6 +238,25 @@ function addBehavior(flags: Set<string>, condition: boolean, flag: string) {
   if (condition) flags.add(flag)
 }
 
+const secretMaterialTerms = ["seed phrase", "recovery phrase", "secret phrase", "private key", "mnemonic"]
+const secretRequestLanguage = /\b(?:ask|asks|request|requests|required|enter|paste|type|submit|provide|send|share|import|restore|verify|confirm|reveal|input|upload)\b/i
+const protectiveSecretLanguage = /\b(?:never|do not|don't|will not|won't|should not|must not|no need to|without sharing)\b/i
+
+function hasExplicitSecretMaterialRequest(text: string) {
+  const normalized = text.replace(/\s+/g, " ").trim().toLowerCase()
+  for (const term of secretMaterialTerms) {
+    let index = normalized.indexOf(term)
+    while (index !== -1) {
+      const start = Math.max(0, index - 120)
+      const end = Math.min(normalized.length, index + term.length + 120)
+      const context = normalized.slice(start, end)
+      if (secretRequestLanguage.test(context) && !protectiveSecretLanguage.test(context)) return true
+      index = normalized.indexOf(term, index + term.length)
+    }
+  }
+  return false
+}
+
 export function fingerprintHtml(input: {
   html: string
   sourceUrl: string
@@ -286,7 +305,7 @@ export function fingerprintHtml(input: {
   addBehavior(behaviorFlags, /navigator\.clipboard|document\.execcommand\s*\(\s*["']copy/i.test(searchableHtml), "clipboard_access")
   addBehavior(behaviorFlags, /eth_requestaccounts|solana\.connect\s*\(|window\.ethereum\.request/i.test(searchableHtml), "wallet_connect_request")
   addBehavior(behaviorFlags, /signtransaction|signalltransactions|signmessage|personal_sign|eth_sendtransaction|setapprovalforall|wallet_switchethereumchain/i.test(searchableHtml), "wallet_signing_api")
-  addBehavior(behaviorFlags, /\b(?:seed|recovery|secret)\s+phrase\b|\bprivate\s+key\b|\bmnemonic\b/i.test(searchableHtml), "secret_material_request")
+  addBehavior(behaviorFlags, hasExplicitSecretMaterialRequest(visibleText), "secret_material_request")
   addBehavior(behaviorFlags, /\beval\s*\(|new\s+function\s*\(|\batob\s*\(|fromcharcode\s*\(|(?:[A-Za-z0-9+/]{400,}={0,2})/i.test(searchableHtml), "obfuscated_script")
   addBehavior(
     behaviorFlags,
