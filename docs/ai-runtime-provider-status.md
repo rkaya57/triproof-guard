@@ -1,0 +1,1 @@
+A provider HTTP 200 without non-thinking text is not sufficient to mark the AI sidecar ready. Readiness requires a usable structured response that passes the local schema validator. HTTP 429 is treated as provider quota exhaustion and never as evidence about wallet risk.
