@@ -10,6 +10,7 @@ import {
 } from "@/lib/onchain/evm-evidence"
 import {
   classifyEvmContractSource,
+  evmParticipantEntityType,
   normalizeEvmCreationProvenance,
   type EvmContractCreationLike,
   type EvmContractSourceLike,
@@ -258,17 +259,24 @@ async function enrichWallet(
     data.knownEntityLabel = knownEntity.label
     data.knownEntityType = knownEntity.type
   } else if (isContract) {
-    const subtypeSuffix = contractInfo.safe
-      ? " (Safe smart account)"
-      : contractInfo.multisig
+    const participantType = evmParticipantEntityType(contractInfo)
+    if (participantType === "user") {
+      // A verified Safe is a user-controlled smart account. Preserve the
+      // contract/proxy provenance in typed fields and rawData, but do not turn
+      // that architecture into a malicious or non-user entity signal.
+      data.knownEntityLabel = null
+      data.knownEntityType = "user"
+    } else {
+      const subtypeSuffix = contractInfo.multisig
         ? " (multisig)"
         : contractInfo.proxy
           ? " (proxy)"
           : ""
-    data.knownEntityLabel = contractInfo.name
-      ? `${contractInfo.name}${subtypeSuffix}`
-      : null
-    data.knownEntityType = contractInfo.bridge ? "bridge" : "contract"
+      data.knownEntityLabel = contractInfo.name
+        ? `${contractInfo.name}${subtypeSuffix}`
+        : null
+      data.knownEntityType = participantType
+    }
   }
 
   const creationTxFallback = normalTxs.find(
@@ -301,6 +309,7 @@ async function enrichWallet(
           safe: contractInfo.safe,
           multisig: contractInfo.multisig,
           bridge: contractInfo.bridge,
+          participantType: evmParticipantEntityType(contractInfo),
         }
       : null,
   }
