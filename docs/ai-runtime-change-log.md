@@ -1,0 +1,1 @@
+2026-08-08: Replaced the incompatible benchmark structured-output request contract with the Gemini generateContent `responseMimeType` + `responseJsonSchema` contract and separated Evidence Analyst model selection from the legacy generic Gemini model setting.
