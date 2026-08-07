@@ -1,0 +1,1 @@
+Tri-Proof keeps the Gemini Evidence Analyst provider contract separate from legacy summarization settings. `GEMINI_EVIDENCE_MODEL` controls the evidence runtime; absent an explicit override, the evidence runtime uses `gemini-3.6-flash`. Legacy `GEMINI_MODEL` remains available to older summarization features but does not define the evidence-sidecar model.
