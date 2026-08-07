@@ -113,7 +113,7 @@ test("high-confidence material conflict escalates approved to manual_review with
   assert.equal(result.wallet.decisionEvidence?.recommendedAction, "manual_review")
   assert.equal(result.wallet.decisionEvidence?.requiresHumanReview, true)
   assert.equal(result.wallet.decisionEvidence?.independentRiskFamilyCount, 0)
-  assert.match(result.wallet.statusExplanation, /not classified.*malicious/i)
+  assert.match(result.wallet.statusExplanation, /did not classify.*malicious/i)
   assert.deepEqual(original, before, "gate must not mutate the original wallet")
 })
 
