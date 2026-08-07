@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client"
 import { NextResponse } from "next/server"
 
 import { getAdminUser } from "@/lib/auth/admin"
-import { runAiSidecarBenchmark } from "@/lib/benchmark/ai-sidecar"
+import { runAiSidecarBenchmarkLive } from "@/lib/benchmark/ai-sidecar-live"
 import { db } from "@/lib/db/prisma"
 
 export const runtime = "nodejs"
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await runAiSidecarBenchmark()
+    const result = await runAiSidecarBenchmarkLive()
     return NextResponse.json(result, {
       headers: {
         "Cache-Control": "no-store, private",
