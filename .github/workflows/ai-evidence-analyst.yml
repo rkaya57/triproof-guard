@@ -1,0 +1,47 @@
+name: AI Evidence Analyst safety
+
+on:
+  push:
+    branches:
+      - feat/ai-evidence-analyst-v1
+    paths:
+      - "lib/ai/evidence-analyst.ts"
+      - "lib/ai/evidence-analyst.test.ts"
+      - ".github/workflows/ai-evidence-analyst.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "lib/ai/evidence-analyst.ts"
+      - "lib/ai/evidence-analyst.test.ts"
+      - ".github/workflows/ai-evidence-analyst.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint AI evidence analyst
+        run: npx eslint lib/ai/evidence-analyst.ts lib/ai/evidence-analyst.test.ts
+
+      - name: AI evidence safety tests
+        run: node --import tsx --test lib/ai/evidence-analyst.test.ts
