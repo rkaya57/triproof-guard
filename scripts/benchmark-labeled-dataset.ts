@@ -27,6 +27,11 @@ const requireClaimReady = process.argv.includes("--require-claim-ready")
 async function main() {
   const rawDataset = JSON.parse(await readFile(datasetPath, "utf8"))
   const dataset = parseLabeledBenchmarkDataset(rawDataset)
+  const containsChallengeCases = dataset.scenarios.some((scenario) =>
+    scenario.cases.some((benchmarkCase) =>
+      benchmarkCase.tags.includes("cohort:challenge")
+    )
+  )
   const report = runLabeledBenchmark(dataset)
   const markdown = formatBenchmarkMarkdown(report)
 
@@ -48,6 +53,14 @@ async function main() {
 
   if (!report.metrics.operationalGate.passed) {
     process.exitCode = 1
+    return
+  }
+
+  if (requireClaimReady && containsChallengeCases) {
+    process.stderr.write(
+      "Challenge-cohort cases are selected using hidden engine-output stratification and are not eligible for external accuracy claims. Use the representative blind-review dataset instead.\n"
+    )
+    process.exitCode = 3
     return
   }
 

@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it } from "node:test"
 
+import "./context.test"
+import "./labeling-queue.test"
 import { calculateBenchmarkMetrics } from "./metrics"
 import { runLabeledBenchmark } from "./runner"
 import {

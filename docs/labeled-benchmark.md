@@ -6,8 +6,8 @@ The labeled benchmark measures whether the campaign-security engine makes defens
 
 The benchmark separates two claims:
 
-1. **Operational regression safety** — the engine still satisfies deterministic safety fixtures and semantic invariants.
-2. **Real-world accuracy readiness** — there is enough independently reviewed holdout data to publish precision, recall, or false-positive claims.
+1. **Operational regression safety** — deterministic safety fixtures and semantic invariants still pass.
+2. **Real-world accuracy readiness** — enough independently reviewed holdout data exists to publish precision, recall, false-positive, or false-negative claims.
 
 Synthetic fixtures can pass the operational gate. They can never, by themselves, justify a public real-world accuracy claim.
 
@@ -19,7 +19,7 @@ Synthetic fixtures can pass the operational gate. They can never, by themselves,
 - `non_user_entity` — exchange, protocol, contract, program, treasury, bridge, service, or another account that is not an individual participant.
 - `insufficient_data` — the available evidence cannot support a reliable participant-risk conclusion.
 
-Ground truth also records the expected campaign decision and whether malicious risk should be present, absent, or unknown. This prevents a non-user eligibility exclusion from being counted as malicious risk.
+Ground truth separately records the expected campaign decision and whether malicious risk should be present, absent, or unknown. This prevents eligibility exclusions such as exchanges or protocol contracts from being mislabeled as malicious risk.
 
 ## Malicious-prediction definition
 
@@ -28,77 +28,162 @@ A case is counted as a malicious prediction only when it is not approved and at 
 - explicit strong malicious evidence exists, such as known-bad funding, self-referral, circular flow, high or very-high bot probability, or equivalent hard evidence;
 - the wallet is linked to a suspicious cluster and at least two independent evidence families support the relationship.
 
-Review-only evidence, such as moderate bot suspicion, young-wallet status, limited history, or low diversity, does not by itself become a malicious prediction. This prevents Gray Zone cases from inflating false-positive counts while preserving corroborated cluster detection.
+Review-only evidence, such as moderate bot suspicion, young-wallet status, limited history, or low diversity, does not by itself become a malicious prediction.
 
 ## Provenance hierarchy
 
-Every scenario must declare one provenance kind:
+Every scenario declares one provenance kind:
 
-- `verified_human` — reviewed real-world case with reviewer identity and review timestamp.
+- `verified_human` — independently reviewed real-world case with reviewer identity and review timestamp.
 - `public_reference` — public entity or protocol reference with a traceable source.
 - `synthetic_adversarial` — deliberately constructed evasion or attack scenario.
 - `synthetic_regression` — deterministic safety and behavior fixture.
 
-Unreviewed production outputs are candidate examples, not ground truth. Engine decisions must never be copied directly into the benchmark label column.
+Unreviewed production outputs are candidates, not ground truth. Engine decisions must never be copied into benchmark labels.
 
-## Blind labeling workflow
+## Real-world blind labeling v2
 
-1. Export a stratified candidate queue:
+The v2 workflow separates **claim-eligible representative sampling** from **challenge/error-discovery sampling**.
 
-   ```bash
-   npm run benchmark:labeling-queue
-   ```
+### Representative cohort
 
-2. The exporter creates two local, gitignored files:
+Representative cases are selected without using engine status, risk score, risk level, cluster membership, graph score, or reason codes. Selection is deterministic and campaign-balanced: by default, a fixed number of wallets is sampled from each completed project/campaign group.
 
-   - `labeling-queue-blind.csv` — reviewer-facing cases without engine status or risk score.
-   - `labeling-audit-map.csv` — separate engine-output map used only after labels are locked.
+This cohort is the only production-derived cohort eligible to contribute to external accuracy-readiness counts.
 
-3. Rename the completed blind file to `labeling-queue-reviewed.csv` and fill all required columns:
+### Challenge cohort
 
-   - `ground_truth_label`
-   - `expected_decision`
-   - `acceptable_decisions`
-   - `malicious_risk_expectation`
-   - `reviewer`
-   - `reviewed_at`
-   - `rationale`
+Challenge cases are selected using hidden engine-output stratification so false positives, false negatives, and edge cases can be discovered faster.
 
-4. Compile and validate the reviewed labels:
+Challenge cases are useful for development, but **must never be used for an external accuracy claim**. The benchmark runner refuses `--require-claim-ready` when a compiled dataset contains `cohort:challenge` cases.
 
-   ```bash
-   npm run benchmark:compile-reviewed -- \
-     --input artifacts/benchmark-labeling/labeling-queue-reviewed.csv \
-     --version real-world-YYYY-MM-DD
-   ```
+## Export workflow
 
-5. Run the benchmark:
+Run:
 
-   ```bash
-   npm run benchmark:labeled -- \
-     --dataset artifacts/benchmark-labeling/real-world-YYYY-MM-DD.json
-   ```
+```bash
+npm run benchmark:labeling-queue
+```
 
-6. Only after labels are frozen may the reviewer compare them with `labeling-audit-map.csv`.
+The exporter writes four gitignored local artifacts:
+
+- `labeling-queue-representative-blind.csv` — claim-eligible reviewer queue.
+- `labeling-queue-challenge-blind.csv` — non-claim error-discovery queue.
+- `labeling-audit-map.csv` — sealed engine/input map. Do not expose it to reviewers before labels are frozen.
+- `labeling-manifest.json` — sampling method, cohort counts, planned split counts, leakage controls, and SHA-256 hashes.
+
+The reviewer-facing CSV intentionally excludes:
+
+- engine status;
+- risk score and risk level;
+- cluster and graph score;
+- engine reason codes;
+- Tri-Proof entity classification;
+- bot, behavior-diversity, reputation, and policy scores;
+- raw internal project and analysis identifiers.
+
+It includes observable evidence, the public wallet address, chain, campaign type, and an explorer link for independent verification.
+
+## Review fields
+
+Copy the selected blind queue to a reviewed file, for example:
+
+```text
+labeling-queue-representative-reviewed.csv
+```
+
+Complete every selected row:
+
+- `ground_truth_label`
+- `expected_decision`
+- `acceptable_decisions`
+- `malicious_risk_expectation`
+- `reviewer`
+- `reviewed_at`
+- `review_confidence` (`high`, `medium`, or `low`)
+- `rationale`
+- optional `tags`
+
+Representative rows with `low` review confidence do not compile as claim-eligible labels. If evidence is genuinely unresolved, use `insufficient_data` rather than manufacturing certainty.
+
+Confirmed `sybil` and `bot` labels in the representative cohort require **two independent named reviewers** before compilation. Reviewer names are separated with `|` or `;`.
+
+## Label freeze and sealed audit map
+
+Reviewers must not open `labeling-audit-map.csv` while assigning labels. The audit map contains the frozen engine input snapshot and original engine output required for reproducibility and post-label comparison.
+
+Only after all labels for the selected cohort are complete and frozen may the audit map be used by the compiler.
+
+The compiler verifies:
+
+- every reviewed case exists in the sealed audit map;
+- chain, wallet address, scenario id, and split-group id match the sealed record;
+- there are no missing or extra cases in the frozen cohort;
+- representative malicious labels have two reviewers;
+- reviewer confidence satisfies the claim-eligible standard.
+
+## Compile reviewed representative labels
+
+```bash
+npm run benchmark:compile-reviewed -- \
+  --cohort representative \
+  --input artifacts/benchmark-labeling/labeling-queue-representative-reviewed.csv \
+  --audit-map artifacts/benchmark-labeling/labeling-audit-map.csv \
+  --version real-world-YYYY-MM-DD
+```
+
+The compiler groups labeled wallets by original campaign scenario rather than turning every wallet into an isolated one-wallet scenario.
+
+### Full campaign context replay
+
+Only sampled wallets have human labels and contribute to metrics. However, the compiler also restores the other unlabeled wallets from the same production campaign as `contextInputs`.
+
+During benchmark execution the engine receives:
+
+- all unlabeled campaign context wallets; and
+- all human-labeled benchmark cases for that scenario.
+
+Metrics are calculated only on the labeled cases. This preserves shared-funding, timing, referral, behavior, and graph/cluster relationships without pretending unlabeled wallets have ground truth.
+
+## Split isolation
+
+Real-world compilation assigns campaign/project split groups deterministically using a **20% development / 20% validation / 60% holdout** policy.
+
+The holdout share is intentionally larger than a conventional model-training split because Tri-Proof already has synthetic and adversarial regression coverage; real human labels are expensive and are primarily needed for independent validation.
+
+Related wallets from the same split group cannot land in different benchmark splits.
+
+Do not deliberately move a known operator, funding tree, referral tree, campaign incident, or coordinated cluster across development and holdout data.
+
+## Run the real-world benchmark
+
+```bash
+npm run benchmark:labeled -- \
+  --dataset artifacts/benchmark-labeling/real-world-YYYY-MM-DD.json
+```
+
+Strict external-claim readiness:
+
+```bash
+npm run benchmark:labeled -- \
+  --dataset artifacts/benchmark-labeling/real-world-YYYY-MM-DD.json \
+  --require-claim-ready
+```
+
+Challenge datasets can be compiled separately for development, but are explicitly non-claim-eligible.
 
 ## Review standard
 
 A real-world case must include:
 
-- a traceable source reference;
-- at least one named reviewer;
-- an ISO-8601 review timestamp;
-- a written rationale;
-- a complete engine-input snapshot sufficient to rerun the case;
-- no unresolved conflict between the label and expected decision.
+- a traceable internal/public source reference;
+- named reviewer identity;
+- ISO-8601 review timestamp;
+- written rationale;
+- frozen engine-input snapshot sufficient to rerun the case;
+- no unresolved conflict between label and expected decision.
 
-Before publishing external accuracy claims, confirmed Sybil and bot cases should receive two independent reviews. Disagreements must be adjudicated without exposing the engine prediction to the deciding reviewer.
-
-## Leakage prevention
-
-The compiler deterministically assigns scenarios to development, validation, and holdout splits. Related wallets must share the same scenario or campaign grouping key so that one cluster cannot appear across multiple splits.
-
-Do not split individual wallets from the same suspected operator, funder, referral tree, campaign incident, or coordinated cluster across development and holdout data. That would inflate measured accuracy.
+Reviewer independence matters more than agreement. If two reviewers disagree, adjudicate the evidence without exposing the original engine prediction to the deciding reviewer.
 
 ## Operational gate
 
@@ -115,28 +200,22 @@ The default operational gate requires:
 - zero malicious-risk leakage for non-user and provider-limited cases;
 - all scenario-level cluster expectations satisfied.
 
-A failed gate exits with a non-zero status and blocks the production build.
+A failed gate exits with a non-zero status and blocks the production build where the regression dataset is used.
 
 ## Real-world accuracy-claim gate
 
-The benchmark refuses to mark the project ready for external real-world accuracy claims until the holdout set contains at least:
+The benchmark does not mark Tri-Proof ready for external real-world accuracy claims until the holdout set contains at least:
 
-- 100 real-world cases;
+- 100 real-world holdout cases;
 - 30 real-world Sybil or bot cases;
 - 30 real-world organic-user cases;
 - two represented chains.
 
-Run the strict gate with:
-
-```bash
-npm run benchmark:labeled -- \
-  --dataset <real-world-dataset.json> \
-  --require-claim-ready
-```
+Meeting the count gate is necessary but not sufficient: the measured precision, recall, false-positive behavior, label provenance, and reviewer quality must still be disclosed accurately.
 
 ## Reported metrics
 
-The JSON and Markdown reports include:
+Reports include:
 
 - acceptable and exact decision accuracy;
 - malicious precision, recall, and F1;
@@ -152,19 +231,18 @@ The JSON and Markdown reports include:
 - operational-gate checks;
 - real-world claim-readiness deficiencies.
 
-Reports are written to `artifacts/benchmark/` and uploaded by GitHub Actions for 30 days.
+Reports are written to `artifacts/benchmark/` and can be uploaded by CI as short-lived artifacts.
 
 ## Data handling
 
-- Benchmark labeling exports are excluded from Git.
+- Benchmark labeling exports remain excluded from Git.
 - Do not commit customer-specific raw exports or private review notes.
-- Wallet addresses are public identifiers but must still be treated as operationally sensitive when tied to customer campaigns.
+- Wallet addresses are public identifiers but remain operationally sensitive when tied to a customer campaign.
 - Use only the minimum evidence needed for reproducibility.
-- Never use reviewer email addresses, passwords, session identifiers, IP addresses, or raw device identifiers in benchmark data.
-- Participant fingerprints must remain one-way values.
+- Never put reviewer email addresses, passwords, sessions, IP addresses, or raw device identifiers in benchmark files.
+- Participant fingerprints must remain one-way values and are kept out of the reviewer-facing blind evidence.
+- The sealed audit map must not be shared with reviewers before label freeze.
 
 ## Reference dataset
 
-`data/benchmarks/reference-v1.json` validates the benchmark framework and engine safety boundaries. It includes deterministic synthetic controls and a small number of public non-user references.
-
-It is intentionally marked **not ready** for real-world accuracy claims. Its purpose is to prevent regression while verified human labels are collected.
+`data/benchmarks/reference-v1.json` remains the deterministic regression dataset. It validates benchmark mechanics and engine safety boundaries but is intentionally **not** a substitute for human-reviewed production holdout evidence.
