@@ -1,0 +1,1 @@
+Corrective PR scope is frozen: Gemini structured-output runtime, live benchmark adapter, provider probe compatibility, targeted tests, and documentation only. No deterministic risk-engine behavior change is permitted in this PR.
