@@ -6,6 +6,13 @@ import {
   runAdversarialSuite,
 } from "./adversarial-suite"
 
+function failureSummary(report: ReturnType<typeof runAdversarialSuite>) {
+  return report.results
+    .filter((result) => !result.passed)
+    .map((result) => `${result.id}: ${result.failures.join(" | ")}`)
+    .join("\n")
+}
+
 describe("adversarial Sybil resilience suite", () => {
   it("covers the required attack and false-positive threat models", () => {
     const ids = new Set(adversarialScenarios().map((scenario) => scenario.id))
@@ -30,8 +37,12 @@ describe("adversarial Sybil resilience suite", () => {
   it("contains every adversarial wallet and protects organic controls", () => {
     const report = runAdversarialSuite()
 
-    assert.equal(report.passed, true)
-    assert.equal(report.maliciousAutoApprovals, 0)
+    assert.equal(report.passed, true, failureSummary(report))
+    assert.equal(
+      report.maliciousAutoApprovals,
+      0,
+      `Auto-approved malicious wallets detected.\n${failureSummary(report)}`
+    )
     assert.equal(report.attackContainmentRate, 1)
     assert.ok(report.organicControlFalseRejectRate <= 0.03)
     assert.equal(report.passedScenarios, report.totalScenarios)
@@ -72,7 +83,15 @@ describe("adversarial Sybil resilience suite", () => {
     assert.ok(solana)
     assert.ok(evm.clusters >= 1)
     assert.ok(solana.clusters >= 1)
-    assert.equal(evm.maliciousAutoApprovals, 0)
-    assert.equal(solana.maliciousAutoApprovals, 0)
+    assert.equal(
+      evm.maliciousAutoApprovals,
+      0,
+      evm.failures.join(" | ")
+    )
+    assert.equal(
+      solana.maliciousAutoApprovals,
+      0,
+      solana.failures.join(" | ")
+    )
   })
 })
