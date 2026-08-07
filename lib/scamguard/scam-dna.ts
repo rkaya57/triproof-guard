@@ -55,6 +55,17 @@ function jaccard(left: string[], right: string[]) {
   return intersection / union.size
 }
 
+function hasGroundedAutomatedThreatEvidence(behaviorFlags: string[], targetOverlap: number) {
+  const flags = new Set(behaviorFlags)
+  return (
+    flags.has("secret_input_field") ||
+    flags.has("automatic_download") ||
+    (flags.has("wallet_signing_api") && flags.has("obfuscated_script")) ||
+    (flags.has("wallet_signing_api") && flags.has("hidden_iframe")) ||
+    targetOverlap > 0
+  )
+}
+
 export function compareScamDna(
   fingerprint: ScamDnaFingerprintData,
   candidate: {
@@ -115,12 +126,17 @@ export function compareScamDna(
   const reviewedCampaign = campaignVerdict === "KNOWN_BAD" || campaignVerdict === "SUSPICIOUS"
   const riskySource = candidate.riskLevel === "CRITICAL" || candidate.riskLevel === "HIGH_RISK"
   const corroboratedClone = crossDomain && strongComponents >= 2 && similarity >= 0.72
-  const actionable = corroboratedClone && (reviewedCampaign || riskySource)
+  const groundedAutomatedSource = riskySource && hasGroundedAutomatedThreatEvidence(candidate.behaviorFlags, targetOverlap)
+  const actionable = corroboratedClone && (reviewedCampaign || groundedAutomatedSource)
   const verdict = campaignVerdict === "KNOWN_BAD"
     ? "known_bad"
     : actionable
       ? "suspicious"
       : "unknown"
+
+  if (corroboratedClone && riskySource && !reviewedCampaign && !groundedAutomatedSource) {
+    evidence.push("unreviewed source lacks grounded malicious behavior; clone match remains context-only")
+  }
 
   return {
     matched: similarity >= 0.55 && strongComponents >= 1,
