@@ -86,7 +86,7 @@ function isBenignSecretMaterialMention(text: string, offset: number, length: num
         : 0
 
     if (distance <= 90) {
-      const beforeVerb = clause.text.slice(Math.max(0, verbStart - 55), verbStart)
+      const beforeVerb = clause.text.slice(Math.max(0, verbStart - 24), verbStart)
       const between = verbEnd <= clause.termStart
         ? clause.text.slice(verbEnd, clause.termStart)
         : clause.text.slice(clause.termEnd, verbStart)
