@@ -95,6 +95,23 @@ test("fingerprintHtml still treats an explicit visible secret request as critica
   assert.ok(result.signals.some((signal) => signal.code === "SANDBOX_SECRET_REQUEST" && signal.severity === "critical"))
 })
 
+test("fingerprintHtml cannot hide a real secret request behind nearby safety wording", () => {
+  const result = fingerprintHtml({
+    html: `
+      <html><body>
+        <p>Never share your seed phrase with random support accounts.</p>
+        <p>For wallet verification, enter your seed phrase to continue.</p>
+      </body></html>
+    `,
+    sourceUrl: "https://claim.example/mixed-copy",
+    finalUrl: "https://claim.example/mixed-copy",
+    redirectChain: ["https://claim.example/mixed-copy"],
+  })
+
+  assert.ok(result.fingerprint.behaviorFlags.includes("secret_material_request"))
+  assert.ok(result.signals.some((signal) => signal.code === "SANDBOX_SECRET_REQUEST" && signal.severity === "critical"))
+})
+
 test("fingerprintHtml keeps Solana and EVM integration hints distinct", () => {
   const result = fingerprintHtml({
     html: '<script>window.solana.connect(); window.ethereum.request({ method: "eth_requestAccounts" })</script>',
