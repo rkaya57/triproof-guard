@@ -1,0 +1,1 @@
+AI runtime readiness requires: provider probe ready, 4/4 structured wallet benchmark responses, Gemini cluster response, zero risk mutations, zero non-approved decision weakening, zero false escalation on the clean control, and reviewed evidence-grounded escalation behavior on the two review-assist controls.
