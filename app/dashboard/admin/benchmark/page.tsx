@@ -1,8 +1,8 @@
 import Link from "next/link"
 import {
-  Download,
   EyeOff,
   FileCheck2,
+  LockKeyhole,
   ShieldCheck,
   UsersRound,
 } from "lucide-react"
@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/card"
 import { getAdminUser } from "@/lib/auth/admin"
 import { buildRepresentativeReviewerQueue } from "@/lib/benchmark/reviewer-export"
+
+import { DownloadReviewBundleButton } from "./download-bundle-button"
 
 function AccessDenied() {
   return (
@@ -63,15 +65,21 @@ export default async function DashboardAdminBenchmarkPage() {
           >
             ENGINE-BLIND
           </Badge>
+          <Badge
+            variant="outline"
+            className="border-yellow-400/30 bg-yellow-400/10 text-yellow-100"
+          >
+            SEALED SNAPSHOT
+          </Badge>
         </div>
 
         <h1 className="text-gradient max-w-4xl text-4xl font-semibold sm:text-5xl">
           Blind Review Queue
         </h1>
         <p className="mt-5 max-w-3xl text-slate-300">
-          Download the representative reviewer file without exposing Tri-Proof
-          decisions, scores, clusters, reason codes, entity labels, or hidden
-          bot/behavior scores.
+          Freeze one production snapshot and download two matching files: a
+          reviewer-safe CSV and a private cryptographic seal containing the
+          original Tri-Proof inputs/outputs needed for post-label replay.
         </p>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -99,19 +107,26 @@ export default async function DashboardAdminBenchmarkPage() {
           </div>
         </div>
 
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Link
-            href="/api/admin/benchmark/reviewer-queue?perProject=20"
-            className={`${buttonVariants()} glow-primary`}
-          >
-            <Download data-icon="inline-start" /> Download reviewer CSV
-          </Link>
+        <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row">
+          <DownloadReviewBundleButton />
           <Link
             href="/dashboard/admin"
             className={`${buttonVariants({ variant: "outline" })} text-white`}
           >
             Back to admin
           </Link>
+        </div>
+
+        <div className="mt-6 flex max-w-3xl gap-3 rounded-xl border border-yellow-400/25 bg-yellow-400/5 p-4 text-sm text-yellow-50">
+          <LockKeyhole className="mt-0.5 size-5 shrink-0 text-yellow-300" />
+          <div>
+            <p className="font-semibold">Two files will download together.</p>
+            <p className="mt-1 text-yellow-100/80">
+              Send only <strong>tri-proof-reviewer-…csv</strong> to the reviewer.
+              Keep <strong>tri-proof-private-seal-…json.gz</strong> private and
+              unchanged. Both filenames share the same batch ID.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -121,8 +136,8 @@ export default async function DashboardAdminBenchmarkPage() {
             <EyeOff className="mb-2 size-5 text-primary" />
             <CardTitle className="text-white">1. Keep it blind</CardTitle>
             <CardDescription className="text-slate-300">
-              Send only the downloaded reviewer CSV. Do not show the reviewer
-              any Tri-Proof dashboard result for these wallets.
+              Send only the reviewer CSV. Never send the PRIVATE seal or show
+              Tri-Proof dashboard results while labels are being assigned.
             </CardDescription>
           </CardHeader>
         </Card>
