@@ -64,14 +64,16 @@ snapshot = (
 text = text[:metric_start] + snapshot + eol + eol + text[campaign_start:]
 
 campaign_start = text.find(campaign_start_marker, main_return)
-explainable_marker = (
-    '      <Card className="glass-panel premium-card">' + eol
-    + '        <CardHeader>' + eol
-    + '          <CardTitle>Explainable Reason Codes</CardTitle>'
+explainable_title = text.find("<CardTitle>Explainable Reason Codes</CardTitle>", campaign_start)
+if explainable_title < 0:
+    raise SystemExit("Explainable Reason Codes title not found")
+explainable_start = text.rfind(
+    '<Card className="glass-panel premium-card">',
+    campaign_start,
+    explainable_title,
 )
-explainable_start = text.find(explainable_marker, campaign_start)
 if explainable_start < 0:
-    raise SystemExit("Explainable Reason Codes anchor not found")
+    raise SystemExit("Explainable Reason Codes card start not found")
 text = text[:campaign_start] + template("policy-proof.txt") + eol + eol + text[explainable_start:]
 
 # Standardize report terminology while leaving backend status values unchanged.
