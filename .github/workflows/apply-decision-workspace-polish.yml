@@ -1,0 +1,37 @@
+name: Apply decision workspace polish
+
+on:
+  push:
+    branches:
+      - feat/decision-workspace-2
+    paths:
+      - scripts/apply-decision-workspace-polish.py
+      - .github/workflows/apply-decision-workspace-polish.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/decision-workspace-2
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Apply presentation transformation
+        run: python scripts/apply-decision-workspace-polish.py
+      - name: Commit transformed component
+        run: |
+          if git diff --quiet -- components/analysis/analysis-detail.tsx; then
+            echo "No presentation changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add components/analysis/analysis-detail.tsx
+          git commit -m "Polish analysis decision workspace"
+          git push origin HEAD:feat/decision-workspace-2
