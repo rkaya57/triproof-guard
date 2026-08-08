@@ -1,18 +1,16 @@
 name: Apply decision workspace polish
 
 on:
-  push:
+  pull_request:
     branches:
       - feat/decision-workspace-2
-    paths:
-      - scripts/apply-decision-workspace-polish.py
-      - .github/workflows/apply-decision-workspace-polish.yml
 
 permissions:
   contents: write
 
 jobs:
   apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,7 +22,7 @@ jobs:
           python-version: "3.12"
       - name: Apply presentation transformation
         run: python scripts/apply-decision-workspace-polish.py
-      - name: Commit transformed component
+      - name: Commit transformed component to feature branch
         run: |
           if git diff --quiet -- components/analysis/analysis-detail.tsx; then
             echo "No presentation changes to commit."
@@ -35,5 +33,3 @@ jobs:
           git add components/analysis/analysis-detail.tsx
           git commit -m "Polish analysis decision workspace"
           git push origin HEAD:feat/decision-workspace-2
-
-# Triggered intentionally after the transformation script is present on the branch.
