@@ -8,10 +8,10 @@ import {
   type AnalysisBriefAiSidecarEvidence,
   type AnalysisBriefInput,
 } from "@/lib/ai/analysis-brief"
+import type { AiReportEvidenceMeta } from "@/lib/ai/report-types"
 import { db } from "@/lib/db/prisma"
 import type {
   AiAnalysisBrief,
-  AiReportEvidenceMeta,
   EnrichmentMeta,
   WalletGraphFinding,
 } from "@/types"
@@ -102,7 +102,7 @@ export function summarizeProductionAiAudit(rows: AuditRow[]): {
       reasonCodes: stringArray(payload.reasonCodes, 10),
       summary: stringValue(payload.summary) ?? "",
       limitations: stringArray(payload.limitations, 6),
-    }
+    } satisfies AnalysisBriefAiSidecarEvidence["walletInsights"][number]
   })
 
   const clusterInsights = clusterRows.map((row) => {
@@ -122,7 +122,7 @@ export function summarizeProductionAiAudit(rows: AuditRow[]): {
       reasonCodes: stringArray(payload.reasonCodes, 10),
       interpretation: stringValue(payload.interpretation) ?? "",
       limitations: stringArray(payload.limitations, 6),
-    }
+    } satisfies AnalysisBriefAiSidecarEvidence["clusterInsights"][number]
   })
 
   const gateInsights = gateRows.map((row) => {
@@ -134,7 +134,7 @@ export function summarizeProductionAiAudit(rows: AuditRow[]): {
       originalStatus: stringValue(payload.originalStatus),
       finalStatus: stringValue(payload.finalStatus),
       riskScoreUnchanged: booleanValue(payload.riskScoreUnchanged) ?? true,
-    }
+    } satisfies AnalysisBriefAiSidecarEvidence["gateInsights"][number]
   })
 
   const models = Array.from(
