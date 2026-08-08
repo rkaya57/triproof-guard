@@ -1,3 +1,5 @@
+import { dispatchAnalysisPostFinalize } from "@/lib/analysis/post-finalize-dispatch"
+import { runProductionAiSidecarForAnalysis } from "@/lib/ai/production-sidecar"
 import { db } from "@/lib/db/prisma"
 import { webhookHeaders } from "@/lib/webhooks/sign"
 
@@ -37,7 +39,32 @@ function siteOrigin() {
   return process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || process.env.APP_URL?.replace(/\/$/, "") || "https://triproofprotocol.com"
 }
 
+/**
+ * Called by the deterministic batch worker. This function intentionally does
+ * not run Gemini inline. It registers a short post-response dispatch to a
+ * dedicated 300-second worker so RPC/batch throughput and AI latency cannot
+ * consume each other's function budget.
+ */
 export async function deliverAnalysisCompletedWebhook(analysisId: string) {
+  dispatchAnalysisPostFinalize(analysisId)
+  return { delivered: 0, skipped: false, scheduled: true }
+}
+
+/**
+ * Runs only inside the authorized analysis-post-finalize worker. The Gemini
+ * sidecar executes after the deterministic transaction committed and before
+ * the externally visible completion webhook snapshot is constructed.
+ */
+export async function deliverAnalysisCompletedWebhookNow(analysisId: string) {
+  try {
+    await runProductionAiSidecarForAnalysis(analysisId)
+  } catch (error) {
+    console.error("Production AI post-finalize sidecar failed", {
+      analysisId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+
   const analysis = await db.analysis.findUnique({
     where: { id: analysisId },
     include: { project: true },
