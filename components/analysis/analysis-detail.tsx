@@ -1619,11 +1619,11 @@ export function AnalysisDetail({
         </Card>
       </div>
 
-<Card className="glass-panel premium-card">
+      <Card className="glass-panel premium-card">
         <CardHeader>
           <CardTitle>Explainable Reason Codes</CardTitle>
           <CardDescription>
-            Human-readable evidence is normalized into compact codes for API responses, clean-list exports and Manual Review review.
+            Human-readable evidence is normalized into compact codes for API responses, clean-list exports and manual-review workflows.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
