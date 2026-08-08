@@ -45,35 +45,43 @@ type AiClusterAuditRow = {
 }
 
 async function latestAiRelationshipInsight(analysisId: string) {
-  const rows = await db.$queryRaw<AiClusterAuditRow[]>(Prisma.sql`
-    SELECT "source", "model", "recommendation", "confidence", "payload", "createdAt"
-    FROM "AiEvidenceAudit"
-    WHERE "analysisId" = ${analysisId}
-      AND "context" = 'production_analysis'
-      AND "subjectKind" = 'cluster'
-      AND "stage" = 'cluster_evidence'
-    ORDER BY "createdAt" DESC
-    LIMIT 1
-  `)
-  const row = rows[0]
-  if (!row) return null
-  const payload = asRecord(row.payload)
+  try {
+    const rows = await db.$queryRaw<AiClusterAuditRow[]>(Prisma.sql`
+      SELECT "source", "model", "recommendation", "confidence", "payload", "createdAt"
+      FROM "AiEvidenceAudit"
+      WHERE "analysisId" = ${analysisId}
+        AND "context" = 'production_analysis'
+        AND "subjectKind" = 'cluster'
+        AND "stage" = 'cluster_evidence'
+      ORDER BY "createdAt" DESC
+      LIMIT 1
+    `)
+    const row = rows[0]
+    if (!row) return null
+    const payload = asRecord(row.payload)
 
-  return {
-    source: row.source === "gemini" ? "gemini" : "fallback",
-    model: row.model,
-    recommendation: stringValue(payload.recommendation) ?? row.recommendation,
-    confidence: numberValue(payload.confidence) ?? row.confidence,
-    evidenceSufficiency: numberValue(payload.evidenceSufficiency),
-    coordinationEvidenceStrength: numberValue(payload.coordinationEvidenceStrength),
-    automationEvidenceStrength: numberValue(payload.automationEvidenceStrength),
-    neutralExplanationStrength: numberValue(payload.neutralExplanationStrength),
-    heterogeneityEvidenceStrength: numberValue(payload.heterogeneityEvidenceStrength),
-    interpretation: stringValue(payload.interpretation),
-    counterEvidence: stringArray(payload.counterEvidence),
-    unresolvedQuestions: stringArray(payload.unresolvedQuestions),
-    limitations: stringArray(payload.limitations),
-    generatedAt: row.createdAt.toISOString(),
+    return {
+      source: row.source === "gemini" ? "gemini" : "fallback",
+      model: row.model,
+      recommendation: stringValue(payload.recommendation) ?? row.recommendation,
+      confidence: numberValue(payload.confidence) ?? row.confidence,
+      evidenceSufficiency: numberValue(payload.evidenceSufficiency),
+      coordinationEvidenceStrength: numberValue(payload.coordinationEvidenceStrength),
+      automationEvidenceStrength: numberValue(payload.automationEvidenceStrength),
+      neutralExplanationStrength: numberValue(payload.neutralExplanationStrength),
+      heterogeneityEvidenceStrength: numberValue(payload.heterogeneityEvidenceStrength),
+      interpretation: stringValue(payload.interpretation),
+      counterEvidence: stringArray(payload.counterEvidence),
+      unresolvedQuestions: stringArray(payload.unresolvedQuestions),
+      limitations: stringArray(payload.limitations),
+      generatedAt: row.createdAt.toISOString(),
+    }
+  } catch (error) {
+    console.warn("AI relationship audit context unavailable; serving deterministic graph only", {
+      analysisId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return null
   }
 }
 
