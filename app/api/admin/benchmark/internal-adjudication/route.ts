@@ -52,7 +52,22 @@ export async function POST(request: Request) {
     const privateSealBytes = new Uint8Array(await sealFile.arrayBuffer())
     const result = runInternalAdjudication(reviewerCsv, privateSealBytes, secondReviewCsv)
 
-    return NextResponse.json(result, {
+    const response = {
+      ...result,
+      provenance: {
+        ...result.provenance,
+        externalIndependenceSatisfied: false as const,
+        reviewerNameSeparation: {
+          separatedCases: result.provenance.independentReviewerCases,
+          totalCases: result.provenance.secondReviewRows,
+          allNamesSeparated: result.provenance.independenceSatisfied,
+        },
+        note:
+          "Reviewer-name separation is only an administrative provenance signal. It does not establish independent human review, reviewer blindness, or external-validation independence. External independence remains NOT SATISFIED in this internal adjudication workflow, and these results cannot support a public accuracy claim.",
+      },
+    }
+
+    return NextResponse.json(response, {
       headers: {
         "Cache-Control": "no-store, private",
         "X-Content-Type-Options": "nosniff",
