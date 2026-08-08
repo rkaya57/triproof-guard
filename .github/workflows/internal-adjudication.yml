@@ -1,0 +1,29 @@
+name: Internal adjudication safety
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Lint adjudication surface
+        run: npx eslint lib/benchmark/internal-adjudication.ts lib/benchmark/internal-adjudication.test.ts app/api/admin/benchmark/internal-adjudication/route.ts app/dashboard/admin/benchmark/calibration-adjudication-upload.tsx app/dashboard/admin/benchmark/calibration/page.tsx
+      - name: Run calibration and adjudication tests
+        run: node --import tsx --test lib/benchmark/internal-calibration.test.ts lib/benchmark/internal-adjudication.test.ts
