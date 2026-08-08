@@ -1,6 +1,6 @@
 const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models"
 
-export const GEMINI_EVIDENCE_RUNTIME_VERSION = "2026-08-08.1" as const
+export const GEMINI_EVIDENCE_RUNTIME_VERSION = "2026-08-08.2" as const
 export const GEMINI_EVIDENCE_DEFAULT_MODEL = "gemini-3.6-flash" as const
 export const GEMINI_EVIDENCE_FALLBACK_MODEL = "gemini-3.5-flash-lite" as const
 
@@ -38,11 +38,26 @@ export function configuredEvidenceModel() {
   )
 }
 
+export function configuredEvidenceFallbackModel() {
+  return (
+    validModel(process.env.GEMINI_EVIDENCE_FALLBACK_MODEL) ??
+    GEMINI_EVIDENCE_FALLBACK_MODEL
+  )
+}
+
 export function configuredClusterModel() {
   return (
     validModel(process.env.GEMINI_CLUSTER_MODEL) ??
     validModel(process.env.GEMINI_EVIDENCE_MODEL) ??
     GEMINI_EVIDENCE_DEFAULT_MODEL
+  )
+}
+
+export function configuredClusterFallbackModel() {
+  return (
+    validModel(process.env.GEMINI_CLUSTER_FALLBACK_MODEL) ??
+    validModel(process.env.GEMINI_EVIDENCE_FALLBACK_MODEL) ??
+    GEMINI_EVIDENCE_FALLBACK_MODEL
   )
 }
 
@@ -191,4 +206,24 @@ export async function requestGeminiStructured(options: {
       providerCode: null,
     }
   }
+}
+
+export async function requestGeminiStructuredWithFallback(options: {
+  prompt: string
+  schema: object
+  systemInstruction: string
+  model?: string
+  fallbackModel?: string
+  maxOutputTokens?: number
+  thinkingLevel?: "minimal" | "low" | "medium" | "high"
+  timeoutMs?: number
+}): Promise<GeminiStructuredResult> {
+  const primaryModel = validModel(options.model) ?? GEMINI_EVIDENCE_DEFAULT_MODEL
+  const primary = await requestGeminiStructured({ ...options, model: primaryModel })
+  if (primary.ok || primary.reason === "not_configured") return primary
+
+  const fallbackModel = validModel(options.fallbackModel) ?? GEMINI_EVIDENCE_FALLBACK_MODEL
+  if (fallbackModel === primaryModel) return primary
+
+  return requestGeminiStructured({ ...options, model: fallbackModel })
 }
