@@ -25,9 +25,11 @@ import {
   parseAiEvidenceModelResponse,
 } from "@/lib/ai/evidence-analyst"
 import {
+  configuredClusterFallbackModel,
   configuredClusterModel,
+  configuredEvidenceFallbackModel,
   configuredEvidenceModel,
-  requestGeminiStructured,
+  requestGeminiStructuredWithFallback,
 } from "@/lib/ai/gemini-structured-runtime"
 
 const walletResponseJsonSchema = {
@@ -217,8 +219,9 @@ export async function generateLiveAiEvidenceAssessment(
   const packet = buildAiEvidencePacket(input)
   if (!process.env.GEMINI_API_KEY?.trim()) return walletFallback(packet, "not_configured")
 
-  const response = await requestGeminiStructured({
+  const response = await requestGeminiStructuredWithFallback({
     model: configuredEvidenceModel(),
+    fallbackModel: configuredEvidenceFallbackModel(),
     prompt: walletPrompt(packet),
     schema: walletResponseJsonSchema,
     systemInstruction:
@@ -264,8 +267,9 @@ export async function generateLiveAiClusterAssessment(
   if (packet.members.representedWallets === 0) return clusterFallback(packet, "empty_cluster")
   if (!process.env.GEMINI_API_KEY?.trim()) return clusterFallback(packet, "not_configured")
 
-  const response = await requestGeminiStructured({
+  const response = await requestGeminiStructuredWithFallback({
     model: configuredClusterModel(),
+    fallbackModel: configuredClusterFallbackModel(),
     prompt: clusterPrompt(packet),
     schema: clusterResponseJsonSchema,
     systemInstruction:
