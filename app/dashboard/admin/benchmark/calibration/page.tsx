@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card"
 import { getAdminUser } from "@/lib/auth/admin"
 
+import { CalibrationAdjudicationUpload } from "../calibration-adjudication-upload"
 import { CalibrationUpload } from "../calibration-upload"
 
 function AccessDenied() {
@@ -37,6 +38,7 @@ export default async function InternalCalibrationPage() {
   return (
     <div className="flex flex-col gap-6">
       <CalibrationUpload />
+      <CalibrationAdjudicationUpload />
       <div>
         <Link
           href="/dashboard/admin/benchmark"
