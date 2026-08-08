@@ -17,6 +17,15 @@ const DEFAULT_WALLET_LIMIT = 8
 const DEFAULT_CLUSTER_LIMIT = 4
 const DEFAULT_CONCURRENCY = 2
 
+type ProductionAiSidecarEnvironment = Partial<
+  Record<
+    | "GEMINI_API_KEY"
+    | "AI_PRODUCTION_SIDECAR_ENABLED"
+    | "AI_EVIDENCE_ANALYST_ENABLED",
+    string | undefined
+  >
+>
+
 function enabledValue(value: string | undefined) {
   return /^(1|true|yes|on)$/i.test(value?.trim() ?? "")
 }
@@ -31,7 +40,9 @@ function boundedInteger(value: string | undefined, fallback: number, max: number
   return Math.min(max, Math.max(1, parsed))
 }
 
-export function productionAiSidecarEnabled(env: NodeJS.ProcessEnv = process.env) {
+export function productionAiSidecarEnabled(
+  env: ProductionAiSidecarEnvironment = process.env
+) {
   if (!env.GEMINI_API_KEY?.trim()) return false
   const explicit = env.AI_PRODUCTION_SIDECAR_ENABLED
   if (disabledValue(explicit)) return false
