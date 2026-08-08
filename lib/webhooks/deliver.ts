@@ -1,4 +1,5 @@
 import { dispatchAnalysisPostFinalize } from "@/lib/analysis/post-finalize-dispatch"
+import { generateAndStoreAnalysisReportBrief } from "@/lib/ai/analysis-report-service"
 import { runProductionAiSidecarForAnalysis } from "@/lib/ai/production-sidecar"
 import { db } from "@/lib/db/prisma"
 import { webhookHeaders } from "@/lib/webhooks/sign"
@@ -52,14 +53,27 @@ export async function deliverAnalysisCompletedWebhook(analysisId: string) {
 
 /**
  * Runs only inside the authorized analysis-post-finalize worker. The Gemini
- * sidecar executes after the deterministic transaction committed and before
- * the externally visible completion webhook snapshot is constructed.
+ * sidecar executes after the deterministic transaction commits. The customer-
+ * facing AI report is then synthesized from the persisted, privacy-reduced
+ * production audit records. Neither step is allowed to alter deterministic
+ * risk scores. External completion webhooks are snapshotted only afterwards.
  */
 export async function deliverAnalysisCompletedWebhookNow(analysisId: string) {
   try {
     await runProductionAiSidecarForAnalysis(analysisId)
   } catch (error) {
     console.error("Production AI post-finalize sidecar failed", {
+      analysisId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+
+  try {
+    await generateAndStoreAnalysisReportBrief(analysisId)
+  } catch (error) {
+    // Report synthesis is optional decision support. It must never block the
+    // deterministic report, exports, or completion webhook delivery.
+    console.error("Production AI report synthesis failed", {
       analysisId,
       error: error instanceof Error ? error.message : String(error),
     })
