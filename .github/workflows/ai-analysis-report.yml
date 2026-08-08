@@ -1,0 +1,77 @@
+name: AI analysis report safety
+
+on:
+  push:
+    branches:
+      - feat/ai-report-from-production-audit
+    paths:
+      - "lib/ai/analysis-brief.ts"
+      - "lib/ai/analysis-brief.test.ts"
+      - "lib/ai/analysis-report-service.ts"
+      - "lib/ai/analysis-report-service.test.ts"
+      - "lib/ai/report-types.ts"
+      - "components/analysis/ai-decision-brief.tsx"
+      - "app/api/analysis/[id]/ai-brief/route.ts"
+      - "lib/webhooks/deliver.ts"
+      - "lib/exports/pdf-with-ai.ts"
+      - "app/api/analysis/[id]/export/route.ts"
+      - ".github/workflows/ai-analysis-report.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "lib/ai/analysis-brief.ts"
+      - "lib/ai/analysis-brief.test.ts"
+      - "lib/ai/analysis-report-service.ts"
+      - "lib/ai/analysis-report-service.test.ts"
+      - "lib/ai/report-types.ts"
+      - "components/analysis/ai-decision-brief.tsx"
+      - "app/api/analysis/[id]/ai-brief/route.ts"
+      - "lib/webhooks/deliver.ts"
+      - "lib/exports/pdf-with-ai.ts"
+      - "app/api/analysis/[id]/export/route.ts"
+      - ".github/workflows/ai-analysis-report.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint AI report integration
+        run: >-
+          npx eslint
+          lib/ai/analysis-brief.ts
+          lib/ai/analysis-brief.test.ts
+          lib/ai/analysis-report-service.ts
+          lib/ai/analysis-report-service.test.ts
+          lib/ai/report-types.ts
+          components/analysis/ai-decision-brief.tsx
+          app/api/analysis/[id]/ai-brief/route.ts
+          lib/webhooks/deliver.ts
+          lib/exports/pdf-with-ai.ts
+          app/api/analysis/[id]/export/route.ts
+
+      - name: AI report safety tests
+        run: >-
+          node --import tsx --test
+          lib/ai/analysis-brief.test.ts
+          lib/ai/analysis-report-service.test.ts
