@@ -5,7 +5,7 @@ import { serializeAnalysis } from "@/lib/analysis/serializers"
 import { getDevAnalysisForUser } from "@/lib/dev-store/store"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
-import { buildPdfReport } from "@/lib/exports/pdf"
+import { buildPdfReportWithAi } from "@/lib/exports/pdf-with-ai"
 import { filterWalletsByExportType, walletsToCsv } from "@/lib/exports/csv"
 
 export const runtime = "nodejs"
@@ -37,6 +37,7 @@ export async function GET(
         project: true,
         wallets: { orderBy: [{ riskScore: "desc" }, { walletAddress: "asc" }] },
         clusters: { orderBy: [{ averageRiskScore: "desc" }, { clusterLabel: "asc" }] },
+        aiBrief: true,
       },
     })
   } catch (error) {
@@ -64,7 +65,7 @@ async function exportAnalysis(
   type: string
 ) {
   if (type === "pdf") {
-    const bytes = await buildPdfReport(analysis)
+    const bytes = await buildPdfReportWithAi(analysis)
     const body = bytes.buffer.slice(
       bytes.byteOffset,
       bytes.byteOffset + bytes.byteLength
