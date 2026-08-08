@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client"
 import { NextResponse } from "next/server"
 
 import { getCurrentUser } from "@/lib/auth/session"
@@ -9,6 +10,79 @@ function boundedLimit(value: string | null) {
   const parsed = Number.parseInt(value ?? "120", 10)
   if (!Number.isFinite(parsed)) return 120
   return Math.min(Math.max(parsed, 20), 250)
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null
+}
+
+function numberValue(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null
+}
+
+function stringArray(value: unknown, limit = 5) {
+  return Array.isArray(value)
+    ? value
+        .filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
+        .map((item) => item.trim())
+        .slice(0, limit)
+    : []
+}
+
+type AiClusterAuditRow = {
+  source: string
+  model: string | null
+  recommendation: string
+  confidence: number | null
+  payload: unknown
+  createdAt: Date
+}
+
+async function latestAiRelationshipInsight(analysisId: string) {
+  try {
+    const rows = await db.$queryRaw<AiClusterAuditRow[]>(Prisma.sql`
+      SELECT "source", "model", "recommendation", "confidence", "payload", "createdAt"
+      FROM "AiEvidenceAudit"
+      WHERE "analysisId" = ${analysisId}
+        AND "context" = 'production_analysis'
+        AND "subjectKind" = 'cluster'
+        AND "stage" = 'cluster_evidence'
+      ORDER BY "createdAt" DESC
+      LIMIT 1
+    `)
+    const row = rows[0]
+    if (!row) return null
+    const payload = asRecord(row.payload)
+
+    return {
+      source: row.source === "gemini" ? "gemini" : "fallback",
+      model: row.model,
+      recommendation: stringValue(payload.recommendation) ?? row.recommendation,
+      confidence: numberValue(payload.confidence) ?? row.confidence,
+      evidenceSufficiency: numberValue(payload.evidenceSufficiency),
+      coordinationEvidenceStrength: numberValue(payload.coordinationEvidenceStrength),
+      automationEvidenceStrength: numberValue(payload.automationEvidenceStrength),
+      neutralExplanationStrength: numberValue(payload.neutralExplanationStrength),
+      heterogeneityEvidenceStrength: numberValue(payload.heterogeneityEvidenceStrength),
+      interpretation: stringValue(payload.interpretation),
+      counterEvidence: stringArray(payload.counterEvidence),
+      unresolvedQuestions: stringArray(payload.unresolvedQuestions),
+      limitations: stringArray(payload.limitations),
+      generatedAt: row.createdAt.toISOString(),
+    }
+  } catch (error) {
+    console.warn("AI relationship audit context unavailable; serving deterministic graph only", {
+      analysisId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return null
+  }
 }
 
 export async function GET(
@@ -37,6 +111,7 @@ export async function GET(
   if (!analysis.graphSummary) {
     return NextResponse.json({
       graph: null,
+      aiInsight: null,
       message: "This analysis predates graph intelligence. Run a new analysis to create graph evidence.",
     })
   }
@@ -56,11 +131,14 @@ export async function GET(
     analysisId: id,
     ...(componentId ? { componentId } : {}),
   }
-  const edges = await db.walletGraphEdge.findMany({
-    where: edgeWhere,
-    orderBy: [{ isRiskBearing: "desc" }, { confidence: "desc" }, { edgeKey: "asc" }],
-    take: limit,
-  })
+  const [edges, aiInsight] = await Promise.all([
+    db.walletGraphEdge.findMany({
+      where: edgeWhere,
+      orderBy: [{ isRiskBearing: "desc" }, { confidence: "desc" }, { edgeKey: "asc" }],
+      take: limit,
+    }),
+    latestAiRelationshipInsight(id),
+  ])
   const nodeKeys = Array.from(
     new Set(edges.flatMap((edge) => [edge.sourceKey, edge.targetKey]))
   )
@@ -104,5 +182,6 @@ export async function GET(
       })),
       truncated: edges.length >= limit || nodes.length >= limit,
     },
+    aiInsight,
   })
 }
