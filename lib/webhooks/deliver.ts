@@ -1,3 +1,4 @@
+import { runProductionAiSidecarForAnalysis } from "@/lib/ai/production-sidecar"
 import { db } from "@/lib/db/prisma"
 import { webhookHeaders } from "@/lib/webhooks/sign"
 
@@ -38,6 +39,18 @@ function siteOrigin() {
 }
 
 export async function deliverAnalysisCompletedWebhook(analysisId: string) {
+  // The sidecar runs after the deterministic analysis transaction has committed,
+  // but before the externally visible completion webhook is snapshotted. Any
+  // Gemini/audit failure leaves the deterministic decisions untouched.
+  try {
+    await runProductionAiSidecarForAnalysis(analysisId)
+  } catch (error) {
+    console.error("Production AI post-finalize sidecar failed", {
+      analysisId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+
   const analysis = await db.analysis.findUnique({
     where: { id: analysisId },
     include: { project: true },
