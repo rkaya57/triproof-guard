@@ -1,4 +1,4 @@
-name: Apply decision workspace transform
+name: Finalize decision workspace polish
 
 on:
   pull_request:
@@ -24,15 +24,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Apply context-aware presentation transform
-        run: python scripts/apply-decision-workspace.py
+      - name: Finalize report copy and alignment
+        run: python scripts/finalize-decision-workspace.py
       - name: Install dependencies
         run: npm ci
       - name: Type check
         run: npx tsc --noEmit
       - name: Lint updated report surface
         run: npx eslint components/analysis/analysis-detail.tsx
-      - name: Commit validated presentation
+      - name: Commit validated final polish
         run: |
           if git diff --quiet -- components/analysis/analysis-detail.tsx; then
             echo "No presentation changes to commit."
@@ -41,5 +41,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add components/analysis/analysis-detail.tsx
-          git commit -m "Polish analysis decision workspace"
+          git commit -m "Finalize decision workspace copy"
           git push origin HEAD:feat/decision-workspace-2
