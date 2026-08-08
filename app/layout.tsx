@@ -40,14 +40,19 @@ export default function RootLayout({
           <div
             role="status"
             aria-label="Public beta notice"
-            className="border-b border-amber-300/20 bg-amber-300/[0.07] px-4 py-2 text-center text-xs leading-5 text-amber-100 sm:text-sm"
+            className="relative overflow-hidden border-b border-cyan-300/10 bg-gradient-to-r from-cyan-500/[0.06] via-sky-400/[0.035] to-violet-500/[0.05] px-4 py-2.5 text-slate-300 backdrop-blur-xl"
           >
-            <span className="mr-2 inline-flex rounded-full border border-amber-300/30 bg-amber-300/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-200 sm:text-xs">
-              Public Beta
-            </span>
-            <span>
-              Tri-Proof Protocol is currently in beta. Features and risk models may change during validation; automated outputs are decision-support signals, not guarantees.
-            </span>
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-cyan-300/25 to-transparent" />
+            <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center text-xs leading-5 sm:text-sm">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-300/20 bg-cyan-300/[0.07] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-200 shadow-[0_0_18px_rgba(34,211,238,0.08)] sm:text-xs">
+                <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_8px_rgba(103,232,249,0.75)]" />
+                Public Beta
+              </span>
+              <span className="text-slate-300/90">
+                Tri-Proof Protocol is currently in public beta. Features and risk models may evolve as validation continues.
+                <span className="hidden sm:inline"> Automated outputs are decision-support signals, not guarantees.</span>
+              </span>
+            </div>
           </div>
           <ToastProvider>{children}</ToastProvider>
         </TooltipProvider>
