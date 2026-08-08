@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { describe, it } from "node:test"
 
 import "./context.test"
+import "./holdout-v1.test"
 import "./labeling-queue.test"
 import { calculateBenchmarkMetrics } from "./metrics"
 import { runLabeledBenchmark } from "./runner"
