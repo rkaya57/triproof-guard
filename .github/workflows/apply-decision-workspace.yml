@@ -1,0 +1,45 @@
+name: Apply decision workspace transform
+
+on:
+  pull_request:
+    branches:
+      - feat/decision-workspace-2
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/decision-workspace-2
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Apply context-aware presentation transform
+        run: python scripts/apply-decision-workspace.py
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Lint updated report surface
+        run: npx eslint components/analysis/analysis-detail.tsx
+      - name: Commit validated presentation
+        run: |
+          if git diff --quiet -- components/analysis/analysis-detail.tsx; then
+            echo "No presentation changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add components/analysis/analysis-detail.tsx
+          git commit -m "Polish analysis decision workspace"
+          git push origin HEAD:feat/decision-workspace-2
