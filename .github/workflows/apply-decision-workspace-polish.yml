@@ -35,3 +35,5 @@ jobs:
           git add components/analysis/analysis-detail.tsx
           git commit -m "Polish analysis decision workspace"
           git push origin HEAD:feat/decision-workspace-2
+
+# Triggered intentionally after the transformation script is present on the branch.
