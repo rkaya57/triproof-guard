@@ -1,5 +1,11 @@
 import { createHash } from "node:crypto"
 
+import {
+  configuredEvidenceFallbackModel,
+  configuredEvidenceModel,
+  requestGeminiStructuredWithFallback,
+} from "@/lib/ai/gemini-structured-runtime"
+import type { AiReportEvidenceMeta } from "@/lib/ai/report-types"
 import type {
   AiAnalysisBrief,
   AiBriefDriver,
@@ -9,10 +15,58 @@ import type {
   WalletRiskResult,
 } from "@/types"
 
-const defaultModel = "gemini-2.5-flash"
-const geminiEndpoint = "https://generativelanguage.googleapis.com/v1beta/models"
 const maxReasonCount = 8
 const maxGraphFindings = 5
+
+export type AnalysisBriefWalletAiInsight = {
+  source: "gemini" | "fallback"
+  model: string | null
+  recommendation: string
+  confidence: number | null
+  evidenceSufficiency: number | null
+  organicEvidenceStrength: number | null
+  coordinationEvidenceStrength: number | null
+  automationEvidenceStrength: number | null
+  entityEvidenceStrength: number | null
+  contradictions: string[]
+  missingEvidence: string[]
+  reasonCodes: string[]
+  summary: string
+  limitations: string[]
+}
+
+export type AnalysisBriefClusterAiInsight = {
+  source: "gemini" | "fallback"
+  model: string | null
+  recommendation: string
+  confidence: number | null
+  evidenceSufficiency: number | null
+  coordinationEvidenceStrength: number | null
+  automationEvidenceStrength: number | null
+  neutralExplanationStrength: number | null
+  heterogeneityEvidenceStrength: number | null
+  counterEvidence: string[]
+  unresolvedQuestions: string[]
+  reasonCodes: string[]
+  interpretation: string
+  limitations: string[]
+}
+
+export type AnalysisBriefGateInsight = {
+  applied: boolean
+  trigger: string | null
+  reasonCode: string | null
+  originalStatus: string | null
+  finalStatus: string | null
+  riskScoreUnchanged: boolean
+}
+
+export type AnalysisBriefAiSidecarEvidence = {
+  meta: AiReportEvidenceMeta
+  walletInsights: AnalysisBriefWalletAiInsight[]
+  clusterInsights: AnalysisBriefClusterAiInsight[]
+  gateInsights: AnalysisBriefGateInsight[]
+}
 
 export type AnalysisBriefInput = {
   totalWallets: number
@@ -39,6 +93,7 @@ export type AnalysisBriefInput = {
       >
     | null
     | undefined
+  aiSidecar?: AnalysisBriefAiSidecarEvidence | null
 }
 
 export type AnalysisBriefEvidence = {
@@ -67,6 +122,7 @@ export type AnalysisBriefEvidence = {
     maxComponentRisk: number
     findings: Array<{ title: string; description: string; severity: string; evidenceCount: number }>
   } | null
+  aiSidecar: AnalysisBriefAiSidecarEvidence | null
 }
 
 function sanitizeText(value: string) {
@@ -84,6 +140,67 @@ function normalizeList(value: unknown, limit: number, itemLimit = 360) {
     .map((item) => sanitizeText(item).slice(0, itemLimit))
     .filter(Boolean)
     .slice(0, limit)
+}
+
+function normalizeNumber(value: number | null) {
+  if (value === null || !Number.isFinite(value)) return null
+  return Math.round(value * 100) / 100
+}
+
+function normalizeSidecar(
+  value: AnalysisBriefAiSidecarEvidence | null | undefined
+): AnalysisBriefAiSidecarEvidence | null {
+  if (!value) return null
+  return {
+    meta: {
+      ...value.meta,
+      models: value.meta.models.map((model) => sanitizeText(model).slice(0, 80)).slice(0, 4),
+      topReasonCodes: value.meta.topReasonCodes
+        .map((item) => ({ code: sanitizeText(item.code).slice(0, 64), count: item.count }))
+        .slice(0, 8),
+      averageConfidence: normalizeNumber(value.meta.averageConfidence),
+      averageEvidenceSufficiency: normalizeNumber(value.meta.averageEvidenceSufficiency),
+    },
+    walletInsights: value.walletInsights.slice(0, 12).map((item) => ({
+      ...item,
+      model: item.model ? sanitizeText(item.model).slice(0, 80) : null,
+      recommendation: sanitizeText(item.recommendation).slice(0, 64),
+      confidence: normalizeNumber(item.confidence),
+      evidenceSufficiency: normalizeNumber(item.evidenceSufficiency),
+      organicEvidenceStrength: normalizeNumber(item.organicEvidenceStrength),
+      coordinationEvidenceStrength: normalizeNumber(item.coordinationEvidenceStrength),
+      automationEvidenceStrength: normalizeNumber(item.automationEvidenceStrength),
+      entityEvidenceStrength: normalizeNumber(item.entityEvidenceStrength),
+      contradictions: normalizeList(item.contradictions, 6),
+      missingEvidence: normalizeList(item.missingEvidence, 6),
+      reasonCodes: normalizeList(item.reasonCodes, 8, 64),
+      summary: sanitizeText(item.summary).slice(0, 900),
+      limitations: normalizeList(item.limitations, 4),
+    })),
+    clusterInsights: value.clusterInsights.slice(0, 6).map((item) => ({
+      ...item,
+      model: item.model ? sanitizeText(item.model).slice(0, 80) : null,
+      recommendation: sanitizeText(item.recommendation).slice(0, 64),
+      confidence: normalizeNumber(item.confidence),
+      evidenceSufficiency: normalizeNumber(item.evidenceSufficiency),
+      coordinationEvidenceStrength: normalizeNumber(item.coordinationEvidenceStrength),
+      automationEvidenceStrength: normalizeNumber(item.automationEvidenceStrength),
+      neutralExplanationStrength: normalizeNumber(item.neutralExplanationStrength),
+      heterogeneityEvidenceStrength: normalizeNumber(item.heterogeneityEvidenceStrength),
+      counterEvidence: normalizeList(item.counterEvidence, 6),
+      unresolvedQuestions: normalizeList(item.unresolvedQuestions, 6),
+      reasonCodes: normalizeList(item.reasonCodes, 8, 64),
+      interpretation: sanitizeText(item.interpretation).slice(0, 900),
+      limitations: normalizeList(item.limitations, 4),
+    })),
+    gateInsights: value.gateInsights.slice(0, 12).map((item) => ({
+      ...item,
+      trigger: item.trigger ? sanitizeText(item.trigger).slice(0, 80) : null,
+      reasonCode: item.reasonCode ? sanitizeText(item.reasonCode).slice(0, 80) : null,
+      originalStatus: item.originalStatus ? sanitizeText(item.originalStatus).slice(0, 40) : null,
+      finalStatus: item.finalStatus ? sanitizeText(item.finalStatus).slice(0, 40) : null,
+    })),
+  }
 }
 
 function reasonTitle(reason: string) {
@@ -105,13 +222,27 @@ function fallbackActions(evidence: AnalysisBriefEvidence) {
   if (evidence.decisions.review > 0) {
     actions.push("Resolve Gray Zone wallets with a reviewer before any reward distribution.")
   }
+  if ((evidence.aiSidecar?.meta.gateEscalations ?? 0) > 0) {
+    actions.push(
+      `Prioritize the ${evidence.aiSidecar?.meta.gateEscalations} wallet(s) escalated by the one-way AI disagreement gate for human review.`
+    )
+  }
+  const collectMore =
+    evidence.aiSidecar?.walletInsights.filter(
+      (item) => item.recommendation === "collect_more_evidence"
+    ).length ?? 0
+  if (collectMore > 0) {
+    actions.push(
+      `Collect additional provider or campaign evidence for ${collectMore} AI-reviewed wallet(s) before final eligibility decisions.`
+    )
+  }
   if (evidence.graph?.highRiskComponents) {
-    actions.push("Review the connected funding and referral components before approving linked wallets.")
+    actions.push("Review connected funding and referral components before approving linked wallets.")
   }
   if ((evidence.enrichment?.warnings ?? 0) > 0) {
     actions.push("Recheck wallets with incomplete provider coverage before making a final exclusion decision.")
   }
-  return actions.slice(0, 4)
+  return actions.slice(0, 5)
 }
 
 export function buildAnalysisBriefEvidence(input: AnalysisBriefInput): AnalysisBriefEvidence {
@@ -173,6 +304,7 @@ export function buildAnalysisBriefEvidence(input: AnalysisBriefInput): AnalysisB
           })),
         }
       : null,
+    aiSidecar: normalizeSidecar(input.aiSidecar),
   }
 }
 
@@ -187,59 +319,116 @@ export function buildDeterministicAnalysisBrief(
   const graphSummary = evidence.graph?.highRiskComponents
     ? ` Graph evidence identified ${evidence.graph.highRiskComponents} high-risk connected component${evidence.graph.highRiskComponents === 1 ? "" : "s"}.`
     : ""
-  const drivers = evidence.topReasons.slice(0, 4).map((item) => ({
+  const aiSummary = evidence.aiSidecar
+    ? ` The production AI sidecar reviewed ${evidence.aiSidecar.meta.walletAssessments} wallet candidate(s): ${evidence.aiSidecar.meta.walletGeminiResponses} Gemini response(s), ${evidence.aiSidecar.meta.walletFallbacks} fallback(s), and ${evidence.aiSidecar.meta.gateEscalations} one-way review escalation(s).`
+    : ""
+  const drivers = evidence.topReasons.slice(0, 3).map((item) => ({
     title: reasonTitle(item.reason),
     explanation: `${item.count} wallet${item.count === 1 ? "" : "s"} carried this evidence: ${item.reason}`,
     severity: classifyDriver(item.reason),
   }))
+  if (evidence.aiSidecar?.meta.topReasonCodes[0]) {
+    const top = evidence.aiSidecar.meta.topReasonCodes[0]
+    drivers.push({
+      title: `AI evidence signal: ${top.code}`,
+      explanation: `${top.count} audited AI assessment(s) carried this reason code. It is decision-support evidence, not ground truth or a malicious label.`,
+      severity: "info",
+    })
+  }
 
   return {
     source: "fallback",
     model: null,
     generatedAt: new Date().toISOString(),
-    executiveSummary: `${decision.approved} of ${evidence.totalWallets} wallets are approved, ${decision.review} require review, and ${decision.rejected} are not eligible under the ${evidence.riskPolicy} policy.${graphSummary}`,
-    decisionRationale: `The report combines wallet activity, campaign behavior, entity context, and corroborated funding or referral evidence. The average risk score is ${evidence.averageRiskScore}/100; final reward decisions remain with the project team.`,
+    executiveSummary: `${decision.approved} of ${evidence.totalWallets} wallets are approved, ${decision.review} require review, and ${decision.rejected} are not eligible under the ${evidence.riskPolicy} policy.${graphSummary}${aiSummary}`,
+    decisionRationale: `The report combines deterministic wallet activity, campaign behavior, entity context, corroborated graph evidence, and—when available—audited AI Evidence Analyst assessments. The average deterministic risk score is ${evidence.averageRiskScore}/100; AI evidence cannot change the risk score and final reward decisions remain with the project team.`,
     riskDrivers: drivers.length
       ? drivers
-      : [{ title: "No dominant risk pattern", explanation: "No repeated risk reason was recorded in this analysis.", severity: "info" }],
+      : [{
+          title: "No dominant risk pattern",
+          explanation: "No repeated risk reason was recorded in this analysis.",
+          severity: "info",
+        }],
     recommendedActions: fallbackActions(evidence),
     limitations: [
-      "This brief is decision support, not proof of wallet ownership or malicious intent.",
+      "AI assessments are decision-support signals, not proof of wallet ownership, automation, Sybil behavior, or malicious intent.",
+      "The AI sidecar reviews a bounded subset of materially ambiguous wallets rather than every wallet in the report.",
       "Missing provider data or incomplete campaign context can reduce confidence.",
     ],
   }
 }
 
-function configuredGeminiModel() {
-  const model = process.env.GEMINI_MODEL?.trim() || defaultModel
-  return /^[a-zA-Z0-9._-]{1,80}$/.test(model) ? model : defaultModel
-}
+const responseJsonSchema = {
+  type: "object",
+  properties: {
+    executiveSummary: { type: "string" },
+    decisionRationale: { type: "string" },
+    riskDrivers: {
+      type: "array",
+      maxItems: 5,
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          explanation: { type: "string" },
+          severity: { type: "string", enum: ["info", "caution", "high"] },
+        },
+        required: ["title", "explanation", "severity"],
+        additionalProperties: false,
+      },
+    },
+    recommendedActions: {
+      type: "array",
+      maxItems: 5,
+      items: { type: "string" },
+    },
+    limitations: {
+      type: "array",
+      maxItems: 5,
+      items: { type: "string" },
+    },
+  },
+  required: [
+    "executiveSummary",
+    "decisionRationale",
+    "riskDrivers",
+    "recommendedActions",
+    "limitations",
+  ],
+  additionalProperties: false,
+} as const
 
-function extractText(payload: unknown) {
-  if (!payload || typeof payload !== "object") return null
-  const candidates = (payload as { candidates?: unknown }).candidates
-  if (!Array.isArray(candidates)) return null
-  const parts = (candidates[0] as { content?: { parts?: Array<{ text?: unknown }> } } | undefined)
-    ?.content?.parts
-  if (!Array.isArray(parts)) return null
-  const text = parts.map((part) => (typeof part.text === "string" ? part.text : "")).join("\n").trim()
-  return text || null
-}
-
-function parseGeminiBrief(value: string): Omit<AiAnalysisBrief, "source" | "model" | "generatedAt"> | null {
+function parseGeminiBrief(
+  value: string
+): Omit<AiAnalysisBrief, "source" | "model" | "generatedAt"> | null {
   const normalized = value.trim().replace(/^```json\s*/i, "").replace(/\s*```$/, "")
   try {
     const parsed = JSON.parse(normalized) as Record<string, unknown>
-    const executiveSummary = typeof parsed.executiveSummary === "string" ? sanitizeText(parsed.executiveSummary).slice(0, 900) : ""
-    const decisionRationale = typeof parsed.decisionRationale === "string" ? sanitizeText(parsed.decisionRationale).slice(0, 900) : ""
+    const executiveSummary =
+      typeof parsed.executiveSummary === "string"
+        ? sanitizeText(parsed.executiveSummary).slice(0, 1000)
+        : ""
+    const decisionRationale =
+      typeof parsed.decisionRationale === "string"
+        ? sanitizeText(parsed.decisionRationale).slice(0, 1000)
+        : ""
     const riskDrivers = Array.isArray(parsed.riskDrivers)
       ? parsed.riskDrivers
           .map((driver): AiBriefDriver | null => {
             if (!driver || typeof driver !== "object") return null
             const record = driver as Record<string, unknown>
-            const title = typeof record.title === "string" ? sanitizeText(record.title).slice(0, 120) : ""
-            const explanation = typeof record.explanation === "string" ? sanitizeText(record.explanation).slice(0, 420) : ""
-            const severity = record.severity === "high" || record.severity === "caution" ? record.severity : "info"
+            const title =
+              typeof record.title === "string"
+                ? sanitizeText(record.title).slice(0, 120)
+                : ""
+            const explanation =
+              typeof record.explanation === "string"
+                ? sanitizeText(record.explanation).slice(0, 460)
+                : ""
+            const severity =
+              record.severity === "high" || record.severity === "caution"
+                ? record.severity
+                : "info"
             return title && explanation ? { title, explanation, severity } : null
           })
           .filter((driver): driver is AiBriefDriver => Boolean(driver))
@@ -252,7 +441,7 @@ function parseGeminiBrief(value: string): Omit<AiAnalysisBrief, "source" | "mode
       decisionRationale,
       riskDrivers,
       recommendedActions: normalizeList(parsed.recommendedActions, 5),
-      limitations: normalizeList(parsed.limitations, 4),
+      limitations: normalizeList(parsed.limitations, 5),
     }
   } catch {
     return null
@@ -262,44 +451,40 @@ function parseGeminiBrief(value: string): Omit<AiAnalysisBrief, "source" | "mode
 export async function generateAnalysisBrief(input: AnalysisBriefInput): Promise<AiAnalysisBrief> {
   const evidence = buildAnalysisBriefEvidence(input)
   const fallback = buildDeterministicAnalysisBrief(evidence)
-  const apiKey = process.env.GEMINI_API_KEY?.trim()
-  if (!apiKey) return fallback
 
-  const model = configuredGeminiModel()
   const prompt = [
-    "Create a concise Web3 campaign risk decision brief from the supplied evidence JSON.",
-    "Use only the evidence supplied. Do not invent sources, wallet facts, identities, or risk findings.",
-    "Do not change the stated decision counts, do not promise safety, and do not state that a person controls a wallet.",
+    "Create a concise Tri-Proof Web3 campaign decision report from the supplied evidence JSON.",
+    "Use only the supplied evidence. Do not invent sources, wallet facts, identities, malicious labels, or ownership claims.",
+    "The deterministic decision counts and deterministic risk score are authoritative. Never alter or reinterpret them as AI scores.",
+    "The aiSidecar section, when present, contains privacy-reduced production AI Evidence Analyst audit records. Treat those records as decision support, not ground truth.",
+    "A manual_review or collect_more_evidence AI recommendation is a review signal only; it does not prove Sybil behavior, automation, common ownership, or malicious intent.",
+    "If aiSidecar is null, do not imply that the AI Evidence Analyst reviewed wallets for this analysis.",
+    "Recommended actions must be operational and conservative: human review, additional evidence collection, or export of already-approved wallets after project confirmation.",
     "Return JSON only with executiveSummary, decisionRationale, riskDrivers, recommendedActions, limitations.",
-    "riskDrivers must contain title, explanation, and severity (info, caution, or high).",
-    "Keep the tone clear, professional, and operational. Avoid markdown.",
+    "Keep the tone clear, professional, concise, and suitable for a customer-facing security report. Avoid markdown.",
     `Evidence JSON:\n${JSON.stringify(evidence)}`,
   ].join("\n\n")
 
-  try {
-    const response = await fetch(`${geminiEndpoint}/${encodeURIComponent(model)}:generateContent`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 900,
-          responseMimeType: "application/json",
-        },
-      }),
-      signal: AbortSignal.timeout(15_000),
-    })
-    if (!response.ok) return fallback
+  const result = await requestGeminiStructuredWithFallback({
+    prompt,
+    schema: responseJsonSchema,
+    systemInstruction:
+      "You are the Tri-Proof AI report synthesizer. Preserve deterministic decisions, separate evidence from inference, and never present AI analysis as proof of malicious behavior.",
+    model: configuredEvidenceModel(),
+    fallbackModel: configuredEvidenceFallbackModel(),
+    maxOutputTokens: 1800,
+    thinkingLevel: "medium",
+    timeoutMs: 20_000,
+  })
+  if (!result.ok) return fallback
 
-    const parsed = parseGeminiBrief(extractText(await response.json()) ?? "")
-    if (!parsed) return fallback
+  const parsed = parseGeminiBrief(result.text)
+  if (!parsed) return fallback
 
-    return { ...parsed, source: "gemini", model, generatedAt: new Date().toISOString() }
-  } catch {
-    return fallback
+  return {
+    ...parsed,
+    source: "gemini",
+    model: result.model,
+    generatedAt: new Date().toISOString(),
   }
 }
