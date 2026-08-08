@@ -97,7 +97,7 @@ type AnalysisDetailProps = {
 const filterOptions = [
   { value: "all", label: "All" },
   { value: "approved", label: "Approved" },
-  { value: "manual_review", label: "Gray Zone" },
+  { value: "manual_review", label: "Manual Review" },
   { value: "rejected", label: "Rejected / Not Eligible" },
   { value: "low", label: "Low Risk" },
   { value: "medium", label: "Medium Risk" },
@@ -418,10 +418,11 @@ function ReportReadyExperience({
 }) {
   const decision = getDecisionIntelligence(analysis)
   const completedLabel = analysis.completedAt ? formatDateTimeUTC(analysis.completedAt) : "ready now"
+  const reviewLabel = analysis.manualReviewCount === 1 ? "wallet" : "wallets"
 
   return (
-    <section className="glass-panel premium-card animated-border grid gap-5 rounded-2xl p-5 lg:grid-cols-[1.05fr_0.95fr]">
-      <div className="flex flex-col gap-4">
+    <section className="glass-panel premium-card animated-border overflow-hidden rounded-2xl">
+      <div className="border-b border-primary/15 bg-gradient-to-r from-primary/10 via-background/40 to-background/10 p-5 sm:p-6">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary" className="border-green-400/30 bg-green-400/10 text-green-200">
             <CheckCircle2 className="size-3.5" />
@@ -430,59 +431,61 @@ function ReportReadyExperience({
           <Badge variant="outline" className="border-primary/30 bg-primary/10 font-mono text-primary">
             {decision.proofId}
           </Badge>
-          <Badge variant="outline">{analysis.riskPolicy ?? "balanced"} policy</Badge>
+          <Badge variant="outline" className="capitalize">{analysis.riskPolicy ?? "balanced"} policy</Badge>
         </div>
-        <div>
-          <h2 className="text-gradient text-3xl font-semibold">Clean-list decision package is ready.</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Completed {completedLabel}. Export approved wallets, keep gray-zone wallets in review, and retain reason-code evidence for customer or community questions.
+        <div className="mt-4 max-w-3xl">
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">Decision package</p>
+          <h2 className="text-gradient mt-2 text-3xl font-semibold sm:text-4xl">Campaign decision package is ready.</h2>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            Completed {completedLabel}. The deterministic decision set is ready for project confirmation, with manual-review wallets withheld from the clean export and evidence retained for audit.
           </p>
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 border-b border-border sm:grid-cols-4">
+        {[
+          ["Evaluated", analysis.totalWallets, "text-foreground"],
+          ["Approved", analysis.approvedCount, "text-green-200"],
+          ["Manual review", analysis.manualReviewCount, "text-amber-200"],
+          ["Excluded", analysis.rejectedCount, "text-red-200"],
+        ].map(([label, value, tone], index) => (
+          <div key={String(label)} className={cn("px-4 py-4 sm:px-5", index > 0 && "border-l border-border", index > 1 && "max-sm:border-t")}>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+            <p className={cn("mt-1 text-2xl font-semibold", tone)}>{formatNumber(Number(value))}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-4 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap gap-2">
           <a href={`${exportPath}?type=approved`} className={`${buttonVariants()} glow-primary`}>
             <ClipboardCheck data-icon="inline-start" />
             Export clean list
           </a>
-          <a href={`${exportPath}?type=manual_review`} className={buttonVariants({ variant: "outline" })}>
+          <Link href={`/dashboard/analysis/${analysis.id}/review`} className={buttonVariants({ variant: "outline" })}>
             <Users data-icon="inline-start" />
-            Review queue
-          </a>
+            {analysis.manualReviewCount ? `Review ${analysis.manualReviewCount} ${reviewLabel}` : "Review queue"}
+          </Link>
           <a href={`${exportPath}?type=pdf`} className={buttonVariants({ variant: "outline" })}>
             <FileText data-icon="inline-start" />
-            PDF proof
+            PDF report
           </a>
-          <Button variant="outline" onClick={onShare}>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="ghost" size="sm" onClick={onShare}>
             <Share2 data-icon="inline-start" />
-            Share report link
+            Share
           </Button>
           <a
             href={buildMailto(
               "Tri-Proof Guard report review",
-              `Please review this Tri-Proof Guard report:\n\n${analysis.project.name}\nApproved: ${analysis.approvedCount}\nGray zone: ${analysis.manualReviewCount}\nNot eligible: ${analysis.rejectedCount}\nProof: ${decision.proofId}`
+              `Please review this Tri-Proof Guard report:\n\n${analysis.project.name}\nApproved: ${analysis.approvedCount}\nManual review: ${analysis.manualReviewCount}\nExcluded: ${analysis.rejectedCount}\nProof: ${decision.proofId}`
             )}
-            className={buttonVariants({ variant: "outline" })}
+            className={buttonVariants({ variant: "ghost", size: "sm" })}
           >
             <Mail data-icon="inline-start" />
             Request review
           </a>
-        </div>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-        <div className="rounded-lg border border-green-400/25 bg-green-400/10 p-4">
-          <p className="text-xs uppercase tracking-wide text-green-200">Approved</p>
-          <p className="mt-1 text-3xl font-semibold text-green-100">{formatNumber(analysis.approvedCount)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{decision.cleanRate}% of list</p>
-        </div>
-        <div className="rounded-lg border border-amber-400/25 bg-amber-400/10 p-4">
-          <p className="text-xs uppercase tracking-wide text-amber-200">Gray zone</p>
-          <p className="mt-1 text-3xl font-semibold text-amber-100">{formatNumber(analysis.manualReviewCount)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{decision.reviewRate}% needs review</p>
-        </div>
-        <div className="rounded-lg border border-red-400/25 bg-red-400/10 p-4">
-          <p className="text-xs uppercase tracking-wide text-red-200">Not eligible</p>
-          <p className="mt-1 text-3xl font-semibold text-red-100">{formatNumber(analysis.rejectedCount)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{decision.rejectRate}% excluded</p>
         </div>
       </div>
     </section>
@@ -496,17 +499,47 @@ function DecisionCenterPanel({ analysis, exportPath }: { analysis: AnalysisDetai
   const failedCount = analysis.enrichment?.failedCount ?? analysis.wallets.filter((wallet) => wallet.enrichmentStatus === "failed").length
   const coverageRate = analysis.totalWallets ? Math.round((enrichedCount / analysis.totalWallets) * 100) : 0
   const highestRisk = [...analysis.wallets].sort((left, right) => right.riskScore - left.riskScore).slice(0, 3)
+  const distributionState = decision.reviewWallets.length ? "Conditional" : "Ready"
+
+  const operationalRows = [
+    {
+      label: "Distribution readiness",
+      value: distributionState,
+      detail: decision.reviewWallets.length
+        ? `${formatNumber(decision.cleanWallets.length)} approved wallets are exportable; ${formatNumber(decision.reviewWallets.length)} remain withheld for human review.`
+        : "No manual-review wallets remain before project confirmation.",
+      tone: decision.reviewWallets.length ? "text-amber-200" : "text-green-200",
+    },
+    {
+      label: "Human review",
+      value: `${formatNumber(decision.reviewWallets.length)} pending`,
+      detail: "Manual-review wallets remain outside the clean export until a reviewer records a final decision.",
+      tone: "text-amber-200",
+    },
+    {
+      label: "Evidence coverage",
+      value: `${formatNumber(enrichedCount)}/${formatNumber(analysis.totalWallets)}`,
+      detail: `${coverageRate}% provider coverage via ${provider}; ${formatNumber(failedCount)} provider retries required.`,
+      tone: "text-primary",
+    },
+    {
+      label: "Policy exclusions",
+      value: formatNumber(decision.rejectedWallets.length),
+      detail: "Excluded by deterministic eligibility/risk policy and retained with reason-code evidence.",
+      tone: "text-red-200",
+    },
+  ]
 
   return (
-    <Card className="glass-panel premium-card">
-      <CardHeader className="gap-4 lg:grid lg:grid-cols-[1fr_auto] lg:items-center">
+    <Card className="glass-panel premium-card overflow-hidden">
+      <CardHeader className="gap-4 border-b border-border lg:grid lg:grid-cols-[1fr_auto] lg:items-center">
         <div>
           <CardTitle className="flex items-center gap-2">
             <ClipboardCheck className="text-primary" />
             Decision Center
           </CardTitle>
           <CardDescription>
-            One operational view for final export, Gray Zone review and explainable risk evidence.
+            Operational readiness, human-review workload and evidence coverage without repeating the decision package.
           </CardDescription>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -516,41 +549,32 @@ function DecisionCenterPanel({ analysis, exportPath }: { analysis: AnalysisDetai
           </a>
           <Link href={`/dashboard/analysis/${analysis.id}/review`} className={buttonVariants({ variant: "outline" })}>
             <Users data-icon="inline-start" />
-            Resolve Gray Zone
+            Review pending wallets
           </Link>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-lg border border-green-400/25 bg-green-400/10 p-4">
-            <p className="text-xs uppercase tracking-wide text-green-200">Ready to distribute</p>
-            <p className="mt-1 text-3xl font-semibold text-green-100">{formatNumber(decision.cleanWallets.length)}</p>
-            <p className="mt-2 text-sm text-muted-foreground">{decision.cleanRate}% of wallets can move to the clean export.</p>
-          </div>
-          <div className="rounded-lg border border-amber-400/25 bg-amber-400/10 p-4">
-            <p className="text-xs uppercase tracking-wide text-amber-200">Reviewer workload</p>
-            <p className="mt-1 text-3xl font-semibold text-amber-100">{formatNumber(decision.reviewWallets.length)}</p>
-            <p className="mt-2 text-sm text-muted-foreground">Gray Zone wallets should be decided before payout.</p>
-          </div>
-          <div className="rounded-lg border border-primary/20 bg-background/45 p-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Provider coverage</p>
-            <p className="mt-1 text-2xl font-semibold text-primary">{coverageRate}%</p>
-            <p className="mt-2 text-sm text-muted-foreground">{formatNumber(enrichedCount)} provider responses, {formatNumber(failedCount)} require retry via {provider}.</p>
-          </div>
-          <div className="rounded-lg border border-red-400/25 bg-red-400/10 p-4">
-            <p className="text-xs uppercase tracking-wide text-red-200">Risk contained</p>
-            <p className="mt-1 text-2xl font-semibold text-red-100">{formatNumber(decision.rejectedWallets.length)}</p>
-            <p className="mt-2 text-sm text-muted-foreground">Excluded wallets stay traceable with reason codes.</p>
-          </div>
+      <CardContent className="grid gap-5 p-5 xl:grid-cols-[0.9fr_1.1fr]">
+        <div className="overflow-hidden rounded-xl border border-border bg-background/35">
+          {operationalRows.map((item, index) => (
+            <div key={item.label} className={cn("grid gap-1 px-4 py-4 sm:grid-cols-[160px_120px_1fr] sm:items-center sm:gap-4", index > 0 && "border-t border-border")}>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{item.label}</p>
+              <p className={cn("font-semibold", item.tone)}>{item.value}</p>
+              <p className="text-sm leading-5 text-muted-foreground">{item.detail}</p>
+            </div>
+          ))}
         </div>
+
         <div className="grid gap-3 lg:grid-cols-2">
-          <div className="rounded-lg border border-border bg-background/45 p-4">
-            <p className="mb-3 text-sm font-medium">Top reason codes</p>
+          <div className="rounded-xl border border-border bg-background/35 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-sm font-medium">Evidence concentration</p>
+              <Badge variant="outline">Top reason codes</Badge>
+            </div>
             <div className="grid gap-2">
               {decision.topReasonCodes.length ? (
                 decision.topReasonCodes.map((reason) => (
                   <div key={reason.code} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background/50 px-3 py-2 text-sm">
-                    <span className="font-mono text-xs text-primary">{reason.code}</span>
+                    <span className="min-w-0 break-all font-mono text-xs text-primary">{reason.code}</span>
                     <Badge variant="outline">{formatNumber(reason.count)}</Badge>
                   </div>
                 ))
@@ -559,8 +583,11 @@ function DecisionCenterPanel({ analysis, exportPath }: { analysis: AnalysisDetai
               )}
             </div>
           </div>
-          <div className="rounded-lg border border-border bg-background/45 p-4">
-            <p className="mb-3 text-sm font-medium">Highest risk wallets</p>
+          <div className="rounded-xl border border-border bg-background/35 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-sm font-medium">Highest risk observations</p>
+              <Badge variant="outline">Deterministic score</Badge>
+            </div>
             <div className="grid gap-2">
               {highestRisk.map((wallet) => (
                 <div key={wallet.walletAddress} className="grid grid-cols-[1fr_auto] gap-3 rounded-lg border border-border bg-background/50 px-3 py-2 text-sm">
@@ -571,6 +598,46 @@ function DecisionCenterPanel({ analysis, exportPath }: { analysis: AnalysisDetai
             </div>
           </div>
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function AnalysisSnapshotPanel({
+  analysis,
+  knownEntitiesCount,
+  exchangeServiceWalletsCount,
+}: {
+  analysis: AnalysisDetailType
+  knownEntitiesCount: number
+  exchangeServiceWalletsCount: number
+}) {
+  const enrichedCount = analysis.enrichment?.enrichedCount ?? analysis.wallets.filter((wallet) => wallet.enrichmentStatus === "completed").length
+  const coverageRate = analysis.totalWallets ? Math.round((enrichedCount / analysis.totalWallets) * 100) : 0
+  const warningCount = analysis.enrichment?.warnings.length ?? 0
+  const metrics = [
+    ["Wallets evaluated", formatNumber(analysis.totalWallets), "Valid rows included in scoring."],
+    ["Average risk", String(analysis.averageRiskScore), "Deterministic 0–100 risk score."],
+    ["Graph clusters", formatNumber(analysis.suspiciousClustersCount), "Risk-relevant funding/behavior groups."],
+    ["Known entities", formatNumber(knownEntitiesCount), `${formatNumber(exchangeServiceWalletsCount)} exchange/service entities.`],
+    ["Provider coverage", `${coverageRate}%`, `${formatNumber(enrichedCount)}/${formatNumber(analysis.totalWallets)} wallets enriched.`],
+    ["Evidence warnings", formatNumber(warningCount), warningCount ? "Provider or evidence caveats require attention." : "No provider warnings recorded."],
+  ] as const
+
+  return (
+    <Card className="glass-panel premium-card">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Analysis Intelligence Snapshot</CardTitle>
+        <CardDescription>Complementary evidence metrics; decision counts are kept in the decision package above.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        {metrics.map(([label, value, detail]) => (
+          <div key={label} className="min-w-0 rounded-xl border border-border bg-background/35 p-3 sm:p-4">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+            <p className="mt-1 text-xl font-semibold text-foreground sm:text-2xl">{value}</p>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">{detail}</p>
+          </div>
+        ))}
       </CardContent>
     </Card>
   )
@@ -590,7 +657,7 @@ function PolicySimulator({ analysis }: { analysis: AnalysisDetailType }) {
           Campaign Policy Simulator
         </CardTitle>
         <CardDescription>
-          Preview how stricter or looser thresholds change the decision list while keeping provider outages in Gray Zone and non-user accounts excluded.
+          Preview how stricter or looser thresholds change the decision list while keeping provider outages in Manual Review and non-user accounts excluded.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 md:grid-cols-3">
@@ -616,7 +683,7 @@ function PolicySimulator({ analysis }: { analysis: AnalysisDetailType }) {
                 <span className="font-semibold">{formatNumber(scenario.manual_review)}</span>
               </div>
               <div className="flex items-center justify-between text-red-200">
-                <span>Reject</span>
+                <span>Exclude</span>
                 <span className="font-semibold">{formatNumber(scenario.rejected)}</span>
               </div>
             </div>
@@ -709,7 +776,7 @@ function ReviewOpsPanel({ analysis }: { analysis: AnalysisDetailType }) {
           Team Review Workflow
         </CardTitle>
         <CardDescription>
-          Turn gray-zone wallets into assigned, auditable team decisions before the clean list is finalized.
+          Turn manual-review wallets into assigned, auditable team decisions before the clean list is finalized.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 md:grid-cols-4">
@@ -726,12 +793,12 @@ function ReviewOpsPanel({ analysis }: { analysis: AnalysisDetailType }) {
         <div className="rounded-lg border border-amber-400/25 bg-amber-400/10 p-4">
           <p className="text-xs uppercase tracking-wide text-amber-200">Second reviewer</p>
           <p className="mt-1 text-2xl font-semibold text-amber-100">{formatNumber(secondReviewerCandidates)}</p>
-          <p className="mt-2 text-sm text-muted-foreground">High-risk gray-zone candidates.</p>
+          <p className="mt-2 text-sm text-muted-foreground">High-risk manual-review candidates.</p>
         </div>
         <div className="flex flex-col justify-between rounded-lg border border-primary/25 bg-primary/10 p-4">
           <div>
             <p className="text-xs uppercase tracking-wide text-primary">Next action</p>
-            <p className="mt-2 text-sm text-muted-foreground">Assign gray-zone review and save final status.</p>
+            <p className="mt-2 text-sm text-muted-foreground">Assign manual-review review and save final status.</p>
           </div>
           <Link href={`/dashboard/analysis/${analysis.id}/review`} className={`${buttonVariants({ variant: "outline" })} mt-4`}>
             Open review queue
@@ -1096,7 +1163,7 @@ function ReviewDrawer({
             onClick={() => onStatusChange("manual_review")}
             title={decisionExplanation("manual_review")}
           >
-            Mark Gray Zone
+            Mark Manual Review
           </Button>
           <Button
             variant="outline"
@@ -1305,237 +1372,128 @@ export function AnalysisDetail({
           <div className="h-7 w-64 animate-pulse rounded-md bg-muted/60" />
           <div className="h-4 w-80 animate-pulse rounded-md bg-muted/40" />
         </div>
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <Card key={index} className="glass-panel h-32 animate-pulse" />
-          ))}
-        </div>
-        <div className="grid gap-4 xl:grid-cols-2">
-          <Card className="glass-panel h-72 animate-pulse" />
-          <Card className="glass-panel h-72 animate-pulse" />
-        </div>
-        <Card className="glass-panel h-96 animate-pulse" />
-      </div>
-    )
-  }
-
-  if (error || !analysis) {
-    return (
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle>Analysis unavailable</CardTitle>
-          <CardDescription>{error || "The requested analysis could not be loaded."}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Link href="/login" className={buttonVariants()}>
-            Login
-          </Link>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  const riskDistribution = (["low", "medium", "high", "critical"] as RiskLevel[]).map(
-    (level) => ({
-      level,
-      label: `${level[0].toUpperCase()}${level.slice(1)}`,
-      value: analysis.wallets.filter((wallet) => wallet.riskLevel === level).length,
-      fill: riskColors[level],
-    })
-  )
-  const knownEntitiesCount = analysis.wallets.filter((wallet) => wallet.entityLabel).length
-  const exchangeServiceWalletsCount = analysis.wallets.filter(
-    (wallet) => wallet.entityType === "exchange" || wallet.entityType === "service"
-  ).length
-  const clusterOptions = analysis.clusters.map((cluster) => cluster.clusterLabel)
-  const entityTypeOptions = Array.from(
-    new Set(analysis.wallets.map((wallet) => wallet.entityType).filter(Boolean))
-  ).sort()
-
-  const exportPath = exportBasePath ?? `/api/analysis/${analysis.id}/export`
-  const campaignPolicy = getCampaignPolicy(analysis)
-  const decisionIntelligence = getDecisionIntelligence(analysis)
-
-  return (
-    <div className="flex flex-col gap-6">
-      <ReportReadyExperience analysis={analysis} exportPath={exportPath} onShare={() => void shareReport()} />
-      <DecisionCenterPanel analysis={analysis} exportPath={exportPath} />
-      {analysis.id !== "demo" && <AiDecisionBriefPanel
-        analysisId={analysis.id}
-        initialBrief={analysis.aiBrief}
-        onBriefChange={handleAiBriefChange}
-      />}
-
-      <div className="sticky top-0 z-20 hidden rounded-lg border border-border bg-background/90 p-3 shadow-lg backdrop-blur md:flex md:items-center md:justify-between">
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          <span className="font-medium">Distribution summary</span>
-          <Badge variant="outline" className="border-green-400/30 bg-green-400/10 text-green-200">{formatNumber(analysis.approvedCount)} approved</Badge>
-          <Badge variant="outline" className="border-amber-400/30 bg-amber-400/10 text-amber-200">{formatNumber(analysis.manualReviewCount)} gray zone</Badge>
-          <Badge variant="outline" className="border-red-400/30 bg-red-400/10 text-red-200">{formatNumber(analysis.rejectedCount)} not eligible</Badge>
-        </div>
-        <div className="flex gap-2">
-          <a href={`${exportPath}?type=approved`} className={buttonVariants({ variant: "outline", size: "sm" })}>
-            <Download data-icon="inline-start" />
-            Clean list
-          </a>
-          <Link href={`/dashboard/analysis/${analysis.id}/review`} className={buttonVariants({ variant: "outline", size: "sm" })}>
-            <Users data-icon="inline-start" />
-            Review
-          </Link>
-        </div>
-      </div>
-
-      <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
-        <div>
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">{analysis.project.campaignType}</Badge>
-            <Badge variant="outline">{analysis.project.chain}</Badge>
-            {analysis.project.notes?.includes("Basic CSV used") && (
-              <Badge variant="outline">Basic CSV used, limited analysis mode</Badge>
-            )}
-          </div>
-          <h2 className="text-gradient text-3xl font-semibold">{analysis.project.name}</h2>
-          <p className="mt-2 text-muted-foreground">
-            Created {formatDateTimeUTC(analysis.createdAt)} from {analysis.csvFileName ?? "uploaded CSV"}.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {[
-            ["approved", "Export Approved CSV"],
-            ["manual_review", "Export Gray Zone CSV"],
-            ["rejected", "Export Rejected / Not Eligible CSV"],
-            ["full", "Export Full Report CSV"],
-            ["pdf", "Export PDF Report"],
-          ].map(([type, label]) => (
-            <a
-              key={type}
-              href={`${exportPath}?type=${type}`}
-              onClick={() =>
-                toast(
-                  type === "pdf"
-                    ? "Generating PDF report…"
-                    : `Exporting ${label.replace("Export ", "")}…`,
-                  "info"
-                )
-              }
-              className={cn(
-                buttonVariants({ variant: type === "pdf" ? "default" : "outline" }),
-                type === "pdf" && "glow-primary"
-              )}
-            >
-              {type === "pdf" ? <FileText data-icon="inline-start" /> : <Download data-icon="inline-start" />}
-              {label}
-            </a>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          title="Total wallets"
-          value={formatNumber(analysis.totalWallets)}
-          description="Valid rows included in scoring."
-          icon={WalletCards}
-        />
-        <MetricCard
-          title="Approved"
-          value={formatNumber(analysis.approvedCount)}
-          description="Suggested clean reward list."
-          icon={CheckCircle2}
-        />
-        <MetricCard
-          title="Gray Zone"
-          value={formatNumber(analysis.manualReviewCount)}
-          description={decisionExplanation("manual_review")}
-          icon={AlertTriangle}
-        />
-        <MetricCard
-          title="Rejected / Not Eligible"
-          value={formatNumber(analysis.rejectedCount)}
-          description={decisionExplanation("rejected")}
-          icon={ShieldX}
-        />
-      </div>
-
-      <div className="grid gap-5 sm:grid-cols-3">
-        <MetricCard
-          title="Average risk"
-          value={String(analysis.averageRiskScore)}
-          description="0 to 100 scoring scale."
-          icon={Gauge}
-        />
-        <MetricCard
-          title="Suspicious clusters"
-          value={formatNumber(analysis.suspiciousClustersCount)}
-          description="Funding and behavior groups."
-          icon={Layers3}
-        />
-        <MetricCard
-          title="Known Entities"
-          value={formatNumber(knownEntitiesCount)}
-          description={`${formatNumber(exchangeServiceWalletsCount)} exchange / service wallets.`}
-          icon={Landmark}
-        />
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
-        <Card className="glass-panel premium-card animated-border">
-          <CardHeader>
-            <CardTitle>Campaign Decision Engine</CardTitle>
-            <CardDescription>
-              {campaignPolicy.label} for {campaignPolicy.scope}. These thresholds turn wallet evidence into approve, Gray Zone and reject lists.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-3">
-            {campaignPolicy.rules.map((rule) => (
-              <div key={rule.label} className="rounded-lg border border-primary/20 bg-primary/5 p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">{rule.label}</p>
-                <p className="mt-1 text-2xl font-semibold text-primary">{rule.value}</p>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">{rule.detail}</p>
+        <AnalysisSnapshotPanel
+        analysis={analysis}
+        knownEntitiesCount={knownEntitiesCount}
+        exchangeServiceWalletsCount={exchangeServiceWalletsCount}
+      />      <div className="grid gap-5 xl:grid-cols-[1.08fr_0.92fr]">
+        <Card className="glass-panel premium-card animated-border overflow-hidden">
+          <CardHeader className="border-b border-border">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <CardTitle>Campaign Decision Engine</CardTitle>
+                <CardDescription className="mt-1">
+                  {campaignPolicy.label} for {campaignPolicy.scope}. The deterministic score is translated through a transparent 0–100 policy spectrum.
+                </CardDescription>
               </div>
-            ))}
+              <Badge variant="outline" className="border-primary/30 bg-primary/10 capitalize text-primary">
+                {analysis.riskPolicy ?? "balanced"} policy
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-5 p-5">
+            <div>
+              <div className="mb-2 flex items-center justify-between text-[10px] uppercase tracking-wide text-muted-foreground">
+                <span>0</span>
+                <span>Risk-policy spectrum</span>
+                <span>100</span>
+              </div>
+              <div className="grid h-3 grid-cols-[36fr_24fr_40fr] overflow-hidden rounded-full border border-border bg-muted/30">
+                <div className="bg-green-400/65" title="Automatic approval range" />
+                <div className="bg-amber-400/65" title="Manual review range" />
+                <div className="bg-red-400/65" title="Automatic exclusion range" />
+              </div>
+              <div className="mt-2 grid grid-cols-[36fr_24fr_40fr] text-[10px] font-medium">
+                <span className="text-green-200">APPROVE</span>
+                <span className="text-center text-amber-200">REVIEW</span>
+                <span className="text-right text-red-200">EXCLUDE</span>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              {campaignPolicy.rules.map((rule, index) => (
+                <div
+                  key={rule.label}
+                  className={cn(
+                    "rounded-xl border p-4",
+                    index === 0
+                      ? "border-green-400/25 bg-green-400/8"
+                      : index === 1
+                        ? "border-amber-400/25 bg-amber-400/8"
+                        : "border-red-400/25 bg-red-400/8"
+                  )}
+                >
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{rule.label}</p>
+                  <p className={cn("mt-1 text-2xl font-semibold", index === 0 ? "text-green-200" : index === 1 ? "text-amber-200" : "text-red-200")}>{rule.value}</p>
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">{rule.detail}</p>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-lg border border-primary/15 bg-primary/5 px-4 py-3 text-xs leading-5 text-muted-foreground">
+              Policy thresholds are decision rules, not proof of identity or malicious intent. Provider failures and unresolved evidence remain subject to manual review safeguards.
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="glass-panel premium-card">
-          <CardHeader>
-            <CardTitle>Clean List Proof</CardTitle>
+        <Card className="glass-panel premium-card overflow-hidden">
+          <CardHeader className="border-b border-border">
+            <CardTitle className="flex items-center gap-2">
+              <LockKeyhole className="text-primary" />
+              Decision Proof
+            </CardTitle>
             <CardDescription>
-              Campaign-scoped proof package. It is not a global identity record and does not require raw personal data.
+              Campaign-scoped evidence traceability for this decision set. This is not a global identity record or a cryptographic ownership claim.
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-lg border border-green-400/25 bg-green-400/10 p-4">
-              <p className="text-xs uppercase tracking-wide text-green-200">Clean list</p>
-              <p className="mt-1 text-2xl font-semibold text-green-200">{decisionIntelligence.cleanRate}%</p>
-              <p className="mt-2 text-sm text-muted-foreground">{formatNumber(decisionIntelligence.cleanWallets.length)} wallets approved.</p>
+          <CardContent className="space-y-4 p-5">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="rounded-lg border border-border bg-background/40 p-3 sm:col-span-2">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Proof ID</p>
+                <p className="mt-1 break-all font-mono text-sm text-primary">{decisionIntelligence.proofId}</p>
+              </div>
+              <div className="rounded-lg border border-border bg-background/40 p-3">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Policy</p>
+                <p className="mt-1 font-medium capitalize">{analysis.riskPolicy ?? "balanced"}</p>
+              </div>
+              <div className="rounded-lg border border-border bg-background/40 p-3">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Wallets evaluated</p>
+                <p className="mt-1 font-medium">{formatNumber(analysis.totalWallets)}</p>
+              </div>
+              <div className="rounded-lg border border-border bg-background/40 p-3">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Generated</p>
+                <p className="mt-1 text-sm font-medium">{formatDateTimeUTC(analysis.completedAt ?? analysis.createdAt)}</p>
+              </div>
+              <div className="rounded-lg border border-primary/25 bg-primary/8 p-3">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Evidence traceability</p>
+                <p className="mt-1 font-medium text-primary">Active</p>
+              </div>
             </div>
-            <div className="rounded-lg border border-amber-400/25 bg-amber-400/10 p-4">
-              <p className="text-xs uppercase tracking-wide text-amber-200">Review queue</p>
-              <p className="mt-1 text-2xl font-semibold text-amber-200">{decisionIntelligence.reviewRate}%</p>
-              <p className="mt-2 text-sm text-muted-foreground">{formatNumber(decisionIntelligence.reviewWallets.length)} wallets need a team call.</p>
+
+            <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-border bg-background/35">
+              <div className="p-3 text-center">
+                <p className="text-lg font-semibold text-green-200">{formatNumber(decisionIntelligence.cleanWallets.length)}</p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Approved</p>
+              </div>
+              <div className="border-x border-border p-3 text-center">
+                <p className="text-lg font-semibold text-amber-200">{formatNumber(decisionIntelligence.reviewWallets.length)}</p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Manual review</p>
+              </div>
+              <div className="p-3 text-center">
+                <p className="text-lg font-semibold text-red-200">{formatNumber(decisionIntelligence.rejectedWallets.length)}</p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Excluded</p>
+              </div>
             </div>
-            <div className="rounded-lg border border-red-400/25 bg-red-400/10 p-4">
-              <p className="text-xs uppercase tracking-wide text-red-200">Excluded</p>
-              <p className="mt-1 text-2xl font-semibold text-red-200">{decisionIntelligence.rejectRate}%</p>
-              <p className="mt-2 text-sm text-muted-foreground">{formatNumber(decisionIntelligence.rejectedWallets.length)} wallets rejected.</p>
-            </div>
-            <div className="rounded-lg border border-primary/20 bg-background/45 p-4 sm:col-span-3">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Proof ID</p>
-              <p className="mt-1 break-all font-mono text-sm text-primary">{decisionIntelligence.proofId}</p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {formatNumber(decisionIntelligence.clusteredWallets)} clustered wallets and top reason codes are retained for explainable customer review.
-              </p>
-            </div>
+
+            <p className="text-xs leading-5 text-muted-foreground">
+              Reason codes, graph context and the campaign-scoped proof identifier are retained for explainable review. Evidence traceability does not establish common ownership, automation, Sybil behavior or malicious intent by itself.
+            </p>
           </CardContent>
         </Card>
-      </div>
-
-      <Card className="glass-panel premium-card">
+      </div><Card className="glass-panel premium-card">
         <CardHeader>
           <CardTitle>Explainable Reason Codes</CardTitle>
           <CardDescription>
-            Human-readable evidence is normalized into compact codes for API responses, clean-list exports and Gray Zone review.
+            Human-readable evidence is normalized into compact codes for API responses, clean-list exports and Manual Review review.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
