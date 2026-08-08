@@ -1,0 +1,46 @@
+name: Evidence Graph 2.0 safety
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "components/analysis/wallet-graph-intelligence.tsx"
+      - "app/api/analysis/[id]/graph/route.ts"
+      - "lib/graph/investigation-presentation.ts"
+      - "lib/graph/investigation-presentation.test.ts"
+      - ".github/workflows/evidence-graph-ui.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint Evidence Graph 2.0
+        run: >-
+          npx eslint
+          components/analysis/wallet-graph-intelligence.tsx
+          app/api/analysis/[id]/graph/route.ts
+          lib/graph/investigation-presentation.ts
+          lib/graph/investigation-presentation.test.ts
+
+      - name: Evidence graph presentation tests
+        run: node --import tsx --test lib/graph/investigation-presentation.test.ts
