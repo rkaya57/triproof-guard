@@ -31,6 +31,22 @@ function AccessDenied() {
   )
 }
 
+function AdjudicationMethodologyGuard() {
+  return (
+    <Card className="glass-panel border-amber-400/30 bg-amber-400/[0.03]">
+      <CardHeader>
+        <CardTitle className="text-amber-100">Methodology guard — external independence is not satisfied</CardTitle>
+        <CardDescription className="max-w-4xl leading-6 text-slate-300">
+          The adjudication workflow may report whether reviewer names are separated between the first and second pass. That is an administrative provenance check only. It is not evidence of an independent human reviewer, reviewer blindness, or independent holdout validation. All adjudication results on this page remain internal and claim-ineligible.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="text-sm leading-6 text-amber-100/80">
+        Any legacy “independence” indicator inside the adjudication card must be interpreted only as reviewer-name separation. Public performance claims require the separate Independent Holdout Validation workflow after the stack is frozen.
+      </CardContent>
+    </Card>
+  )
+}
+
 export default async function InternalCalibrationPage() {
   const admin = await getAdminUser()
   if (!admin) return <AccessDenied />
@@ -38,6 +54,7 @@ export default async function InternalCalibrationPage() {
   return (
     <div className="flex flex-col gap-6">
       <CalibrationUpload />
+      <AdjudicationMethodologyGuard />
       <CalibrationAdjudicationUpload />
       <div>
         <Link
