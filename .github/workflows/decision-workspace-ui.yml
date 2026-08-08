@@ -1,0 +1,26 @@
+name: Decision workspace UI safety
+
+on:
+  pull_request:
+    paths:
+      - "components/analysis/analysis-detail.tsx"
+      - "scripts/check-decision-workspace-ui.mjs"
+      - ".github/workflows/decision-workspace-ui.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Lint report surface
+        run: npx eslint components/analysis/analysis-detail.tsx scripts/check-decision-workspace-ui.mjs
+      - name: Verify decision workspace presentation contract
+        run: node scripts/check-decision-workspace-ui.mjs
