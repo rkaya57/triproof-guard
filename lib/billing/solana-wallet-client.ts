@@ -95,6 +95,17 @@ export function findSolanaWalletProvider(sources: WalletProviderSources) {
   return unique.find((provider) => provider.publicKey) ?? unique[0] ?? null
 }
 
+export function solanaPayReferenceAccountMeta(pubkey: PublicKeyInstance): AccountMeta {
+  return { pubkey, isSigner: false, isWritable: false }
+}
+
+export function paymentMemoAccountMetas(): AccountMeta[] {
+  // SPL Memo requires every account supplied to the memo instruction to be a
+  // signer. The checkout reference belongs on the payment transfer instruction
+  // as a read-only non-signer, not on the memo instruction.
+  return []
+}
+
 async function waitForWalletProvider(timeoutMs = 3_000) {
   const startedAt = Date.now()
   while (Date.now() - startedAt < timeoutMs) {
@@ -248,7 +259,8 @@ function createTransferCheckedInstruction(
   destination: PublicKeyInstance,
   owner: PublicKeyInstance,
   amount: bigint,
-  tokenProgramId: PublicKeyInstance
+  tokenProgramId: PublicKeyInstance,
+  reference: PublicKeyInstance
 ) {
   return new web3.TransactionInstruction({
     programId: tokenProgramId,
@@ -257,6 +269,7 @@ function createTransferCheckedInstruction(
       { pubkey: mint, isSigner: false, isWritable: false },
       { pubkey: destination, isSigner: false, isWritable: true },
       { pubkey: owner, isSigner: true, isWritable: false },
+      solanaPayReferenceAccountMeta(reference),
     ],
     data: transferCheckedData(amount),
   })
@@ -266,13 +279,15 @@ function createNativeTransferInstruction(
   web3: SolanaWeb3,
   source: PublicKeyInstance,
   destination: PublicKeyInstance,
-  amountLamports: bigint
+  amountLamports: bigint,
+  reference: PublicKeyInstance
 ) {
   return new web3.TransactionInstruction({
     programId: web3.SystemProgram.programId,
     keys: [
       { pubkey: source, isSigner: true, isWritable: true },
       { pubkey: destination, isSigner: false, isWritable: true },
+      solanaPayReferenceAccountMeta(reference),
     ],
     data: nativeTransferData(amountLamports),
   })
@@ -291,6 +306,7 @@ async function sendSolanaPayment({
     web3: SolanaWeb3
     owner: PublicKeyInstance
     treasury: PublicKeyInstance
+    referenceKey: PublicKeyInstance
     connection: ConnectionInstance
   }) => Promise<TransactionInstructionInstance[]>
 }) {
@@ -315,11 +331,11 @@ async function sendSolanaPayment({
   const memoProgramId = new web3.PublicKey(MEMO_PROGRAM_ID)
   const transaction = new web3.Transaction()
 
-  transaction.add(...(await buildPaymentInstruction({ web3, owner, treasury, connection })))
+  transaction.add(...(await buildPaymentInstruction({ web3, owner, treasury, referenceKey, connection })))
   transaction.add(
     new web3.TransactionInstruction({
       programId: memoProgramId,
-      keys: [{ pubkey: referenceKey, isSigner: false, isWritable: false }],
+      keys: paymentMemoAccountMetas(),
       data: new TextEncoder().encode(memo),
     })
   )
@@ -360,7 +376,7 @@ export async function paySolanaUsdcWithWallet({
     treasuryAddress,
     reference,
     memo: "Tri-Proof Solana USDC checkout",
-    buildPaymentInstruction: async ({ web3, owner, treasury, connection }) => {
+    buildPaymentInstruction: async ({ web3, owner, treasury, referenceKey, connection }) => {
       const mint = new web3.PublicKey(USDC_MINT)
       const tokenProgramId = new web3.PublicKey(TOKEN_PROGRAM_ID)
       const associatedProgramId = new web3.PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID)
@@ -375,7 +391,16 @@ export async function paySolanaUsdcWithWallet({
       }
 
       instructions.push(
-        createTransferCheckedInstruction(web3, sourceAta, mint, destinationAta, owner, amountToUsdcUnits(amountUsdc), tokenProgramId)
+        createTransferCheckedInstruction(
+          web3,
+          sourceAta,
+          mint,
+          destinationAta,
+          owner,
+          amountToUsdcUnits(amountUsdc),
+          tokenProgramId,
+          referenceKey
+        )
       )
       return instructions
     },
@@ -398,8 +423,8 @@ export async function paySolanaSolWithWallet({
     treasuryAddress,
     reference,
     memo: "Tri-Proof Solana SOL checkout",
-    buildPaymentInstruction: async ({ web3, owner, treasury }) => [
-      createNativeTransferInstruction(web3, owner, treasury, amountLamports),
+    buildPaymentInstruction: async ({ web3, owner, treasury, referenceKey }) => [
+      createNativeTransferInstruction(web3, owner, treasury, amountLamports, referenceKey),
     ],
   })
 }
