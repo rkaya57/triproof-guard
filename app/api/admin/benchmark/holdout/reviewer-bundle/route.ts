@@ -11,11 +11,7 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const maxDuration = 120
 
-function perProjectFrom(request: Request) {
-  const url = new URL(request.url)
-  const raw = Number.parseInt(url.searchParams.get("perProject") ?? "20", 10)
-  return Number.isFinite(raw) ? Math.min(100, Math.max(1, raw)) : 20
-}
+const HOLDOUT_CASES_PER_PROJECT = 20
 
 async function authorizedActiveRun() {
   const admin = await getAdminUser()
@@ -37,17 +33,23 @@ async function authorizedActiveRun() {
   return { run }
 }
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
     const state = await authorizedActiveRun()
     if (state.error) return state.error
-    const preview = await previewHoldoutReviewerBundle(state.run, perProjectFrom(request))
-    return NextResponse.json(preview, {
-      headers: {
-        "Cache-Control": "no-store, private",
-        "X-Content-Type-Options": "nosniff",
-      },
-    })
+    const preview = await previewHoldoutReviewerBundle(
+      state.run,
+      HOLDOUT_CASES_PER_PROJECT
+    )
+    return NextResponse.json(
+      { ...preview, casesPerProject: HOLDOUT_CASES_PER_PROJECT },
+      {
+        headers: {
+          "Cache-Control": "no-store, private",
+          "X-Content-Type-Options": "nosniff",
+        },
+      }
+    )
   } catch (error) {
     console.error("Holdout reviewer-bundle preview failed", error)
     return NextResponse.json(
@@ -57,15 +59,19 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST() {
   try {
     const state = await authorizedActiveRun()
     if (state.error) return state.error
-    const result = await sealHoldoutReviewerBundle(state.run, perProjectFrom(request))
+    const result = await sealHoldoutReviewerBundle(
+      state.run,
+      HOLDOUT_CASES_PER_PROJECT
+    )
     return NextResponse.json(
       {
         created: result.created,
         bundle: result.bundle,
+        casesPerProject: HOLDOUT_CASES_PER_PROJECT,
         privateSealStoredServerSide: true,
       },
       {
