@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server"
 
 import { getAdminUser } from "@/lib/auth/admin"
+import { getHoldoutArtifact } from "@/lib/benchmark/holdout-artifacts"
 import { getActiveHoldoutRun } from "@/lib/benchmark/holdout-store"
 import {
   previewHoldoutReviewerBundle,
   sealHoldoutReviewerBundle,
+  type HoldoutReviewBundlePayload,
 } from "@/lib/benchmark/holdout-reviewer-bundle"
 
 export const runtime = "nodejs"
@@ -41,8 +43,15 @@ export async function GET() {
       state.run,
       HOLDOUT_CASES_PER_PROJECT
     )
+    const sealed = preview.alreadySealed
+      ? await getHoldoutArtifact<HoldoutReviewBundlePayload>(state.run.id, "review_bundle")
+      : null
     return NextResponse.json(
-      { ...preview, casesPerProject: HOLDOUT_CASES_PER_PROJECT },
+      {
+        ...preview,
+        casesPerProject: HOLDOUT_CASES_PER_PROJECT,
+        bundle: sealed?.payload ?? null,
+      },
       {
         headers: {
           "Cache-Control": "no-store, private",
