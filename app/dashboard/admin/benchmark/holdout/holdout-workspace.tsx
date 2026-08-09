@@ -11,7 +11,6 @@ import {
   LockKeyhole,
   RefreshCw,
   ShieldCheck,
-  Upload,
   UsersRound,
 } from "lucide-react"
 
@@ -175,7 +174,10 @@ export function HoldoutWorkspace() {
   }, [])
 
   useEffect(() => {
-    void refresh()
+    const timeout = window.setTimeout(() => {
+      void refresh()
+    }, 0)
+    return () => window.clearTimeout(timeout)
   }, [refresh])
 
   const visibleRun = run ?? latestRun
