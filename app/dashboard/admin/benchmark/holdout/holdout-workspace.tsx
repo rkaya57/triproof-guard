@@ -263,13 +263,26 @@ export function HoldoutWorkspace() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
-          {!visibleRun ? (
+          {visibleRun ? (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-xl border border-border bg-background/35 p-4"><p className="text-xs uppercase tracking-wide text-slate-400">Status</p><p className="mt-2 text-xl font-semibold text-white">{visibleRun.status}</p></div>
+              <div className="rounded-xl border border-border bg-background/35 p-4"><p className="text-xs uppercase tracking-wide text-slate-400">Freeze commit</p><p className="mt-2 truncate font-mono text-sm text-cyan-200" title={visibleRun.stackCommitSha}>{visibleRun.stackCommitSha.slice(0, 12)}…</p></div>
+              <div className="rounded-xl border border-border bg-background/35 p-4"><p className="text-xs uppercase tracking-wide text-slate-400">Candidate cutoff</p><p className="mt-2 text-sm font-semibold text-white">{new Date(visibleRun.candidateNotBefore).toLocaleString()}</p></div>
+              <div className="rounded-xl border border-border bg-background/35 p-4"><p className="text-xs uppercase tracking-wide text-slate-400">Freeze hash</p><p className="mt-2 truncate font-mono text-sm text-violet-200" title={visibleRun.freezeHash}>{visibleRun.freezeHash.slice(0, 16)}…</p></div>
+            </div>
+          ) : null}
+
+          {!run ? (
             <div className="rounded-xl border border-yellow-400/25 bg-yellow-400/5 p-5">
               <div className="flex gap-3">
                 <LockKeyhole className="mt-0.5 size-5 text-yellow-300" />
                 <div>
-                  <p className="font-semibold text-white">No holdout freeze exists yet</p>
-                  <p className="mt-1 text-sm leading-6 text-slate-300">Create the freeze only after this workspace and all validation tooling are deployed and production-stable. The freeze commit becomes part of the scientific protocol.</p>
+                  <p className="font-semibold text-white">{latestRun ? "No active holdout freeze" : "No holdout freeze exists yet"}</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-300">
+                    {latestRun
+                      ? `The latest run is ${latestRun.status}. Create a new freeze only after the current production stack is stable; the new production commit becomes part of the scientific protocol.`
+                      : "Create the freeze only after this workspace and all validation tooling are deployed and production-stable. The freeze commit becomes part of the scientific protocol."}
+                  </p>
                 </div>
               </div>
               <Button className="mt-4" onClick={createFreeze} disabled={Boolean(busy)}>
@@ -277,14 +290,7 @@ export function HoldoutWorkspace() {
                 Create Holdout v1 freeze
               </Button>
             </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-xl border border-border bg-background/35 p-4"><p className="text-xs uppercase tracking-wide text-slate-400">Status</p><p className="mt-2 text-xl font-semibold text-white">{visibleRun.status}</p></div>
-              <div className="rounded-xl border border-border bg-background/35 p-4"><p className="text-xs uppercase tracking-wide text-slate-400">Freeze commit</p><p className="mt-2 truncate font-mono text-sm text-cyan-200" title={visibleRun.stackCommitSha}>{visibleRun.stackCommitSha.slice(0, 12)}…</p></div>
-              <div className="rounded-xl border border-border bg-background/35 p-4"><p className="text-xs uppercase tracking-wide text-slate-400">Candidate cutoff</p><p className="mt-2 text-sm font-semibold text-white">{new Date(visibleRun.candidateNotBefore).toLocaleString()}</p></div>
-              <div className="rounded-xl border border-border bg-background/35 p-4"><p className="text-xs uppercase tracking-wide text-slate-400">Freeze hash</p><p className="mt-2 truncate font-mono text-sm text-violet-200" title={visibleRun.freezeHash}>{visibleRun.freezeHash.slice(0, 16)}…</p></div>
-            </div>
-          )}
+          ) : null}
 
           <Button variant="outline" onClick={() => void refresh()} disabled={Boolean(busy)} className="text-white">
             <RefreshCw className="mr-2 size-4" />Refresh state
