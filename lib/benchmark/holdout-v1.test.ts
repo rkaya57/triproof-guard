@@ -59,6 +59,20 @@ function groundTruthCase(
   }
 }
 
+function reorderJsonObject(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => reorderJsonObject(item))
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => right.localeCompare(left))
+        .map(([key, item]) => [key, reorderJsonObject(item)])
+    )
+  }
+  return value
+}
+
 function passingMetrics(): BenchmarkMetricsReport {
   return {
     totalCases: 100,
@@ -143,6 +157,17 @@ test("holdout freeze is deterministic and integrity protected", () => {
     minimums: { ...freeze.minimums, cases: 99 },
   }
   assert.equal(verifyHoldoutFreezeIntegrity(tampered), false)
+})
+
+test("holdout freeze integrity survives JSONB-style object key reordering", () => {
+  const freeze = buildHoldoutStackFreeze({
+    commitSha: COMMIT,
+    frozenAt: FROZEN_AT,
+  })
+  const reordered = reorderJsonObject(freeze) as typeof freeze
+
+  assert.notEqual(JSON.stringify(reordered), JSON.stringify(freeze))
+  assert.equal(verifyHoldoutFreezeIntegrity(reordered), true)
 })
 
 test("two agreeing independent reviewers freeze a non-malicious case", () => {
