@@ -1,10 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { BadgeCheck, CheckCircle2, CircleDollarSign, Clock3, Copy, ExternalLink, Loader2, ShieldCheck, WalletCards } from "lucide-react"
+import { BadgeCheck, CheckCircle2, CircleDollarSign, Clock3, Copy, ExternalLink, Loader2, ShieldCheck, Smartphone, WalletCards } from "lucide-react"
 
+import { buildMobileWalletBrowseUrl, isLikelyMobileUserAgent, type MobileSolanaWallet } from "@/lib/billing/mobile-wallet"
 import { paySolanaSolWithWallet, paySolanaUsdcWithWallet } from "@/lib/billing/solana-wallet-client"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -40,17 +41,54 @@ type CheckoutIntent = {
   intent: string
 }
 
-export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network[] }) {
+type WalletBrowserWindow = Window & {
+  solana?: unknown
+  solflare?: unknown
+  phantom?: { solana?: unknown }
+}
+
+function hasInjectedWalletProvider() {
+  if (typeof window === "undefined") return false
+  const browserWindow = window as WalletBrowserWindow
+  return Boolean(browserWindow.solana || browserWindow.phantom?.solana || browserWindow.solflare)
+}
+
+export function CheckoutForm({
+  plan,
+  networks,
+  initialCurrency = "USDC",
+}: {
+  plan: Plan
+  networks: Network[]
+  initialCurrency?: "USDC" | "SOL"
+}) {
   const router = useRouter()
   const { toast } = useToast()
   const solanaNetwork = networks.find((network) => network.id === "solana" && network.treasuryAddress)
   const [txSignature, setTxSignature] = useState("")
-  const [currency, setCurrency] = useState<"USDC" | "SOL">("USDC")
+  const [currency, setCurrency] = useState<"USDC" | "SOL">(initialCurrency)
   const [paymentIntent, setPaymentIntent] = useState<CheckoutIntent | null>(null)
   const [intentPending, setIntentPending] = useState(false)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
+  const [mobileBrowser, setMobileBrowser] = useState(false)
+  const [injectedWallet, setInjectedWallet] = useState(false)
+
+  useEffect(() => {
+    function refreshWalletContext() {
+      setMobileBrowser(isLikelyMobileUserAgent(window.navigator.userAgent))
+      setInjectedWallet(hasInjectedWalletProvider())
+    }
+
+    refreshWalletContext()
+    const retry = window.setTimeout(refreshWalletContext, 750)
+    window.addEventListener("focus", refreshWalletContext)
+    return () => {
+      window.clearTimeout(retry)
+      window.removeEventListener("focus", refreshWalletContext)
+    }
+  }, [])
 
   async function loadPaymentIntent(paymentCurrency: "USDC" | "SOL") {
     setIntentPending(true)
@@ -84,7 +122,7 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
     setCurrency(nextCurrency)
     setError("")
     setPaymentIntent(null)
-    if (nextCurrency === "SOL") void loadPaymentIntent("SOL").catch(() => undefined)
+    if (nextCurrency === "SOL" && injectedWallet) void loadPaymentIntent("SOL").catch(() => undefined)
   }
 
   async function verifyPayment(signature: string, intent: CheckoutIntent) {
@@ -110,8 +148,26 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
     setTimeout(() => router.push("/dashboard/new-analysis"), 900)
   }
 
+  function openInMobileWallet(wallet: MobileSolanaWallet) {
+    setError("")
+    const target = new URL(window.location.href)
+    target.searchParams.set("currency", currency)
+    const link = buildMobileWalletBrowseUrl({
+      wallet,
+      targetUrl: target.toString(),
+      refUrl: window.location.origin,
+    })
+    window.location.assign(link)
+  }
+
   async function payWithWallet() {
     if (!solanaNetwork?.treasuryAddress) return
+
+    if (mobileBrowser && !hasInjectedWalletProvider()) {
+      setInjectedWallet(false)
+      setError("Open this checkout inside Phantom or Solflare using one of the mobile wallet buttons below.")
+      return
+    }
 
     setPending(true)
     setError("")
@@ -167,6 +223,8 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
     )
   }
 
+  const needsMobileWalletHandoff = mobileBrowser && !injectedWallet
+
   return (
     <div className="flex flex-col gap-5">
       <div className="grid gap-3 sm:grid-cols-2">
@@ -178,7 +236,7 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
         <div className="rounded-lg border border-border bg-background/50 p-4">
           <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Selected settlement</p>
           <p className="mt-2 text-2xl font-semibold">
-            {currency === "SOL" && paymentIntent?.amountSol ? `${paymentIntent.amountSol.toFixed(6)} SOL` : `${plan.amount} USDC`}
+            {currency === "SOL" && paymentIntent?.amountSol ? `${paymentIntent.amountSol.toFixed(6)} SOL` : currency === "SOL" ? "SOL" : `${plan.amount} USDC`}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">{currency === "SOL" ? "Signed live quote for this checkout" : plan.purchaseKind === "credits" ? "Fixed Sybil credit-pack denomination" : "Fixed plan denomination"}</p>
         </div>
@@ -203,23 +261,39 @@ export function CheckoutForm({ plan, networks }: { plan: Plan; networks: Network
           </Button>
         </div>
         <p className="mt-3 text-sm text-muted-foreground">
-          {currency === "SOL"
-            ? paymentIntent?.amountSol && paymentIntent.solUsdPrice
-              ? `Locked quote: ${paymentIntent.amountSol.toFixed(6)} SOL at $${paymentIntent.solUsdPrice.toFixed(2)} per SOL. It expires ${new Date(paymentIntent.expiresAt).toLocaleTimeString()}.`
-              : "Preparing a short-lived signed SOL checkout intent."
-            : `Click Open Wallet & Pay. Phantom or Solflare will transfer ${plan.amount} USDC with a unique checkout reference and Tri-Proof will verify both automatically.`}
+          {needsMobileWalletHandoff
+            ? `Mobile browser detected. Open this secure checkout inside Phantom or Solflare, then approve the ${currency} payment in the wallet app.`
+            : currency === "SOL"
+              ? paymentIntent?.amountSol && paymentIntent.solUsdPrice
+                ? `Locked quote: ${paymentIntent.amountSol.toFixed(6)} SOL at $${paymentIntent.solUsdPrice.toFixed(2)} per SOL. It expires ${new Date(paymentIntent.expiresAt).toLocaleTimeString()}.`
+                : "A short-lived signed SOL quote will be prepared when you continue."
+              : `Click Open Wallet & Pay. Phantom or Solflare will transfer ${plan.amount} USDC with a unique checkout reference and Tri-Proof will verify both automatically.`}
         </p>
         {txSignature && (
           <p className="mt-2 break-all text-xs text-muted-foreground">
             Transaction: {txSignature}
           </p>
         )}
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-          <Button type="button" variant="secondary" className="glow-primary" onClick={payWithWallet} disabled={pending || intentPending}>
-            {pending || intentPending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <ExternalLink data-icon="inline-start" />}
-            {intentPending ? "Preparing secure checkout" : `Open Wallet & Pay ${currency}`}
-          </Button>
-        </div>
+        {needsMobileWalletHandoff ? (
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <Button type="button" variant="secondary" className="glow-primary" onClick={() => openInMobileWallet("phantom")}>
+              <Smartphone data-icon="inline-start" /> Open in Phantom
+            </Button>
+            <Button type="button" variant="outline" onClick={() => openInMobileWallet("solflare")}>
+              <Smartphone data-icon="inline-start" /> Open in Solflare
+            </Button>
+            <p className="text-xs leading-5 text-muted-foreground sm:col-span-2">
+              The wallet app opens this same Tri-Proof checkout in its protected in-app browser. If the wallet browser asks you to sign in, sign in to the same Tri-Proof account and continue; the selected {currency} option is preserved.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <Button type="button" variant="secondary" className="glow-primary" onClick={payWithWallet} disabled={pending || intentPending}>
+              {pending || intentPending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <ExternalLink data-icon="inline-start" />}
+              {intentPending ? "Preparing secure checkout" : `Open Wallet & Pay ${currency}`}
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">

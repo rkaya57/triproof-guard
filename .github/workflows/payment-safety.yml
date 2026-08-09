@@ -37,6 +37,7 @@ jobs:
         run: >-
           node --import tsx --test
           lib/billing/credits.test.ts
+          lib/billing/mobile-wallet.test.ts
           lib/billing/plans.test.ts
           lib/billing/sol-price-quote.test.ts
           lib/billing/solana-wallet-client.test.ts
@@ -48,6 +49,8 @@ jobs:
           app/api/billing/verify-solana/route.ts
           app/checkout/page.tsx
           components/checkout/checkout-form.tsx
+          lib/billing/mobile-wallet.ts
+          lib/billing/mobile-wallet.test.ts
           lib/billing/payment-intent.ts
           lib/billing/payment-settlement.ts
           lib/billing/plans.ts
