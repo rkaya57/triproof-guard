@@ -25,6 +25,7 @@ const HOLDOUT_PRIVATE_SEAL_SCHEMA_VERSION =
   "tri-proof-independent-holdout-private-seal-v1" as const
 
 const AUDIT_HEADERS = [
+  "selected_cohort",
   "case_id",
   "scenario_id",
   "project_id",
@@ -100,6 +101,7 @@ type HoldoutPrivateSeal = {
   reviewerSha256: string
   auditSha256: string
   representativeCases: number
+  contextRows: number
   projects: number
   byChain: Record<string, number>
   auditCsv: string
@@ -194,7 +196,7 @@ function addressKey(chain: string, analysisId: string, address: string) {
 }
 
 function caseId(candidate: Pick<Candidate, "analysisId" | "id">) {
-  return opaqueId("hv", `${candidate.analysisId}:${candidate.id}`)
+  return opaqueId("rw", `${candidate.analysisId}:${candidate.id}`)
 }
 
 function engineInput(candidate: Candidate, enrichment: Enrichment | undefined) {
@@ -451,9 +453,13 @@ export async function sealHoldoutReviewerBundle(
       `${left.scenario_id}:${left.case_id}`.localeCompare(`${right.scenario_id}:${right.case_id}`)
     )
   const reviewerCsv = `${reviewerRowsToCsv(reviewerRows)}\n`
+  const reviewerCaseIds = new Set(reviewerRows.map((row) => row.case_id))
 
   const auditRows = contextCandidates
     .map((candidate) => ({
+      selected_cohort: selectedKeys.has(`${candidate.analysisId}:${candidate.id}`)
+        ? "representative"
+        : "context",
       case_id: caseId(candidate),
       scenario_id: opaqueId("sc", candidate.analysisId),
       project_id: candidate.projectId,
@@ -475,13 +481,24 @@ export async function sealHoldoutReviewerBundle(
       entity_label: candidate.entityLabel,
       status_explanation: candidate.statusExplanation,
       reasons_json: JSON.stringify(candidate.reasons),
-      selected: selectedKeys.has(`${candidate.analysisId}:${candidate.id}`),
     }))
     .sort((left, right) =>
       `${left.scenario_id}:${left.case_id}`.localeCompare(`${right.scenario_id}:${right.case_id}`)
     )
-  const auditCsv = csv(AUDIT_HEADERS, auditRows)
 
+  const auditRepresentativeIds = new Set(
+    auditRows
+      .filter((row) => row.selected_cohort === "representative")
+      .map((row) => row.case_id)
+  )
+  if (
+    reviewerCaseIds.size !== auditRepresentativeIds.size ||
+    Array.from(reviewerCaseIds).some((id) => !auditRepresentativeIds.has(id))
+  ) {
+    throw new Error("Holdout reviewer/private-audit case identities do not match exactly.")
+  }
+
+  const auditCsv = csv(AUDIT_HEADERS, auditRows)
   const reviewerSha256 = sha256(reviewerCsv)
   const auditSha256 = sha256(auditCsv)
   const generatedAt = new Date().toISOString()
@@ -517,6 +534,7 @@ export async function sealHoldoutReviewerBundle(
     reviewerSha256,
     auditSha256,
     representativeCases: reviewerRows.length,
+    contextRows: auditRows.length,
     projects,
     byChain: readiness.byChain,
     auditCsv,
