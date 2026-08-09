@@ -24,6 +24,6 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
       - name: Lint holdout operational surface
-        run: npx eslint lib/benchmark/holdout-v1.ts lib/benchmark/holdout-store.ts lib/benchmark/holdout-artifacts.ts lib/benchmark/holdout-reviewer-bundle.ts lib/benchmark/holdout-reviewer-bundle.test.ts app/api/admin/benchmark/holdout/reviewer-bundle/route.ts
+        run: npx eslint lib/benchmark/holdout-v1.ts lib/benchmark/holdout-store.ts lib/benchmark/holdout-artifacts.ts lib/benchmark/holdout-reviewer-bundle.ts lib/benchmark/holdout-reviewer-bundle.test.ts lib/benchmark/holdout-review-import.ts lib/benchmark/holdout-review-import.test.ts app/api/admin/benchmark/holdout/reviewer-bundle/route.ts app/api/admin/benchmark/holdout/reviews/route.ts
       - name: Run holdout core and operations tests
-        run: node --import tsx --test lib/benchmark/holdout-v1.test.ts lib/benchmark/holdout-reviewer-bundle.test.ts
+        run: node --import tsx --test lib/benchmark/holdout-v1.test.ts lib/benchmark/holdout-reviewer-bundle.test.ts lib/benchmark/holdout-review-import.test.ts
