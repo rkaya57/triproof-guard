@@ -14,6 +14,7 @@ type SignatureInfo = {
 
 type ParsedInstruction = {
   program?: string
+  accounts?: string[]
   parsed?: {
     type?: string
     info?: Record<string, unknown>
@@ -24,6 +25,8 @@ type ParsedInnerInstructionGroup = {
   instructions?: ParsedInstruction[]
 }
 
+type ParsedAccountKey = string | { pubkey?: string }
+
 type ParsedSolanaTransaction = {
   slot?: number
   meta?: {
@@ -32,6 +35,7 @@ type ParsedSolanaTransaction = {
   } | null
   transaction?: {
     message?: {
+      accountKeys?: ParsedAccountKey[]
       instructions?: ParsedInstruction[]
     }
   }
@@ -91,6 +95,18 @@ function flattenInstructions(transaction: ParsedSolanaTransaction) {
   return [...direct, ...inner]
 }
 
+function accountKeyText(value: ParsedAccountKey) {
+  return typeof value === "string" ? value : String(value.pubkey ?? "")
+}
+
+function transactionHasReference(transaction: ParsedSolanaTransaction, reference: string) {
+  const messageKeys = transaction.transaction?.message?.accountKeys ?? []
+  if (messageKeys.some((key) => accountKeyText(key) === reference)) return true
+  return flattenInstructions(transaction).some((instruction) =>
+    (instruction.accounts ?? []).some((account) => account === reference)
+  )
+}
+
 export function buildSolanaPayUrl({
   recipient,
   amountUsdc,
@@ -119,10 +135,12 @@ export async function verifySolanaUsdcTransfer({
   txHash,
   network,
   expectedAmountUsdc,
+  requiredReference,
 }: {
   txHash: string
   network: SolanaPaymentNetwork
   expectedAmountUsdc: number
+  requiredReference?: string
 }) {
   const treasury = network.treasury?.trim()
   const usdcMint = network.usdcMint?.trim() || process.env.SOLANA_USDC_MINT || defaultSolanaUsdcMint
@@ -137,6 +155,10 @@ export async function verifySolanaUsdcTransfer({
 
   if (!solanaSignatureRegex.test(txHash)) {
     return { ok: false as const, error: "Invalid Solana transaction signature." }
+  }
+
+  if (requiredReference && !validateSolanaAddress(requiredReference)) {
+    return { ok: false as const, error: "Invalid signed checkout reference." }
   }
 
   const tokenAccounts = await solanaRpc<{ value?: TokenAccount[] }>("getTokenAccountsByOwner", [
@@ -171,6 +193,13 @@ export async function verifySolanaUsdcTransfer({
 
   if (transaction.meta?.err) {
     return { ok: false as const, error: "Solana transaction is not successful." }
+  }
+
+  if (requiredReference && !transactionHasReference(transaction, requiredReference)) {
+    return {
+      ok: false as const,
+      error: "This Solana transaction does not contain the signed checkout reference.",
+    }
   }
 
   const expectedUnits = BigInt(expectedAmountUsdc) * usdcDecimals
@@ -208,10 +237,12 @@ export async function verifySolanaNativeSolTransfer({
   txHash,
   network,
   expectedAmountSol,
+  requiredReference,
 }: {
   txHash: string
   network: SolanaPaymentNetwork
   expectedAmountSol: number
+  requiredReference?: string
 }) {
   const treasury = network.treasury?.trim()
   if (!treasury || !validateSolanaAddress(treasury)) {
@@ -220,6 +251,9 @@ export async function verifySolanaNativeSolTransfer({
   if (!solanaSignatureRegex.test(txHash)) {
     return { ok: false as const, error: "Invalid Solana transaction signature." }
   }
+  if (requiredReference && !validateSolanaAddress(requiredReference)) {
+    return { ok: false as const, error: "Invalid signed checkout reference." }
+  }
 
   const transaction = await solanaRpc<ParsedSolanaTransaction | null>("getTransaction", [
     txHash,
@@ -227,6 +261,9 @@ export async function verifySolanaNativeSolTransfer({
   ])
   if (!transaction) return { ok: false as const, error: "Solana transaction was not found yet." }
   if (transaction.meta?.err) return { ok: false as const, error: "Solana transaction is not successful." }
+  if (requiredReference && !transactionHasReference(transaction, requiredReference)) {
+    return { ok: false as const, error: "This Solana transaction does not contain the signed checkout reference." }
+  }
 
   const expectedLamports = BigInt(Math.ceil(expectedAmountSol * 1_000_000_000))
   const matchingTransfer = flattenInstructions(transaction).find((instruction) =>
@@ -278,6 +315,7 @@ export async function verifySolanaUsdcTransferByReference({
       txHash: item.signature,
       network,
       expectedAmountUsdc,
+      requiredReference: reference,
     })
 
     if (verification.ok) {
