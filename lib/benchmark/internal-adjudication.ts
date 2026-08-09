@@ -70,6 +70,9 @@ export type InternalAdjudicationResult = {
     secondReviewRows: number
     independentReviewerCases: number
     independenceSatisfied: boolean
+    reviewerNameSeparatedCases: number
+    reviewerNameSeparationSatisfied: boolean
+    externalIndependenceSatisfied: false
     note: string
   }
   original: CalibrationSummary
@@ -115,7 +118,7 @@ function normalizedReviewerKey(value: string) {
   return value.trim().toLowerCase()
 }
 
-function areIndependent(first: string[], second: string[]) {
+function reviewerNamesSeparated(first: string[], second: string[]) {
   const firstKeys = new Set(first.map(normalizedReviewerKey))
   return second.length > 0 && second.every((name) => !firstKeys.has(normalizedReviewerKey(name)))
 }
@@ -189,7 +192,7 @@ export function runInternalAdjudication(
     const secondReviewers = reviewers(row.reviewer)
     if (!secondReviewers.length) throw new Error(`Row ${rowNumber}: reviewer is required`)
 
-    const independentReviewer = areIndependent(firstReviewers, secondReviewers)
+    const independentReviewer = reviewerNamesSeparated(firstReviewers, secondReviewers)
     changes.push({
       caseId,
       chain: required(first, "chain", rowNumber),
@@ -238,8 +241,8 @@ export function runInternalAdjudication(
 
   const adjudicatedReviewerCsv = `${reviewerRowsToCsv(mergedRows)}\n`
   const adjudicated = runInternalCalibration(adjudicatedReviewerCsv, privateSealBytes)
-  const independentReviewerCases = changes.filter((change) => change.independentReviewer).length
-  const independenceSatisfied = independentReviewerCases === changes.length
+  const reviewerNameSeparatedCases = changes.filter((change) => change.independentReviewer).length
+  const reviewerNameSeparationSatisfied = reviewerNameSeparatedCases === changes.length
 
   return {
     schemaVersion: INTERNAL_ADJUDICATION_SCHEMA_VERSION,
@@ -249,11 +252,15 @@ export function runInternalAdjudication(
       firstReviewPreserved: true,
       adjudicationLayerSha256: sha256(completedSecondReviewCsv),
       secondReviewRows: changes.length,
-      independentReviewerCases,
-      independenceSatisfied,
-      note: independenceSatisfied
-        ? "Second-review reviewer names do not overlap the first-review names. This remains claim-ineligible internal adjudication until the independent holdout workflow is completed."
-        : "Reviewer independence is not satisfied for every adjudicated case. Results are for internal error discovery only and cannot support an external accuracy claim.",
+      // Backward-compatible aliases. They describe reviewer-name separation only,
+      // not independent-human validation.
+      independentReviewerCases: reviewerNameSeparatedCases,
+      independenceSatisfied: reviewerNameSeparationSatisfied,
+      reviewerNameSeparatedCases,
+      reviewerNameSeparationSatisfied,
+      externalIndependenceSatisfied: false,
+      note:
+        "Reviewer-name separation is an administrative provenance signal only. It does not establish independent human review, reviewer blindness, or external-validation independence. External independence remains NOT SATISFIED in this internal adjudication workflow, and these results cannot support a public accuracy claim.",
     },
     original: summary(original),
     adjudicated: summary(adjudicated),
