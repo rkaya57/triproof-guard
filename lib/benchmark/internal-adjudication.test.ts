@@ -199,8 +199,10 @@ test("internal adjudication preserves first review and computes a separate claim
   assert.equal(result.batchId, "adjudication-unit-test")
   assert.equal(result.provenance.firstReviewPreserved, true)
   assert.equal(result.provenance.secondReviewRows, 1)
-  assert.equal(result.provenance.independentReviewerCases, 1)
-  assert.equal(result.provenance.independenceSatisfied, true)
+  assert.equal(result.provenance.reviewerNameSeparatedCases, 1)
+  assert.equal(result.provenance.reviewerNameSeparationSatisfied, true)
+  assert.equal(result.provenance.externalIndependenceSatisfied, false)
+  assert.match(result.provenance.note, /External independence remains NOT SATISFIED/)
   assert.equal(result.original.labelCounts.sybil, 1)
   assert.equal(result.adjudicated.labelCounts.sybil ?? 0, 0)
   assert.equal(result.adjudicated.labelCounts.insufficient_data, 1)
@@ -210,7 +212,7 @@ test("internal adjudication preserves first review and computes a separate claim
   assert.match(result.adjudicatedReviewerCsv, /first_review_label:sybil/)
 })
 
-test("internal adjudication reports reviewer overlap instead of treating it as independent", () => {
+test("internal adjudication reports reviewer-name overlap without claiming external independence", () => {
   const { firstRows, reviewerCsv, sealBytes } = fixture()
   const second = {
     ...firstRows[1]!,
@@ -222,8 +224,9 @@ test("internal adjudication reports reviewer overlap instead of treating it as i
     sealBytes,
     `${reviewerRowsToCsv([second])}\n`
   )
-  assert.equal(result.provenance.independenceSatisfied, false)
-  assert.equal(result.provenance.independentReviewerCases, 0)
+  assert.equal(result.provenance.reviewerNameSeparationSatisfied, false)
+  assert.equal(result.provenance.reviewerNameSeparatedCases, 0)
+  assert.equal(result.provenance.externalIndependenceSatisfied, false)
   assert.equal(result.changes[0]?.independentReviewer, false)
 })
 
