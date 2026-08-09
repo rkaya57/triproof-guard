@@ -24,6 +24,6 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
       - name: Lint holdout operational surface
-        run: npx eslint lib/benchmark/holdout-v1.ts lib/benchmark/holdout-store.ts lib/benchmark/holdout-artifacts.ts lib/benchmark/holdout-reviewer-bundle.ts lib/benchmark/holdout-reviewer-bundle.test.ts lib/benchmark/holdout-review-import.ts lib/benchmark/holdout-review-import.test.ts app/api/admin/benchmark/holdout/reviewer-bundle/route.ts app/api/admin/benchmark/holdout/reviews/route.ts
+        run: npx eslint lib/benchmark/holdout-v1.ts lib/benchmark/holdout-store.ts lib/benchmark/holdout-artifacts.ts lib/benchmark/holdout-reviewer-bundle.ts lib/benchmark/holdout-reviewer-bundle.test.ts lib/benchmark/holdout-review-import.ts lib/benchmark/holdout-review-import.test.ts lib/benchmark/holdout-evaluation.ts lib/benchmark/holdout-evaluation.test.ts app/api/admin/benchmark/holdout/freeze/route.ts app/api/admin/benchmark/holdout/reviewer-bundle/route.ts app/api/admin/benchmark/holdout/reviews/route.ts app/api/admin/benchmark/holdout/evaluate/route.ts app/dashboard/admin/benchmark/holdout/page.tsx app/dashboard/admin/benchmark/holdout/holdout-workspace.tsx
       - name: Run holdout core and operations tests
-        run: node --import tsx --test lib/benchmark/holdout-v1.test.ts lib/benchmark/holdout-reviewer-bundle.test.ts lib/benchmark/holdout-review-import.test.ts
+        run: node --import tsx --test lib/benchmark/holdout-v1.test.ts lib/benchmark/holdout-reviewer-bundle.test.ts lib/benchmark/holdout-review-import.test.ts lib/benchmark/holdout-evaluation.test.ts
