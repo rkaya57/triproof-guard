@@ -146,16 +146,63 @@ export async function activateSubscriptionPayment({
   planId: Exclude<SubscriptionPlanId, "free">
 }) {
   const plan = subscriptionPlans[planId]
-  const existingForPayment = await db.subscription.findUnique({ where: { paymentTransactionId } })
-  if (existingForPayment) return existingForPayment
-  const now = new Date()
-  const current = await db.subscription.findUnique({ where: { userId }, select: { expiresAt: true } })
-  const startsAt = current?.expiresAt && current.expiresAt > now ? current.expiresAt : now
-  const expiresAt = new Date(startsAt.getTime() + monthlyDurationMs)
-  return db.subscription.upsert({
-    where: { userId },
-    create: { userId, paymentTransactionId, plan: plan.dbPlan, status: "ACTIVE", startsAt: now, expiresAt },
-    update: { paymentTransactionId, plan: plan.dbPlan, status: "ACTIVE", startsAt: now, expiresAt, canceledAt: null },
+
+  return db.$transaction(async (tx: Prisma.TransactionClient) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`subscription:${userId}`}))`
+
+    const payment = await tx.paymentTransaction.findUnique({ where: { id: paymentTransactionId } })
+    if (!payment || payment.userId !== userId || payment.status !== "verified") {
+      throw new Error("Verified subscription payment was not found for this user.")
+    }
+    if (
+      payment.plan !== plan.id ||
+      payment.walletCredits !== 0 ||
+      Math.abs(Number(payment.amountUsdc) - plan.amountUsdc) >= 0.000001
+    ) {
+      throw new Error("Subscription payment does not match the requested plan.")
+    }
+    if (!payment.reference) {
+      throw new Error("Legacy unbound payments cannot be reactivated. Start a fresh checkout.")
+    }
+
+    const grantKey = `subscription:${payment.id}`
+    const existingGrant = await tx.creditLedger.findUnique({ where: { idempotencyKey: grantKey } })
+    if (existingGrant) {
+      const current = await tx.subscription.findUnique({ where: { userId } })
+      if (!current) throw new Error("Subscription grant exists but the subscription record is missing.")
+      return current
+    }
+
+    const now = new Date()
+    const current = await tx.subscription.findUnique({ where: { userId }, select: { expiresAt: true } })
+    const startsAt = current?.expiresAt && current.expiresAt > now ? current.expiresAt : now
+    const expiresAt = new Date(startsAt.getTime() + monthlyDurationMs)
+    const subscription = await tx.subscription.upsert({
+      where: { userId },
+      create: { userId, paymentTransactionId, plan: plan.dbPlan, status: "ACTIVE", startsAt: now, expiresAt },
+      update: { paymentTransactionId, plan: plan.dbPlan, status: "ACTIVE", startsAt: now, expiresAt, canceledAt: null },
+    })
+
+    const balance = await tx.creditLedger.aggregate({ _sum: { amount: true }, where: { userId } })
+    await tx.creditLedger.create({
+      data: {
+        userId,
+        paymentTransactionId: payment.id,
+        kind: "admin_adjustment",
+        amount: 0,
+        balanceAfter: balance._sum.amount ?? 0,
+        idempotencyKey: grantKey,
+        metadata: {
+          source: "subscription_grant",
+          plan: plan.id,
+          txHash: payment.txHash,
+          reference: payment.reference,
+          expiresAt: subscription.expiresAt?.toISOString() ?? null,
+        },
+      },
+    })
+
+    return subscription
   })
 }
 

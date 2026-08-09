@@ -20,7 +20,7 @@ export const subscriptionPlans = {
     amountUsdc: 12,
     monthly: true,
     dailyScanLimit: 100,
-    dailyAnalysisWalletLimit: 500,
+    dailyAnalysisWalletLimit: 0,
     deepUrlScamDna: true,
     telegramGroupLimit: 0,
     telegramAdminLimit: 0,
@@ -34,7 +34,7 @@ export const subscriptionPlans = {
     amountUsdc: 39,
     monthly: true,
     dailyScanLimit: 250,
-    dailyAnalysisWalletLimit: 2_000,
+    dailyAnalysisWalletLimit: 0,
     deepUrlScamDna: true,
     telegramGroupLimit: 1,
     telegramAdminLimit: 3,
@@ -48,7 +48,7 @@ export const subscriptionPlans = {
     amountUsdc: 29,
     monthly: true,
     dailyScanLimit: 100,
-    dailyAnalysisWalletLimit: 1_000,
+    dailyAnalysisWalletLimit: 0,
     deepUrlScamDna: true,
     telegramGroupLimit: 0,
     telegramAdminLimit: 0,
@@ -62,7 +62,7 @@ export const subscriptionPlans = {
     amountUsdc: 79,
     monthly: true,
     dailyScanLimit: 500,
-    dailyAnalysisWalletLimit: 5_000,
+    dailyAnalysisWalletLimit: 0,
     deepUrlScamDna: true,
     telegramGroupLimit: 1,
     telegramAdminLimit: 3,
@@ -70,6 +70,15 @@ export const subscriptionPlans = {
     webhookAccess: true,
   },
 } as const
+
+// Only plans that are intentionally available without a selected-pilot approval
+// may be purchased from the public checkout. API plans remain pilot-only.
+export const selfServeSubscriptionPlanIds = ["builder", "community"] as const
+export type SelfServeSubscriptionPlanId = (typeof selfServeSubscriptionPlanIds)[number]
+
+export function isSelfServeSubscriptionPlan(value: unknown): value is SelfServeSubscriptionPlanId {
+  return value === "builder" || value === "community"
+}
 
 // One credit pays for one wallet row in a Sybil campaign analysis. These packs
 // are intentionally separate from access subscriptions: they never renew and
@@ -118,10 +127,19 @@ export function subscriptionPlanFromDb(value: string | null | undefined) {
   return plansByDbValue[value ?? ""] ?? subscriptionPlans.free
 }
 
+export function analysisCreditPackForWalletCount(walletCount: number) {
+  const requested = Number.isFinite(walletCount) ? Math.max(0, Math.ceil(walletCount)) : 0
+  if (requested <= analysisCreditPacks.sybil_starter.walletCredits) return analysisCreditPacks.sybil_starter
+  if (requested <= analysisCreditPacks.sybil_growth.walletCredits) return analysisCreditPacks.sybil_growth
+  return analysisCreditPacks.sybil_pro
+}
+
 export const billingPlans = subscriptionPlans
 export type BillingPlanId = SubscriptionPlanId
 export const getBillingPlan = getSubscriptionPlan
 
+// Legacy helper retained for callers outside checkout. Campaign analyses are not
+// bundled into subscriptions; they use the one-time Sybil credit packs above.
 export function planForWalletCount() {
   return "builder" as const
 }

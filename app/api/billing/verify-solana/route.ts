@@ -1,18 +1,14 @@
 import { NextResponse } from "next/server"
 
 import { getCurrentUser } from "@/lib/auth/session"
-import { assertAccessPassSigningConfigured } from "@/lib/billing/access-pass"
-import { recordVerifiedSolanaPayment } from "@/lib/billing/credits"
-import { getAnalysisCreditPack, getSubscriptionPlan } from "@/lib/billing/plans"
-import { activateSubscriptionPayment } from "@/lib/billing/subscription"
-import { db } from "@/lib/db/prisma"
+import { getAnalysisCreditPack, getSubscriptionPlan, isSelfServeSubscriptionPlan } from "@/lib/billing/plans"
+import { verifyPaymentIntent } from "@/lib/billing/payment-intent"
+import { settleCreditPackPayment, settleSubscriptionPayment } from "@/lib/billing/payment-settlement"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import {
   verifySolanaNativeSolTransfer,
   verifySolanaUsdcTransfer,
-  verifySolanaUsdcTransferByReference,
 } from "@/lib/billing/solana-pay"
-import { verifySolPaymentQuote } from "@/lib/billing/sol-price-quote"
 
 export const runtime = "nodejs"
 
@@ -50,25 +46,23 @@ export async function POST(request: Request) {
     plan?: string
     pack?: string
     txHash?: string
-    reference?: string
     currency?: string
-    quote?: string
+    intent?: string
   }
 
   const subscriptionPlan = getSubscriptionPlan(body.plan)
   const creditPack = getAnalysisCreditPack(body.pack)
-  const item = subscriptionPlan ?? creditPack
-  const itemId = item?.id
-  const txHash = String(body.txHash ?? "").trim()
-  const reference = String(body.reference ?? "").trim()
-  const currency = String(body.currency ?? "USDC").trim().toUpperCase()
-  const quoteToken = String(body.quote ?? "").trim()
-
-  if (!item || !itemId) {
+  if ((subscriptionPlan && creditPack) || (!subscriptionPlan && !creditPack)) {
     return NextResponse.json({ error: "Invalid checkout item." }, { status: 400 })
   }
   if (subscriptionPlan?.id === "free") {
     return NextResponse.json({ error: "Free plan does not require a payment." }, { status: 400 })
+  }
+  if (subscriptionPlan && !isSelfServeSubscriptionPlan(subscriptionPlan.id)) {
+    return NextResponse.json(
+      { error: "This plan is available only through a selected pilot." },
+      { status: 403 }
+    )
   }
 
   if (!solanaNetwork.treasury) {
@@ -78,24 +72,40 @@ export async function POST(request: Request) {
     )
   }
 
-  if (!reference && !txHash) {
+  const item = subscriptionPlan ?? creditPack!
+  const txHash = String(body.txHash ?? "").trim()
+  const currency = String(body.currency ?? "USDC").trim().toUpperCase()
+  const intentToken = String(body.intent ?? "").trim()
+
+  if (!txHash) {
     return NextResponse.json(
-      { error: "Solana payment reference or transaction signature is required." },
+      { error: "Solana transaction signature is required." },
+      { status: 400 }
+    )
+  }
+  if (currency !== "USDC" && currency !== "SOL") {
+    return NextResponse.json({ error: "Unsupported payment currency." }, { status: 400 })
+  }
+  if (!intentToken) {
+    return NextResponse.json(
+      { error: "A signed checkout intent is required. Reload checkout and try again." },
       { status: 400 }
     )
   }
 
-  if (currency !== "USDC" && currency !== "SOL") {
-    return NextResponse.json({ error: "Unsupported payment currency." }, { status: 400 })
-  }
-
   try {
-    if (subscriptionPlan) assertAccessPassSigningConfigured()
-
-    const quote = currency === "SOL" ? await verifySolPaymentQuote(quoteToken) : null
-    if (currency === "SOL" && (!quote || quote.userId !== user.id || quote.plan !== itemId || quote.amountUsdc !== item.amountUsdc)) {
+    const intent = await verifyPaymentIntent(intentToken)
+    const expectedKind = subscriptionPlan ? "subscription" : "credits"
+    if (
+      !intent ||
+      intent.userId !== user.id ||
+      intent.purchaseKind !== expectedKind ||
+      intent.itemId !== item.id ||
+      intent.currency !== currency ||
+      intent.amountUsdc !== item.amountUsdc
+    ) {
       return NextResponse.json(
-        { error: "Your SOL quote is invalid or expired. Request a new quote before paying." },
+        { error: "Your checkout intent is invalid, expired, or does not match this purchase." },
         { status: 400 }
       )
     }
@@ -105,25 +115,20 @@ export async function POST(request: Request) {
         ? await verifySolanaNativeSolTransfer({
             txHash,
             network: solanaNetwork,
-            expectedAmountSol: quote!.amountSol,
+            expectedAmountSol: intent.amountSol!,
+            requiredReference: intent.reference,
           })
-        : reference
-          ? await verifySolanaUsdcTransferByReference({
-              reference,
-              network: solanaNetwork,
-              expectedAmountUsdc: item.amountUsdc,
-            })
-          : await verifySolanaUsdcTransfer({
-              txHash,
-              network: solanaNetwork,
-              expectedAmountUsdc: item.amountUsdc,
-            })
+        : await verifySolanaUsdcTransfer({
+            txHash,
+            network: solanaNetwork,
+            expectedAmountUsdc: item.amountUsdc,
+            requiredReference: intent.reference,
+          })
 
     if (!verification.ok) {
-      const isPending = "pending" in verification && verification.pending
       return NextResponse.json(
-        { error: verification.error, pending: isPending },
-        { status: isPending ? 202 : 400 }
+        { error: verification.error },
+        { status: 400 }
       )
     }
 
@@ -135,28 +140,33 @@ export async function POST(request: Request) {
       currency === "SOL" && "receivedAmountSol" in verification
         ? verification.receivedAmountSol
         : null
+    const provider = currency === "SOL" ? "solana_sol" as const : "solana_usdc" as const
+    const rawData = {
+      currency,
+      intentId: intent.intentId,
+      reference: intent.reference,
+      requestedTxHash: txHash,
+      verifiedTxHash: verification.txHash,
+      expectedAmountUsdc: item.amountUsdc,
+      expectedAmountSol: currency === "SOL" ? intent.amountSol : null,
+      receivedAmountSol,
+      receivedAmountUsdc,
+      solUsdPrice: currency === "SOL" ? intent.solUsdPrice : null,
+      confirmations: verification.confirmations,
+      checkoutIntentExpiresAt: intent.expiresAt,
+    }
 
     if (creditPack) {
-      const paymentResult = await recordVerifiedSolanaPayment({
+      const paymentResult = await settleCreditPackPayment({
         userId: user.id,
-        plan: creditPack.id,
+        packId: creditPack.id,
         txHash: verification.txHash,
-        reference: reference || null,
+        reference: intent.reference,
         amountUsdc: creditPack.amountUsdc,
-        walletCredits: creditPack.walletCredits,
         confirmations: verification.confirmations,
-        provider: currency === "SOL" ? "solana_sol" : "solana_usdc",
+        provider,
         rawData: {
-          currency,
-          reference: reference || null,
-          requestedTxHash: txHash || null,
-          verifiedTxHash: verification.txHash,
-          expectedAmountUsdc: creditPack.amountUsdc,
-          expectedAmountSol: currency === "SOL" ? quote!.amountSol : null,
-          receivedAmountSol,
-          receivedAmountUsdc,
-          solUsdPrice: currency === "SOL" ? quote!.solUsdPrice : null,
-          confirmations: verification.confirmations,
+          ...rawData,
           accessModel: "persistent_sybil_wallet_credits",
         },
       })
@@ -166,7 +176,7 @@ export async function POST(request: Request) {
         pack: creditPack.id,
         network: "solana",
         txHash: verification.txHash,
-        reference: reference || null,
+        reference: intent.reference,
         amountUsdc: creditPack.amountUsdc,
         walletCredits: creditPack.walletCredits,
         creditBalance: paymentResult.balance,
@@ -178,58 +188,39 @@ export async function POST(request: Request) {
       })
     }
 
-    const existing = await db.paymentTransaction.findUnique({ where: { txHash: verification.txHash } })
-    if (existing && existing.userId !== user.id) {
-      return NextResponse.json({ error: "This Solana payment has already been claimed by another account." }, { status: 409 })
+    const selfServePlanId = subscriptionPlan?.id
+    if (!selfServePlanId || !isSelfServeSubscriptionPlan(selfServePlanId)) {
+      return NextResponse.json({ error: "Invalid self-serve subscription plan." }, { status: 400 })
     }
-    const payment = existing ?? await db.paymentTransaction.create({
-      data: {
-        userId: user.id,
-        provider: currency === "SOL" ? "solana_sol" : "solana_usdc",
-        network: "solana",
-        plan: subscriptionPlan!.id,
-        txHash: verification.txHash,
-        reference: reference || null,
-        amountUsdc: subscriptionPlan!.amountUsdc.toFixed(6),
-        walletCredits: 0,
-        confirmations: verification.confirmations,
-        status: "verified",
-        rawData: {
-          currency,
-          reference: reference || null,
-          requestedTxHash: txHash || null,
-          verifiedTxHash: verification.txHash,
-          expectedAmountUsdc: subscriptionPlan!.amountUsdc,
-          expectedAmountSol: currency === "SOL" ? quote!.amountSol : null,
-          receivedAmountSol,
-          receivedAmountUsdc,
-          solUsdPrice: currency === "SOL" ? quote!.solUsdPrice : null,
-          confirmations: verification.confirmations,
-          accessModel: "30_day_subscription",
-        },
+
+    const paymentResult = await settleSubscriptionPayment({
+      userId: user.id,
+      planId: selfServePlanId,
+      txHash: verification.txHash,
+      reference: intent.reference,
+      amountUsdc: subscriptionPlan!.amountUsdc,
+      confirmations: verification.confirmations,
+      provider,
+      rawData: {
+        ...rawData,
+        accessModel: "30_day_subscription",
       },
     })
-    const subscription = await activateSubscriptionPayment({
-      userId: user.id,
-      paymentTransactionId: payment.id,
-      planId: subscriptionPlan!.id as "builder" | "community" | "api_starter" | "api_growth",
-    })
 
-    const response = NextResponse.json({
+    return NextResponse.json({
       ok: true,
       plan: subscriptionPlan!.id,
       network: "solana",
       txHash: verification.txHash,
-      reference: reference || null,
+      reference: intent.reference,
       amountUsdc: subscriptionPlan!.amountUsdc,
       confirmations: verification.confirmations,
-      expiresAt: subscription.expiresAt,
-      alreadyRecorded: Boolean(existing),
-      message: existing
+      expiresAt: paymentResult.subscription.expiresAt,
+      alreadyRecorded: paymentResult.alreadyRecorded,
+      message: paymentResult.alreadyRecorded
         ? `Solana ${currency} payment was already verified. Your ${subscriptionPlan!.name} access is active.`
         : `Solana ${currency} payment verified. ${subscriptionPlan!.name} access is active for 30 days.`,
     })
-    return response
   } catch (error) {
     if (isBillingSchemaError(error)) {
       return NextResponse.json(

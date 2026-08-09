@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server"
 
 import { getCurrentUser } from "@/lib/auth/session"
-import { getAnalysisCreditPack, getSubscriptionPlan } from "@/lib/billing/plans"
-import { createSolPaymentQuote } from "@/lib/billing/sol-price-quote"
+import { createPaymentIntent } from "@/lib/billing/payment-intent"
+import {
+  getAnalysisCreditPack,
+  getSubscriptionPlan,
+  isSelfServeSubscriptionPlan,
+} from "@/lib/billing/plans"
 
 export const runtime = "nodejs"
 
@@ -13,24 +17,35 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as { plan?: string; pack?: string }
   const plan = getSubscriptionPlan(body.plan)
   const pack = getAnalysisCreditPack(body.pack)
-  const item = plan ?? pack
+  if ((plan && pack) || (!plan && !pack) || plan?.id === "free") {
+    return NextResponse.json({ error: "Invalid checkout item." }, { status: 400 })
+  }
+  if (plan && !isSelfServeSubscriptionPlan(plan.id)) {
+    return NextResponse.json(
+      { error: "This plan is available only through a selected pilot." },
+      { status: 403 }
+    )
+  }
 
-  if (!item || plan?.id === "free") return NextResponse.json({ error: "Invalid checkout item." }, { status: 400 })
-
+  const item = plan ?? pack!
   try {
-    const quote = await createSolPaymentQuote({
+    const intent = await createPaymentIntent({
       userId: user.id,
-      plan: item.id,
+      purchaseKind: plan ? "subscription" : "credits",
+      itemId: item.id,
+      currency: "SOL",
       amountUsdc: item.amountUsdc,
     })
 
     return NextResponse.json({
       ok: true,
       currency: "SOL",
-      amountSol: quote.amountSol,
-      solUsdPrice: quote.solUsdPrice,
-      expiresAt: quote.expiresAt,
-      quote: quote.token,
+      amountSol: intent.amountSol,
+      solUsdPrice: intent.solUsdPrice,
+      expiresAt: intent.expiresAt,
+      reference: intent.reference,
+      intent: intent.token,
+      quote: intent.token,
     })
   } catch (error) {
     return NextResponse.json(
