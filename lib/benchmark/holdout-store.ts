@@ -144,6 +144,27 @@ export async function getHoldoutRun(id: string) {
   return rows[0] ? parseRun(rows[0]) : null
 }
 
+export async function getLatestHoldoutRun() {
+  const rows = await db.$queryRaw<HoldoutRunRow[]>`
+    SELECT
+      "id",
+      "protocolVersion",
+      "status",
+      "freezeHash",
+      "stackHash",
+      "stackCommitSha",
+      "freezeJson",
+      "frozenAt",
+      "candidateNotBefore",
+      "createdAt",
+      "updatedAt"
+    FROM "HoldoutValidationRun"
+    ORDER BY "frozenAt" DESC
+    LIMIT 1
+  `
+  return rows[0] ? parseRun(rows[0]) : null
+}
+
 export async function createIndependentHoldoutFreeze(input?: {
   frozenAt?: string
   commitSha?: string
