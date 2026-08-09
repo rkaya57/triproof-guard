@@ -6,7 +6,7 @@ import { scamGuardChromeWebStoreUrl } from "@/lib/scamguard/links"
 
 export function ChromeStoreReleaseBanner() {
   return (
-    <section className="border-b border-emerald-400/20 bg-emerald-400/[0.045]">
+    <section id="extension" className="border-b border-emerald-400/20 bg-emerald-400/[0.045]">
       <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-5 sm:px-8 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-400/10 text-emerald-200">
