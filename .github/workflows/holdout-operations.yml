@@ -1,0 +1,29 @@
+name: Holdout operations safety
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Lint holdout operational surface
+        run: npx eslint lib/benchmark/holdout-v1.ts lib/benchmark/holdout-store.ts lib/benchmark/holdout-artifacts.ts lib/benchmark/holdout-reviewer-bundle.ts lib/benchmark/holdout-reviewer-bundle.test.ts app/api/admin/benchmark/holdout/reviewer-bundle/route.ts
+      - name: Run holdout core and operations tests
+        run: node --import tsx --test lib/benchmark/holdout-v1.test.ts lib/benchmark/holdout-reviewer-bundle.test.ts
