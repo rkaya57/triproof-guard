@@ -188,9 +188,14 @@ export async function POST(request: Request) {
       })
     }
 
+    const selfServePlanId = subscriptionPlan?.id
+    if (!selfServePlanId || !isSelfServeSubscriptionPlan(selfServePlanId)) {
+      return NextResponse.json({ error: "Invalid self-serve subscription plan." }, { status: 400 })
+    }
+
     const paymentResult = await settleSubscriptionPayment({
       userId: user.id,
-      planId: subscriptionPlan!.id,
+      planId: selfServePlanId,
       txHash: verification.txHash,
       reference: intent.reference,
       amountUsdc: subscriptionPlan!.amountUsdc,
