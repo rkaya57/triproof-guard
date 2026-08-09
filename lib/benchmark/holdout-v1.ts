@@ -15,6 +15,7 @@ import {
   ENTITY_REGISTRY_SCHEMA_VERSION,
 } from "@/lib/entity-registry"
 import type { WalletStatus } from "@/types"
+import { canonicalJsonStringify } from "./canonical-json"
 import type {
   BenchmarkLabel,
   BenchmarkMaliciousExpectation,
@@ -159,7 +160,7 @@ function isMaliciousLabel(label: BenchmarkLabel) {
 }
 
 export function hashHoldoutStackFingerprint(stack: HoldoutStackFingerprint) {
-  return sha256(JSON.stringify(stack))
+  return sha256(canonicalJsonStringify(stack))
 }
 
 export function buildHoldoutStackFingerprint(input: {
@@ -236,7 +237,7 @@ export function buildHoldoutStackFreeze(input: {
   }
   return {
     ...base,
-    freezeHash: sha256(JSON.stringify(base)),
+    freezeHash: sha256(canonicalJsonStringify(base)),
   }
 }
 
@@ -244,7 +245,7 @@ export function verifyHoldoutFreezeIntegrity(freeze: HoldoutStackFreeze) {
   const { freezeHash, ...base } = freeze
   return (
     hashHoldoutStackFingerprint(freeze.stack) === freeze.stackHash &&
-    sha256(JSON.stringify(base)) === freezeHash
+    sha256(canonicalJsonStringify(base)) === freezeHash
   )
 }
 
