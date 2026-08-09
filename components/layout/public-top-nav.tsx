@@ -2,6 +2,7 @@ import Image from "next/image"
 import Link from "next/link"
 
 import { buttonVariants } from "@/components/ui/button"
+import { scamGuardChromeWebStoreUrl } from "@/lib/scamguard/links"
 
 export function PublicTopNav() {
   return (
@@ -19,6 +20,7 @@ export function PublicTopNav() {
         <nav className="hidden items-center gap-5 text-sm text-muted-foreground lg:flex">
           <Link href="/#solutions" className="hover:text-primary">Solutions</Link>
           <Link href="/scamguard" className="hover:text-primary">ScamGuard</Link>
+          <a href={scamGuardChromeWebStoreUrl} target="_blank" rel="noopener noreferrer" className="hover:text-primary">Chrome Extension</a>
           <Link href="/audit" className="hover:text-primary">Sybil Analyst</Link>
           <Link href="/telegram" className="hover:text-primary">Group Guardian</Link>
           <Link href="/case-studies/public-demo" className="hover:text-primary">Proof</Link>

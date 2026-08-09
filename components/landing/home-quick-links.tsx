@@ -1,6 +1,7 @@
 import Link from "next/link"
-import { Mail, Send } from "lucide-react"
+import { Mail, Puzzle, Send } from "lucide-react"
 
+import { scamGuardChromeWebStoreUrl } from "@/lib/scamguard/links"
 import { scamGuardTelegramBotUrl } from "@/lib/telegram/links"
 
 const officialXUrl = "https://x.com/TriProof_"
@@ -28,6 +29,17 @@ export function HomeQuickLinks() {
         >
           <span aria-hidden className="flex size-4 items-center justify-center font-bold">X</span>
           <span className="hidden sm:inline">@TriProof_</span>
+        </a>
+
+        <a
+          href={scamGuardChromeWebStoreUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={sharedLinkClass}
+          aria-label="Open ScamGuard Web3 Shield in the Chrome Web Store"
+        >
+          <Puzzle aria-hidden className="size-4" />
+          <span className="hidden sm:inline">Add to Chrome</span>
         </a>
 
         <a
