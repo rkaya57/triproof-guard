@@ -1,5 +1,6 @@
 import Image from "next/image"
 import Link from "next/link"
+import { redirect } from "next/navigation"
 import { ArrowLeft, BadgeCheck, BellRing, Bot, Code2, ShieldCheck, WalletCards } from "lucide-react"
 
 import { CheckoutForm } from "@/components/checkout/checkout-form"
@@ -7,7 +8,13 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { requirePageUser } from "@/lib/auth/page"
-import { getAnalysisCreditPack, getSubscriptionPlan, subscriptionPlans } from "@/lib/billing/plans"
+import {
+  analysisCreditPackForWalletCount,
+  getAnalysisCreditPack,
+  getSubscriptionPlan,
+  isSelfServeSubscriptionPlan,
+  subscriptionPlans,
+} from "@/lib/billing/plans"
 
 const featureCopy = {
   free: ["Extension and Telegram bot", "Basic scans with daily limit", "Shareable security reports"],
@@ -17,10 +24,19 @@ const featureCopy = {
   api_growth: ["25,000 API requests each month", "Signed analysis webhooks", "Priority integration support"],
 } as const
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ plan?: string; pack?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<{ plan?: string; pack?: string; requiredWallets?: string }> }) {
   const params = await searchParams
-  const creditPack = getAnalysisCreditPack(params.pack)
-  const selectedPlan = getSubscriptionPlan(params.plan)?.id ?? "builder"
+  const requestedPlan = getSubscriptionPlan(params.plan)
+  if (requestedPlan && requestedPlan.id !== "free" && !isSelfServeSubscriptionPlan(requestedPlan.id)) {
+    redirect("/contact?topic=security-pilot")
+  }
+
+  const requiredWallets = Number.parseInt(params.requiredWallets ?? "0", 10)
+  const inferredPack = !params.pack && !params.plan && requiredWallets > 0
+    ? analysisCreditPackForWalletCount(requiredWallets)
+    : null
+  const creditPack = getAnalysisCreditPack(params.pack) ?? inferredPack
+  const selectedPlan = requestedPlan?.id ?? "builder"
   const plan = creditPack ? null : subscriptionPlans[selectedPlan]
   const checkoutQuery = creditPack ? `pack=${encodeURIComponent(creditPack.id)}` : `plan=${encodeURIComponent(selectedPlan)}`
   await requirePageUser(`/checkout?${checkoutQuery}`)
@@ -64,7 +80,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
               {featureItems.map((detail, index) => { const Icon = icons[index]; return <div key={detail} className="flex gap-3"><span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-primary/25 bg-primary/10"><Icon className="size-4 text-primary" /></span><p className="pt-1 text-sm leading-5 text-muted-foreground">{detail}</p></div> })}
             </div>
           </section>
-          <Card className="glass-panel premium-card animated-border overflow-hidden border-primary/35"><CardHeader className="border-b border-border bg-primary/5"><Badge variant="secondary" className="mb-3 w-fit border-primary/30 text-primary">Secure settlement</Badge><CardTitle className="text-2xl">{isCreditPack ? `Complete your ${name} purchase` : `Complete your ${name} access pass`}</CardTitle><CardDescription>{isCreditPack ? "The wallet-credit amount is fixed. Native SOL uses a signed, short-lived quote before your wallet opens." : "The USDC amount is fixed. Native SOL uses a signed, short-lived quote before your wallet opens."}</CardDescription></CardHeader><CardContent className="pt-6"><CheckoutForm plan={{ id: creditPack?.id ?? plan!.id, name, amount: String(amountUsdc), wallets: isCreditPack ? `${creditPack!.walletCredits.toLocaleString()} wallets` : "30 days", purchaseKind: isCreditPack ? "credits" : "subscription" }} networks={networks} /></CardContent></Card>
+          <Card className="glass-panel premium-card animated-border overflow-hidden border-primary/35"><CardHeader className="border-b border-border bg-primary/5"><Badge variant="secondary" className="mb-3 w-fit border-primary/30 text-primary">Secure settlement</Badge><CardTitle className="text-2xl">{isCreditPack ? `Complete your ${name} purchase` : `Complete your ${name} access pass`}</CardTitle><CardDescription>{isCreditPack ? "The wallet-credit amount is fixed. Every transfer is bound to a short-lived signed checkout reference; native SOL also locks a live quote." : "The USDC amount is fixed. Every transfer is bound to a short-lived signed checkout reference; native SOL also locks a live quote."}</CardDescription></CardHeader><CardContent className="pt-6"><CheckoutForm plan={{ id: creditPack?.id ?? plan!.id, name, amount: String(amountUsdc), wallets: isCreditPack ? `${creditPack!.walletCredits.toLocaleString()} wallets` : "30 days", purchaseKind: isCreditPack ? "credits" : "subscription" }} networks={networks} /></CardContent></Card>
         </div>
       </section>
     </main>
