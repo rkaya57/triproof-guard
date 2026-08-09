@@ -6,18 +6,15 @@ import {
   CheckCircle2,
   Code2,
   FileCheck2,
-  Globe2,
   Layers3,
   LockKeyhole,
   Network,
-  Puzzle,
   Radar,
   ScanSearch,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
   Users,
-  WalletCards,
 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -33,7 +30,6 @@ import { scamGuardTelegramBotUrl } from "@/lib/telegram/links"
 
 const navLinks = [
   ["Solutions", "#solutions"],
-  ["For you", "#personas"],
   ["How it works", "#how-it-works"],
   ["Proof", "#proof"],
   ["Pricing", "/pricing"],
@@ -47,41 +43,6 @@ const trustSignals = [
   [Users, "Human override", "Teams can review gray-zone wallets and correct false positives before a final decision."],
 ] as const
 
-const personas = [
-  {
-    icon: Radar,
-    label: "Campaign Team",
-    title: "Protect reward distribution",
-    text: "Analyze participant wallets, identify coordinated clusters, and export a defensible reward list.",
-    href: "/audit",
-    action: "Analyze a wallet list",
-  },
-  {
-    icon: Bot,
-    label: "Community Admin",
-    title: "Protect Telegram communities",
-    text: "Scan suspicious posts, quarantine critical threats, and keep an auditable Group Guardian history.",
-    href: "/telegram",
-    action: "Protect a community",
-  },
-  {
-    icon: WalletCards,
-    label: "Web3 User",
-    title: "Check before you sign",
-    text: "Review links, wallets, token contracts, and transaction intent before committing an on-chain action.",
-    href: "/scamguard",
-    action: "Sign in to scan",
-  },
-  {
-    icon: Code2,
-    label: "Developer",
-    title: "Add risk intelligence",
-    text: "Evaluate a selected pilot integration for wallets, dApps, launchpads, or campaign platforms.",
-    href: "/contact?topic=api-pilot",
-    action: "Request an integration pilot",
-  },
-] as const
-
 const solutions = [
   {
     icon: ScanSearch,
@@ -90,7 +51,7 @@ const solutions = [
     text: "Understand risky links, wallets, contracts, token mints, and transaction intent before a user clicks, trusts, or signs.",
     features: ["Web Scanner", "Chrome Extension", "Telegram Bot"],
     primaryHref: "/scamguard",
-    primaryAction: "Sign in to scan a risk",
+    primaryAction: "Scan a risk",
     secondaryLinks: [
       ["Chrome Extension", "/extension"],
       ["Telegram Bot", scamGuardTelegramBotUrl],
@@ -138,7 +99,7 @@ const proofCards = [
     title: "ScamGuard result",
     text: "Inspect the evidence structure used for links, wallets, token contracts, and transaction intent.",
     href: "/scamguard",
-    action: "Sign in to open Scanner",
+    action: "Open Scanner",
   },
   {
     icon: Radar,
@@ -152,7 +113,7 @@ const proofCards = [
     title: "Telegram protection",
     text: "See how private scans, watchlists, and Group Guardian fit community operations.",
     href: "/telegram",
-    action: "Open Telegram product page",
+    action: "Open Telegram protection",
   },
   {
     icon: Code2,
@@ -161,13 +122,6 @@ const proofCards = [
     href: "/docs/api",
     action: "Review API documentation",
   },
-] as const
-
-const pricingChoices = [
-  [WalletCards, "My own wallet", "Free or Builder", "/pricing#personal"],
-  [Bot, "A Telegram community", "Community", "/pricing#community"],
-  [Radar, "An airdrop or campaign", "Wallet credits", "/pricing#campaign"],
-  [Code2, "A wallet, dApp, or platform", "Selected pilot", "/pricing#advanced"],
 ] as const
 
 export function LandingPage() {
@@ -198,7 +152,7 @@ export function LandingPage() {
           </nav>
           <div className="flex items-center gap-3">
             <Link href="/login" className={`${buttonVariants({ variant: "outline" })} hidden sm:inline-flex`}>Login</Link>
-            <Link href="/scamguard" className={`${buttonVariants()} glow-primary`}>Sign in to scan</Link>
+            <Link href="/audit" className={`${buttonVariants()} glow-primary`}>Analyze a wallet list</Link>
           </div>
         </header>
 
@@ -217,23 +171,19 @@ export function LandingPage() {
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Link href="/scamguard" className={`${buttonVariants({ size: "lg" })} glow-primary hover-lift`}>
-                Sign in to scan a risk <ArrowRight data-icon="inline-end" />
-              </Link>
-              <Link href="/audit" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>
+              <Link href="/audit" className={`${buttonVariants({ size: "lg" })} glow-primary hover-lift`}>
                 Analyze a wallet list <ArrowRight data-icon="inline-end" />
               </Link>
-            </div>
-            <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
-              <Link href="/telegram" className="hover:text-primary">Protect a Telegram community</Link>
-              <Link href="/contact?topic=api-pilot" className="hover:text-primary">Discuss an integration pilot</Link>
+              <Link href="/scamguard" className={`${buttonVariants({ variant: "outline", size: "lg" })} hover-lift`}>
+                Scan a risk <ArrowRight data-icon="inline-end" />
+              </Link>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {trustSignals.map(([Icon, title, text]) => (
                 <div key={title} className="rounded-xl border border-border bg-background/45 p-4 backdrop-blur">
                   <Icon className="mb-3 size-5 text-primary" />
                   <p className="font-medium">{title}</p>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{text}</p>
+                  <p className="mt-1 text-[0.8125rem] leading-5 text-muted-foreground">{text}</p>
                 </div>
               ))}
             </div>
@@ -260,7 +210,7 @@ export function LandingPage() {
                     </span>
                     <div>
                       <p className="font-semibold">{title as string}</p>
-                      <p className="mt-1 text-sm leading-6 text-muted-foreground">{text as string}</p>
+                      <p className="mt-1 text-[0.9375rem] leading-6 text-muted-foreground">{text as string}</p>
                     </div>
                   </div>
                 </div>
@@ -268,7 +218,7 @@ export function LandingPage() {
             </div>
             <div className="mt-5 rounded-2xl border border-primary/25 bg-primary/10 p-5">
               <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Clear product boundary</p>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              <p className="mt-2 text-[0.9375rem] leading-6 text-muted-foreground">
                 Developer API, signed webhooks, and Team Policies are advanced capabilities offered through selected pilot integrations until real-world usage is validated.
               </p>
             </div>
@@ -276,38 +226,12 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section id="personas" className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
-        <div className="mb-9 max-w-3xl">
-          <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">I am a...</Badge>
-          <h2 className="text-gradient text-3xl font-semibold sm:text-5xl">Start with the problem you need to solve.</h2>
-          <p className="mt-4 leading-7 text-muted-foreground">Choose your role and go directly to the relevant protection workflow instead of comparing unrelated product names.</p>
-        </div>
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-          {personas.map((persona) => {
-            const Icon = persona.icon
-            return (
-              <Card key={persona.label} className="glass-panel premium-card hover-lift">
-                <CardHeader>
-                  <span className="mb-2 flex size-11 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary"><Icon /></span>
-                  <p className="font-mono text-xs uppercase tracking-[0.16em] text-primary">{persona.label}</p>
-                  <CardTitle>{persona.title}</CardTitle>
-                  <CardDescription>{persona.text}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Link href={persona.href} className={`${buttonVariants({ variant: "outline" })} w-full`}>{persona.action}<ArrowRight data-icon="inline-end" /></Link>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
-      </section>
-
-      <section id="solutions" className="border-y border-border bg-primary/[0.03]">
+      <section id="solutions" className="border-b border-border bg-primary/[0.03]">
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
           <div className="mb-10 max-w-4xl">
             <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Three clear solutions</Badge>
             <h2 className="text-gradient text-3xl font-semibold sm:text-5xl">One platform packaged around three customer outcomes.</h2>
-            <p className="mt-4 leading-7 text-muted-foreground">Chrome and Telegram are access channels for ScamGuard, not separate products. Advanced integration capabilities are clearly separated from validated core workflows.</p>
+            <p className="mt-4 max-w-3xl text-base leading-7 text-muted-foreground">Choose the protection surface that matches the decision you need to make. Chrome and Telegram remain access channels, while advanced integrations stay clearly separated from validated core workflows.</p>
           </div>
           <div className="grid gap-6 lg:grid-cols-3">
             {solutions.map((solution) => {
@@ -318,10 +242,10 @@ export function LandingPage() {
                     <span className="mb-3 flex size-12 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary"><Icon /></span>
                     <p className="font-mono text-xs uppercase tracking-[0.16em] text-primary">{solution.eyebrow}</p>
                     <CardTitle className="text-2xl">{solution.title}</CardTitle>
-                    <CardDescription className="leading-6">{solution.text}</CardDescription>
+                    <CardDescription className="text-[0.9375rem] leading-6">{solution.text}</CardDescription>
                   </CardHeader>
                   <CardContent className="flex flex-1 flex-col gap-5">
-                    <ul className="grid gap-2 text-sm">
+                    <ul className="grid gap-2 text-[0.9375rem]">
                       {solution.features.map((feature) => (
                         <li key={feature} className="flex items-center gap-2"><CheckCircle2 className="size-4 shrink-0 text-primary" />{feature}</li>
                       ))}
@@ -357,7 +281,7 @@ export function LandingPage() {
             <div key={number} className="glass-panel premium-card rounded-2xl p-6">
               <span className="font-mono text-sm font-semibold text-primary">{number}</span>
               <h3 className="mt-5 text-lg font-semibold">{title}</h3>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p>
+              <p className="mt-2 text-[0.9375rem] leading-6 text-muted-foreground">{text}</p>
             </div>
           ))}
         </div>
@@ -368,54 +292,32 @@ export function LandingPage() {
           <div className="mb-9 max-w-3xl">
             <Badge variant="secondary" className="mb-4 w-fit gap-2 border-primary/30 text-primary"><Layers3 className="size-3.5" /> See it in action</Badge>
             <h2 className="text-gradient text-3xl font-semibold sm:text-5xl">Inspect working product surfaces.</h2>
-            <p className="mt-4 leading-7 text-muted-foreground">The evidence below is presented for customers and operators, not as grant-jury presentation material.</p>
+            <p className="mt-4 text-base leading-7 text-muted-foreground">Open working surfaces and sample outputs before choosing the workflow that fits your team.</p>
           </div>
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
             {proofCards.map((item) => {
               const Icon = item.icon
               return (
                 <Card key={item.title} className="glass-panel premium-card hover-lift">
-                  <CardHeader><Icon className="mb-2 size-5 text-primary" /><CardTitle>{item.title}</CardTitle><CardDescription>{item.text}</CardDescription></CardHeader>
+                  <CardHeader><Icon className="mb-2 size-5 text-primary" /><CardTitle>{item.title}</CardTitle><CardDescription className="text-[0.9375rem] leading-6">{item.text}</CardDescription></CardHeader>
                   <CardContent><Link href={item.href} className={`${buttonVariants({ variant: "outline" })} w-full`}>{item.action}<ArrowRight data-icon="inline-end" /></Link></CardContent>
                 </Card>
               )
             })}
           </div>
-        </div>
-      </section>
 
-      <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
-        <div className="grid gap-8 rounded-3xl border border-primary/25 bg-primary/[0.06] p-7 sm:p-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-          <div>
-            <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Public validation case study</Badge>
-            <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">How a public wallet dataset moves through Tri-Proof decisions.</h2>
-            <p className="mt-4 leading-7 text-muted-foreground">This is a transparent product validation example, not a customer endorsement. It demonstrates the report structure while the first external pilot case study is being earned.</p>
-            <Link href="/case-studies/public-demo" className={`${buttonVariants()} mt-6`}>Read the validation case study<ArrowRight data-icon="inline-end" /></Link>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {[["20", "Wallets analyzed"], ["6", "Approved"], ["5", "Gray-zone review"], ["9", "Rejected / not eligible"]].map(([value, label]) => (
-              <div key={label} className="rounded-2xl border border-border bg-background/55 p-5"><p className="text-gradient text-3xl font-semibold">{value}</p><p className="mt-1 text-sm text-muted-foreground">{label}</p></div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="border-y border-border bg-muted/20">
-        <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
-          <div className="mb-9 max-w-3xl">
-            <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Choose by need</Badge>
-            <h2 className="text-gradient text-3xl font-semibold sm:text-5xl">What do you need to protect?</h2>
-            <p className="mt-4 leading-7 text-muted-foreground">Select your surface first. The pricing page will take you directly to the relevant access model.</p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {pricingChoices.map(([Icon, need, recommendation, href]) => (
-              <Link key={need} href={href} className="glass-panel premium-card hover-lift rounded-2xl p-5">
-                <Icon className="size-5 text-primary" />
-                <p className="mt-4 font-semibold">{need}</p>
-                <p className="mt-1 text-sm text-muted-foreground">Recommended: {recommendation}</p>
-                <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary">View option <ArrowRight className="size-4" /></span>
-              </Link>
-            ))}
+          <div className="mt-8 grid gap-8 rounded-3xl border border-primary/25 bg-primary/[0.06] p-7 sm:p-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
+            <div>
+              <Badge variant="secondary" className="mb-4 w-fit border-primary/30 text-primary">Public validation case study</Badge>
+              <h3 className="text-gradient text-3xl font-semibold sm:text-4xl">How a public wallet dataset moves through Tri-Proof decisions.</h3>
+              <p className="mt-4 text-base leading-7 text-muted-foreground">This transparent validation example demonstrates the report structure while the first external pilot case study is being earned.</p>
+              <Link href="/case-studies/public-demo" className={`${buttonVariants()} mt-6`}>Read the validation case study<ArrowRight data-icon="inline-end" /></Link>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {[["20", "Wallets analyzed"], ["6", "Approved"], ["5", "Gray-zone review"], ["9", "Rejected / not eligible"]].map(([value, label]) => (
+                <div key={label} className="rounded-2xl border border-border bg-background/55 p-5"><p className="text-gradient text-3xl font-semibold">{value}</p><p className="mt-1 text-sm text-muted-foreground">{label}</p></div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -425,11 +327,11 @@ export function LandingPage() {
           <div>
             <div className="mb-3 flex items-center gap-2 text-primary"><Sparkles className="size-5" /><span className="font-mono text-xs uppercase tracking-[0.2em]">Protect the next decision</span></div>
             <h2 className="text-gradient text-2xl font-semibold sm:text-4xl">Protect your next campaign before rewards move.</h2>
-            <p className="mt-3 max-w-2xl text-muted-foreground">Run the free mini audit for an initial wallet-list review or request a limited pilot for an active campaign.</p>
+            <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground">Start with a wallet-list analysis or scan a suspicious risk before it reaches a user or reward decision.</p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
-            <Link href="/audit" className={`${buttonVariants({ size: "lg" })} glow-primary`}>Run a free mini audit</Link>
-            <Link href="/contact?topic=pilot-review" className={buttonVariants({ variant: "outline", size: "lg" })}>Request a pilot review</Link>
+            <Link href="/audit" className={`${buttonVariants({ size: "lg" })} glow-primary`}>Analyze a wallet list</Link>
+            <Link href="/scamguard" className={buttonVariants({ variant: "outline", size: "lg" })}>Scan a risk</Link>
           </div>
         </div>
       </section>
