@@ -1,7 +1,11 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
-import { findSolanaWalletProvider } from "./solana-wallet-client"
+import {
+  findSolanaWalletProvider,
+  paymentMemoAccountMetas,
+  solanaPayReferenceAccountMeta,
+} from "./solana-wallet-client"
 
 function provider(publicKey?: string) {
   return {
@@ -43,5 +47,24 @@ describe("Solana checkout wallet discovery", () => {
       findSolanaWalletProvider({ solana: { connect: async () => undefined } as never }),
       null
     )
+  })
+})
+
+describe("Solana Pay checkout reference placement", () => {
+  it("marks the checkout reference read-only and non-signer on the payment transfer", () => {
+    const reference = {
+      toString: () => "reference-key",
+      toBuffer: () => new Uint8Array(32),
+    }
+
+    assert.deepEqual(solanaPayReferenceAccountMeta(reference), {
+      pubkey: reference,
+      isSigner: false,
+      isWritable: false,
+    })
+  })
+
+  it("never attaches the checkout reference to the SPL Memo instruction", () => {
+    assert.deepEqual(paymentMemoAccountMetas(), [])
   })
 })
