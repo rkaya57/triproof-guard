@@ -24,7 +24,7 @@ const featureCopy = {
   api_growth: ["25,000 API requests each month", "Signed analysis webhooks", "Priority integration support"],
 } as const
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ plan?: string; pack?: string; requiredWallets?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<{ plan?: string; pack?: string; requiredWallets?: string; currency?: string }> }) {
   const params = await searchParams
   const requestedPlan = getSubscriptionPlan(params.plan)
   if (requestedPlan && requestedPlan.id !== "free" && !isSelfServeSubscriptionPlan(requestedPlan.id)) {
@@ -38,7 +38,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   const creditPack = getAnalysisCreditPack(params.pack) ?? inferredPack
   const selectedPlan = requestedPlan?.id ?? "builder"
   const plan = creditPack ? null : subscriptionPlans[selectedPlan]
-  const checkoutQuery = creditPack ? `pack=${encodeURIComponent(creditPack.id)}` : `plan=${encodeURIComponent(selectedPlan)}`
+  const initialCurrency = params.currency?.toUpperCase() === "SOL" ? "SOL" as const : "USDC" as const
+  const checkoutItemQuery = creditPack ? `pack=${encodeURIComponent(creditPack.id)}` : `plan=${encodeURIComponent(selectedPlan)}`
+  const checkoutQuery = `${checkoutItemQuery}&currency=${initialCurrency}`
   await requirePageUser(`/checkout?${checkoutQuery}`)
 
   if (plan?.id === "free") {
@@ -80,7 +82,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
               {featureItems.map((detail, index) => { const Icon = icons[index]; return <div key={detail} className="flex gap-3"><span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-primary/25 bg-primary/10"><Icon className="size-4 text-primary" /></span><p className="pt-1 text-sm leading-5 text-muted-foreground">{detail}</p></div> })}
             </div>
           </section>
-          <Card className="glass-panel premium-card animated-border overflow-hidden border-primary/35"><CardHeader className="border-b border-border bg-primary/5"><Badge variant="secondary" className="mb-3 w-fit border-primary/30 text-primary">Secure settlement</Badge><CardTitle className="text-2xl">{isCreditPack ? `Complete your ${name} purchase` : `Complete your ${name} access pass`}</CardTitle><CardDescription>{isCreditPack ? "The wallet-credit amount is fixed. Every transfer is bound to a short-lived signed checkout reference; native SOL also locks a live quote." : "The USDC amount is fixed. Every transfer is bound to a short-lived signed checkout reference; native SOL also locks a live quote."}</CardDescription></CardHeader><CardContent className="pt-6"><CheckoutForm plan={{ id: creditPack?.id ?? plan!.id, name, amount: String(amountUsdc), wallets: isCreditPack ? `${creditPack!.walletCredits.toLocaleString()} wallets` : "30 days", purchaseKind: isCreditPack ? "credits" : "subscription" }} networks={networks} /></CardContent></Card>
+          <Card className="glass-panel premium-card animated-border overflow-hidden border-primary/35"><CardHeader className="border-b border-border bg-primary/5"><Badge variant="secondary" className="mb-3 w-fit border-primary/30 text-primary">Secure settlement</Badge><CardTitle className="text-2xl">{isCreditPack ? `Complete your ${name} purchase` : `Complete your ${name} access pass`}</CardTitle><CardDescription>{isCreditPack ? "The wallet-credit amount is fixed. Every transfer is bound to a short-lived signed checkout reference; native SOL also locks a live quote." : "The USDC amount is fixed. Every transfer is bound to a short-lived signed checkout reference; native SOL also locks a live quote."}</CardDescription></CardHeader><CardContent className="pt-6"><CheckoutForm plan={{ id: creditPack?.id ?? plan!.id, name, amount: String(amountUsdc), wallets: isCreditPack ? `${creditPack!.walletCredits.toLocaleString()} wallets` : "30 days", purchaseKind: isCreditPack ? "credits" : "subscription" }} networks={networks} initialCurrency={initialCurrency} /></CardContent></Card>
         </div>
       </section>
     </main>
