@@ -1,16 +1,24 @@
+import { createHash } from "node:crypto"
+
 import { NextResponse } from "next/server"
 
 import { getAdminUser } from "@/lib/auth/admin"
+import { getHoldoutArtifact } from "@/lib/benchmark/holdout-artifacts"
 import { getActiveHoldoutRun } from "@/lib/benchmark/holdout-store"
 import {
   getHoldoutReviewState,
   importHoldoutReviewCsv,
   sealHoldoutGroundTruth,
+  type HoldoutReviewArtifactPayload,
 } from "@/lib/benchmark/holdout-review-import"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const maxDuration = 120
+
+function sha256(value: string) {
+  return createHash("sha256").update(value).digest("hex")
+}
 
 async function activeRunOrResponse() {
   const admin = await getAdminUser()
@@ -59,10 +67,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "A completed reviewCsv file up to 4 MB is required" }, { status: 400 })
     }
 
+    const completedCsv = await file.text()
+    const completedCsvSha256 = sha256(completedCsv)
+    const existing = await getHoldoutArtifact<HoldoutReviewArtifactPayload>(active.run.id, role)
+    if (existing) {
+      if (existing.payload.completedCsvSha256 !== completedCsvSha256) {
+        throw new Error(`${role} is already frozen with a different completed-review hash.`)
+      }
+      return NextResponse.json(
+        {
+          created: false,
+          artifactHash: existing.artifactHash,
+          state: await getHoldoutReviewState(active.run),
+          groundTruth: null,
+          groundTruthError: null,
+        },
+        {
+          headers: {
+            "Cache-Control": "no-store, private",
+            "X-Content-Type-Options": "nosniff",
+          },
+        }
+      )
+    }
+
     const imported = await importHoldoutReviewCsv({
       run: active.run,
       role,
-      completedCsv: await file.text(),
+      completedCsv,
     })
 
     let groundTruth = null
