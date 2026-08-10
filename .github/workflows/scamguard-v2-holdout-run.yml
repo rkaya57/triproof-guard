@@ -68,8 +68,39 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Enforce decision-grade run
-        if: steps.holdout.outcome != 'success'
+      - name: Check V2 provider parity
+        id: parity
+        if: always() && hashFiles('artifacts/scamguard-v2-holdout-report.json') != ''
+        continue-on-error: true
         run: |
-          echo "Holdout runner did not complete at decision-grade coverage. Inspect the uploaded report/unscorable reasons."
+          node <<'NODE'
+          const fs = require('fs')
+          const report = JSON.parse(fs.readFileSync('artifacts/scamguard-v2-holdout-report.json', 'utf8'))
+          const scored = report.cases.filter((x) => x.status === 'scored')
+          const qualities = scored.flatMap((x) => x.providerQuality || [])
+          const eligible = new Set(qualities.filter((x) => x.activationEligible).map((x) => x.source))
+          const observed = new Set(qualities.map((x) => x.source))
+          const blockers = []
+
+          if (!report.environment.tokensXyzConfigured) blockers.push('TOKENS_XYZ_API_KEY is not configured')
+          if (!eligible.has('phishing.database')) blockers.push('phishing.database produced no activation-eligible evidence')
+          if (!eligible.has('solana-rpc')) blockers.push('solana-rpc produced no activation-eligible V2 evidence')
+          if (!eligible.has('local-brand-registry')) blockers.push('local-brand-registry was not activation-eligible')
+          if (!eligible.has('v1-transaction-decoder')) blockers.push('v1-transaction-decoder was not activation-eligible')
+
+          console.log('Observed V2 sources:', [...observed].sort().join(', ') || '(none)')
+          console.log('Activation-eligible sources:', [...eligible].sort().join(', ') || '(none)')
+          if (blockers.length) {
+            console.error('Provider parity blockers:')
+            for (const blocker of blockers) console.error(`- ${blocker}`)
+            process.exit(1)
+          }
+          console.log('Provider parity gate passed.')
+          NODE
+
+      - name: Enforce decision-grade run
+        if: steps.holdout.outcome != 'success' || steps.parity.outcome != 'success'
+        run: |
+          echo "Holdout is diagnostic only: scoring coverage or V2 provider parity is insufficient."
+          echo "Inspect the uploaded report and provider parity output before making any production-readiness claim."
           exit 1
