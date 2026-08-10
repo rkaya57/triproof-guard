@@ -8,6 +8,8 @@ export type InternalEntityAttributionEvidence = {
   entityType?: string
   observations: number
   providers: string[]
+  independentProviderCount: number
+  attributionConfidence: "none" | "low" | "medium" | "high"
   latestObservedAt?: string
   contextOnly: true
   checkedAt: string
@@ -44,35 +46,59 @@ export function summarizeEntityAttribution(rows: EntityObservation[]) {
       entityType: undefined,
       observations: 0,
       providers: [] as string[],
+      independentProviderCount: 0,
+      attributionConfidence: "none" as const,
       latestObservedAt: undefined,
     }
   }
 
-  const votes = new Map<string, { label: string; type: string; count: number; latest: Date }>()
+  const votes = new Map<string, { label: string; type: string; rows: EntityObservation[]; latest: Date }>()
   for (const row of attributed) {
     const label = row.knownEntityLabel!.trim()
     const type = row.knownEntityType!.trim().toLowerCase()
     const key = `${type}:${label.toLowerCase()}`
     const current = votes.get(key)
-    if (!current) votes.set(key, { label, type, count: 1, latest: row.updatedAt })
+    if (!current) votes.set(key, { label, type, rows: [row], latest: row.updatedAt })
     else {
-      current.count += 1
+      current.rows.push(row)
       if (row.updatedAt > current.latest) current.latest = row.updatedAt
     }
   }
 
-  const best = [...votes.values()].sort((a, b) => b.count - a.count || b.latest.getTime() - a.latest.getTime())[0]
+  const best = [...votes.values()].sort((a, b) => b.rows.length - a.rows.length || b.latest.getTime() - a.latest.getTime())[0]
+  const providers = best ? Array.from(new Set(best.rows.map((row) => row.provider))).slice(0, 8) : []
+  const observations = best?.rows.length ?? 0
+  const independentProviderCount = providers.length
+  const attributionConfidence = independentProviderCount >= 3 && observations >= 3
+    ? "high"
+    : independentProviderCount >= 2 && observations >= 2
+      ? "medium"
+      : observations > 0
+        ? "low"
+        : "none"
+
   return {
     label: best?.label,
     entityType: best?.type,
-    observations: best?.count ?? 0,
-    providers: Array.from(new Set(attributed.map((row) => row.provider))).slice(0, 8),
+    observations,
+    providers,
+    independentProviderCount,
+    attributionConfidence,
     latestObservedAt: best?.latest.toISOString(),
   }
 }
 
 export function isInfrastructureEntity(entityType?: string) {
   return Boolean(entityType && infrastructureTypes.has(entityType.toLowerCase()))
+}
+
+export function isActionableInfrastructureAttribution(evidence?: Pick<InternalEntityAttributionEvidence, "entityType" | "independentProviderCount" | "attributionConfidence">) {
+  return Boolean(
+    evidence
+    && isInfrastructureEntity(evidence.entityType)
+    && evidence.independentProviderCount >= 2
+    && (evidence.attributionConfidence === "medium" || evidence.attributionConfidence === "high"),
+  )
 }
 
 export async function inspectInternalEntityAttribution(walletAddress: string, chain?: string): Promise<InternalEntityAttributionEvidence> {
@@ -86,6 +112,8 @@ export async function inspectInternalEntityAttribution(walletAddress: string, ch
       walletAddress: normalized,
       observations: 0,
       providers: [],
+      independentProviderCount: 0,
+      attributionConfidence: "none",
       contextOnly: true,
       checkedAt,
       error: "Wallet address is empty",
@@ -99,6 +127,8 @@ export async function inspectInternalEntityAttribution(walletAddress: string, ch
       walletAddress: normalized,
       observations: 0,
       providers: [],
+      independentProviderCount: 0,
+      attributionConfidence: "none",
       contextOnly: true,
       checkedAt,
     }
@@ -137,6 +167,8 @@ export async function inspectInternalEntityAttribution(walletAddress: string, ch
       walletAddress: normalized,
       observations: 0,
       providers: [],
+      independentProviderCount: 0,
+      attributionConfidence: "none",
       contextOnly: true,
       checkedAt,
       error: error instanceof Error ? error.message.slice(0, 240) : "Internal entity attribution lookup failed",
