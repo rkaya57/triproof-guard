@@ -7,7 +7,6 @@ import { proposeV2ActivationPolicy } from "@/lib/scamguard/v2/activation-policy"
 import { observeScamGuardV2 } from "@/lib/scamguard/v2/evidence-fusion"
 import { compareShadowDecision } from "@/lib/scamguard/v2/shadow-decision"
 import { buildShadowTelemetryRecord } from "@/lib/scamguard/v2/shadow-telemetry"
-import { buildV2TransactionImpact } from "@/lib/scamguard/v2/transaction-impact"
 
 export const runtime = "nodejs"
 
@@ -48,7 +47,6 @@ export async function POST(request: Request) {
     claimedAsset: type === "token" ? body.claimedAsset?.trim().slice(0, 160) || undefined : undefined,
     deepScan: access.deepScan,
   })
-  const transactionImpact = buildV2TransactionImpact(observation.base)
   const shadowDecision = compareShadowDecision(observation.base.riskLevel, observation.proposedAssessment)
   const shadowTelemetry = buildShadowTelemetryRecord({
     scanType: type,
@@ -60,7 +58,7 @@ export async function POST(request: Request) {
   })
   const activationPolicy = proposeV2ActivationPolicy(shadowDecision)
 
-  return NextResponse.json({ ...observation, transactionImpact, shadowDecision, shadowTelemetry, activationPolicy }, {
+  return NextResponse.json({ ...observation, transactionImpact: observation.evidence.transactionImpact, shadowDecision, shadowTelemetry, activationPolicy }, {
     headers: {
       "Cache-Control": "no-store",
       "X-ScamGuard-V2-Mode": "observe-only",
