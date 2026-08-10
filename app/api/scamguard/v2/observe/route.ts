@@ -4,6 +4,7 @@ import type { ScamGuardChain, ScamGuardScanType } from "@/lib/scamguard/engine"
 import { getExtensionSession } from "@/lib/extension/session"
 import { scanAccess } from "@/lib/scamguard/scan-access"
 import { observeScamGuardV2 } from "@/lib/scamguard/v2/evidence-fusion"
+import { compareShadowDecision } from "@/lib/scamguard/v2/shadow-decision"
 
 export const runtime = "nodejs"
 
@@ -44,11 +45,13 @@ export async function POST(request: Request) {
     claimedAsset: type === "token" ? body.claimedAsset?.trim().slice(0, 160) || undefined : undefined,
     deepScan: access.deepScan,
   })
+  const shadowDecision = compareShadowDecision(observation.base.riskLevel, observation.proposedAssessment)
 
-  return NextResponse.json(observation, {
+  return NextResponse.json({ ...observation, shadowDecision }, {
     headers: {
       "Cache-Control": "no-store",
       "X-ScamGuard-V2-Mode": "observe-only",
+      "X-ScamGuard-V2-Shadow": shadowDecision.relation,
       "X-ScamGuard-Plan": access.plan.name,
       "X-ScamGuard-Daily-Limit": String(access.plan.dailyScanLimit),
       "X-ScamGuard-Scans-Used": String(access.scanCount),
