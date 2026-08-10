@@ -1,0 +1,48 @@
+name: ScamGuard V2 calibration
+
+on:
+  pull_request:
+    branches:
+      - feat/risk-engine-v2
+    paths:
+      - "lib/scamguard/providers/**"
+      - "lib/scamguard/v2/**"
+      - ".github/workflows/scamguard-v2-calibration.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  calibration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Calibration safety tests
+        run: >-
+          node --import tsx --test
+          lib/scamguard/providers/evm-public-threat-corpus.test.ts
+          lib/scamguard/v2/evm-threat-corroboration.test.ts
+          lib/scamguard/v2/corroboration.test.ts
+          lib/scamguard/v2/provider-quality.test.ts
+          lib/scamguard/v2/evidence-fusion.test.ts
+          lib/scamguard/v2/evidence-fusion-transaction.test.ts
+          lib/scamguard/v2/evidence-fusion-solana-transaction.test.ts
+          lib/scamguard/v2/cross-surface-consistency.test.ts
+          lib/scamguard/v2/holdout-leakage-guard.test.ts
+      - name: Focused lint
+        run: >-
+          npx eslint
+          lib/scamguard/providers/evm-public-threat-corpus.ts
+          lib/scamguard/providers/evm-public-threat-corpus.test.ts
+          lib/scamguard/v2/corroboration.ts
+          lib/scamguard/v2/evm-threat-corroboration.test.ts
+          lib/scamguard/v2/provider-quality.ts
+          lib/scamguard/v2/evidence-fusion.ts
