@@ -1,0 +1,51 @@
+name: Risk Engine V2 Token-2022 evidence
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "lib/scamguard/providers/token-2022-rpc.ts"
+      - "lib/scamguard/providers/token-2022-rpc.test.ts"
+      - "lib/scamguard/v2/token-2022-extensions.ts"
+      - "lib/scamguard/v2/token-2022-extensions.test.ts"
+      - "lib/scamguard/v2/evidence-fusion.ts"
+      - "lib/scamguard/v2/evidence-fusion.test.ts"
+      - "app/api/scamguard/v2/observe/route.ts"
+      - ".github/workflows/risk-engine-v2-token2022.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Token-2022 and fusion tests
+        run: >-
+          node --import tsx --test
+          lib/scamguard/providers/token-2022-rpc.test.ts
+          lib/scamguard/v2/token-2022-extensions.test.ts
+          lib/scamguard/v2/evidence-fusion.test.ts
+      - name: Focused lint
+        run: >-
+          npx eslint
+          lib/scamguard/providers/token-2022-rpc.ts
+          lib/scamguard/providers/token-2022-rpc.test.ts
+          lib/scamguard/v2/token-2022-extensions.ts
+          lib/scamguard/v2/token-2022-extensions.test.ts
+          lib/scamguard/v2/evidence-fusion.ts
+          lib/scamguard/v2/evidence-fusion.test.ts
+          app/api/scamguard/v2/observe/route.ts
