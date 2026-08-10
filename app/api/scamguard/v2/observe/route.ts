@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 
 import type { ScamGuardChain, ScamGuardScanType } from "@/lib/scamguard/engine"
 import { getExtensionSession } from "@/lib/extension/session"
-import { inspectInternalEntityAttribution, isInfrastructureEntity } from "@/lib/scamguard/providers/internal-entity-attribution"
+import { inspectInternalEntityAttribution, isActionableInfrastructureAttribution } from "@/lib/scamguard/providers/internal-entity-attribution"
 import { inspectReviewedCommunityThreatContext } from "@/lib/scamguard/providers/reviewed-community-threat-context"
 import { scanAccess } from "@/lib/scamguard/scan-access"
 import { proposeV2ActivationPolicy } from "@/lib/scamguard/v2/activation-policy"
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
       : Promise.resolve(undefined),
   ])
 
-  const infrastructureContext = Boolean(entityAttribution && isInfrastructureEntity(entityAttribution.entityType))
+  const infrastructureContext = isActionableInfrastructureAttribution(entityAttribution)
   const entityAttributionContext = entityAttribution
     ? {
         ...entityAttribution,
