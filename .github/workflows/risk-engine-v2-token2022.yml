@@ -40,6 +40,7 @@ jobs:
           lib/scamguard/v2/token-2022-extensions.test.ts
           lib/scamguard/v2/canonical-identity.test.ts
           lib/scamguard/v2/brand-impersonation.test.ts
+          lib/scamguard/v2/corroboration.test.ts
           lib/scamguard/v2/evidence-fusion.test.ts
       - name: Focused lint
         run: >-
@@ -54,6 +55,8 @@ jobs:
           lib/scamguard/v2/canonical-identity.test.ts
           lib/scamguard/v2/brand-impersonation.ts
           lib/scamguard/v2/brand-impersonation.test.ts
+          lib/scamguard/v2/corroboration.ts
+          lib/scamguard/v2/corroboration.test.ts
           lib/scamguard/v2/evidence-fusion.ts
           lib/scamguard/v2/evidence-fusion.test.ts
           app/api/scamguard/v2/observe/route.ts
