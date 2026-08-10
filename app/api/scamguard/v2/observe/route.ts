@@ -1,8 +1,10 @@
+import type { ScamGuardIntelKind } from "@prisma/client"
 import { NextResponse } from "next/server"
 
 import type { ScamGuardChain, ScamGuardScanType } from "@/lib/scamguard/engine"
 import { getExtensionSession } from "@/lib/extension/session"
 import { inspectInternalEntityAttribution, isInfrastructureEntity } from "@/lib/scamguard/providers/internal-entity-attribution"
+import { inspectReviewedCommunityThreatContext } from "@/lib/scamguard/providers/reviewed-community-threat-context"
 import { scanAccess } from "@/lib/scamguard/scan-access"
 import { proposeV2ActivationPolicy } from "@/lib/scamguard/v2/activation-policy"
 import { assessV2ActivationReadiness } from "@/lib/scamguard/v2/activation-readiness"
@@ -14,6 +16,17 @@ export const runtime = "nodejs"
 
 const scanTypes = new Set<ScamGuardScanType>(["url", "wallet", "token", "transaction"])
 const chains = new Set<ScamGuardChain>(["solana", "evm", "unknown"])
+
+function communityContextTarget(type: ScamGuardScanType, value: string, chain?: ScamGuardChain): { kind: ScamGuardIntelKind; target: string } | null {
+  if (type === "url") return { kind: "DOMAIN", target: value }
+  if (type === "token") return { kind: "TOKEN", target: value }
+  if (type === "wallet") {
+    if (chain === "evm") return { kind: "EVM_ADDRESS", target: value }
+    if (chain === "solana") return { kind: "SOLANA_ADDRESS", target: value }
+    return { kind: "WALLET", target: value }
+  }
+  return null
+}
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
@@ -41,7 +54,9 @@ export async function POST(request: Request) {
   if (access.error) return access.error
 
   const walletTarget = type === "wallet" ? value : body?.walletAddress?.trim() || undefined
-  const [observation, entityAttribution] = await Promise.all([
+  const communityTarget = communityContextTarget(type, value, body?.chain)
+
+  const [observation, entityAttribution, reviewedCommunityThreats] = await Promise.all([
     observeScamGuardV2({
       type,
       value,
@@ -54,6 +69,9 @@ export async function POST(request: Request) {
     walletTarget
       ? inspectInternalEntityAttribution(walletTarget, body?.chain)
       : Promise.resolve(undefined),
+    communityTarget
+      ? inspectReviewedCommunityThreatContext({ kind: communityTarget.kind, target: communityTarget.target, chain: body?.chain })
+      : Promise.resolve(undefined),
   ])
 
   const entityAttributionContext = entityAttribution
@@ -63,6 +81,18 @@ export async function POST(request: Request) {
         affectsRiskScore: false,
         affectsActivation: false,
         canDowngradeDecision: false,
+      }
+    : undefined
+
+  const communityThreatContext = reviewedCommunityThreats
+    ? {
+        ...reviewedCommunityThreats,
+        affectsRiskScore: false,
+        affectsActivation: false,
+        independentSourceForCorroboration: false,
+        note: reviewedCommunityThreats.promotedReports > 0
+          ? "One or more reviewed reports were already promoted into V1 ScamGuard intelligence; V2 does not count them again."
+          : "Reviewed community reports are explanation-only context until separately validated.",
       }
     : undefined
 
@@ -84,6 +114,7 @@ export async function POST(request: Request) {
     ...observation,
     transactionImpact: observation.evidence.transactionImpact,
     entityAttributionContext,
+    communityThreatContext,
     shadowDecision,
     shadowTelemetry,
     activationPolicy,
