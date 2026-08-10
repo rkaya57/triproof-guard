@@ -69,6 +69,13 @@ function skeleton(value: string) {
     .replace(/[^a-z0-9-]/g, "")
 }
 
+function visualSkeleton(value: string) {
+  return value
+    .replace(/rn/g, "m")
+    .replace(/vv/g, "w")
+    .replace(/cl/g, "d")
+}
+
 function editDistance(left: string, right: string) {
   if (left === right) return 0
   if (!left.length) return right.length
@@ -124,8 +131,9 @@ export function detectBrandImpersonation(value: string): BrandImpersonationFindi
         break
       }
 
-      const distance = editDistance(normalizedLabel.replace(/-/g, ""), brand)
-      if (distance === 1 && normalizedLabel.length >= Math.max(4, brand.length - 1)) {
+      const comparableLabel = visualSkeleton(normalizedLabel.replace(/-/g, ""))
+      const distance = editDistance(comparableLabel, brand)
+      if ((distance === 1 || (distance === 0 && comparableLabel !== normalizedLabel.replace(/-/g, ""))) && normalizedLabel.length >= Math.max(4, brand.length - 1)) {
         findings.push({
           brand,
           officialDomains: [...entry.domains],
@@ -135,7 +143,7 @@ export function detectBrandImpersonation(value: string): BrandImpersonationFindi
           matchType: "typosquat",
           confidence: "high",
           distance,
-          note: `A hostname label is one edit away from the ${brand} brand while using a non-official domain.`,
+          note: `A hostname label is visually equivalent or one edit away from the ${brand} brand while using a non-official domain.`,
         })
         break
       }
