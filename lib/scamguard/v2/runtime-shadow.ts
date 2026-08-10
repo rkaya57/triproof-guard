@@ -1,5 +1,5 @@
 import type { ScamGuardV2Input, ScamGuardV2Observation } from "@/lib/scamguard/v2/evidence-fusion"
-import { observeScamGuardV2 } from "@/lib/scamguard/v2/evidence-fusion"
+import { observeCalibratedScamGuardV2 } from "@/lib/scamguard/v2/calibrated-evidence-fusion"
 import { compareShadowDecision } from "@/lib/scamguard/v2/shadow-decision"
 import { buildShadowTelemetryRecord, type V2ShadowTelemetryRecord } from "@/lib/scamguard/v2/shadow-telemetry"
 
@@ -7,7 +7,7 @@ type V2Observer = (input: ScamGuardV2Input) => Promise<ScamGuardV2Observation>
 
 export async function buildRuntimeShadowTelemetry(
   input: ScamGuardV2Input,
-  observer: V2Observer = (value) => observeScamGuardV2(value, { evaluationMode: "live" }),
+  observer: V2Observer = (value) => observeCalibratedScamGuardV2(value, { evaluationMode: "live" }),
 ): Promise<V2ShadowTelemetryRecord> {
   const observation = await observer(input)
   const shadow = compareShadowDecision(observation.base.riskLevel, observation.proposedAssessment)
