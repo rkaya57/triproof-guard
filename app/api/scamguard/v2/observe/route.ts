@@ -17,6 +17,7 @@ export async function POST(request: Request) {
     walletAddress?: string
     chain?: ScamGuardChain
     sourceUrl?: string
+    claimedAsset?: string
     deepScan?: boolean
   } | null
 
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
     walletAddress: body.walletAddress?.trim() || undefined,
     chain: body.chain,
     sourceUrl: body.sourceUrl?.trim() || undefined,
+    claimedAsset: type === "token" ? body.claimedAsset?.trim().slice(0, 160) || undefined : undefined,
     deepScan: access.deepScan,
   })
 
