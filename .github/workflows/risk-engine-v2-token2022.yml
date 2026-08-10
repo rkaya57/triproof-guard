@@ -41,6 +41,7 @@ jobs:
           lib/scamguard/v2/canonical-identity.test.ts
           lib/scamguard/v2/brand-impersonation.test.ts
           lib/scamguard/v2/corroboration.test.ts
+          lib/scamguard/v2/shadow-decision.test.ts
           lib/scamguard/v2/evidence-fusion.test.ts
           lib/scamguard/v2/evidence-fusion-brand.test.ts
       - name: Focused lint
@@ -58,6 +59,8 @@ jobs:
           lib/scamguard/v2/brand-impersonation.test.ts
           lib/scamguard/v2/corroboration.ts
           lib/scamguard/v2/corroboration.test.ts
+          lib/scamguard/v2/shadow-decision.ts
+          lib/scamguard/v2/shadow-decision.test.ts
           lib/scamguard/v2/evidence-fusion.ts
           lib/scamguard/v2/evidence-fusion.test.ts
           lib/scamguard/v2/evidence-fusion-brand.test.ts
