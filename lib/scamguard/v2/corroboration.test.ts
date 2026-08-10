@@ -157,7 +157,7 @@ test("canonical mismatch plus independent Solana authority evidence can corrobor
   assert.equal(assessment.proposedRiskLevel, "HIGH_RISK")
 })
 
-test("degraded phishing evidence stays visible but cannot corroborate an activation gate", () => {
+test("degraded phishing evidence stays visible but cannot corroborate or propose high risk", () => {
   const assessment = assessV2Corroboration([
     signal("V2_ACTIVE_PHISHING_FEED_MATCH", "critical"),
     signal("V2_BRAND_TYPOSQUAT", "medium"),
@@ -168,6 +168,7 @@ test("degraded phishing evidence stays visible but cannot corroborate an activat
   assert.deepEqual(assessment.observedSources, ["phishing.database", "local-brand-registry"])
   assert.deepEqual(assessment.independentSources, ["local-brand-registry"])
   assert.equal(assessment.activationGate, "insufficient")
+  assert.equal(assessment.proposedRiskLevel, "CAUTION")
   assert.equal(assessment.confidence, "LOW")
   assert.equal(assessment.corroborations.length, 0)
 })
