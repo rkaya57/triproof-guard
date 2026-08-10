@@ -1,7 +1,7 @@
 import type { ScamGuardSignal } from "@/lib/scamguard/engine"
 
-export type V2EvidenceFamily = "threat_intelligence" | "identity" | "brand_impersonation" | "authority_surface" | "market_health" | "distribution" | "transaction_impact"
-export type V2EvidenceSourceGroup = "phishing.database" | "tokens.xyz" | "local-brand-registry" | "solana-rpc" | "v1-transaction-decoder"
+export type V2EvidenceFamily = "threat_intelligence" | "identity" | "brand_impersonation" | "authority_surface" | "market_health" | "distribution" | "transaction_impact" | "internal_reputation"
+export type V2EvidenceSourceGroup = "phishing.database" | "tokens.xyz" | "local-brand-registry" | "solana-rpc" | "v1-transaction-decoder" | "triproof-adjudication"
 
 export type V2CorroborationAssessment = {
   mode: "observe_only"
@@ -30,6 +30,7 @@ const familyCaps: Record<V2EvidenceFamily, number> = {
   market_health: 14,
   distribution: 10,
   transaction_impact: 24,
+  internal_reputation: 28,
 }
 
 const sourceForFamily: Record<V2EvidenceFamily, V2EvidenceSourceGroup> = {
@@ -40,6 +41,7 @@ const sourceForFamily: Record<V2EvidenceFamily, V2EvidenceSourceGroup> = {
   authority_surface: "solana-rpc",
   distribution: "solana-rpc",
   transaction_impact: "v1-transaction-decoder",
+  internal_reputation: "triproof-adjudication",
 }
 
 function weightedSignal(signal: ScamGuardSignal): WeightedSignal | null {
@@ -55,6 +57,7 @@ function weightedSignal(signal: ScamGuardSignal): WeightedSignal | null {
   if (code === "V2_TX_AUTHORITY_CONTROL") return { family: "transaction_impact", weight: 14 }
   if (code === "V2_TX_DELEGATE_RIGHTS" || code === "V2_TX_TYPED_AUTHORIZATION") return { family: "transaction_impact", weight: 10 }
   if (code === "V2_TX_ACCOUNT_CLOSURE") return { family: "transaction_impact", weight: 8 }
+  if (code === "V2_INTERNAL_CONFIRMED_RISK") return { family: "internal_reputation", weight: 28 }
   if (code === "V2_VERY_LOW_TOKEN_LIQUIDITY" || code === "V2_VERY_LOW_HOLDER_COUNT") return { family: "market_health", weight: 6 }
   if (code === "V2_LOW_TOKEN_LIQUIDITY" || code === "V2_UNUSUAL_VOLUME_TO_LIQUIDITY" || code === "V2_WEAK_MARKET_HEALTH_SCORE") {
     return { family: "market_health", weight: 3 }
@@ -117,6 +120,14 @@ export function assessV2Corroboration(
   if (has("brand_impersonation") && has("transaction_impact") && pairEligible("brand_impersonation", "transaction_impact")) {
     bonus += 8
     corroborations.push("Local brand-impersonation evidence converges with a high-impact signing capability.")
+  }
+  if (has("internal_reputation") && has("threat_intelligence") && pairEligible("internal_reputation", "threat_intelligence")) {
+    bonus += 10
+    corroborations.push("Independent external threat intelligence corroborates prior human-confirmed Tri-Proof risk adjudication.")
+  }
+  if (has("internal_reputation") && has("transaction_impact") && pairEligible("internal_reputation", "transaction_impact")) {
+    bonus += 8
+    corroborations.push("Prior human-confirmed Tri-Proof risk adjudication converges with a high-impact signing capability.")
   }
   if (
     has("brand_impersonation") && has("threat_intelligence") && has("identity")
