@@ -55,6 +55,8 @@ export async function POST(request: Request) {
     shadow: shadowDecision,
     providerCount: observation.summary.providerCount,
     availableProviders: observation.summary.availableProviders,
+    activationEligibleSources: observation.summary.activationEligibleSources,
+    degradedOrUnavailableSources: observation.providerQuality.filter((item) => !item.activationEligible).length,
     proposedSignalCount: observation.summary.proposedSignalCount,
   })
   const activationPolicy = proposeV2ActivationPolicy(shadowDecision)
