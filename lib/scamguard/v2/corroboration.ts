@@ -10,6 +10,7 @@ export type V2CorroborationAssessment = {
   confidence: "LOW" | "MEDIUM" | "HIGH"
   independentFamilies: V2EvidenceFamily[]
   independentSources: V2EvidenceSourceGroup[]
+  observedSources: V2EvidenceSourceGroup[]
   familyScores: Partial<Record<V2EvidenceFamily, number>>
   corroborations: string[]
   activationGate: "insufficient" | "single_strong_source" | "corroborated"
@@ -64,18 +65,18 @@ function weightedSignal(signal: ScamGuardSignal): WeightedSignal | null {
 function riskLevel(
   score: number,
   independentFamilyCount: number,
-  independentSourceCount: number,
+  activationEligibleSourceCount: number,
 ): V2CorroborationAssessment["proposedRiskLevel"] {
-  // CRITICAL requires convergence across at least three evidence families AND
-  // three independently controlled source groups. A single provider cannot
-  // manufacture source diversity by emitting multiple evidence families.
-  if (score >= 80 && independentFamilyCount >= 3 && independentSourceCount >= 3) return "CRITICAL"
+  if (score >= 80 && independentFamilyCount >= 3 && activationEligibleSourceCount >= 3) return "CRITICAL"
   if (score >= 55) return "HIGH_RISK"
   if (score >= 25) return "CAUTION"
   return "SAFE"
 }
 
-export function assessV2Corroboration(signals: ScamGuardSignal[]): V2CorroborationAssessment {
+export function assessV2Corroboration(
+  signals: ScamGuardSignal[],
+  options?: { activationEligibleSources?: V2EvidenceSourceGroup[] },
+): V2CorroborationAssessment {
   const familyScores: Partial<Record<V2EvidenceFamily, number>> = {}
   for (const signal of signals) {
     const weighted = weightedSignal(signal)
@@ -85,42 +86,49 @@ export function assessV2Corroboration(signals: ScamGuardSignal[]): V2Corroborati
   }
 
   const families = (Object.keys(familyScores) as V2EvidenceFamily[]).filter((family) => (familyScores[family] ?? 0) > 0)
-  const sources = Array.from(new Set(families.map((family) => sourceForFamily[family])))
+  const observedSources = Array.from(new Set(families.map((family) => sourceForFamily[family])))
+  const eligibleSet = options?.activationEligibleSources
+    ? new Set(options.activationEligibleSources)
+    : new Set(observedSources)
+  const sources = observedSources.filter((source) => eligibleSet.has(source))
   const corroborations: string[] = []
   let bonus = 0
 
   const has = (family: V2EvidenceFamily) => families.includes(family)
-  if (has("threat_intelligence") && has("brand_impersonation")) {
+  const sourceEligible = (family: V2EvidenceFamily) => eligibleSet.has(sourceForFamily[family])
+  const pairEligible = (left: V2EvidenceFamily, right: V2EvidenceFamily) => sourceEligible(left) && sourceEligible(right)
+
+  if (has("threat_intelligence") && has("brand_impersonation") && pairEligible("threat_intelligence", "brand_impersonation")) {
     bonus += 20
     corroborations.push("Independent phishing-feed and local brand-impersonation evidence agree on the same scan context.")
   }
-  // identity + market_health intentionally receive no corroboration bonus because
-  // both originate from Tokens.xyz. authority_surface + distribution likewise
-  // share Solana RPC and are never treated as independently controlled sources.
-  if (has("identity") && has("authority_surface")) {
+  if (has("identity") && has("authority_surface") && pairEligible("identity", "authority_surface")) {
     bonus += 8
     corroborations.push("Canonical identity mismatch is independently corroborated by Solana authority capabilities.")
   }
-  if (has("identity") && has("distribution")) {
+  if (has("identity") && has("distribution") && pairEligible("identity", "distribution")) {
     bonus += 4
     corroborations.push("Canonical identity mismatch coexists with independently queried Solana account-concentration evidence.")
   }
-  if (has("threat_intelligence") && has("transaction_impact")) {
+  if (has("threat_intelligence") && has("transaction_impact") && pairEligible("threat_intelligence", "transaction_impact")) {
     bonus += 12
     corroborations.push("Independent threat intelligence converges with a high-impact signing capability.")
   }
-  if (has("brand_impersonation") && has("transaction_impact")) {
+  if (has("brand_impersonation") && has("transaction_impact") && pairEligible("brand_impersonation", "transaction_impact")) {
     bonus += 8
     corroborations.push("Local brand-impersonation evidence converges with a high-impact signing capability.")
   }
-  if (has("brand_impersonation") && has("threat_intelligence") && has("identity")) {
+  if (
+    has("brand_impersonation") && has("threat_intelligence") && has("identity")
+    && sourceEligible("brand_impersonation") && sourceEligible("threat_intelligence") && sourceEligible("identity")
+  ) {
     bonus += 8
     corroborations.push("Three independently controlled impersonation/threat source groups converge.")
   }
 
   const baseScore = families.reduce((sum, family) => sum + (familyScores[family] ?? 0), 0)
   const evidenceScore = Math.min(100, baseScore + bonus)
-  const strongFamily = families.some((family) => (familyScores[family] ?? 0) >= 38)
+  const strongFamily = families.some((family) => (familyScores[family] ?? 0) >= 38 && sourceEligible(family))
   const activationGate: V2CorroborationAssessment["activationGate"] = families.length >= 2 && sources.length >= 2 && evidenceScore >= 55
     ? "corroborated"
     : strongFamily
@@ -139,6 +147,7 @@ export function assessV2Corroboration(signals: ScamGuardSignal[]): V2Corroborati
     confidence,
     independentFamilies: families,
     independentSources: sources,
+    observedSources,
     familyScores,
     corroborations,
     activationGate,
