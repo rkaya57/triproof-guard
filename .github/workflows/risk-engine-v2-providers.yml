@@ -39,6 +39,8 @@ jobs:
           node --import tsx --test
           lib/scamguard/providers/tokens-xyz.test.ts
           lib/scamguard/providers/phishing-database.test.ts
+          lib/scamguard/providers/evm-public-threat-corpus.test.ts
+          lib/scamguard/v2/evm-threat-corroboration.test.ts
           lib/scamguard/v2/evidence-fusion.test.ts
           lib/scamguard/v2/token-2022-extensions.test.ts
 
@@ -49,6 +51,10 @@ jobs:
           lib/scamguard/providers/tokens-xyz.test.ts
           lib/scamguard/providers/phishing-database.ts
           lib/scamguard/providers/phishing-database.test.ts
+          lib/scamguard/providers/evm-public-threat-corpus.ts
+          lib/scamguard/providers/evm-public-threat-corpus.test.ts
+          lib/scamguard/v2/corroboration.ts
+          lib/scamguard/v2/evm-threat-corroboration.test.ts
           lib/scamguard/v2/evidence-fusion.ts
           lib/scamguard/v2/evidence-fusion.test.ts
           lib/scamguard/v2/token-2022-extensions.ts
