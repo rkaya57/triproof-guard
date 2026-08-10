@@ -6,6 +6,7 @@ export type EvmPublicThreatCorpusEvidence = {
   address: string
   matched: boolean
   matchedSources: EvmThreatCorpusSource[]
+  availableSources: EvmThreatCorpusSource[]
   independentSourceCount: number
   checkedAt: string
   error?: string
@@ -14,6 +15,7 @@ export type EvmPublicThreatCorpusEvidence = {
 type CorpusCache = {
   expiresAt: number
   sources: Record<EvmThreatCorpusSource, Set<string>>
+  availableSources: EvmThreatCorpusSource[]
 }
 
 type CorpusConfig = {
@@ -79,7 +81,7 @@ async function loadOne(url: string, timeoutMs: number) {
 
 async function loadCorpora() {
   const cfg = config()
-  if (corpusCache && corpusCache.expiresAt > Date.now()) return corpusCache.sources
+  if (corpusCache && corpusCache.expiresAt > Date.now()) return corpusCache
 
   const entries = await Promise.allSettled((Object.entries(cfg.urls) as Array<[EvmThreatCorpusSource, string]>).map(async ([source, url]) => {
     const addresses = await loadOne(url, cfg.timeoutMs)
@@ -90,16 +92,16 @@ async function loadCorpora() {
     "real-cats": new Set<string>(),
     "rug-pull-dataset": new Set<string>(),
   }
-  let available = 0
+  const availableSources: EvmThreatCorpusSource[] = []
   for (const entry of entries) {
     if (entry.status !== "fulfilled") continue
     sources[entry.value[0]] = entry.value[1]
-    available += 1
+    availableSources.push(entry.value[0])
   }
-  if (available === 0) throw new Error("All EVM public threat corpora were unavailable")
+  if (availableSources.length === 0) throw new Error("All EVM public threat corpora were unavailable")
 
-  corpusCache = { sources, expiresAt: Date.now() + cfg.ttlMs }
-  return sources
+  corpusCache = { sources, availableSources, expiresAt: Date.now() + cfg.ttlMs }
+  return corpusCache
 }
 
 export async function inspectEvmPublicThreatCorpus(address: string): Promise<EvmPublicThreatCorpusEvidence> {
@@ -107,21 +109,22 @@ export async function inspectEvmPublicThreatCorpus(address: string): Promise<Evm
   const checkedAt = new Date().toISOString()
   const { enabled } = config()
   if (!enabled) {
-    return { status: "disabled", source: "evm-public-threat-corpus", address: normalized, matched: false, matchedSources: [], independentSourceCount: 0, checkedAt }
+    return { status: "disabled", source: "evm-public-threat-corpus", address: normalized, matched: false, matchedSources: [], availableSources: [], independentSourceCount: 0, checkedAt }
   }
   if (!normalized) {
-    return { status: "unavailable", source: "evm-public-threat-corpus", address: normalized, matched: false, matchedSources: [], independentSourceCount: 0, checkedAt, error: "Invalid EVM address" }
+    return { status: "unavailable", source: "evm-public-threat-corpus", address: normalized, matched: false, matchedSources: [], availableSources: [], independentSourceCount: 0, checkedAt, error: "Invalid EVM address" }
   }
 
   try {
     const corpora = await loadCorpora()
-    const matchedSources = (Object.keys(corpora) as EvmThreatCorpusSource[]).filter((source) => corpora[source].has(normalized))
+    const matchedSources = corpora.availableSources.filter((source) => corpora.sources[source].has(normalized))
     return {
       status: "available",
       source: "evm-public-threat-corpus",
       address: normalized,
       matched: matchedSources.length > 0,
       matchedSources,
+      availableSources: corpora.availableSources,
       independentSourceCount: matchedSources.length,
       checkedAt,
     }
@@ -132,6 +135,7 @@ export async function inspectEvmPublicThreatCorpus(address: string): Promise<Evm
       address: normalized,
       matched: false,
       matchedSources: [],
+      availableSources: [],
       independentSourceCount: 0,
       checkedAt,
       error: error instanceof Error ? error.message.slice(0, 240) : "EVM threat corpus lookup failed",
