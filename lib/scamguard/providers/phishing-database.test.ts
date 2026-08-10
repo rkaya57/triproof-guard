@@ -6,6 +6,7 @@ import { inspectPhishingDatabase, resetPhishingDatabaseCacheForTests } from "./p
 const originalFetch = globalThis.fetch
 const originalEnabled = process.env.PHISHING_DATABASE_ENABLED
 const originalFeedUrl = process.env.PHISHING_DATABASE_FEED_URL
+const originalBackoff = process.env.PHISHING_DATABASE_FAILURE_BACKOFF_MS
 
 function restore() {
   globalThis.fetch = originalFetch
@@ -13,6 +14,8 @@ function restore() {
   else process.env.PHISHING_DATABASE_ENABLED = originalEnabled
   if (originalFeedUrl === undefined) delete process.env.PHISHING_DATABASE_FEED_URL
   else process.env.PHISHING_DATABASE_FEED_URL = originalFeedUrl
+  if (originalBackoff === undefined) delete process.env.PHISHING_DATABASE_FAILURE_BACKOFF_MS
+  else process.env.PHISHING_DATABASE_FAILURE_BACKOFF_MS = originalBackoff
   resetPhishingDatabaseCacheForTests()
 }
 
@@ -52,4 +55,22 @@ test("Phishing.Database provider degrades safely on upstream failure", async () 
   assert.equal(result.status, "unavailable")
   assert.equal(result.matched, false)
   assert.match(result.error ?? "", /HTTP 503/)
+})
+
+test("Phishing.Database failure backoff prevents repeated upstream hammering", async () => {
+  process.env.PHISHING_DATABASE_ENABLED = "true"
+  process.env.PHISHING_DATABASE_FAILURE_BACKOFF_MS = "60000"
+  let calls = 0
+  globalThis.fetch = async () => {
+    calls += 1
+    return new Response("upstream error", { status: 503 })
+  }
+
+  const first = await inspectPhishingDatabase("example.com")
+  const second = await inspectPhishingDatabase("another.example.com")
+
+  assert.equal(first.status, "unavailable")
+  assert.equal(second.status, "unavailable")
+  assert.equal(calls, 1)
+  assert.match(second.error ?? "", /temporarily backed off/)
 })
