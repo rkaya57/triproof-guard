@@ -11,6 +11,7 @@ function assessment(overrides: Partial<V2CorroborationAssessment> = {}): V2Corro
     proposedRiskLevel: "HIGH_RISK",
     confidence: "HIGH",
     independentFamilies: ["threat_intelligence", "brand_impersonation"],
+    independentSources: ["phishing.database", "local-brand-registry"],
     familyScores: { threat_intelligence: 46, brand_impersonation: 30 },
     corroborations: ["Independent evidence agrees."],
     activationGate: "corroborated",
@@ -24,6 +25,7 @@ test("shadow comparison reports a higher V2 proposal without changing production
   assert.equal(result.relation, "v2_higher")
   assert.equal(result.levelDelta, 1)
   assert.equal(result.eligibleForActivationStudy, true)
+  assert.deepEqual(result.independentSources, ["phishing.database", "local-brand-registry"])
   assert.equal(result.productionDecisionChanged, false)
 })
 
@@ -32,10 +34,12 @@ test("single-source evidence is not eligible for activation study", () => {
     proposedRiskLevel: "CAUTION",
     confidence: "MEDIUM",
     activationGate: "single_strong_source",
-    independentFamilies: ["threat_intelligence"],
+    independentFamilies: ["identity", "market_health"],
+    independentSources: ["tokens.xyz"],
   }))
   assert.equal(result.relation, "v2_higher")
   assert.equal(result.eligibleForActivationStudy, false)
+  assert.equal(result.independentSources.length, 1)
 })
 
 test("shadow comparison can record a lower V2 proposal for false-positive analysis", () => {
