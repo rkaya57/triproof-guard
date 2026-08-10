@@ -20,6 +20,7 @@ const remoteCacheBoundsMs: Partial<Record<V2EvidenceSourceGroup, number>> = {
 const localSources = new Set<V2EvidenceSourceGroup>([
   "local-brand-registry",
   "v1-transaction-decoder",
+  "triproof-adjudication",
 ])
 
 export function assessProviderQuality(input: {
@@ -52,7 +53,7 @@ export function assessProviderQuality(input: {
       activationEligible: true,
       maxCacheAgeMs: null,
       checkedAt: input.checkedAt,
-      reason: "This source is derived locally during the current request and does not depend on a remote cache.",
+      reason: "This source is derived from Tri-Proof state during the current request and does not depend on a remote cache.",
     }
   }
 
