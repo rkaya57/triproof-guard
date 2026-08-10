@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { inspectTokensXyzAsset, resetTokensXyzCacheForTests } from "./tokens-xyz"
+import { inspectTokensXyzAsset, resetTokensXyzCacheForTests, resolveTokensXyzReference } from "./tokens-xyz"
 
 const originalFetch = globalThis.fetch
 const originalApiKey = process.env.TOKENS_XYZ_API_KEY
@@ -55,6 +55,26 @@ test("Tokens.xyz adapter merges canonical, risk, and market evidence", async () 
   assert.equal(result.risk?.grade, "A")
   assert.equal(result.market?.liquidity, 5000000)
   assert.equal(result.market?.holder, 1000000)
+})
+
+test("Tokens.xyz reference resolver maps a claimed brand to canonical identity", async () => {
+  process.env.TOKENS_XYZ_API_KEY = "test-key"
+  process.env.TOKENS_XYZ_API_URL = "https://tokens.example/v1"
+  globalThis.fetch = async (input) => {
+    const url = String(input)
+    assert.match(url, /\/assets\/resolve\?ref=USDC/)
+    return new Response(JSON.stringify({
+      assetId: "usd",
+      resolvedBy: "alias",
+      asset: { assetId: "usd", name: "US Dollar", symbol: "USD" },
+      variant: { mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
+    }), { status: 200 })
+  }
+
+  const result = await resolveTokensXyzReference("USDC")
+  assert.equal(result.status, "available")
+  assert.equal(result.assetId, "usd")
+  assert.equal(result.mint, "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
 })
 
 test("Tokens.xyz adapter degrades to unavailable instead of throwing", async () => {
