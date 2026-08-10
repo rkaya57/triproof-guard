@@ -91,12 +91,14 @@ const referenceCache = new Map<string, ReferenceCacheEntry>()
 const defaultBaseUrl = "https://api.tokens.xyz/v1"
 const defaultTimeoutMs = 2_500
 const defaultTtlMs = 10 * 60 * 1000
+const maxTtlMs = 60 * 60 * 1000
 
 function getConfig() {
   const apiKey = process.env.TOKENS_XYZ_API_KEY?.trim() ?? ""
   const baseUrl = (process.env.TOKENS_XYZ_API_URL?.trim() || defaultBaseUrl).replace(/\/$/, "")
   const timeoutMs = Math.max(500, Number(process.env.TOKENS_XYZ_TIMEOUT_MS ?? defaultTimeoutMs) || defaultTimeoutMs)
-  const ttlMs = Math.max(1_000, Number(process.env.TOKENS_XYZ_CACHE_TTL_MS ?? defaultTtlMs) || defaultTtlMs)
+  const configuredTtlMs = Number(process.env.TOKENS_XYZ_CACHE_TTL_MS ?? defaultTtlMs) || defaultTtlMs
+  const ttlMs = Math.max(1_000, Math.min(configuredTtlMs, maxTtlMs))
   return { apiKey, baseUrl, timeoutMs, ttlMs }
 }
 
