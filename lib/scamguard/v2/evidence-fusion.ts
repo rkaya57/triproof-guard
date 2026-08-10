@@ -11,15 +11,17 @@ import {
 import { detectBrandImpersonation, type BrandImpersonationFinding } from "@/lib/scamguard/v2/brand-impersonation"
 import { compareCanonicalIdentity, type CanonicalIdentityComparison } from "@/lib/scamguard/v2/canonical-identity"
 import { assessV2Corroboration, type V2CorroborationAssessment } from "@/lib/scamguard/v2/corroboration"
+import { buildV2TransactionImpact, type V2TransactionImpact } from "@/lib/scamguard/v2/transaction-impact"
+import { transactionImpactSignals } from "@/lib/scamguard/v2/transaction-impact-signals"
 
-export type V2EvidenceSource = "tokens.xyz" | "phishing.database" | "solana-rpc" | "local-brand-registry"
+export type V2EvidenceSource = "tokens.xyz" | "phishing.database" | "solana-rpc" | "local-brand-registry" | "v1-transaction-decoder"
 export type ScamGuardV2Input = ScamGuardScanInput & { claimedAsset?: string }
 
 export type V2EvidenceProvenance = {
   source: V2EvidenceSource
   status: "available" | "unavailable" | "disabled" | "not_applicable"
   confidence: "low" | "medium" | "high"
-  purpose: "market_health" | "canonical_identity" | "threat_intelligence" | "authority_surface" | "brand_impersonation"
+  purpose: "market_health" | "canonical_identity" | "threat_intelligence" | "authority_surface" | "brand_impersonation" | "transaction_impact"
   note: string
 }
 
@@ -35,6 +37,7 @@ export type ScamGuardV2Observation = {
     phishingDatabase?: PhishingDatabaseEvidence
     token2022?: Token2022RpcEvidence
     brandImpersonation?: BrandImpersonationFinding[]
+    transactionImpact?: V2TransactionImpact
   }
   provenance: V2EvidenceProvenance[]
   summary: {
@@ -183,12 +186,14 @@ export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamG
     token2022Promise,
   ])
   const canonicalIdentity = claimedTokensXyz ? compareCanonicalIdentity(tokensXyz, claimedTokensXyz) : undefined
+  const transactionImpact = input.type === "transaction" ? buildV2TransactionImpact(base) : undefined
   const proposedSignals = [
     ...(tokensXyz ? tokensSignals(tokensXyz) : []),
     ...(canonicalIdentity?.signal ? [canonicalIdentity.signal] : []),
     ...(phishingDatabase ? phishingSignals(phishingDatabase) : []),
     ...(token2022 ? token2022Signals(token2022) : []),
     ...brandSignals(brandImpersonation),
+    ...(transactionImpact ? transactionImpactSignals(transactionImpact) : []),
   ]
   const proposedAssessment = assessV2Corroboration(proposedSignals)
 
@@ -242,13 +247,22 @@ export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamG
         : "No protected-brand homoglyph, typosquat, or lure-domain pattern was observed.",
     })
   }
+  if (transactionImpact) {
+    provenance.push({
+      source: "v1-transaction-decoder",
+      status: transactionImpact.status,
+      confidence: transactionImpact.confidence === "decoded" ? "high" : transactionImpact.confidence === "partial" ? "medium" : "low",
+      purpose: "transaction_impact",
+      note: "V2 transaction-impact evidence is normalized from the existing decoded V1 signing analysis; raw signing payloads are not retained by this layer and impact alone cannot trigger HIGH or CRITICAL risk.",
+    })
+  }
 
   return {
     mode: "observe_only",
     base,
     proposedSignals,
     proposedAssessment,
-    evidence: { tokensXyz, claimedTokensXyz, canonicalIdentity, phishingDatabase, token2022, brandImpersonation },
+    evidence: { tokensXyz, claimedTokensXyz, canonicalIdentity, phishingDatabase, token2022, brandImpersonation, transactionImpact },
     provenance,
     summary: {
       providerCount: provenance.length,
