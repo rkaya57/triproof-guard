@@ -39,11 +39,21 @@ export function proposeV2ActivationPolicy(shadow: V2ShadowDecision): V2Activatio
     }
   }
 
-  if (shadow.v2ProposedRiskLevel === "CRITICAL" && shadow.independentFamilies.length >= 2) {
+  if (shadow.v2ProposedRiskLevel === "CRITICAL") {
+    if (shadow.independentFamilies.length < 3) {
+      return {
+        mode: "observe_only",
+        candidateAction: "none",
+        reason: "CRITICAL activation study requires convergence across at least three independent evidence families.",
+        requiresHoldoutValidation: true,
+        productionActionChanged: false,
+      }
+    }
+
     return {
       mode: "observe_only",
       candidateAction: "block_candidate",
-      reason: "V2 proposes CRITICAL risk with corroborated high-confidence evidence from multiple independent families. Blocking remains a holdout-gated candidate only.",
+      reason: "V2 proposes CRITICAL risk with corroborated high-confidence evidence from at least three independent families. Blocking remains a holdout-gated candidate only.",
       requiresHoldoutValidation: true,
       productionActionChanged: false,
     }
