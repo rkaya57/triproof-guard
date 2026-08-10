@@ -41,7 +41,7 @@ jobs:
       - name: V2 shadow telemetry tests
         run: node --import tsx --test lib/scamguard/v2/shadow-decision.test.ts lib/scamguard/v2/shadow-telemetry.test.ts
       - name: V2 activation policy tests
-        run: node --import tsx --test lib/scamguard/v2/activation-policy.test.ts
+        run: node --import tsx --test lib/scamguard/v2/activation-policy.test.ts lib/scamguard/v2/activation-readiness.test.ts
       - name: V2 provider tests
         run: node --import tsx --test lib/scamguard/providers/tokens-xyz.test.ts lib/scamguard/providers/token-2022-rpc.test.ts
       - name: V2 Token-2022 extension tests
@@ -73,6 +73,8 @@ jobs:
           lib/scamguard/v2/shadow-telemetry.test.ts
           lib/scamguard/v2/activation-policy.ts
           lib/scamguard/v2/activation-policy.test.ts
+          lib/scamguard/v2/activation-readiness.ts
+          lib/scamguard/v2/activation-readiness.test.ts
           lib/scamguard/v2/transaction-impact.ts
           lib/scamguard/v2/transaction-impact.test.ts
           lib/scamguard/v2/transaction-impact-signals.ts
