@@ -8,6 +8,8 @@ export type V2ActivationReadiness = {
   holdoutRequired: true
   minimumIndependentFamilies: number
   observedIndependentFamilies: number
+  minimumIndependentSources: number
+  observedIndependentSources: number
   blockers: string[]
   nextStep: "continue_shadow" | "run_holdout_validation"
 }
@@ -17,7 +19,9 @@ export function assessV2ActivationReadiness(
   policy: V2ActivationPolicyCandidate,
 ): V2ActivationReadiness {
   const blockers: string[] = []
-  const minimumIndependentFamilies = policy.candidateAction === "block_candidate" ? 3 : 2
+  const isBlockCandidate = policy.candidateAction === "block_candidate"
+  const minimumIndependentFamilies = isBlockCandidate ? 3 : 2
+  const minimumIndependentSources = isBlockCandidate ? 3 : 2
 
   if (!shadow.eligibleForActivationStudy) {
     blockers.push("The shadow decision has not crossed the corroborated high-confidence activation-study gate.")
@@ -31,6 +35,9 @@ export function assessV2ActivationReadiness(
   if (shadow.independentFamilies.length < minimumIndependentFamilies) {
     blockers.push(`At least ${minimumIndependentFamilies} independent evidence families are required for this activation study.`)
   }
+  if (shadow.independentSources.length < minimumIndependentSources) {
+    blockers.push(`At least ${minimumIndependentSources} independently controlled source groups are required for this activation study.`)
+  }
 
   // V2 cannot become production-ready from per-scan evidence alone. A frozen holdout
   // evaluation must validate thresholds/policy before any activation decision.
@@ -40,6 +47,7 @@ export function assessV2ActivationReadiness(
   const structurallyEligible = holdoutCandidate
     && shadow.eligibleForActivationStudy
     && shadow.independentFamilies.length >= minimumIndependentFamilies
+    && shadow.independentSources.length >= minimumIndependentSources
 
   return {
     mode: "shadow_only",
@@ -48,6 +56,8 @@ export function assessV2ActivationReadiness(
     holdoutRequired: true,
     minimumIndependentFamilies,
     observedIndependentFamilies: shadow.independentFamilies.length,
+    minimumIndependentSources,
+    observedIndependentSources: shadow.independentSources.length,
     blockers,
     nextStep: structurallyEligible ? "run_holdout_validation" : "continue_shadow",
   }
