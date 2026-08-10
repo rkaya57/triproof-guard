@@ -34,7 +34,7 @@ const maxTtlMs = 60 * 60 * 1000
 const maxCorpusBytes = 12 * 1024 * 1024
 
 const defaultUrls: Record<EvmThreatCorpusSource, string> = {
-  "real-cats": "https://raw.githubusercontent.com/sjdseu/Real-CATS/main/CE.tsv",
+  "real-cats": "https://raw.githubusercontent.com/sjdseu/Real-CATS/master/CE.tsv",
   "rug-pull-dataset": "https://raw.githubusercontent.com/dianxiang-sun/rug_pull_dataset/main/rugpull_full_dataset_new.csv",
   "mew-darklist": "https://raw.githubusercontent.com/MyEtherWallet/ethereum-lists/master/src/addresses/addresses-darklist.json",
 }
