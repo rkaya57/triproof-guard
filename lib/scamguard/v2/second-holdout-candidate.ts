@@ -48,13 +48,13 @@ export function validateCandidateIntake(candidates: SecondHoldoutCandidate[]) {
 
   for (const candidate of candidates) {
     const id = candidate.id.trim()
+    const target = candidate.target.trim()
     const fingerprint = candidateFingerprint(candidate)
     const provenanceId = candidate.provenanceId.trim()
     if (!id) blockers.push("Candidate id is required.")
     else if (ids.has(id)) blockers.push(`Duplicate candidate id: ${id}`)
     else ids.add(id)
-    if (!candidate.target.trim()) blockers.push(`Candidate ${id || "<missing-id>"} requires target.`)
-    if (fingerprints.endsWith(":")) blockers.push(`Candidate ${id || "<missing-id>"} has an invalid target fingerprint.`)
+    if (!target) blockers.push(`Candidate ${id || "<missing-id>"} requires target.`)
     else if (fingerprints.has(fingerprint)) blockers.push(`Duplicate candidate target: ${fingerprint}`)
     else fingerprints.add(fingerprint)
     if (!provenanceId) blockers.push(`Candidate ${id || "<missing-id>"} requires provenanceId.`)
