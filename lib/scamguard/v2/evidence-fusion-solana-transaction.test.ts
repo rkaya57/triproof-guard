@@ -22,23 +22,24 @@ function restore() {
 
 test.afterEach(restore)
 
-function structuredDelegateApproval() {
+function structuredInstruction(type: string, info: Record<string, unknown> = {}) {
   return JSON.stringify({
     transaction: {
       instructions: [
         {
           program: "spl-token",
           programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-          parsed: {
-            type: "approveChecked",
-            info: {
-              delegate: "Delegate111111111111111111111111111111111",
-              amount: "100",
-            },
-          },
+          parsed: { type, info },
         },
       ],
     },
+  })
+}
+
+function structuredDelegateApproval() {
+  return structuredInstruction("approveChecked", {
+    delegate: "Delegate111111111111111111111111111111111",
+    amount: "100",
   })
 }
 
@@ -59,6 +60,48 @@ test("real structured Solana delegate approval reaches V2 transaction-impact evi
   assert.deepEqual(observation.proposedAssessment.independentFamilies, ["transaction_impact"])
   assert.equal(observation.proposedAssessment.activationGate, "insufficient")
   assert.equal(observation.summary.decisionChanged, false)
+})
+
+test("real structured Solana setAuthority reaches bounded authority-control evidence", async () => {
+  process.env.PHISHING_DATABASE_ENABLED = "false"
+  delete process.env.TOKENS_XYZ_API_KEY
+
+  const observation = await observeScamGuardV2({
+    type: "transaction",
+    chain: "solana",
+    value: structuredInstruction("setAuthority", {
+      authorityType: "accountOwner",
+      newAuthority: "Authority11111111111111111111111111111111",
+    }),
+  })
+
+  assert.equal(observation.base.metadata.decodedIntent?.category, "authority")
+  assert.equal(observation.evidence.transactionImpact?.action, "authority_change")
+  assert.ok(observation.evidence.transactionImpact?.capabilities.includes("authority_control"))
+  assert.ok(observation.proposedSignals.some((signal) => signal.code === "V2_TX_AUTHORITY_CONTROL"))
+  assert.deepEqual(observation.proposedAssessment.independentFamilies, ["transaction_impact"])
+  assert.equal(observation.proposedAssessment.activationGate, "insufficient")
+})
+
+test("real structured Solana closeAccount reaches bounded account-closure evidence", async () => {
+  process.env.PHISHING_DATABASE_ENABLED = "false"
+  delete process.env.TOKENS_XYZ_API_KEY
+
+  const observation = await observeScamGuardV2({
+    type: "transaction",
+    chain: "solana",
+    value: structuredInstruction("closeAccount", {
+      account: "TokenAccount111111111111111111111111111111",
+      destination: "Destination11111111111111111111111111111",
+    }),
+  })
+
+  assert.equal(observation.base.metadata.decodedIntent?.category, "account_close")
+  assert.equal(observation.evidence.transactionImpact?.action, "account_close")
+  assert.ok(observation.evidence.transactionImpact?.capabilities.includes("account_closure"))
+  assert.ok(observation.proposedSignals.some((signal) => signal.code === "V2_TX_ACCOUNT_CLOSURE"))
+  assert.deepEqual(observation.proposedAssessment.independentFamilies, ["transaction_impact"])
+  assert.equal(observation.proposedAssessment.activationGate, "insufficient")
 })
 
 test("Solana delegate approval plus phishing and brand evidence reaches three-family critical shadow proposal", async () => {
