@@ -34,6 +34,7 @@ jobs:
           node --import tsx --test
           lib/scamguard/verified-domain-guard.test.ts
           lib/scamguard/providers/evm-public-threat-corpus.test.ts
+          lib/scamguard/providers/goplus-address-security.test.ts
           lib/scamguard/v2/brand-impersonation.test.ts
           lib/scamguard/v2/evm-threat-corroboration.test.ts
           lib/scamguard/v2/corroboration.test.ts
@@ -55,6 +56,8 @@ jobs:
           lib/scamguard/verified-domain-guard.test.ts
           lib/scamguard/providers/evm-public-threat-corpus.ts
           lib/scamguard/providers/evm-public-threat-corpus.test.ts
+          lib/scamguard/providers/goplus-address-security.ts
+          lib/scamguard/providers/goplus-address-security.test.ts
           lib/scamguard/v2/brand-impersonation.ts
           lib/scamguard/v2/brand-impersonation.test.ts
           lib/scamguard/v2/corroboration.ts
