@@ -12,6 +12,11 @@ import {
 import { detectBrandImpersonation, type BrandImpersonationFinding } from "@/lib/scamguard/v2/brand-impersonation"
 import { compareCanonicalIdentity, type CanonicalIdentityComparison } from "@/lib/scamguard/v2/canonical-identity"
 import { assessV2Corroboration, type V2CorroborationAssessment } from "@/lib/scamguard/v2/corroboration"
+import {
+  activationEligibleSources,
+  assessProviderQuality,
+  type V2ProviderQuality,
+} from "@/lib/scamguard/v2/provider-quality"
 import { buildV2TransactionImpact, type V2TransactionImpact } from "@/lib/scamguard/v2/transaction-impact"
 import { transactionImpactSignals } from "@/lib/scamguard/v2/transaction-impact-signals"
 
@@ -31,6 +36,7 @@ export type ScamGuardV2Observation = {
   base: ScamGuardScanResult
   proposedSignals: ScamGuardSignal[]
   proposedAssessment: V2CorroborationAssessment
+  providerQuality: V2ProviderQuality[]
   evidence: {
     tokensXyz?: TokensXyzEvidence
     claimedTokensXyz?: TokensXyzReferenceEvidence
@@ -45,6 +51,7 @@ export type ScamGuardV2Observation = {
   summary: {
     providerCount: number
     availableProviders: number
+    activationEligibleSources: number
     proposedSignalCount: number
     decisionChanged: false
   }
@@ -224,7 +231,40 @@ export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamG
     ...brandSignals(brandImpersonation),
     ...(transactionImpact ? transactionImpactSignals(transactionImpact) : []),
   ]
-  const proposedAssessment = assessV2Corroboration(proposedSignals)
+
+  const providerQuality: V2ProviderQuality[] = []
+  if (tokensXyz || claimedTokensXyz) {
+    providerQuality.push(assessProviderQuality({
+      source: "tokens.xyz",
+      available: tokensXyz?.status === "available" || claimedTokensXyz?.status === "available",
+    }))
+  }
+  if (phishingDatabase) {
+    providerQuality.push(assessProviderQuality({
+      source: "phishing.database",
+      available: phishingDatabase.status === "available",
+      checkedAt: phishingDatabase.checkedAt,
+    }))
+  }
+  if (token2022 || solanaDistribution) {
+    providerQuality.push(assessProviderQuality({
+      source: "solana-rpc",
+      available: token2022?.status === "available" || solanaDistribution?.status === "available",
+      checkedAt: solanaDistribution?.checkedAt,
+    }))
+  }
+  if (domainValue) {
+    providerQuality.push(assessProviderQuality({ source: "local-brand-registry", available: true }))
+  }
+  if (transactionImpact) {
+    providerQuality.push(assessProviderQuality({
+      source: "v1-transaction-decoder",
+      available: transactionImpact.status === "available",
+    }))
+  }
+
+  const eligibleSources = activationEligibleSources(providerQuality)
+  const proposedAssessment = assessV2Corroboration(proposedSignals, { activationEligibleSources: eligibleSources })
 
   const provenance: V2EvidenceProvenance[] = []
   if (tokensXyz) {
@@ -300,11 +340,13 @@ export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamG
     base,
     proposedSignals,
     proposedAssessment,
+    providerQuality,
     evidence: { tokensXyz, claimedTokensXyz, canonicalIdentity, phishingDatabase, token2022, solanaDistribution, brandImpersonation, transactionImpact },
     provenance,
     summary: {
       providerCount: provenance.length,
       availableProviders: provenance.filter((entry) => entry.status === "available").length,
+      activationEligibleSources: eligibleSources.length,
       proposedSignalCount: proposedSignals.length,
       decisionChanged: false,
     },
