@@ -1,15 +1,16 @@
 import type { ScamGuardScanInput, ScamGuardScanResult, ScamGuardSignal } from "@/lib/scamguard/engine"
 import { scanScamGuard } from "@/lib/scamguard/engine"
 import { inspectPhishingDatabase, type PhishingDatabaseEvidence } from "@/lib/scamguard/providers/phishing-database"
+import { inspectToken2022Rpc, type Token2022RpcEvidence } from "@/lib/scamguard/providers/token-2022-rpc"
 import { inspectTokensXyzAsset, type TokensXyzEvidence } from "@/lib/scamguard/providers/tokens-xyz"
 
-export type V2EvidenceSource = "tokens.xyz" | "phishing.database"
+export type V2EvidenceSource = "tokens.xyz" | "phishing.database" | "solana-rpc"
 
 export type V2EvidenceProvenance = {
   source: V2EvidenceSource
   status: "available" | "unavailable" | "disabled" | "not_applicable"
   confidence: "low" | "medium" | "high"
-  purpose: "market_health" | "canonical_identity" | "threat_intelligence"
+  purpose: "market_health" | "canonical_identity" | "threat_intelligence" | "authority_surface"
   note: string
 }
 
@@ -20,6 +21,7 @@ export type ScamGuardV2Observation = {
   evidence: {
     tokensXyz?: TokensXyzEvidence
     phishingDatabase?: PhishingDatabaseEvidence
+    token2022?: Token2022RpcEvidence
   }
   provenance: V2EvidenceProvenance[]
   summary: {
@@ -87,7 +89,7 @@ function tokensSignals(evidence: TokensXyzEvidence): ScamGuardSignal[] {
       code: "V2_UNUSUAL_VOLUME_TO_LIQUIDITY",
       severity: "low",
       title: "Unusual volume-to-liquidity ratio",
-      detail: `24h volume is more than 7× observed liquidity. This is an anomaly signal that requires corroboration before any maliciousness conclusion.`,
+      detail: "24h volume is more than 7× observed liquidity. This is an anomaly signal that requires corroboration before any maliciousness conclusion.",
     })
   }
 
@@ -113,20 +115,44 @@ function phishingSignals(evidence: PhishingDatabaseEvidence): ScamGuardSignal[] 
   }]
 }
 
+function token2022Signals(evidence: Token2022RpcEvidence): ScamGuardSignal[] {
+  if (evidence.status !== "available" || !evidence.isToken2022 || !evidence.inspection) return []
+  return evidence.inspection.findings.flatMap((finding) => {
+    if (finding.severity === "info") return []
+    const severity: ScamGuardSignal["severity"] = finding.severity === "high" ? "medium" : "low"
+    return [{
+      code: `V2_TOKEN2022_${finding.extension.replace(/[^a-zA-Z0-9]+/g, "_").toUpperCase()}`,
+      severity,
+      title: finding.title,
+      detail: `${finding.detail} This is capability evidence only and does not independently imply maliciousness.`,
+    }]
+  })
+}
+
 export async function observeScamGuardV2(input: ScamGuardScanInput): Promise<ScamGuardV2Observation> {
   const basePromise = scanScamGuard(input)
-  const tokenPromise = input.type === "token" && (input.chain === "solana" || input.chain === undefined)
+  const isSolanaToken = input.type === "token" && (input.chain === "solana" || input.chain === undefined)
+  const tokenPromise = isSolanaToken
     ? inspectTokensXyzAsset(input.value)
     : Promise.resolve<TokensXyzEvidence | undefined>(undefined)
+  const token2022Promise = isSolanaToken
+    ? inspectToken2022Rpc(input.value)
+    : Promise.resolve<Token2022RpcEvidence | undefined>(undefined)
   const domain = input.type === "url" ? hostFromUrl(input.value) : input.sourceUrl ? hostFromUrl(input.sourceUrl) : null
   const phishingPromise = domain
     ? inspectPhishingDatabase(domain)
     : Promise.resolve<PhishingDatabaseEvidence | undefined>(undefined)
 
-  const [base, tokensXyz, phishingDatabase] = await Promise.all([basePromise, tokenPromise, phishingPromise])
+  const [base, tokensXyz, phishingDatabase, token2022] = await Promise.all([
+    basePromise,
+    tokenPromise,
+    phishingPromise,
+    token2022Promise,
+  ])
   const proposedSignals = [
     ...(tokensXyz ? tokensSignals(tokensXyz) : []),
     ...(phishingDatabase ? phishingSignals(phishingDatabase) : []),
+    ...(token2022 ? token2022Signals(token2022) : []),
   ]
 
   const provenance: V2EvidenceProvenance[] = []
@@ -148,12 +174,23 @@ export async function observeScamGuardV2(input: ScamGuardScanInput): Promise<Sca
       note: "Active-feed matches are strong external evidence but remain subject to false-positive review and corroboration.",
     })
   }
+  if (token2022) {
+    provenance.push({
+      source: "solana-rpc",
+      status: token2022.status,
+      confidence: token2022.status === "available" ? "high" : "low",
+      purpose: "authority_surface",
+      note: token2022.isToken2022
+        ? "Token-2022 extension capabilities were inspected through parsed Solana RPC account data; capabilities require corroboration before risk escalation."
+        : "Solana RPC account ownership was checked; no Token-2022 extension surface was applicable.",
+    })
+  }
 
   return {
     mode: "observe_only",
     base,
     proposedSignals,
-    evidence: { tokensXyz, phishingDatabase },
+    evidence: { tokensXyz, phishingDatabase, token2022 },
     provenance,
     summary: {
       providerCount: provenance.length,
