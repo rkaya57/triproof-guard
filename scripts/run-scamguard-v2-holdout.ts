@@ -9,6 +9,7 @@ const FIXTURE = path.join(process.cwd(), "lib/scamguard/v2/fixtures/holdout-150.
 const OUT_DIR = path.join(process.cwd(), "artifacts/scamguard-v2-holdout")
 const FROZEN_COMMIT = "8561f45c72868ae75e8a5bcfeb554b964717d8ff"
 const PUBLIC_SOLANA_RPC = "https://api.mainnet-beta.solana.com"
+const PUBLIC_SOLANA_ARCHIVE_FALLBACK = "https://solana-rpc.publicnode.com"
 const PUBLIC_EVM_RPC = "https://ethereum-rpc.publicnode.com"
 
 const rank: Record<ScamGuardRiskLevel, number> = { SAFE: 0, CAUTION: 1, HIGH_RISK: 2, CRITICAL: 3 }
@@ -53,13 +54,17 @@ async function resolveTransaction(chain: string, id: string) {
     return tx ? JSON.stringify(tx) : null
   }
   if (chain === "solana") {
-    const endpoint = process.env.SOLANA_RPC_URL?.trim() || PUBLIC_SOLANA_RPC
-    const tx = await rpc<{ transaction?: [string, string] | string }>(endpoint, "getTransaction", [
-      id,
-      { encoding: "base64", commitment: "confirmed", maxSupportedTransactionVersion: 0 },
-    ])
-    const serialized = Array.isArray(tx?.transaction) ? tx?.transaction[0] : tx?.transaction
-    return typeof serialized === "string" && serialized.length > 80 ? serialized : null
+    const configured = process.env.SOLANA_RPC_URL?.trim()
+    const endpoints = Array.from(new Set([configured, PUBLIC_SOLANA_RPC, PUBLIC_SOLANA_ARCHIVE_FALLBACK].filter(Boolean))) as string[]
+    for (const endpoint of endpoints) {
+      const tx = await rpc<{ transaction?: [string, string] | string }>(endpoint, "getTransaction", [
+        id,
+        { encoding: "base64", commitment: "confirmed", maxSupportedTransactionVersion: 0 },
+      ])
+      const serialized = Array.isArray(tx?.transaction) ? tx?.transaction[0] : tx?.transaction
+      if (typeof serialized === "string" && serialized.length > 80) return serialized
+    }
+    return null
   }
   return null
 }
