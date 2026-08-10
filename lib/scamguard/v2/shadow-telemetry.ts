@@ -14,6 +14,7 @@ export type V2ShadowTelemetryRecord = {
   evidenceScore: number
   confidence: V2ShadowDecision["confidence"]
   independentFamilies: V2ShadowDecision["independentFamilies"]
+  independentSources: V2ShadowDecision["independentSources"]
   providerCount: number
   availableProviders: number
   proposedSignalCount: number
@@ -43,6 +44,7 @@ export function buildShadowTelemetryRecord(input: {
     evidenceScore: input.shadow.evidenceScore,
     confidence: input.shadow.confidence,
     independentFamilies: [...input.shadow.independentFamilies],
+    independentSources: [...input.shadow.independentSources],
     providerCount: Math.max(0, Math.trunc(input.providerCount)),
     availableProviders: Math.max(0, Math.trunc(input.availableProviders)),
     proposedSignalCount: Math.max(0, Math.trunc(input.proposedSignalCount)),
