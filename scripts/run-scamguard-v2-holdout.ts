@@ -185,4 +185,7 @@ async function main() {
   if (!providerParityReady) process.exitCode = 2
 }
 
-await main()
+main().catch((error) => {
+  console.error(error instanceof Error ? error.stack ?? error.message : String(error))
+  process.exitCode = 1
+})
