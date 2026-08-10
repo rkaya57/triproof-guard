@@ -28,13 +28,23 @@ test("corroborated high-risk escalation becomes review candidate only", () => {
   assert.equal(policy.productionActionChanged, false)
 })
 
-test("corroborated critical escalation becomes block candidate only", () => {
+test("critical escalation with three independent families becomes block candidate only", () => {
+  const policy = proposeV2ActivationPolicy(shadow({
+    v2ProposedRiskLevel: "CRITICAL",
+    levelDelta: 2,
+    independentFamilies: ["threat_intelligence", "brand_impersonation", "transaction_impact"],
+  }))
+  assert.equal(policy.candidateAction, "block_candidate")
+  assert.equal(policy.productionActionChanged, false)
+})
+
+test("critical escalation with only two families cannot become a block candidate", () => {
   const policy = proposeV2ActivationPolicy(shadow({
     v2ProposedRiskLevel: "CRITICAL",
     levelDelta: 2,
   }))
-  assert.equal(policy.candidateAction, "block_candidate")
-  assert.equal(policy.productionActionChanged, false)
+  assert.equal(policy.candidateAction, "none")
+  assert.match(policy.reason, /at least three independent evidence families/)
 })
 
 test("single-source evidence cannot become an activation candidate", () => {
