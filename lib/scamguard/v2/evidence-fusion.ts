@@ -8,16 +8,18 @@ import {
   type TokensXyzEvidence,
   type TokensXyzReferenceEvidence,
 } from "@/lib/scamguard/providers/tokens-xyz"
+import { detectBrandImpersonation, type BrandImpersonationFinding } from "@/lib/scamguard/v2/brand-impersonation"
 import { compareCanonicalIdentity, type CanonicalIdentityComparison } from "@/lib/scamguard/v2/canonical-identity"
+import { assessV2Corroboration, type V2CorroborationAssessment } from "@/lib/scamguard/v2/corroboration"
 
-export type V2EvidenceSource = "tokens.xyz" | "phishing.database" | "solana-rpc"
+export type V2EvidenceSource = "tokens.xyz" | "phishing.database" | "solana-rpc" | "local-brand-registry"
 export type ScamGuardV2Input = ScamGuardScanInput & { claimedAsset?: string }
 
 export type V2EvidenceProvenance = {
   source: V2EvidenceSource
   status: "available" | "unavailable" | "disabled" | "not_applicable"
   confidence: "low" | "medium" | "high"
-  purpose: "market_health" | "canonical_identity" | "threat_intelligence" | "authority_surface"
+  purpose: "market_health" | "canonical_identity" | "threat_intelligence" | "authority_surface" | "brand_impersonation"
   note: string
 }
 
@@ -25,12 +27,14 @@ export type ScamGuardV2Observation = {
   mode: "observe_only"
   base: ScamGuardScanResult
   proposedSignals: ScamGuardSignal[]
+  proposedAssessment: V2CorroborationAssessment
   evidence: {
     tokensXyz?: TokensXyzEvidence
     claimedTokensXyz?: TokensXyzReferenceEvidence
     canonicalIdentity?: CanonicalIdentityComparison
     phishingDatabase?: PhishingDatabaseEvidence
     token2022?: Token2022RpcEvidence
+    brandImpersonation?: BrandImpersonationFinding[]
   }
   provenance: V2EvidenceProvenance[]
   summary: {
@@ -138,6 +142,19 @@ function token2022Signals(evidence: Token2022RpcEvidence): ScamGuardSignal[] {
   })
 }
 
+function brandSignals(findings: BrandImpersonationFinding[]): ScamGuardSignal[] {
+  return findings.map((finding) => ({
+    code: `V2_BRAND_${finding.matchType.toUpperCase()}`,
+    severity: finding.confidence === "high" ? "medium" : "low",
+    title: finding.matchType === "homoglyph"
+      ? "Unicode brand impersonation pattern"
+      : finding.matchType === "typosquat"
+        ? "Brand typosquatting pattern"
+        : "Brand name combined with lure wording",
+    detail: `${finding.observedHost} resembles ${finding.brand} but is outside the registered official domains (${finding.officialDomains.join(", ")}). This is local impersonation evidence and requires corroboration for blocking.`,
+  }))
+}
+
 export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamGuardV2Observation> {
   const basePromise = scanScamGuard(input)
   const isSolanaToken = input.type === "token" && (input.chain === "solana" || input.chain === undefined)
@@ -151,10 +168,12 @@ export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamG
   const token2022Promise = isSolanaToken
     ? inspectToken2022Rpc(input.value)
     : Promise.resolve<Token2022RpcEvidence | undefined>(undefined)
-  const domain = input.type === "url" ? hostFromUrl(input.value) : input.sourceUrl ? hostFromUrl(input.sourceUrl) : null
+  const domainValue = input.type === "url" ? input.value : input.sourceUrl
+  const domain = domainValue ? hostFromUrl(domainValue) : null
   const phishingPromise = domain
     ? inspectPhishingDatabase(domain)
     : Promise.resolve<PhishingDatabaseEvidence | undefined>(undefined)
+  const brandImpersonation = domainValue ? detectBrandImpersonation(domainValue) : []
 
   const [base, tokensXyz, claimedTokensXyz, phishingDatabase, token2022] = await Promise.all([
     basePromise,
@@ -169,7 +188,9 @@ export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamG
     ...(canonicalIdentity?.signal ? [canonicalIdentity.signal] : []),
     ...(phishingDatabase ? phishingSignals(phishingDatabase) : []),
     ...(token2022 ? token2022Signals(token2022) : []),
+    ...brandSignals(brandImpersonation),
   ]
+  const proposedAssessment = assessV2Corroboration(proposedSignals)
 
   const provenance: V2EvidenceProvenance[] = []
   if (tokensXyz) {
@@ -210,12 +231,24 @@ export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamG
         : "Solana RPC account ownership was checked; no Token-2022 extension surface was applicable.",
     })
   }
+  if (domainValue) {
+    provenance.push({
+      source: "local-brand-registry",
+      status: "available",
+      confidence: brandImpersonation.some((finding) => finding.confidence === "high") ? "high" : "medium",
+      purpose: "brand_impersonation",
+      note: brandImpersonation.length
+        ? "The observed hostname resembles a protected Web3 brand outside its registered official domains."
+        : "No protected-brand homoglyph, typosquat, or lure-domain pattern was observed.",
+    })
+  }
 
   return {
     mode: "observe_only",
     base,
     proposedSignals,
-    evidence: { tokensXyz, claimedTokensXyz, canonicalIdentity, phishingDatabase, token2022 },
+    proposedAssessment,
+    evidence: { tokensXyz, claimedTokensXyz, canonicalIdentity, phishingDatabase, token2022, brandImpersonation },
     provenance,
     summary: {
       providerCount: provenance.length,
