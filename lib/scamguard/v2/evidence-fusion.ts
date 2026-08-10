@@ -1,5 +1,6 @@
 import type { ScamGuardScanInput, ScamGuardScanResult, ScamGuardSignal } from "@/lib/scamguard/engine"
 import { scanScamGuard } from "@/lib/scamguard/engine"
+import { inspectEvmPublicThreatCorpus, type EvmPublicThreatCorpusEvidence } from "@/lib/scamguard/providers/evm-public-threat-corpus"
 import { inspectInternalAdjudication, type InternalAdjudicationEvidence } from "@/lib/scamguard/providers/internal-adjudication"
 import { inspectInternalGraphContext, type InternalGraphContextEvidence } from "@/lib/scamguard/providers/internal-graph-context"
 import { inspectPhishingDatabase, type PhishingDatabaseEvidence } from "@/lib/scamguard/providers/phishing-database"
@@ -14,15 +15,11 @@ import {
 import { detectBrandImpersonation, type BrandImpersonationFinding } from "@/lib/scamguard/v2/brand-impersonation"
 import { compareCanonicalIdentity, type CanonicalIdentityComparison } from "@/lib/scamguard/v2/canonical-identity"
 import { assessV2Corroboration, type V2CorroborationAssessment } from "@/lib/scamguard/v2/corroboration"
-import {
-  activationEligibleSources,
-  assessProviderQuality,
-  type V2ProviderQuality,
-} from "@/lib/scamguard/v2/provider-quality"
+import { activationEligibleSources, assessProviderQuality, type V2ProviderQuality } from "@/lib/scamguard/v2/provider-quality"
 import { buildV2TransactionImpact, type V2TransactionImpact } from "@/lib/scamguard/v2/transaction-impact"
 import { transactionImpactSignals } from "@/lib/scamguard/v2/transaction-impact-signals"
 
-export type V2EvidenceSource = "tokens.xyz" | "phishing.database" | "solana-rpc" | "local-brand-registry" | "v1-transaction-decoder" | "triproof-adjudication" | "triproof-graph"
+export type V2EvidenceSource = "tokens.xyz" | "phishing.database" | "evm-real-cats" | "evm-rug-pull-dataset" | "evm-rpc-contract" | "solana-rpc" | "local-brand-registry" | "v1-transaction-decoder" | "triproof-adjudication" | "triproof-graph"
 export type ScamGuardV2Input = ScamGuardScanInput & { claimedAsset?: string }
 export type ScamGuardV2EvaluationMode = "live" | "holdout"
 export type ScamGuardV2ObserveOptions = { evaluationMode?: ScamGuardV2EvaluationMode }
@@ -31,7 +28,7 @@ export type V2EvidenceProvenance = {
   source: V2EvidenceSource
   status: "available" | "unavailable" | "disabled" | "not_applicable"
   confidence: "low" | "medium" | "high"
-  purpose: "market_health" | "canonical_identity" | "threat_intelligence" | "authority_surface" | "distribution" | "brand_impersonation" | "transaction_impact" | "internal_reputation" | "graph_context"
+  purpose: "market_health" | "canonical_identity" | "threat_intelligence" | "contract_integrity" | "authority_surface" | "distribution" | "brand_impersonation" | "transaction_impact" | "internal_reputation" | "graph_context"
   note: string
 }
 
@@ -46,6 +43,7 @@ export type ScamGuardV2Observation = {
     claimedTokensXyz?: TokensXyzReferenceEvidence
     canonicalIdentity?: CanonicalIdentityComparison
     phishingDatabase?: PhishingDatabaseEvidence
+    evmThreatCorpus?: EvmPublicThreatCorpusEvidence
     token2022?: Token2022RpcEvidence
     solanaDistribution?: SolanaDistributionRpcEvidence
     internalAdjudication?: InternalAdjudicationEvidence
@@ -66,11 +64,7 @@ export type ScamGuardV2Observation = {
 }
 
 function hostFromUrl(value: string) {
-  try {
-    return new URL(value).hostname.toLowerCase().replace(/^www\./, "")
-  } catch {
-    return null
-  }
+  try { return new URL(value).hostname.toLowerCase().replace(/^www\./, "") } catch { return null }
 }
 
 function finite(value: number | null | undefined): value is number {
@@ -82,13 +76,29 @@ function tokensSignals(evidence: TokensXyzEvidence): ScamGuardSignal[] {
   const signals: ScamGuardSignal[] = []
   const market = evidence.market
   const risk = evidence.risk
-
   if (evidence.canonical?.assetId) signals.push({ code: "V2_CANONICAL_ASSET_RESOLVED", severity: "info", title: "Canonical Solana asset resolved", detail: `Tokens.xyz resolved this mint to ${evidence.canonical.assetId}${evidence.canonical.symbol ? ` (${evidence.canonical.symbol})` : ""}. Canonical identity is supporting evidence, not a safety guarantee.` })
   if (finite(market?.liquidity) && market.liquidity < 1_000) signals.push({ code: "V2_VERY_LOW_TOKEN_LIQUIDITY", severity: "medium", title: "Very low token liquidity", detail: `Observed market liquidity is approximately $${Math.round(market.liquidity).toLocaleString("en-US")}. Low liquidity increases execution and exit risk but does not by itself prove maliciousness.` })
   else if (finite(market?.liquidity) && market.liquidity < 10_000) signals.push({ code: "V2_LOW_TOKEN_LIQUIDITY", severity: "low", title: "Low token liquidity", detail: `Observed market liquidity is approximately $${Math.round(market.liquidity).toLocaleString("en-US")}. Treat this as market-health evidence only.` })
   if (finite(market?.holder) && market.holder < 20) signals.push({ code: "V2_VERY_LOW_HOLDER_COUNT", severity: "medium", title: "Very low holder count", detail: `Only ${Math.round(market.holder)} holders were reported by the market-intelligence provider. This can indicate an immature or inactive token, not necessarily a scam.` })
   if (finite(market?.volume24hUSD) && finite(market?.liquidity) && market.liquidity > 0 && market.volume24hUSD / market.liquidity > 7) signals.push({ code: "V2_UNUSUAL_VOLUME_TO_LIQUIDITY", severity: "low", title: "Unusual volume-to-liquidity ratio", detail: "24h volume is more than 7× observed liquidity. This is an anomaly signal that requires corroboration before any maliciousness conclusion." })
   if (typeof risk?.score === "number" && risk.score < 40 && !risk.hasInsufficientData) signals.push({ code: "V2_WEAK_MARKET_HEALTH_SCORE", severity: "low", title: "Weak external market-health score", detail: `Tokens.xyz reported market-health score ${Math.round(risk.score)}${risk.grade ? ` / grade ${risk.grade}` : ""}. Tri-Proof treats this as supporting market evidence only.` })
+  return signals
+}
+
+function evmThreatSignals(evidence: EvmPublicThreatCorpusEvidence): ScamGuardSignal[] {
+  if (evidence.status !== "available" || !evidence.matched) return []
+  const signals: ScamGuardSignal[] = []
+  if (evidence.matchedSources.includes("real-cats")) signals.push({ code: "V2_EVM_REAL_CATS_MATCH", severity: "high", title: "Address matched Real-CATS criminal Ethereum corpus", detail: "The address appears in the independently maintained Real-CATS criminal Ethereum dataset. Tri-Proof requires corroboration before HIGH_RISK activation." })
+  if (evidence.matchedSources.includes("rug-pull-dataset")) signals.push({ code: "V2_EVM_RUG_PULL_MATCH", severity: "high", title: "Address matched validated rug-pull corpus", detail: "The address appears in a public validated rug-pull incident dataset with upstream security-source provenance. Tri-Proof still requires independent corroboration." })
+  return signals
+}
+
+function contractIntegritySignals(base: ScamGuardScanResult): ScamGuardSignal[] {
+  const contract = base.metadata.contractIntelligence
+  if (!contract?.checked || !contract.isContract) return []
+  const signals: ScamGuardSignal[] = []
+  if (contract.verified === false) signals.push({ code: "V2_EVM_UNVERIFIED_CONTRACT", severity: "low", title: "Contract source is not verified", detail: "Live EVM contract intelligence found bytecode without verified source evidence. This is contextual integrity evidence only unless corroborated." })
+  if (contract.proxy) signals.push({ code: "V2_EVM_PROXY_CONTRACT", severity: "low", title: "Upgradeable proxy contract", detail: "The EVM target is an upgradeable proxy. This is control-surface context, not standalone maliciousness." })
   return signals
 }
 
@@ -102,7 +112,7 @@ function distributionSignals(evidence: SolanaDistributionRpcEvidence): ScamGuard
 
 function phishingSignals(evidence: PhishingDatabaseEvidence): ScamGuardSignal[] {
   if (evidence.status !== "available" || !evidence.matched) return []
-  return [{ code: "V2_ACTIVE_PHISHING_FEED_MATCH", severity: "critical", title: "Active phishing feed match", detail: `${evidence.domain} appears in the active Phishing.Database feed. This is independent threat-intelligence evidence and should be corroborated with Tri-Proof domain and page signals before permanent blocking.` }]
+  return [{ code: "V2_ACTIVE_PHISHING_FEED_MATCH", severity: "critical", title: "Active phishing feed match", detail: `${evidence.domain} appears in the active phishing feed. This is independent threat-intelligence evidence and should be corroborated before permanent blocking.` }]
 }
 
 function token2022Signals(evidence: Token2022RpcEvidence): ScamGuardSignal[] {
@@ -124,12 +134,7 @@ function adjudicationSignals(evidence: InternalAdjudicationEvidence): ScamGuardS
 
 function graphContextSignals(evidence: InternalGraphContextEvidence): ScamGuardSignal[] {
   if (evidence.status !== "available" || evidence.riskBearingEdges <= 0) return []
-  return [{
-    code: "V2_INTERNAL_GRAPH_RISK_CONTEXT",
-    severity: "info",
-    title: "Prior Tri-Proof graph risk context",
-    detail: `This wallet previously appeared in ${evidence.riskBearingEdges} risk-bearing graph edge${evidence.riskBearingEdges === 1 ? "" : "s"} across ${evidence.observedComponents} component${evidence.observedComponents === 1 ? "" : "s"}. This context is intentionally excluded from V2 scoring and activation until separately validated.`,
-  }]
+  return [{ code: "V2_INTERNAL_GRAPH_RISK_CONTEXT", severity: "info", title: "Prior Tri-Proof graph risk context", detail: `This wallet previously appeared in ${evidence.riskBearingEdges} risk-bearing graph edge${evidence.riskBearingEdges === 1 ? "" : "s"} across ${evidence.observedComponents} component${evidence.observedComponents === 1 ? "" : "s"}. This context is intentionally excluded from V2 scoring and activation until separately validated.` }]
 }
 
 function brandSignals(findings: BrandImpersonationFinding[]): ScamGuardSignal[] {
@@ -141,7 +146,9 @@ export async function observeScamGuardV2(input: ScamGuardV2Input, options: ScamG
   const allowInternalEvidence = evaluationMode !== "holdout"
   const basePromise = scanScamGuard(input)
   const isSolanaToken = input.type === "token" && (input.chain === "solana" || input.chain === undefined)
+  const isEvmTarget = (input.type === "token" || input.type === "wallet") && input.chain === "evm"
   const tokenPromise = isSolanaToken ? inspectTokensXyzAsset(input.value) : Promise.resolve<TokensXyzEvidence | undefined>(undefined)
+  const evmThreatPromise = isEvmTarget ? inspectEvmPublicThreatCorpus(input.value) : Promise.resolve<EvmPublicThreatCorpusEvidence | undefined>(undefined)
   const claimedAsset = input.claimedAsset?.trim()
   const claimedTokenPromise = isSolanaToken && claimedAsset ? resolveTokensXyzReference(claimedAsset) : Promise.resolve<TokensXyzReferenceEvidence | undefined>(undefined)
   const token2022Promise = isSolanaToken ? inspectToken2022Rpc(input.value) : Promise.resolve<Token2022RpcEvidence | undefined>(undefined)
@@ -154,23 +161,19 @@ export async function observeScamGuardV2(input: ScamGuardV2Input, options: ScamG
   const phishingPromise = domain ? inspectPhishingDatabase(domain) : Promise.resolve<PhishingDatabaseEvidence | undefined>(undefined)
   const brandImpersonation = domainValue ? detectBrandImpersonation(domainValue) : []
 
-  const [base, tokensXyz, claimedTokensXyz, phishingDatabase, token2022, solanaDistribution, internalAdjudication, internalGraphContext] = await Promise.all([
-    basePromise,
-    tokenPromise,
-    claimedTokenPromise,
-    phishingPromise,
-    token2022Promise,
-    distributionPromise,
-    adjudicationPromise,
-    graphPromise,
+  const [base, tokensXyz, claimedTokensXyz, phishingDatabase, evmThreatCorpus, token2022, solanaDistribution, internalAdjudication, internalGraphContext] = await Promise.all([
+    basePromise, tokenPromise, claimedTokenPromise, phishingPromise, evmThreatPromise, token2022Promise, distributionPromise, adjudicationPromise, graphPromise,
   ])
 
   const canonicalIdentity = claimedTokensXyz ? compareCanonicalIdentity(tokensXyz, claimedTokensXyz) : undefined
   const transactionImpact = input.type === "transaction" ? buildV2TransactionImpact(base) : undefined
+  const contractSignals = input.chain === "evm" ? contractIntegritySignals(base) : []
   const proposedSignals = [
     ...(tokensXyz ? tokensSignals(tokensXyz) : []),
     ...(canonicalIdentity?.signal ? [canonicalIdentity.signal] : []),
     ...(phishingDatabase ? phishingSignals(phishingDatabase) : []),
+    ...(evmThreatCorpus ? evmThreatSignals(evmThreatCorpus) : []),
+    ...contractSignals,
     ...(token2022 ? token2022Signals(token2022) : []),
     ...(solanaDistribution ? distributionSignals(solanaDistribution) : []),
     ...(internalAdjudication ? adjudicationSignals(internalAdjudication) : []),
@@ -182,6 +185,11 @@ export async function observeScamGuardV2(input: ScamGuardV2Input, options: ScamG
   const providerQuality: V2ProviderQuality[] = []
   if (tokensXyz || claimedTokensXyz) providerQuality.push(assessProviderQuality({ source: "tokens.xyz", available: tokensXyz?.status === "available" || claimedTokensXyz?.status === "available" }))
   if (phishingDatabase) providerQuality.push(assessProviderQuality({ source: "phishing.database", available: phishingDatabase.status === "available", checkedAt: phishingDatabase.checkedAt }))
+  if (evmThreatCorpus) {
+    providerQuality.push(assessProviderQuality({ source: "evm-real-cats", available: evmThreatCorpus.availableSources.includes("real-cats"), checkedAt: evmThreatCorpus.checkedAt }))
+    providerQuality.push(assessProviderQuality({ source: "evm-rug-pull-dataset", available: evmThreatCorpus.availableSources.includes("rug-pull-dataset"), checkedAt: evmThreatCorpus.checkedAt }))
+  }
+  if (input.chain === "evm" && base.metadata.contractIntelligence) providerQuality.push(assessProviderQuality({ source: "evm-rpc-contract", available: base.metadata.contractIntelligence.checked }))
   if (token2022 || solanaDistribution) providerQuality.push(assessProviderQuality({ source: "solana-rpc", available: token2022?.status === "available" || solanaDistribution?.status === "available", checkedAt: solanaDistribution?.checkedAt }))
   if (internalAdjudication) providerQuality.push(assessProviderQuality({ source: "triproof-adjudication", available: internalAdjudication.status === "available" }))
   if (domainValue) providerQuality.push(assessProviderQuality({ source: "local-brand-registry", available: true }))
@@ -189,11 +197,14 @@ export async function observeScamGuardV2(input: ScamGuardV2Input, options: ScamG
 
   const eligibleSources = activationEligibleSources(providerQuality)
   const proposedAssessment = assessV2Corroboration(proposedSignals, { activationEligibleSources: eligibleSources })
-
   const provenance: V2EvidenceProvenance[] = []
   if (tokensXyz) provenance.push({ source: "tokens.xyz", status: tokensXyz.status, confidence: tokensXyz.status === "available" && Boolean(tokensXyz.canonical?.assetId) ? "high" : "low", purpose: "canonical_identity", note: "Canonical identity and market-health evidence are additive and cannot independently label a token malicious." })
   if (claimedTokensXyz) provenance.push({ source: "tokens.xyz", status: claimedTokensXyz.status, confidence: canonicalIdentity?.status === "mismatch" || canonicalIdentity?.status === "match" ? "high" : "low", purpose: "canonical_identity", note: canonicalIdentity?.note ?? "Claimed token identity could not be compared." })
   if (phishingDatabase) provenance.push({ source: "phishing.database", status: phishingDatabase.status, confidence: phishingDatabase.status === "available" && phishingDatabase.matched ? "high" : "medium", purpose: "threat_intelligence", note: "Active-feed matches are strong external evidence but remain subject to false-positive review and corroboration." })
+  if (evmThreatCorpus) {
+    for (const source of ["real-cats", "rug-pull-dataset"] as const) provenance.push({ source: source === "real-cats" ? "evm-real-cats" : "evm-rug-pull-dataset", status: evmThreatCorpus.availableSources.includes(source) ? "available" : "unavailable", confidence: evmThreatCorpus.matchedSources.includes(source) ? "high" : "medium", purpose: "threat_intelligence", note: evmThreatCorpus.matchedSources.includes(source) ? `Target matched the ${source} public EVM threat corpus.` : `The ${source} corpus was queried without a target match.` })
+  }
+  if (input.chain === "evm" && base.metadata.contractIntelligence) provenance.push({ source: "evm-rpc-contract", status: base.metadata.contractIntelligence.checked ? "available" : "unavailable", confidence: base.metadata.contractIntelligence.checked ? "high" : "low", purpose: "contract_integrity", note: "Contract bytecode, verification and proxy context are independent on-chain integrity evidence; they cannot alone label a target malicious." })
   if (token2022) provenance.push({ source: "solana-rpc", status: token2022.status, confidence: token2022.status === "available" ? "high" : "low", purpose: "authority_surface", note: token2022.isToken2022 ? "Token-2022 extension capabilities were inspected through parsed Solana RPC account data; capabilities require corroboration before risk escalation." : "Solana RPC account ownership was checked; no Token-2022 extension surface was applicable." })
   if (solanaDistribution) provenance.push({ source: "solana-rpc", status: solanaDistribution.status, confidence: solanaDistribution.status === "available" ? "high" : "low", purpose: "distribution", note: "Largest-account concentration is computed directly from Solana token-account balances. It is not a unique-holder metric and cannot independently imply malicious control." })
   if (internalAdjudication) provenance.push({ source: "triproof-adjudication", status: internalAdjudication.status, confidence: internalAdjudication.verdict === "confirmed_risk" || internalAdjudication.verdict === "trusted" ? "high" : internalAdjudication.verdict === "disputed" ? "medium" : "low", purpose: "internal_reputation", note: "This source is derived only from distinct human feedback/adjudication records. Model-generated WalletAnalysis scores and AI briefs are intentionally excluded to avoid self-reinforcement and benchmark leakage." })
@@ -207,7 +218,7 @@ export async function observeScamGuardV2(input: ScamGuardV2Input, options: ScamG
     proposedSignals,
     proposedAssessment,
     providerQuality,
-    evidence: { tokensXyz, claimedTokensXyz, canonicalIdentity, phishingDatabase, token2022, solanaDistribution, internalAdjudication, internalGraphContext, brandImpersonation, transactionImpact },
+    evidence: { tokensXyz, claimedTokensXyz, canonicalIdentity, phishingDatabase, evmThreatCorpus, token2022, solanaDistribution, internalAdjudication, internalGraphContext, brandImpersonation, transactionImpact },
     provenance,
     summary: {
       providerCount: provenance.length,
