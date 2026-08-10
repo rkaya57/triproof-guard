@@ -77,6 +77,33 @@ test("Token-2022 capabilities remain bounded without an independent identity sig
   assert.deepEqual(assessment.independentSources, ["solana-rpc"])
 })
 
+test("Solana distribution concentration stays bounded when it is the only evidence family", () => {
+  const assessment = assessV2Corroboration([
+    signal("V2_HIGH_LARGEST_TOKEN_ACCOUNT_CONCENTRATION"),
+    signal("V2_HIGH_TOP10_TOKEN_ACCOUNT_CONCENTRATION"),
+  ])
+
+  assert.equal(assessment.familyScores.distribution, 10)
+  assert.deepEqual(assessment.independentFamilies, ["distribution"])
+  assert.deepEqual(assessment.independentSources, ["solana-rpc"])
+  assert.equal(assessment.activationGate, "insufficient")
+  assert.equal(assessment.proposedRiskLevel, "SAFE")
+})
+
+test("Token-2022 authority and Solana distribution do not count as independent source corroboration", () => {
+  const assessment = assessV2Corroboration([
+    signal("V2_TOKEN2022_PERMANENTDELEGATE", "medium"),
+    signal("V2_TOKEN2022_TRANSFERHOOK", "medium"),
+    signal("V2_HIGH_LARGEST_TOKEN_ACCOUNT_CONCENTRATION"),
+    signal("V2_HIGH_TOP10_TOKEN_ACCOUNT_CONCENTRATION"),
+  ])
+
+  assert.equal(assessment.independentFamilies.length, 2)
+  assert.deepEqual(assessment.independentSources, ["solana-rpc"])
+  assert.equal(assessment.activationGate, "insufficient")
+  assert.equal(assessment.proposedRiskLevel, "CAUTION")
+})
+
 test("transaction-impact capabilities stay below caution when they are the only evidence family", () => {
   const assessment = assessV2Corroboration([
     signal("V2_TX_UNLIMITED_APPROVAL", "medium"),
