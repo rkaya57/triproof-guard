@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import type { ScamGuardChain, ScamGuardScanType } from "@/lib/scamguard/engine"
 import { getExtensionSession } from "@/lib/extension/session"
+import { inspectInternalEntityAttribution, isInfrastructureEntity } from "@/lib/scamguard/providers/internal-entity-attribution"
 import { scanAccess } from "@/lib/scamguard/scan-access"
 import { proposeV2ActivationPolicy } from "@/lib/scamguard/v2/activation-policy"
 import { assessV2ActivationReadiness } from "@/lib/scamguard/v2/activation-readiness"
@@ -39,15 +40,32 @@ export async function POST(request: Request) {
   const access = await scanAccess(Boolean(body.deepScan), extensionSession?.user)
   if (access.error) return access.error
 
-  const observation = await observeScamGuardV2({
-    type,
-    value,
-    walletAddress: body.walletAddress?.trim() || undefined,
-    chain: body.chain,
-    sourceUrl: body.sourceUrl?.trim() || undefined,
-    claimedAsset: type === "token" ? body.claimedAsset?.trim().slice(0, 160) || undefined : undefined,
-    deepScan: access.deepScan,
-  })
+  const walletTarget = type === "wallet" ? value : body?.walletAddress?.trim() || undefined
+  const [observation, entityAttribution] = await Promise.all([
+    observeScamGuardV2({
+      type,
+      value,
+      walletAddress: body.walletAddress?.trim() || undefined,
+      chain: body.chain,
+      sourceUrl: body.sourceUrl?.trim() || undefined,
+      claimedAsset: type === "token" ? body.claimedAsset?.trim().slice(0, 160) || undefined : undefined,
+      deepScan: access.deepScan,
+    }),
+    walletTarget
+      ? inspectInternalEntityAttribution(walletTarget, body?.chain)
+      : Promise.resolve(undefined),
+  ])
+
+  const entityAttributionContext = entityAttribution
+    ? {
+        ...entityAttribution,
+        infrastructureContext: isInfrastructureEntity(entityAttribution.entityType),
+        affectsRiskScore: false,
+        affectsActivation: false,
+        canDowngradeDecision: false,
+      }
+    : undefined
+
   const shadowDecision = compareShadowDecision(observation.base.riskLevel, observation.proposedAssessment)
   const shadowTelemetry = buildShadowTelemetryRecord({
     scanType: type,
@@ -65,6 +83,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ...observation,
     transactionImpact: observation.evidence.transactionImpact,
+    entityAttributionContext,
     shadowDecision,
     shadowTelemetry,
     activationPolicy,
