@@ -18,6 +18,7 @@ let feedCache: FeedCache | null = null
 const defaultFeedUrl = "https://phish.co.za/latest/phishing-domains-ACTIVE.txt"
 const defaultTimeoutMs = 3_000
 const defaultTtlMs = 60 * 60 * 1000
+const maxTtlMs = 60 * 60 * 1000
 const maxFeedBytes = 8 * 1024 * 1024
 
 function normalizeDomain(value: string) {
@@ -32,7 +33,8 @@ function config() {
   const enabled = (process.env.PHISHING_DATABASE_ENABLED ?? "true").trim().toLowerCase() !== "false"
   const url = process.env.PHISHING_DATABASE_FEED_URL?.trim() || defaultFeedUrl
   const timeoutMs = Math.max(500, Number(process.env.PHISHING_DATABASE_TIMEOUT_MS ?? defaultTimeoutMs) || defaultTimeoutMs)
-  const ttlMs = Math.max(60_000, Number(process.env.PHISHING_DATABASE_CACHE_TTL_MS ?? defaultTtlMs) || defaultTtlMs)
+  const configuredTtlMs = Number(process.env.PHISHING_DATABASE_CACHE_TTL_MS ?? defaultTtlMs) || defaultTtlMs
+  const ttlMs = Math.max(60_000, Math.min(configuredTtlMs, maxTtlMs))
   return { enabled, url, timeoutMs, ttlMs }
 }
 
@@ -71,7 +73,6 @@ async function loadFeed() {
 function domainCandidates(domain: string) {
   const parts = domain.split(".")
   const candidates = [domain]
-  // Include parent domains but never collapse below registrable-looking two labels.
   for (let index = 1; index < parts.length - 1; index += 1) {
     candidates.push(parts.slice(index).join("."))
   }
