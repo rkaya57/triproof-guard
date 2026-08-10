@@ -13,12 +13,20 @@ type FeedCache = {
   domains: Set<string>
 }
 
+type FailureBackoff = {
+  retryAfter: number
+  error: string
+}
+
 let feedCache: FeedCache | null = null
+let failureBackoff: FailureBackoff | null = null
 
 const defaultFeedUrl = "https://phish.co.za/latest/phishing-domains-ACTIVE.txt"
 const defaultTimeoutMs = 3_000
 const defaultTtlMs = 60 * 60 * 1000
 const maxTtlMs = 60 * 60 * 1000
+const defaultFailureBackoffMs = 60_000
+const maxFailureBackoffMs = 5 * 60 * 1000
 const maxFeedBytes = 8 * 1024 * 1024
 
 function normalizeDomain(value: string) {
@@ -35,7 +43,9 @@ function config() {
   const timeoutMs = Math.max(500, Number(process.env.PHISHING_DATABASE_TIMEOUT_MS ?? defaultTimeoutMs) || defaultTimeoutMs)
   const configuredTtlMs = Number(process.env.PHISHING_DATABASE_CACHE_TTL_MS ?? defaultTtlMs) || defaultTtlMs
   const ttlMs = Math.max(60_000, Math.min(configuredTtlMs, maxTtlMs))
-  return { enabled, url, timeoutMs, ttlMs }
+  const configuredBackoffMs = Number(process.env.PHISHING_DATABASE_FAILURE_BACKOFF_MS ?? defaultFailureBackoffMs) || defaultFailureBackoffMs
+  const failureBackoffMs = Math.max(1_000, Math.min(configuredBackoffMs, maxFailureBackoffMs))
+  return { enabled, url, timeoutMs, ttlMs, failureBackoffMs }
 }
 
 function parseDomains(text: string) {
@@ -49,25 +59,35 @@ function parseDomains(text: string) {
 }
 
 async function loadFeed() {
-  const { url, timeoutMs, ttlMs } = config()
+  const { url, timeoutMs, ttlMs, failureBackoffMs } = config()
   if (feedCache && feedCache.expiresAt > Date.now()) return feedCache.domains
+  if (failureBackoff && failureBackoff.retryAfter > Date.now()) {
+    throw new Error(`Phishing.Database temporarily backed off after upstream failure: ${failureBackoff.error}`)
+  }
 
-  const response = await fetch(url, {
-    headers: { Accept: "text/plain" },
-    signal: AbortSignal.timeout(timeoutMs),
-    cache: "no-store",
-  })
-  if (!response.ok) throw new Error(`Phishing.Database request failed with HTTP ${response.status}`)
+  try {
+    const response = await fetch(url, {
+      headers: { Accept: "text/plain" },
+      signal: AbortSignal.timeout(timeoutMs),
+      cache: "no-store",
+    })
+    if (!response.ok) throw new Error(`Phishing.Database request failed with HTTP ${response.status}`)
 
-  const declaredLength = Number(response.headers.get("content-length") ?? 0)
-  if (declaredLength > maxFeedBytes) throw new Error("Phishing.Database feed exceeded size limit")
+    const declaredLength = Number(response.headers.get("content-length") ?? 0)
+    if (declaredLength > maxFeedBytes) throw new Error("Phishing.Database feed exceeded size limit")
 
-  const text = await response.text()
-  if (Buffer.byteLength(text, "utf8") > maxFeedBytes) throw new Error("Phishing.Database feed exceeded size limit")
+    const text = await response.text()
+    if (Buffer.byteLength(text, "utf8") > maxFeedBytes) throw new Error("Phishing.Database feed exceeded size limit")
 
-  const domains = parseDomains(text)
-  feedCache = { domains, expiresAt: Date.now() + ttlMs }
-  return domains
+    const domains = parseDomains(text)
+    feedCache = { domains, expiresAt: Date.now() + ttlMs }
+    failureBackoff = null
+    return domains
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Phishing.Database lookup failed"
+    failureBackoff = { retryAfter: Date.now() + failureBackoffMs, error: message.slice(0, 240) }
+    throw error
+  }
 }
 
 function domainCandidates(domain: string) {
@@ -121,4 +141,5 @@ export async function inspectPhishingDatabase(domain: string): Promise<PhishingD
 
 export function resetPhishingDatabaseCacheForTests() {
   feedCache = null
+  failureBackoff = null
 }
