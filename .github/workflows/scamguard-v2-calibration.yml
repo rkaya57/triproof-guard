@@ -48,6 +48,7 @@ jobs:
           lib/scamguard/v2/holdout-leakage-guard.test.ts
           lib/scamguard/v2/second-holdout-dataset-contract.test.ts
           lib/scamguard/v2/second-holdout-collection-plan.test.ts
+          lib/scamguard/v2/second-holdout-candidate.test.ts
       - name: Focused lint
         run: >-
           npx eslint
@@ -74,3 +75,5 @@ jobs:
           lib/scamguard/v2/second-holdout-dataset-contract.test.ts
           lib/scamguard/v2/second-holdout-collection-plan.ts
           lib/scamguard/v2/second-holdout-collection-plan.test.ts
+          lib/scamguard/v2/second-holdout-candidate.ts
+          lib/scamguard/v2/second-holdout-candidate.test.ts
