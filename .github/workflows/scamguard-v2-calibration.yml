@@ -61,6 +61,7 @@ jobs:
           lib/scamguard/v2/evm-threat-corroboration.test.ts
           lib/scamguard/v2/provider-quality.ts
           lib/scamguard/v2/evidence-fusion.ts
+          lib/scamguard/v2/calibrated-evidence-fusion.ts
           lib/scamguard/v2/runtime-shadow.ts
           lib/scamguard/v2/runtime-shadow.test.ts
           lib/scamguard/v2/shadow-telemetry.ts
