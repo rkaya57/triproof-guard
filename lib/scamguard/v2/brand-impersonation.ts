@@ -23,21 +23,33 @@ const brandRegistry = [
 const confusables: Record<string, string> = {
   "а": "a", "ɑ": "a", "α": "a",
   "е": "e", "ε": "e",
-  "і": "i", "ι": "i", "ӏ": "i",
+  "і": "i", "ι": "i",
   "о": "o", "ο": "o", "օ": "o",
   "р": "p", "ρ": "p",
   "с": "c", "ϲ": "c",
   "х": "x", "χ": "x",
   "у": "y", "γ": "y",
   "к": "k", "κ": "k",
-  "м": "m", "м": "m",
+  "м": "m",
   "т": "t", "τ": "t",
   "в": "b", "β": "b",
   "ѕ": "s",
   "ӏ": "l", "ⅼ": "l", "Ι": "l",
 }
 
-function hostOnly(value: string) {
+function rawHost(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return ""
+  const withoutScheme = trimmed.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
+  const authority = withoutScheme.split(/[/?#]/, 1)[0] ?? ""
+  const withoutCredentials = authority.includes("@") ? authority.slice(authority.lastIndexOf("@") + 1) : authority
+  const withoutPort = withoutCredentials.startsWith("[")
+    ? withoutCredentials
+    : withoutCredentials.replace(/:\d+$/, "")
+  return withoutPort.toLowerCase().replace(/^www\./, "").replace(/\.$/, "")
+}
+
+function canonicalHost(value: string) {
   try {
     const url = value.includes("://") ? new URL(value) : new URL(`https://${value}`)
     return url.hostname.toLowerCase().replace(/^www\./, "").replace(/\.$/, "")
@@ -82,25 +94,27 @@ function isOfficialHost(host: string, domains: readonly string[]) {
 }
 
 export function detectBrandImpersonation(value: string): BrandImpersonationFinding[] {
-  const host = hostOnly(value)
-  if (!host) return []
-  const hostLabels = labels(host)
+  const parsedHost = canonicalHost(value)
+  const observedHost = rawHost(value) || parsedHost
+  if (!parsedHost || !observedHost) return []
+  const hostLabels = labels(observedHost)
   const findings: BrandImpersonationFinding[] = []
 
   for (const entry of brandRegistry) {
-    if (isOfficialHost(host, entry.domains)) continue
+    if (isOfficialHost(parsedHost, entry.domains)) continue
     for (const observedLabel of hostLabels) {
       const normalizedLabel = skeleton(observedLabel)
       if (!normalizedLabel) continue
       const brand = entry.brand
       const rawLower = observedLabel.toLowerCase()
-      const changedBySkeleton = normalizedLabel !== rawLower.replace(/[^a-z0-9-]/g, "")
+      const asciiRaw = rawLower.replace(/[^a-z0-9-]/g, "")
+      const changedBySkeleton = normalizedLabel !== asciiRaw
 
       if (normalizedLabel === brand && changedBySkeleton) {
         findings.push({
           brand,
           officialDomains: [...entry.domains],
-          observedHost: host,
+          observedHost,
           observedLabel,
           normalizedLabel,
           matchType: "homoglyph",
@@ -115,7 +129,7 @@ export function detectBrandImpersonation(value: string): BrandImpersonationFindi
         findings.push({
           brand,
           officialDomains: [...entry.domains],
-          observedHost: host,
+          observedHost,
           observedLabel,
           normalizedLabel,
           matchType: "typosquat",
@@ -130,7 +144,7 @@ export function detectBrandImpersonation(value: string): BrandImpersonationFindi
         findings.push({
           brand,
           officialDomains: [...entry.domains],
-          observedHost: host,
+          observedHost,
           observedLabel,
           normalizedLabel,
           matchType: "embedded_brand",
