@@ -5,6 +5,7 @@ on:
     branches:
       - feat/risk-engine-v2
     paths:
+      - "app/api/scamguard/scan-transaction/route.ts"
       - "lib/scamguard/providers/**"
       - "lib/scamguard/v2/**"
       - ".github/workflows/scamguard-v2-calibration.yml"
@@ -29,20 +30,30 @@ jobs:
         run: >-
           node --import tsx --test
           lib/scamguard/providers/evm-public-threat-corpus.test.ts
+          lib/scamguard/v2/brand-impersonation.test.ts
           lib/scamguard/v2/evm-threat-corroboration.test.ts
           lib/scamguard/v2/corroboration.test.ts
           lib/scamguard/v2/provider-quality.test.ts
           lib/scamguard/v2/evidence-fusion.test.ts
           lib/scamguard/v2/evidence-fusion-transaction.test.ts
           lib/scamguard/v2/evidence-fusion-solana-transaction.test.ts
+          lib/scamguard/v2/runtime-shadow.test.ts
+          lib/scamguard/v2/shadow-telemetry.test.ts
           lib/scamguard/v2/cross-surface-consistency.test.ts
           lib/scamguard/v2/holdout-leakage-guard.test.ts
       - name: Focused lint
         run: >-
           npx eslint
+          app/api/scamguard/scan-transaction/route.ts
           lib/scamguard/providers/evm-public-threat-corpus.ts
           lib/scamguard/providers/evm-public-threat-corpus.test.ts
+          lib/scamguard/v2/brand-impersonation.ts
+          lib/scamguard/v2/brand-impersonation.test.ts
           lib/scamguard/v2/corroboration.ts
           lib/scamguard/v2/evm-threat-corroboration.test.ts
           lib/scamguard/v2/provider-quality.ts
           lib/scamguard/v2/evidence-fusion.ts
+          lib/scamguard/v2/runtime-shadow.ts
+          lib/scamguard/v2/runtime-shadow.test.ts
+          lib/scamguard/v2/shadow-telemetry.ts
+          lib/scamguard/v2/shadow-telemetry.test.ts
