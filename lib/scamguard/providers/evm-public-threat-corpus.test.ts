@@ -16,6 +16,7 @@ function restore() {
   globalThis.fetch = originalFetch
   if (originalEnabled === undefined) delete process.env.EVM_PUBLIC_THREAT_CORPUS_ENABLED
   else process.env.EVM_PUBLIC_THREAT_CORPUS_ENABLED = originalEnabled
+  delete process.env.EVM_REAL_CATS_FEED_URL
   resetEvmPublicThreatCorpusCacheForTests()
 }
 
@@ -60,6 +61,21 @@ test("MyEtherWallet darklist parser imports only valid EVM addresses", () => {
   assert.equal(values.has(valid), true)
   assert.equal(values.size, 1)
   assert.equal(parseMewDarklistAddresses("not-json").size, 0)
+})
+
+test("default Real-CATS feed targets the repository master branch", async () => {
+  process.env.EVM_PUBLIC_THREAT_CORPUS_ENABLED = "true"
+  const seenUrls: string[] = []
+  globalThis.fetch = async (input) => {
+    const url = String(input)
+    seenUrls.push(url)
+    if (url.includes("Real-CATS")) return new Response("address\tlabel\n", { status: 200 })
+    if (url.includes("rugpull")) return new Response("No.,Chain,address,Losses,Type,Root Causes,Sources,URL\n", { status: 200 })
+    return new Response("[]", { status: 200 })
+  }
+  await inspectEvmPublicThreatCorpus("0x8888888888888888888888888888888888888888")
+  assert.ok(seenUrls.includes("https://raw.githubusercontent.com/sjdseu/Real-CATS/master/CE.tsv"))
+  assert.ok(!seenUrls.some((url) => url.includes("Real-CATS/main/CE.tsv")))
 })
 
 test("reports independent matches across three separately maintained corpora", async () => {
