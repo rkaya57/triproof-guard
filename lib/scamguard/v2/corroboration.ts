@@ -10,7 +10,7 @@ export type V2CorroborationAssessment = {
   confidence: "LOW" | "MEDIUM" | "HIGH"
   independentFamilies: V2EvidenceFamily[]
   independentSources: V2EvidenceSourceGroup[]
-  observedSources: V2EvidenceSourceGroup[]
+  observedSources?: V2EvidenceSourceGroup[]
   familyScores: Partial<Record<V2EvidenceFamily, number>>
   corroborations: string[]
   activationGate: "insufficient" | "single_strong_source" | "corroborated"
