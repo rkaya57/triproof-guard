@@ -64,12 +64,30 @@ export type TokensXyzEvidence = {
   error?: string
 }
 
+export type TokensXyzReferenceEvidence = {
+  status: "available" | "unavailable" | "disabled"
+  source: "tokens.xyz"
+  ref: string
+  assetId?: string
+  name?: string | null
+  symbol?: string | null
+  mint?: string
+  resolvedBy?: string
+  error?: string
+}
+
 type CacheEntry = {
   expiresAt: number
   value: TokensXyzEvidence
 }
 
+type ReferenceCacheEntry = {
+  expiresAt: number
+  value: TokensXyzReferenceEvidence
+}
+
 const cache = new Map<string, CacheEntry>()
+const referenceCache = new Map<string, ReferenceCacheEntry>()
 const defaultBaseUrl = "https://api.tokens.xyz/v1"
 const defaultTimeoutMs = 2_500
 const defaultTtlMs = 10 * 60 * 1000
@@ -177,6 +195,43 @@ export async function inspectTokensXyzAsset(mint: string): Promise<TokensXyzEvid
   return value
 }
 
+export async function resolveTokensXyzReference(ref: string): Promise<TokensXyzReferenceEvidence> {
+  const normalized = ref.trim().slice(0, 160)
+  const { apiKey, ttlMs } = getConfig()
+  if (!apiKey) return { status: "disabled", source: "tokens.xyz", ref: normalized }
+  if (!normalized) return { status: "unavailable", source: "tokens.xyz", ref: normalized, error: "Reference is empty" }
+
+  const key = normalized.toLowerCase()
+  const cached = referenceCache.get(key)
+  if (cached && cached.expiresAt > Date.now()) return cached.value
+
+  let value: TokensXyzReferenceEvidence
+  try {
+    const resolved = await tokensFetch<TokensXyzResolveResponse>(`/assets/resolve?ref=${encodeURIComponent(normalized)}`)
+    value = {
+      status: "available",
+      source: "tokens.xyz",
+      ref: normalized,
+      assetId: resolved.assetId ?? resolved.asset?.assetId,
+      name: resolved.asset?.name,
+      symbol: resolved.asset?.symbol,
+      mint: resolved.variant?.mint ?? resolved.mint,
+      resolvedBy: resolved.resolvedBy,
+    }
+  } catch (error) {
+    value = {
+      status: "unavailable",
+      source: "tokens.xyz",
+      ref: normalized,
+      error: error instanceof Error ? error.message : "Tokens.xyz reference lookup failed",
+    }
+  }
+
+  referenceCache.set(key, { value, expiresAt: Date.now() + ttlMs })
+  return value
+}
+
 export function resetTokensXyzCacheForTests() {
   cache.clear()
+  referenceCache.clear()
 }
