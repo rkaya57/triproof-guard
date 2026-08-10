@@ -34,8 +34,10 @@ jobs:
         run: npx tsc --noEmit
       - name: V2 transaction impact tests
         run: node --import tsx --test lib/scamguard/v2/transaction-impact.test.ts lib/scamguard/v2/transaction-impact-signals.test.ts
-      - name: V2 transaction fusion adversarial tests
+      - name: V2 EVM transaction fusion adversarial tests
         run: node --import tsx --test lib/scamguard/v2/evidence-fusion-transaction.test.ts
+      - name: V2 Solana transaction fusion adversarial tests
+        run: node --import tsx --test lib/scamguard/v2/evidence-fusion-solana-transaction.test.ts
       - name: V2 cross-surface consistency tests
         run: node --import tsx --test lib/scamguard/v2/cross-surface-consistency.test.ts
       - name: V2 shadow telemetry tests
@@ -87,5 +89,6 @@ jobs:
           lib/scamguard/v2/evidence-fusion.test.ts
           lib/scamguard/v2/evidence-fusion-brand.test.ts
           lib/scamguard/v2/evidence-fusion-transaction.test.ts
+          lib/scamguard/v2/evidence-fusion-solana-transaction.test.ts
           lib/scamguard/v2/cross-surface-consistency.test.ts
           app/api/scamguard/v2/observe/route.ts
