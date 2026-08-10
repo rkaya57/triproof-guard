@@ -27,7 +27,18 @@ export function buildEntityContextHint(input: {
     return {
       mode: "context_only",
       status: "none",
-      reason: "No known infrastructure attribution is available for this target.",
+      reason: "No independently corroborated infrastructure attribution is available for this target.",
+      canDowngradeDecision: false,
+      affectsRiskScore: false,
+      requiresHumanReview: false,
+    }
+  }
+
+  if (input.assessment.proposedRiskLevel === "HIGH_RISK" || input.assessment.proposedRiskLevel === "CRITICAL") {
+    return {
+      mode: "context_only",
+      status: "none",
+      reason: "Infrastructure attribution is never presented as a de-risking hint when V2 proposes HIGH_RISK or CRITICAL.",
       canDowngradeDecision: false,
       affectsRiskScore: false,
       requiresHumanReview: false,
