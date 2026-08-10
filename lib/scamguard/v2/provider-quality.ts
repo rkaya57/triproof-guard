@@ -17,6 +17,7 @@ const remoteCacheBoundsMs: Partial<Record<V2EvidenceSourceGroup, number>> = {
   "solana-rpc": 60 * 60 * 1000,
   "evm-real-cats": 60 * 60 * 1000,
   "evm-rug-pull-dataset": 60 * 60 * 1000,
+  "evm-mew-darklist": 60 * 60 * 1000,
   "evm-rpc-contract": 60 * 60 * 1000,
 }
 
