@@ -11,6 +11,7 @@ export type V2ShadowDecision = {
   evidenceScore: number
   confidence: V2CorroborationAssessment["confidence"]
   independentFamilies: V2CorroborationAssessment["independentFamilies"]
+  independentSources: V2CorroborationAssessment["independentSources"]
   eligibleForActivationStudy: boolean
   productionDecisionChanged: false
 }
@@ -40,6 +41,7 @@ export function compareShadowDecision(
     evidenceScore: proposed.evidenceScore,
     confidence: proposed.confidence,
     independentFamilies: [...proposed.independentFamilies],
+    independentSources: [...proposed.independentSources],
     eligibleForActivationStudy: proposed.activationGate === "corroborated" && proposed.confidence === "HIGH",
     productionDecisionChanged: false,
   }
