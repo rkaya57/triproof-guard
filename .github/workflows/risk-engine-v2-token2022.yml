@@ -106,6 +106,7 @@ jobs:
           lib/scamguard/v2/context-telemetry.test.ts
           lib/scamguard/v2/pre-holdout-benchmark.ts
           lib/scamguard/v2/pre-holdout-benchmark.test.ts
+          lib/scamguard/v2/pre-holdout-edge-cases.ts
           lib/scamguard/v2/pre-holdout-readiness.ts
           lib/scamguard/v2/pre-holdout-readiness.test.ts
           lib/scamguard/v2/shadow-decision.ts
