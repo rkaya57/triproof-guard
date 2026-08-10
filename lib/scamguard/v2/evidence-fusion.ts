@@ -2,9 +2,16 @@ import type { ScamGuardScanInput, ScamGuardScanResult, ScamGuardSignal } from "@
 import { scanScamGuard } from "@/lib/scamguard/engine"
 import { inspectPhishingDatabase, type PhishingDatabaseEvidence } from "@/lib/scamguard/providers/phishing-database"
 import { inspectToken2022Rpc, type Token2022RpcEvidence } from "@/lib/scamguard/providers/token-2022-rpc"
-import { inspectTokensXyzAsset, type TokensXyzEvidence } from "@/lib/scamguard/providers/tokens-xyz"
+import {
+  inspectTokensXyzAsset,
+  resolveTokensXyzReference,
+  type TokensXyzEvidence,
+  type TokensXyzReferenceEvidence,
+} from "@/lib/scamguard/providers/tokens-xyz"
+import { compareCanonicalIdentity, type CanonicalIdentityComparison } from "@/lib/scamguard/v2/canonical-identity"
 
 export type V2EvidenceSource = "tokens.xyz" | "phishing.database" | "solana-rpc"
+export type ScamGuardV2Input = ScamGuardScanInput & { claimedAsset?: string }
 
 export type V2EvidenceProvenance = {
   source: V2EvidenceSource
@@ -20,6 +27,8 @@ export type ScamGuardV2Observation = {
   proposedSignals: ScamGuardSignal[]
   evidence: {
     tokensXyz?: TokensXyzEvidence
+    claimedTokensXyz?: TokensXyzReferenceEvidence
+    canonicalIdentity?: CanonicalIdentityComparison
     phishingDatabase?: PhishingDatabaseEvidence
     token2022?: Token2022RpcEvidence
   }
@@ -129,12 +138,16 @@ function token2022Signals(evidence: Token2022RpcEvidence): ScamGuardSignal[] {
   })
 }
 
-export async function observeScamGuardV2(input: ScamGuardScanInput): Promise<ScamGuardV2Observation> {
+export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamGuardV2Observation> {
   const basePromise = scanScamGuard(input)
   const isSolanaToken = input.type === "token" && (input.chain === "solana" || input.chain === undefined)
   const tokenPromise = isSolanaToken
     ? inspectTokensXyzAsset(input.value)
     : Promise.resolve<TokensXyzEvidence | undefined>(undefined)
+  const claimedAsset = input.claimedAsset?.trim()
+  const claimedTokenPromise = isSolanaToken && claimedAsset
+    ? resolveTokensXyzReference(claimedAsset)
+    : Promise.resolve<TokensXyzReferenceEvidence | undefined>(undefined)
   const token2022Promise = isSolanaToken
     ? inspectToken2022Rpc(input.value)
     : Promise.resolve<Token2022RpcEvidence | undefined>(undefined)
@@ -143,14 +156,17 @@ export async function observeScamGuardV2(input: ScamGuardScanInput): Promise<Sca
     ? inspectPhishingDatabase(domain)
     : Promise.resolve<PhishingDatabaseEvidence | undefined>(undefined)
 
-  const [base, tokensXyz, phishingDatabase, token2022] = await Promise.all([
+  const [base, tokensXyz, claimedTokensXyz, phishingDatabase, token2022] = await Promise.all([
     basePromise,
     tokenPromise,
+    claimedTokenPromise,
     phishingPromise,
     token2022Promise,
   ])
+  const canonicalIdentity = claimedTokensXyz ? compareCanonicalIdentity(tokensXyz, claimedTokensXyz) : undefined
   const proposedSignals = [
     ...(tokensXyz ? tokensSignals(tokensXyz) : []),
+    ...(canonicalIdentity?.signal ? [canonicalIdentity.signal] : []),
     ...(phishingDatabase ? phishingSignals(phishingDatabase) : []),
     ...(token2022 ? token2022Signals(token2022) : []),
   ]
@@ -163,6 +179,15 @@ export async function observeScamGuardV2(input: ScamGuardScanInput): Promise<Sca
       confidence: tokensXyz.status === "available" && Boolean(tokensXyz.canonical?.assetId) ? "high" : "low",
       purpose: "canonical_identity",
       note: "Canonical identity and market-health evidence are additive and cannot independently label a token malicious.",
+    })
+  }
+  if (claimedTokensXyz) {
+    provenance.push({
+      source: "tokens.xyz",
+      status: claimedTokensXyz.status,
+      confidence: canonicalIdentity?.status === "mismatch" || canonicalIdentity?.status === "match" ? "high" : "low",
+      purpose: "canonical_identity",
+      note: canonicalIdentity?.note ?? "Claimed token identity could not be compared.",
     })
   }
   if (phishingDatabase) {
@@ -190,7 +215,7 @@ export async function observeScamGuardV2(input: ScamGuardScanInput): Promise<Sca
     mode: "observe_only",
     base,
     proposedSignals,
-    evidence: { tokensXyz, phishingDatabase, token2022 },
+    evidence: { tokensXyz, claimedTokensXyz, canonicalIdentity, phishingDatabase, token2022 },
     provenance,
     summary: {
       providerCount: provenance.length,
