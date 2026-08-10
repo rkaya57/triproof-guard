@@ -28,12 +28,20 @@ function disableRemoteEvidence() {
   delete process.env.TOKENS_XYZ_API_KEY
 }
 
-test("trusted source context never suppresses a dangerous unlimited approval", async () => {
+test("trusted URL surface never suppresses a dangerous unlimited approval on the transaction surface", async () => {
   disableRemoteEvidence()
+
+  const trustedUrl = await observeScamGuardV2({
+    type: "url",
+    chain: "evm",
+    value: "https://zerg.app/",
+  })
+  assert.equal(trustedUrl.base.metadata.reputation?.verdict, "trusted")
+  assert.equal(trustedUrl.base.riskLevel, "SAFE")
 
   const token = "0x1111111111111111111111111111111111111111"
   const spender = "0x2222222222222222222222222222222222222222"
-  const observation = await observeScamGuardV2({
+  const transaction = await observeScamGuardV2({
     type: "transaction",
     chain: "evm",
     sourceUrl: "https://zerg.app/",
@@ -46,13 +54,12 @@ test("trusted source context never suppresses a dangerous unlimited approval", a
     }),
   })
 
-  assert.equal(observation.base.metadata.reputation?.verdict, "trusted")
-  assert.equal(observation.evidence.transactionImpact?.action, "approval")
-  assert.ok(observation.evidence.transactionImpact?.capabilities.includes("unlimited_approval"))
-  assert.ok(observation.proposedSignals.some((signal) => signal.code === "V2_TX_UNLIMITED_APPROVAL"))
-  assert.ok(observation.proposedAssessment.independentFamilies.includes("transaction_impact"))
-  assert.equal(observation.proposedAssessment.activationGate, "insufficient")
-  assert.equal(observation.summary.decisionChanged, false)
+  assert.equal(transaction.evidence.transactionImpact?.action, "approval")
+  assert.ok(transaction.evidence.transactionImpact?.capabilities.includes("unlimited_approval"))
+  assert.ok(transaction.proposedSignals.some((signal) => signal.code === "V2_TX_UNLIMITED_APPROVAL"))
+  assert.ok(transaction.proposedAssessment.independentFamilies.includes("transaction_impact"))
+  assert.equal(transaction.proposedAssessment.activationGate, "insufficient")
+  assert.equal(transaction.summary.decisionChanged, false)
 })
 
 test("spoofed brand context can warn on an otherwise ordinary transfer without inventing transaction risk", async () => {
