@@ -34,6 +34,8 @@ jobs:
         run: npm ci
       - name: Type check
         run: npx tsc --noEmit
+      - name: V2 provider quality tests
+        run: node --import tsx --test lib/scamguard/v2/provider-quality.test.ts
       - name: V2 transaction impact tests
         run: node --import tsx --test lib/scamguard/v2/transaction-impact.test.ts lib/scamguard/v2/transaction-impact-signals.test.ts
       - name: V2 EVM transaction fusion adversarial tests
@@ -67,6 +69,8 @@ jobs:
           lib/scamguard/providers/token-2022-rpc.test.ts
           lib/scamguard/providers/solana-distribution-rpc.ts
           lib/scamguard/providers/solana-distribution-rpc.test.ts
+          lib/scamguard/v2/provider-quality.ts
+          lib/scamguard/v2/provider-quality.test.ts
           lib/scamguard/v2/token-2022-extensions.ts
           lib/scamguard/v2/token-2022-extensions.test.ts
           lib/scamguard/v2/canonical-identity.ts
