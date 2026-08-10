@@ -15,11 +15,14 @@ const nonDowngradableCodes = new Set([
   "PUNYCODE_DOMAIN",
   "SENSITIVE_REDIRECT_PARAMETER",
   "ENCODED_CLAIM_PAYLOAD",
+  "SECRET_MATERIAL_REQUEST",
   "EXTENSION_SEED_PHRASE_FORM",
   "EXTENSION_PRIVATE_KEY_FORM",
 ])
 
 const heuristicOnlyCodes = new Set([
+  "BRAND_IMPERSONATION",
+  "TYPOSQUATTING_PATTERN",
   "CLAIM_LANGUAGE",
   "UNVERIFIED_CLAIM_DOMAIN",
   "UNVERIFIED_PROJECT_CONTEXT",
@@ -47,12 +50,14 @@ function isVerifiedCurrentDomain(value: string) {
   return [...verifiedCurrentWeb3Domains].some((root) => domainMatches(host, root))
 }
 
-function stopLevelSignal(signal: ScamGuardSignal) {
-  return signal.severity === "critical" || signal.severity === "high" || nonDowngradableCodes.has(signal.code)
-}
-
 function heuristicRiskSignal(signal: ScamGuardSignal) {
   return heuristicOnlyCodes.has(signal.code)
+}
+
+function stopLevelSignal(signal: ScamGuardSignal) {
+  if (nonDowngradableCodes.has(signal.code)) return true
+  if (signal.severity === "critical") return true
+  return signal.severity === "high" && !heuristicRiskSignal(signal)
 }
 
 function riskLevel(score: number): ScamGuardRiskLevel {
@@ -65,7 +70,7 @@ function riskLevel(score: number): ScamGuardRiskLevel {
 /**
  * Narrow production guard for verified project domains that migrated or were
  * missing from the historical V1 registry. It never overrides threat intel,
- * explicit stop-level browser signals, or non-heuristic medium/high evidence.
+ * explicit browser stop signals, or non-heuristic medium/high evidence.
  */
 export function applyVerifiedDomainFalsePositiveGuard(value: string, result: ScamGuardScanResult): ScamGuardScanResult {
   if (result.type !== "url" || !isVerifiedCurrentDomain(value)) return result
@@ -82,7 +87,7 @@ export function applyVerifiedDomainFalsePositiveGuard(value: string, result: Sca
       code: "CURRENT_VERIFIED_PROJECT_DOMAIN",
       severity: "info" as const,
       title: "Current verified project domain",
-      detail: "The hostname matches a currently verified official Web3 project domain. Campaign-language heuristics were suppressed, but threat-intelligence and wallet-intent checks remain authoritative.",
+      detail: "The hostname matches a currently verified official Web3 project domain. Registry-gap heuristics were suppressed, but threat-intelligence and wallet-intent checks remain authoritative.",
     },
   ]
   const score = Math.min(result.score, 22)
