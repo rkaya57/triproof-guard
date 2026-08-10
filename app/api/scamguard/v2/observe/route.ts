@@ -8,6 +8,7 @@ import { inspectReviewedCommunityThreatContext } from "@/lib/scamguard/providers
 import { scanAccess } from "@/lib/scamguard/scan-access"
 import { proposeV2ActivationPolicy } from "@/lib/scamguard/v2/activation-policy"
 import { assessV2ActivationReadiness } from "@/lib/scamguard/v2/activation-readiness"
+import { buildEntityContextHint } from "@/lib/scamguard/v2/entity-context-hint"
 import { observeScamGuardV2 } from "@/lib/scamguard/v2/evidence-fusion"
 import { compareShadowDecision } from "@/lib/scamguard/v2/shadow-decision"
 import { buildShadowTelemetryRecord } from "@/lib/scamguard/v2/shadow-telemetry"
@@ -74,15 +75,23 @@ export async function POST(request: Request) {
       : Promise.resolve(undefined),
   ])
 
+  const infrastructureContext = Boolean(entityAttribution && isInfrastructureEntity(entityAttribution.entityType))
   const entityAttributionContext = entityAttribution
     ? {
         ...entityAttribution,
-        infrastructureContext: isInfrastructureEntity(entityAttribution.entityType),
+        infrastructureContext,
         affectsRiskScore: false,
         affectsActivation: false,
         canDowngradeDecision: false,
       }
     : undefined
+
+  const entityContextHint = buildEntityContextHint({
+    infrastructureContext,
+    entityLabel: entityAttribution?.label,
+    entityType: entityAttribution?.entityType,
+    assessment: observation.proposedAssessment,
+  })
 
   const communityThreatContext = reviewedCommunityThreats
     ? {
@@ -114,6 +123,7 @@ export async function POST(request: Request) {
     ...observation,
     transactionImpact: observation.evidence.transactionImpact,
     entityAttributionContext,
+    entityContextHint,
     communityThreatContext,
     shadowDecision,
     shadowTelemetry,
