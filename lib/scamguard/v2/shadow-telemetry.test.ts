@@ -14,6 +14,7 @@ const shadow: V2ShadowDecision = {
   evidenceScore: 72,
   confidence: "HIGH",
   independentFamilies: ["threat_intelligence", "brand_impersonation"],
+  independentSources: ["phishing.database", "local-brand-registry"],
   eligibleForActivationStudy: true,
   productionDecisionChanged: false,
 }
@@ -34,6 +35,7 @@ test("shadow telemetry keeps only decision metadata", () => {
   assert.equal(record.providerCount, 4)
   assert.equal(record.availableProviders, 3)
   assert.deepEqual(record.independentFamilies, ["threat_intelligence", "brand_impersonation"])
+  assert.deepEqual(record.independentSources, ["phishing.database", "local-brand-registry"])
 })
 
 test("numeric counters are normalized to non-negative integers", () => {
