@@ -17,6 +17,8 @@ export type V2ShadowTelemetryRecord = {
   independentSources: V2ShadowDecision["independentSources"]
   providerCount: number
   availableProviders: number
+  activationEligibleSources: number
+  degradedOrUnavailableSources: number
   proposedSignalCount: number
   eligibleForActivationStudy: boolean
   containsRawTarget: false
@@ -29,6 +31,8 @@ export function buildShadowTelemetryRecord(input: {
   shadow: V2ShadowDecision
   providerCount: number
   availableProviders: number
+  activationEligibleSources?: number
+  degradedOrUnavailableSources?: number
   proposedSignalCount: number
 }): V2ShadowTelemetryRecord {
   return {
@@ -47,6 +51,8 @@ export function buildShadowTelemetryRecord(input: {
     independentSources: [...input.shadow.independentSources],
     providerCount: Math.max(0, Math.trunc(input.providerCount)),
     availableProviders: Math.max(0, Math.trunc(input.availableProviders)),
+    activationEligibleSources: Math.max(0, Math.trunc(input.activationEligibleSources ?? input.shadow.independentSources.length)),
+    degradedOrUnavailableSources: Math.max(0, Math.trunc(input.degradedOrUnavailableSources ?? 0)),
     proposedSignalCount: Math.max(0, Math.trunc(input.proposedSignalCount)),
     eligibleForActivationStudy: input.shadow.eligibleForActivationStudy,
     containsRawTarget: false,
