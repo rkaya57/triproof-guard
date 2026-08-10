@@ -6,13 +6,18 @@ export type ScamGuardV2SecondHoldoutRecord = {
   surface: ScamGuardV2HoldoutSurface
   chain: ScamGuardV2HoldoutChain
   groundTruth: ScamGuardV2HoldoutGroundTruth
+  target: string
   sourceUrl?: string
   provenanceId: string
+  source1Url: string
+  source2Url?: string
+  verificationStatus: "verified" | "provisional"
+  evidenceQuality: "high" | "medium" | "low"
   collectedAt: string
 }
 
 export const scamGuardV2SecondHoldoutContract = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   role: "independent_final_validation" as const,
   minimumTotalCases: 180,
   minimumProjects: 8,
@@ -24,12 +29,24 @@ export const scamGuardV2SecondHoldoutContract = {
     wallet: 30,
   },
   minimumTransactionSourceContextCoverage: 0.8,
+  minimumVerifiedCoverage: 0.9,
+  minimumMaliciousDualSourceCoverage: 0.5,
   requiresDistinctProvenance: true,
   excludesSeenFixtureIds: true,
   internalAdjudicationExcluded: true,
   internalGraphContextExcluded: true,
   productionDecisionChangesAllowed: false,
 } as const
+
+function validHttpUrl(value: string | undefined) {
+  if (!value?.trim()) return false
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === "https:" || parsed.protocol === "http:"
+  } catch {
+    return false
+  }
+}
 
 export function validateSecondHoldoutDataset(
   records: ScamGuardV2SecondHoldoutRecord[],
@@ -45,11 +62,15 @@ export function validateSecondHoldoutDataset(
   const groundTruthCounts: Record<ScamGuardV2HoldoutGroundTruth, number> = { benign: 0, malicious: 0 }
   let transactionCases = 0
   let transactionCasesWithSourceContext = 0
+  let verifiedCases = 0
+  let maliciousCases = 0
+  let maliciousCasesWithTwoSources = 0
 
   for (const record of records) {
     const id = record.id.trim()
     const projectId = record.projectId.trim()
     const provenanceId = record.provenanceId.trim()
+    const target = record.target.trim()
     if (!id) blockers.push("Every second-Holdout record requires an id.")
     else if (ids.has(id)) blockers.push(`Duplicate second-Holdout id: ${id}`)
     else {
@@ -58,16 +79,25 @@ export function validateSecondHoldoutDataset(
     }
     if (!projectId) blockers.push(`Record ${id || "<missing-id>"} requires projectId.`)
     else projects.add(projectId)
+    if (!target) blockers.push(`Record ${id || "<missing-id>"} requires an executable target.`)
     if (!provenanceId) blockers.push(`Record ${id || "<missing-id>"} requires independent provenanceId.`)
+    else if (provenance.has(provenanceId)) blockers.push(`Duplicate provenanceId is prohibited in final validation: ${provenanceId}`)
     else provenance.add(provenanceId)
+    if (!validHttpUrl(record.source1Url)) blockers.push(`Record ${id || "<missing-id>"} requires a valid source1Url.`)
+    if (record.source2Url && !validHttpUrl(record.source2Url)) blockers.push(`Record ${id || "<missing-id>"} has an invalid source2Url.`)
     if (!Number.isFinite(Date.parse(record.collectedAt))) blockers.push(`Record ${id || "<missing-id>"} requires a valid collectedAt timestamp.`)
+    if (record.verificationStatus === "verified") verifiedCases += 1
 
     surfaceCounts[record.surface] += 1
     groundTruthCounts[record.groundTruth] += 1
     if (record.chain !== "unknown") chains.add(record.chain)
+    if (record.groundTruth === "malicious") {
+      maliciousCases += 1
+      if (validHttpUrl(record.source2Url)) maliciousCasesWithTwoSources += 1
+    }
     if (record.surface === "transaction") {
       transactionCases += 1
-      if (record.sourceUrl?.trim()) transactionCasesWithSourceContext += 1
+      if (validHttpUrl(record.sourceUrl)) transactionCasesWithSourceContext += 1
     }
   }
 
@@ -81,9 +111,18 @@ export function validateSecondHoldoutDataset(
   for (const label of ["benign", "malicious"] as const) {
     if (groundTruthCounts[label] < scamGuardV2SecondHoldoutContract.minimumGroundTruthPerClass) blockers.push(`${label} requires at least ${scamGuardV2SecondHoldoutContract.minimumGroundTruthPerClass} cases.`)
   }
+
   const transactionSourceContextCoverage = transactionCases ? transactionCasesWithSourceContext / transactionCases : 0
   if (transactionSourceContextCoverage < scamGuardV2SecondHoldoutContract.minimumTransactionSourceContextCoverage) {
     blockers.push(`Transaction source-context coverage must be at least ${Math.round(scamGuardV2SecondHoldoutContract.minimumTransactionSourceContextCoverage * 100)}%.`)
+  }
+  const verifiedCoverage = records.length ? verifiedCases / records.length : 0
+  if (verifiedCoverage < scamGuardV2SecondHoldoutContract.minimumVerifiedCoverage) {
+    blockers.push(`Verified ground-truth coverage must be at least ${Math.round(scamGuardV2SecondHoldoutContract.minimumVerifiedCoverage * 100)}%.`)
+  }
+  const maliciousDualSourceCoverage = maliciousCases ? maliciousCasesWithTwoSources / maliciousCases : 0
+  if (maliciousDualSourceCoverage < scamGuardV2SecondHoldoutContract.minimumMaliciousDualSourceCoverage) {
+    blockers.push(`Malicious dual-source ground-truth coverage must be at least ${Math.round(scamGuardV2SecondHoldoutContract.minimumMaliciousDualSourceCoverage * 100)}%.`)
   }
 
   return {
@@ -97,6 +136,11 @@ export function validateSecondHoldoutDataset(
     transactionCases,
     transactionCasesWithSourceContext,
     transactionSourceContextCoverage,
+    verifiedCases,
+    verifiedCoverage,
+    maliciousCases,
+    maliciousCasesWithTwoSources,
+    maliciousDualSourceCoverage,
     blockers,
   }
 }
