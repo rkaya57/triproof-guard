@@ -3,7 +3,7 @@ import path from "node:path"
 
 import type { ScamGuardChain, ScamGuardRiskLevel, ScamGuardScanType } from "@/lib/scamguard/engine"
 import { summarizeCalibrationEvidenceCoverage, type CalibrationEvidenceCase } from "@/lib/scamguard/v2/calibration-evidence-coverage"
-import { observeScamGuardV2 } from "@/lib/scamguard/v2/evidence-fusion"
+import { observeCalibratedScamGuardV2 } from "@/lib/scamguard/v2/calibrated-evidence-fusion"
 import { evaluateScamGuardHoldout, type ScamGuardHoldoutCase } from "@/lib/scamguard/v2/holdout-evaluation"
 
 const FIXTURE = path.join(process.cwd(), "lib/scamguard/v2/fixtures/holdout-150.csv")
@@ -120,7 +120,7 @@ async function main() {
       // Holdout mode is intentionally reused here only to exclude internal
       // adjudication and graph history. The dataset itself is SEEN and this
       // report is calibration-only; it is never final validation evidence.
-      const observation = await observeScamGuardV2(normalizeInput(record, resolvedTransaction), { evaluationMode: "holdout" })
+      const observation = await observeCalibratedScamGuardV2(normalizeInput(record, resolvedTransaction), { evaluationMode: "holdout" })
       const v1RiskLevel = observation.base.riskLevel
       const additiveV2RiskLevel = observation.proposedAssessment.proposedRiskLevel
       const effectiveV2RiskLevel = maxRisk(v1RiskLevel, additiveV2RiskLevel)
