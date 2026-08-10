@@ -4,6 +4,7 @@ import type { ScamGuardChain, ScamGuardScanType } from "@/lib/scamguard/engine"
 import { getExtensionSession } from "@/lib/extension/session"
 import { scanAccess } from "@/lib/scamguard/scan-access"
 import { proposeV2ActivationPolicy } from "@/lib/scamguard/v2/activation-policy"
+import { assessV2ActivationReadiness } from "@/lib/scamguard/v2/activation-readiness"
 import { observeScamGuardV2 } from "@/lib/scamguard/v2/evidence-fusion"
 import { compareShadowDecision } from "@/lib/scamguard/v2/shadow-decision"
 import { buildShadowTelemetryRecord } from "@/lib/scamguard/v2/shadow-telemetry"
@@ -57,13 +58,22 @@ export async function POST(request: Request) {
     proposedSignalCount: observation.summary.proposedSignalCount,
   })
   const activationPolicy = proposeV2ActivationPolicy(shadowDecision)
+  const activationReadiness = assessV2ActivationReadiness(shadowDecision, activationPolicy)
 
-  return NextResponse.json({ ...observation, transactionImpact: observation.evidence.transactionImpact, shadowDecision, shadowTelemetry, activationPolicy }, {
+  return NextResponse.json({
+    ...observation,
+    transactionImpact: observation.evidence.transactionImpact,
+    shadowDecision,
+    shadowTelemetry,
+    activationPolicy,
+    activationReadiness,
+  }, {
     headers: {
       "Cache-Control": "no-store",
       "X-ScamGuard-V2-Mode": "observe-only",
       "X-ScamGuard-V2-Shadow": shadowDecision.relation,
       "X-ScamGuard-V2-Candidate": activationPolicy.candidateAction,
+      "X-ScamGuard-V2-Readiness": activationReadiness.stage,
       "X-ScamGuard-Plan": access.plan.name,
       "X-ScamGuard-Daily-Limit": String(access.plan.dailyScanLimit),
       "X-ScamGuard-Scans-Used": String(access.scanCount),
