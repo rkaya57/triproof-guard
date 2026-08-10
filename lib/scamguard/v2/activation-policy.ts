@@ -40,11 +40,11 @@ export function proposeV2ActivationPolicy(shadow: V2ShadowDecision): V2Activatio
   }
 
   if (shadow.v2ProposedRiskLevel === "CRITICAL") {
-    if (shadow.independentFamilies.length < 3) {
+    if (shadow.independentFamilies.length < 3 || shadow.independentSources.length < 3) {
       return {
         mode: "observe_only",
         candidateAction: "none",
-        reason: "CRITICAL activation study requires convergence across at least three independent evidence families.",
+        reason: "CRITICAL activation study requires convergence across at least three evidence families and three independently controlled source groups.",
         requiresHoldoutValidation: true,
         productionActionChanged: false,
       }
@@ -53,17 +53,27 @@ export function proposeV2ActivationPolicy(shadow: V2ShadowDecision): V2Activatio
     return {
       mode: "observe_only",
       candidateAction: "block_candidate",
-      reason: "V2 proposes CRITICAL risk with corroborated high-confidence evidence from at least three independent families. Blocking remains a holdout-gated candidate only.",
+      reason: "V2 proposes CRITICAL risk with corroborated high-confidence evidence from at least three evidence families and three independently controlled source groups. Blocking remains a holdout-gated candidate only.",
       requiresHoldoutValidation: true,
       productionActionChanged: false,
     }
   }
 
   if (shadow.v2ProposedRiskLevel === "HIGH_RISK") {
+    if (shadow.independentSources.length < 2) {
+      return {
+        mode: "observe_only",
+        candidateAction: "none",
+        reason: "HIGH_RISK activation study requires at least two independently controlled source groups.",
+        requiresHoldoutValidation: true,
+        productionActionChanged: false,
+      }
+    }
+
     return {
       mode: "observe_only",
       candidateAction: "review_candidate",
-      reason: "V2 proposes HIGH_RISK with corroborated high-confidence evidence. A mandatory review is a holdout-gated candidate.",
+      reason: "V2 proposes HIGH_RISK with corroborated high-confidence evidence from independent sources. A mandatory review is a holdout-gated candidate.",
       requiresHoldoutValidation: true,
       productionActionChanged: false,
     }
