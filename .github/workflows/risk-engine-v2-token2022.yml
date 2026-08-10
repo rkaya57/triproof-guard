@@ -42,6 +42,7 @@ jobs:
           lib/scamguard/v2/brand-impersonation.test.ts
           lib/scamguard/v2/corroboration.test.ts
           lib/scamguard/v2/evidence-fusion.test.ts
+          lib/scamguard/v2/evidence-fusion-brand.test.ts
       - name: Focused lint
         run: >-
           npx eslint
@@ -59,4 +60,5 @@ jobs:
           lib/scamguard/v2/corroboration.test.ts
           lib/scamguard/v2/evidence-fusion.ts
           lib/scamguard/v2/evidence-fusion.test.ts
+          lib/scamguard/v2/evidence-fusion-brand.test.ts
           app/api/scamguard/v2/observe/route.ts
