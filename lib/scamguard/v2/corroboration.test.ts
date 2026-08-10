@@ -33,7 +33,7 @@ test("a single phishing feed match is strong evidence but not corroborated activ
   assert.equal(assessment.confidence, "MEDIUM")
 })
 
-test("phishing intelligence plus brand impersonation crosses the corroborated high-risk gate", () => {
+test("phishing intelligence plus brand impersonation is capped at high risk with only two families", () => {
   const assessment = assessV2Corroboration([
     signal("V2_ACTIVE_PHISHING_FEED_MATCH", "critical"),
     signal("V2_BRAND_TYPOSQUAT", "medium"),
@@ -42,8 +42,22 @@ test("phishing intelligence plus brand impersonation crosses the corroborated hi
   assert.equal(assessment.activationGate, "corroborated")
   assert.equal(assessment.proposedRiskLevel, "HIGH_RISK")
   assert.equal(assessment.confidence, "HIGH")
-  assert.ok(assessment.evidenceScore >= 55)
+  assert.ok(assessment.evidenceScore >= 80)
+  assert.equal(assessment.independentFamilies.length, 2)
   assert.ok(assessment.corroborations.length > 0)
+})
+
+test("three independent strong evidence families may propose critical risk", () => {
+  const assessment = assessV2Corroboration([
+    signal("V2_ACTIVE_PHISHING_FEED_MATCH", "critical"),
+    signal("V2_BRAND_TYPOSQUAT", "medium"),
+    signal("V2_CANONICAL_IDENTITY_MISMATCH", "critical"),
+  ])
+
+  assert.equal(assessment.activationGate, "corroborated")
+  assert.equal(assessment.proposedRiskLevel, "CRITICAL")
+  assert.equal(assessment.confidence, "HIGH")
+  assert.ok(assessment.independentFamilies.length >= 3)
 })
 
 test("Token-2022 capabilities remain bounded without an independent identity signal", () => {
