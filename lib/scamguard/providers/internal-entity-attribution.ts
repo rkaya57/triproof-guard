@@ -16,6 +16,11 @@ export type InternalEntityAttributionEvidence = {
   error?: string
 }
 
+type EntityAttributionSummary = Pick<
+  InternalEntityAttributionEvidence,
+  "label" | "entityType" | "observations" | "providers" | "independentProviderCount" | "attributionConfidence" | "latestObservedAt"
+>
+
 type EntityObservation = {
   knownEntityLabel: string | null
   knownEntityType: string | null
@@ -38,16 +43,16 @@ function normalizeWallet(value: string, chain?: string) {
     : trimmed
 }
 
-export function summarizeEntityAttribution(rows: EntityObservation[]) {
+export function summarizeEntityAttribution(rows: EntityObservation[]): EntityAttributionSummary {
   const attributed = rows.filter((row) => row.knownEntityLabel?.trim() && row.knownEntityType?.trim())
   if (!attributed.length) {
     return {
       label: undefined,
       entityType: undefined,
       observations: 0,
-      providers: [] as string[],
+      providers: [],
       independentProviderCount: 0,
-      attributionConfidence: "none" as const,
+      attributionConfidence: "none",
       latestObservedAt: undefined,
     }
   }
@@ -69,7 +74,7 @@ export function summarizeEntityAttribution(rows: EntityObservation[]) {
   const providers = best ? Array.from(new Set(best.rows.map((row) => row.provider))).slice(0, 8) : []
   const observations = best?.rows.length ?? 0
   const independentProviderCount = providers.length
-  const attributionConfidence = independentProviderCount >= 3 && observations >= 3
+  const attributionConfidence: EntityAttributionSummary["attributionConfidence"] = independentProviderCount >= 3 && observations >= 3
     ? "high"
     : independentProviderCount >= 2 && observations >= 2
       ? "medium"
