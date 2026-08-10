@@ -1,6 +1,6 @@
 import type { ScamGuardSignal } from "@/lib/scamguard/engine"
 
-export type V2EvidenceFamily = "threat_intelligence" | "identity" | "brand_impersonation" | "authority_surface" | "market_health" | "transaction_impact"
+export type V2EvidenceFamily = "threat_intelligence" | "identity" | "brand_impersonation" | "authority_surface" | "market_health" | "distribution" | "transaction_impact"
 export type V2EvidenceSourceGroup = "phishing.database" | "tokens.xyz" | "local-brand-registry" | "solana-rpc" | "v1-transaction-decoder"
 
 export type V2CorroborationAssessment = {
@@ -27,6 +27,7 @@ const familyCaps: Record<V2EvidenceFamily, number> = {
   brand_impersonation: 32,
   authority_surface: 16,
   market_health: 14,
+  distribution: 10,
   transaction_impact: 24,
 }
 
@@ -36,6 +37,7 @@ const sourceForFamily: Record<V2EvidenceFamily, V2EvidenceSourceGroup> = {
   market_health: "tokens.xyz",
   brand_impersonation: "local-brand-registry",
   authority_surface: "solana-rpc",
+  distribution: "solana-rpc",
   transaction_impact: "v1-transaction-decoder",
 }
 
@@ -46,6 +48,8 @@ function weightedSignal(signal: ScamGuardSignal): WeightedSignal | null {
   if (code === "V2_BRAND_HOMOGLYPH" || code === "V2_BRAND_TYPOSQUAT") return { family: "brand_impersonation", weight: 30 }
   if (code === "V2_BRAND_EMBEDDED_BRAND") return { family: "brand_impersonation", weight: 18 }
   if (code.startsWith("V2_TOKEN2022_")) return { family: "authority_surface", weight: signal.severity === "medium" ? 8 : 4 }
+  if (code === "V2_HIGH_LARGEST_TOKEN_ACCOUNT_CONCENTRATION") return { family: "distribution", weight: 5 }
+  if (code === "V2_HIGH_TOP10_TOKEN_ACCOUNT_CONCENTRATION") return { family: "distribution", weight: 5 }
   if (code === "V2_TX_UNLIMITED_APPROVAL") return { family: "transaction_impact", weight: 16 }
   if (code === "V2_TX_AUTHORITY_CONTROL") return { family: "transaction_impact", weight: 14 }
   if (code === "V2_TX_DELEGATE_RIGHTS" || code === "V2_TX_TYPED_AUTHORIZATION") return { family: "transaction_impact", weight: 10 }
@@ -91,10 +95,15 @@ export function assessV2Corroboration(signals: ScamGuardSignal[]): V2Corroborati
     corroborations.push("Independent phishing-feed and local brand-impersonation evidence agree on the same scan context.")
   }
   // identity + market_health intentionally receive no corroboration bonus because
-  // both originate from Tokens.xyz and therefore are not independent sources.
+  // both originate from Tokens.xyz. authority_surface + distribution likewise
+  // share Solana RPC and are never treated as independently controlled sources.
   if (has("identity") && has("authority_surface")) {
     bonus += 8
     corroborations.push("Canonical identity mismatch is independently corroborated by Solana authority capabilities.")
+  }
+  if (has("identity") && has("distribution")) {
+    bonus += 4
+    corroborations.push("Canonical identity mismatch coexists with independently queried Solana account-concentration evidence.")
   }
   if (has("threat_intelligence") && has("transaction_impact")) {
     bonus += 12
