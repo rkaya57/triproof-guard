@@ -1,6 +1,7 @@
 import type { ScamGuardScanInput, ScamGuardScanResult, ScamGuardSignal } from "@/lib/scamguard/engine"
 import { scanScamGuard } from "@/lib/scamguard/engine"
 import { inspectInternalAdjudication, type InternalAdjudicationEvidence } from "@/lib/scamguard/providers/internal-adjudication"
+import { inspectInternalGraphContext, type InternalGraphContextEvidence } from "@/lib/scamguard/providers/internal-graph-context"
 import { inspectPhishingDatabase, type PhishingDatabaseEvidence } from "@/lib/scamguard/providers/phishing-database"
 import { inspectSolanaDistributionRpc, type SolanaDistributionRpcEvidence } from "@/lib/scamguard/providers/solana-distribution-rpc"
 import { inspectToken2022Rpc, type Token2022RpcEvidence } from "@/lib/scamguard/providers/token-2022-rpc"
@@ -21,14 +22,14 @@ import {
 import { buildV2TransactionImpact, type V2TransactionImpact } from "@/lib/scamguard/v2/transaction-impact"
 import { transactionImpactSignals } from "@/lib/scamguard/v2/transaction-impact-signals"
 
-export type V2EvidenceSource = "tokens.xyz" | "phishing.database" | "solana-rpc" | "local-brand-registry" | "v1-transaction-decoder" | "triproof-adjudication"
+export type V2EvidenceSource = "tokens.xyz" | "phishing.database" | "solana-rpc" | "local-brand-registry" | "v1-transaction-decoder" | "triproof-adjudication" | "triproof-graph"
 export type ScamGuardV2Input = ScamGuardScanInput & { claimedAsset?: string }
 
 export type V2EvidenceProvenance = {
   source: V2EvidenceSource
   status: "available" | "unavailable" | "disabled" | "not_applicable"
   confidence: "low" | "medium" | "high"
-  purpose: "market_health" | "canonical_identity" | "threat_intelligence" | "authority_surface" | "distribution" | "brand_impersonation" | "transaction_impact" | "internal_reputation"
+  purpose: "market_health" | "canonical_identity" | "threat_intelligence" | "authority_surface" | "distribution" | "brand_impersonation" | "transaction_impact" | "internal_reputation" | "graph_context"
   note: string
 }
 
@@ -46,6 +47,7 @@ export type ScamGuardV2Observation = {
     token2022?: Token2022RpcEvidence
     solanaDistribution?: SolanaDistributionRpcEvidence
     internalAdjudication?: InternalAdjudicationEvidence
+    internalGraphContext?: InternalGraphContextEvidence
     brandImpersonation?: BrandImpersonationFinding[]
     transactionImpact?: V2TransactionImpact
   }
@@ -77,42 +79,20 @@ function tokensSignals(evidence: TokensXyzEvidence): ScamGuardSignal[] {
   const market = evidence.market
   const risk = evidence.risk
 
-  if (evidence.canonical?.assetId) {
-    signals.push({
-      code: "V2_CANONICAL_ASSET_RESOLVED",
-      severity: "info",
-      title: "Canonical Solana asset resolved",
-      detail: `Tokens.xyz resolved this mint to ${evidence.canonical.assetId}${evidence.canonical.symbol ? ` (${evidence.canonical.symbol})` : ""}. Canonical identity is supporting evidence, not a safety guarantee.`,
-    })
-  }
-
-  if (finite(market?.liquidity) && market.liquidity < 1_000) {
-    signals.push({ code: "V2_VERY_LOW_TOKEN_LIQUIDITY", severity: "medium", title: "Very low token liquidity", detail: `Observed market liquidity is approximately $${Math.round(market.liquidity).toLocaleString("en-US")}. Low liquidity increases execution and exit risk but does not by itself prove maliciousness.` })
-  } else if (finite(market?.liquidity) && market.liquidity < 10_000) {
-    signals.push({ code: "V2_LOW_TOKEN_LIQUIDITY", severity: "low", title: "Low token liquidity", detail: `Observed market liquidity is approximately $${Math.round(market.liquidity).toLocaleString("en-US")}. Treat this as market-health evidence only.` })
-  }
-
-  if (finite(market?.holder) && market.holder < 20) {
-    signals.push({ code: "V2_VERY_LOW_HOLDER_COUNT", severity: "medium", title: "Very low holder count", detail: `Only ${Math.round(market.holder)} holders were reported by the market-intelligence provider. This can indicate an immature or inactive token, not necessarily a scam.` })
-  }
-  if (finite(market?.volume24hUSD) && finite(market?.liquidity) && market.liquidity > 0 && market.volume24hUSD / market.liquidity > 7) {
-    signals.push({ code: "V2_UNUSUAL_VOLUME_TO_LIQUIDITY", severity: "low", title: "Unusual volume-to-liquidity ratio", detail: "24h volume is more than 7× observed liquidity. This is an anomaly signal that requires corroboration before any maliciousness conclusion." })
-  }
-  if (typeof risk?.score === "number" && risk.score < 40 && !risk.hasInsufficientData) {
-    signals.push({ code: "V2_WEAK_MARKET_HEALTH_SCORE", severity: "low", title: "Weak external market-health score", detail: `Tokens.xyz reported market-health score ${Math.round(risk.score)}${risk.grade ? ` / grade ${risk.grade}` : ""}. Tri-Proof treats this as supporting market evidence only.` })
-  }
+  if (evidence.canonical?.assetId) signals.push({ code: "V2_CANONICAL_ASSET_RESOLVED", severity: "info", title: "Canonical Solana asset resolved", detail: `Tokens.xyz resolved this mint to ${evidence.canonical.assetId}${evidence.canonical.symbol ? ` (${evidence.canonical.symbol})` : ""}. Canonical identity is supporting evidence, not a safety guarantee.` })
+  if (finite(market?.liquidity) && market.liquidity < 1_000) signals.push({ code: "V2_VERY_LOW_TOKEN_LIQUIDITY", severity: "medium", title: "Very low token liquidity", detail: `Observed market liquidity is approximately $${Math.round(market.liquidity).toLocaleString("en-US")}. Low liquidity increases execution and exit risk but does not by itself prove maliciousness.` })
+  else if (finite(market?.liquidity) && market.liquidity < 10_000) signals.push({ code: "V2_LOW_TOKEN_LIQUIDITY", severity: "low", title: "Low token liquidity", detail: `Observed market liquidity is approximately $${Math.round(market.liquidity).toLocaleString("en-US")}. Treat this as market-health evidence only.` })
+  if (finite(market?.holder) && market.holder < 20) signals.push({ code: "V2_VERY_LOW_HOLDER_COUNT", severity: "medium", title: "Very low holder count", detail: `Only ${Math.round(market.holder)} holders were reported by the market-intelligence provider. This can indicate an immature or inactive token, not necessarily a scam.` })
+  if (finite(market?.volume24hUSD) && finite(market?.liquidity) && market.liquidity > 0 && market.volume24hUSD / market.liquidity > 7) signals.push({ code: "V2_UNUSUAL_VOLUME_TO_LIQUIDITY", severity: "low", title: "Unusual volume-to-liquidity ratio", detail: "24h volume is more than 7× observed liquidity. This is an anomaly signal that requires corroboration before any maliciousness conclusion." })
+  if (typeof risk?.score === "number" && risk.score < 40 && !risk.hasInsufficientData) signals.push({ code: "V2_WEAK_MARKET_HEALTH_SCORE", severity: "low", title: "Weak external market-health score", detail: `Tokens.xyz reported market-health score ${Math.round(risk.score)}${risk.grade ? ` / grade ${risk.grade}` : ""}. Tri-Proof treats this as supporting market evidence only.` })
   return signals
 }
 
 function distributionSignals(evidence: SolanaDistributionRpcEvidence): ScamGuardSignal[] {
   if (evidence.status !== "available") return []
   const signals: ScamGuardSignal[] = []
-  if (finite(evidence.largestAccountPercent) && evidence.largestAccountPercent >= 50) {
-    signals.push({ code: "V2_HIGH_LARGEST_TOKEN_ACCOUNT_CONCENTRATION", severity: "low", title: "High concentration in the largest token account", detail: `The largest token account holds approximately ${evidence.largestAccountPercent.toFixed(2)}% of supply. Token accounts can represent exchanges, vaults, or liquidity infrastructure, so this is distribution context rather than proof of holder control or maliciousness.` })
-  }
-  if (finite(evidence.top10AccountPercent) && evidence.top10AccountPercent >= 80) {
-    signals.push({ code: "V2_HIGH_TOP10_TOKEN_ACCOUNT_CONCENTRATION", severity: "low", title: "High concentration across the ten largest token accounts", detail: `The ten largest token accounts hold approximately ${evidence.top10AccountPercent.toFixed(2)}% of supply. This is an account-concentration signal, not a unique-holder measurement, and requires independent corroboration.` })
-  }
+  if (finite(evidence.largestAccountPercent) && evidence.largestAccountPercent >= 50) signals.push({ code: "V2_HIGH_LARGEST_TOKEN_ACCOUNT_CONCENTRATION", severity: "low", title: "High concentration in the largest token account", detail: `The largest token account holds approximately ${evidence.largestAccountPercent.toFixed(2)}% of supply. Token accounts can represent exchanges, vaults, or liquidity infrastructure, so this is distribution context rather than proof of holder control or maliciousness.` })
+  if (finite(evidence.top10AccountPercent) && evidence.top10AccountPercent >= 80) signals.push({ code: "V2_HIGH_TOP10_TOKEN_ACCOUNT_CONCENTRATION", severity: "low", title: "High concentration across the ten largest token accounts", detail: `The ten largest token accounts hold approximately ${evidence.top10AccountPercent.toFixed(2)}% of supply. This is an account-concentration signal, not a unique-holder measurement, and requires independent corroboration.` })
   return signals
 }
 
@@ -132,30 +112,24 @@ function token2022Signals(evidence: Token2022RpcEvidence): ScamGuardSignal[] {
 
 function adjudicationSignals(evidence: InternalAdjudicationEvidence): ScamGuardSignal[] {
   if (evidence.status !== "available") return []
-  if (evidence.verdict === "confirmed_risk") {
-    return [{
-      code: "V2_INTERNAL_CONFIRMED_RISK",
-      severity: "medium",
-      title: "Prior human-confirmed Tri-Proof risk",
-      detail: `${Math.max(evidence.confirmedRiskReviewers + evidence.falseNegativeReviewers, 2)} independent human reviewers previously supported a risk finding for this wallet. This is internal adjudication evidence, not a model-generated score, and still requires independent corroboration.`,
-    }]
-  }
-  if (evidence.verdict === "trusted") {
-    return [{ code: "V2_INTERNAL_TRUSTED_HISTORY", severity: "info", title: "Prior human trust adjudication", detail: "Independent Tri-Proof reviewers previously marked this wallet as trusted. V2 records this for context only and never uses it to automatically downgrade a production decision." }]
-  }
-  if (evidence.verdict === "disputed") {
-    return [{ code: "V2_INTERNAL_DISPUTED_HISTORY", severity: "info", title: "Conflicting human adjudication history", detail: "Tri-Proof human reviewers have conflicting prior judgments for this wallet. The internal evidence is excluded from maliciousness weighting." }]
-  }
+  if (evidence.verdict === "confirmed_risk") return [{ code: "V2_INTERNAL_CONFIRMED_RISK", severity: "medium", title: "Prior human-confirmed Tri-Proof risk", detail: `${Math.max(evidence.confirmedRiskReviewers + evidence.falseNegativeReviewers, 2)} independent human reviewers previously supported a risk finding for this wallet. This is internal adjudication evidence, not a model-generated score, and still requires independent corroboration.` }]
+  if (evidence.verdict === "trusted") return [{ code: "V2_INTERNAL_TRUSTED_HISTORY", severity: "info", title: "Prior human trust adjudication", detail: "Independent Tri-Proof reviewers previously marked this wallet as trusted. V2 records this for context only and never uses it to automatically downgrade a production decision." }]
+  if (evidence.verdict === "disputed") return [{ code: "V2_INTERNAL_DISPUTED_HISTORY", severity: "info", title: "Conflicting human adjudication history", detail: "Tri-Proof human reviewers have conflicting prior judgments for this wallet. The internal evidence is excluded from maliciousness weighting." }]
   return []
 }
 
+function graphContextSignals(evidence: InternalGraphContextEvidence): ScamGuardSignal[] {
+  if (evidence.status !== "available" || evidence.riskBearingEdges <= 0) return []
+  return [{
+    code: "V2_INTERNAL_GRAPH_RISK_CONTEXT",
+    severity: "info",
+    title: "Prior Tri-Proof graph risk context",
+    detail: `This wallet previously appeared in ${evidence.riskBearingEdges} risk-bearing graph edge${evidence.riskBearingEdges === 1 ? "" : "s"} across ${evidence.observedComponents} component${evidence.observedComponents === 1 ? "" : "s"}. This context is intentionally excluded from V2 scoring and activation until separately validated.`,
+  }]
+}
+
 function brandSignals(findings: BrandImpersonationFinding[]): ScamGuardSignal[] {
-  return findings.map((finding) => ({
-    code: `V2_BRAND_${finding.matchType.toUpperCase()}`,
-    severity: finding.confidence === "high" ? "medium" : "low",
-    title: finding.matchType === "homoglyph" ? "Unicode brand impersonation pattern" : finding.matchType === "typosquat" ? "Brand typosquatting pattern" : "Brand name combined with lure wording",
-    detail: `${finding.observedHost} resembles ${finding.brand} but is outside the registered official domains (${finding.officialDomains.join(", ")}). This is local impersonation evidence and requires corroboration for blocking.`,
-  }))
+  return findings.map((finding) => ({ code: `V2_BRAND_${finding.matchType.toUpperCase()}`, severity: finding.confidence === "high" ? "medium" : "low", title: finding.matchType === "homoglyph" ? "Unicode brand impersonation pattern" : finding.matchType === "typosquat" ? "Brand typosquatting pattern" : "Brand name combined with lure wording", detail: `${finding.observedHost} resembles ${finding.brand} but is outside the registered official domains (${finding.officialDomains.join(", ")}). This is local impersonation evidence and requires corroboration for blocking.` }))
 }
 
 export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamGuardV2Observation> {
@@ -167,15 +141,14 @@ export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamG
   const token2022Promise = isSolanaToken ? inspectToken2022Rpc(input.value) : Promise.resolve<Token2022RpcEvidence | undefined>(undefined)
   const distributionPromise = isSolanaToken ? inspectSolanaDistributionRpc(input.value) : Promise.resolve<SolanaDistributionRpcEvidence | undefined>(undefined)
   const walletTarget = input.type === "wallet" ? input.value : input.walletAddress
-  const adjudicationPromise = walletTarget
-    ? inspectInternalAdjudication(walletTarget, input.chain)
-    : Promise.resolve<InternalAdjudicationEvidence | undefined>(undefined)
+  const adjudicationPromise = walletTarget ? inspectInternalAdjudication(walletTarget, input.chain) : Promise.resolve<InternalAdjudicationEvidence | undefined>(undefined)
+  const graphPromise = walletTarget ? inspectInternalGraphContext(walletTarget, input.chain) : Promise.resolve<InternalGraphContextEvidence | undefined>(undefined)
   const domainValue = input.type === "url" ? input.value : input.sourceUrl
   const domain = domainValue ? hostFromUrl(domainValue) : null
   const phishingPromise = domain ? inspectPhishingDatabase(domain) : Promise.resolve<PhishingDatabaseEvidence | undefined>(undefined)
   const brandImpersonation = domainValue ? detectBrandImpersonation(domainValue) : []
 
-  const [base, tokensXyz, claimedTokensXyz, phishingDatabase, token2022, solanaDistribution, internalAdjudication] = await Promise.all([
+  const [base, tokensXyz, claimedTokensXyz, phishingDatabase, token2022, solanaDistribution, internalAdjudication, internalGraphContext] = await Promise.all([
     basePromise,
     tokenPromise,
     claimedTokenPromise,
@@ -183,6 +156,7 @@ export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamG
     token2022Promise,
     distributionPromise,
     adjudicationPromise,
+    graphPromise,
   ])
 
   const canonicalIdentity = claimedTokensXyz ? compareCanonicalIdentity(tokensXyz, claimedTokensXyz) : undefined
@@ -194,6 +168,7 @@ export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamG
     ...(token2022 ? token2022Signals(token2022) : []),
     ...(solanaDistribution ? distributionSignals(solanaDistribution) : []),
     ...(internalAdjudication ? adjudicationSignals(internalAdjudication) : []),
+    ...(internalGraphContext ? graphContextSignals(internalGraphContext) : []),
     ...brandSignals(brandImpersonation),
     ...(transactionImpact ? transactionImpactSignals(transactionImpact) : []),
   ]
@@ -216,6 +191,7 @@ export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamG
   if (token2022) provenance.push({ source: "solana-rpc", status: token2022.status, confidence: token2022.status === "available" ? "high" : "low", purpose: "authority_surface", note: token2022.isToken2022 ? "Token-2022 extension capabilities were inspected through parsed Solana RPC account data; capabilities require corroboration before risk escalation." : "Solana RPC account ownership was checked; no Token-2022 extension surface was applicable." })
   if (solanaDistribution) provenance.push({ source: "solana-rpc", status: solanaDistribution.status, confidence: solanaDistribution.status === "available" ? "high" : "low", purpose: "distribution", note: "Largest-account concentration is computed directly from Solana token-account balances. It is not a unique-holder metric and cannot independently imply malicious control." })
   if (internalAdjudication) provenance.push({ source: "triproof-adjudication", status: internalAdjudication.status, confidence: internalAdjudication.verdict === "confirmed_risk" || internalAdjudication.verdict === "trusted" ? "high" : internalAdjudication.verdict === "disputed" ? "medium" : "low", purpose: "internal_reputation", note: "This source is derived only from distinct human feedback/adjudication records. Model-generated WalletAnalysis scores and AI briefs are intentionally excluded to avoid self-reinforcement and benchmark leakage." })
+  if (internalGraphContext) provenance.push({ source: "triproof-graph", status: internalGraphContext.status, confidence: internalGraphContext.status === "available" && internalGraphContext.riskBearingEdges > 0 ? "medium" : "low", purpose: "graph_context", note: "Historical graph context is exposed for explanation only. Wallet graph risk scores and component heuristics are not fed into V2 scoring or activation before independent validation." })
   if (domainValue) provenance.push({ source: "local-brand-registry", status: "available", confidence: brandImpersonation.some((finding) => finding.confidence === "high") ? "high" : "medium", purpose: "brand_impersonation", note: brandImpersonation.length ? "The observed hostname resembles a protected Web3 brand outside its registered official domains." : "No protected-brand homoglyph, typosquat, or lure-domain pattern was observed." })
   if (transactionImpact) provenance.push({ source: "v1-transaction-decoder", status: transactionImpact.status, confidence: transactionImpact.confidence === "decoded" ? "high" : transactionImpact.confidence === "partial" ? "medium" : "low", purpose: "transaction_impact", note: "V2 transaction-impact evidence is normalized from the existing decoded V1 signing analysis; raw signing payloads are not retained by this layer and impact alone cannot trigger HIGH or CRITICAL risk." })
 
@@ -225,7 +201,7 @@ export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamG
     proposedSignals,
     proposedAssessment,
     providerQuality,
-    evidence: { tokensXyz, claimedTokensXyz, canonicalIdentity, phishingDatabase, token2022, solanaDistribution, internalAdjudication, brandImpersonation, transactionImpact },
+    evidence: { tokensXyz, claimedTokensXyz, canonicalIdentity, phishingDatabase, token2022, solanaDistribution, internalAdjudication, internalGraphContext, brandImpersonation, transactionImpact },
     provenance,
     summary: {
       providerCount: provenance.length,
