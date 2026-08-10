@@ -2,8 +2,9 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import {
-  extractEvmAddresses,
   inspectEvmPublicThreatCorpus,
+  parseRealCatsCriminalAddresses,
+  parseValidatedEthereumRugPullAddresses,
   resetEvmPublicThreatCorpusCacheForTests,
 } from "./evm-public-threat-corpus"
 
@@ -19,22 +20,47 @@ function restore() {
 
 test.afterEach(restore)
 
-test("extracts normalized EVM addresses from CSV and TSV-style text", () => {
-  const values = extractEvmAddresses("row,0xABCDEFabcdefABCDEFabcdefABCDEFabcdefABCD\nfoo\t0x1111111111111111111111111111111111111111")
-  assert.equal(values.has("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"), true)
-  assert.equal(values.has("0x1111111111111111111111111111111111111111"), true)
+test("Real-CATS parser includes malicious labels and excludes neutral labels", () => {
+  const malicious = "0x1111111111111111111111111111111111111111"
+  const neutral = "0x2222222222222222222222222222222222222222"
+  const metamorphic = "0x3333333333333333333333333333333333333333"
+  const values = parseRealCatsCriminalAddresses([
+    "address\tlabel\tbalance",
+    `${malicious}\tHack Scam\t0`,
+    `${neutral}\tOther\t0`,
+    `${metamorphic}\tMetamorphic Contract\t0`,
+  ].join("\n"))
+  assert.equal(values.has(malicious), true)
+  assert.equal(values.has(neutral), false)
+  assert.equal(values.has(metamorphic), false)
+})
+
+test("rug-pull parser only imports the validated ETH address column", () => {
+  const eth = "0x4444444444444444444444444444444444444444"
+  const bsc = "0x5555555555555555555555555555555555555555"
+  const unrelated = "0x6666666666666666666666666666666666666666"
+  const values = parseValidatedEthereumRugPullAddresses([
+    "No.,Chain,address,Losses,Type,Root Causes,Sources,URL",
+    `1,ETH,${eth},Unknown,Combination,Combination,Source,https://example.com/${unrelated}`,
+    `2,BSC,${bsc},Unknown,Combination,Combination,Source,https://example.com`,
+  ].join("\n"))
+  assert.equal(values.has(eth), true)
+  assert.equal(values.has(bsc), false)
+  assert.equal(values.has(unrelated), false)
 })
 
 test("reports one-source and two-source matches without manufacturing duplicates", async () => {
   process.env.EVM_PUBLIC_THREAT_CORPUS_ENABLED = "true"
-  const shared = "0x2222222222222222222222222222222222222222"
-  const realCatsOnly = "0x3333333333333333333333333333333333333333"
+  const shared = "0x7777777777777777777777777777777777777777"
+  const realCatsOnly = "0x8888888888888888888888888888888888888888"
   let calls = 0
   globalThis.fetch = async (input) => {
     calls += 1
     const url = String(input)
-    if (url.includes("Real-CATS")) return new Response(`${shared}\n${realCatsOnly}\n`, { status: 200 })
-    return new Response(`Address\n${shared}\n`, { status: 200 })
+    if (url.includes("Real-CATS")) {
+      return new Response(`address\tlabel\n${shared}\tHack Scam\n${realCatsOnly}\tPhishing\n`, { status: 200 })
+    }
+    return new Response(`No.,Chain,address,Losses,Type,Root Causes,Sources,URL\n1,ETH,${shared},Unknown,Combination,Combination,Source,https://example.com\n`, { status: 200 })
   }
 
   const sharedResult = await inspectEvmPublicThreatCorpus(shared)
@@ -52,7 +78,7 @@ test("reports one-source and two-source matches without manufacturing duplicates
 test("provider degrades safely if all upstream corpora fail", async () => {
   process.env.EVM_PUBLIC_THREAT_CORPUS_ENABLED = "true"
   globalThis.fetch = async () => new Response("upstream error", { status: 503 })
-  const result = await inspectEvmPublicThreatCorpus("0x4444444444444444444444444444444444444444")
+  const result = await inspectEvmPublicThreatCorpus("0x9999999999999999999999999999999999999999")
   assert.equal(result.status, "unavailable")
   assert.equal(result.matched, false)
   assert.match(result.error ?? "", /unavailable/i)
@@ -65,7 +91,7 @@ test("provider can be disabled without network access", async () => {
     called = true
     return new Response("", { status: 200 })
   }
-  const result = await inspectEvmPublicThreatCorpus("0x5555555555555555555555555555555555555555")
+  const result = await inspectEvmPublicThreatCorpus("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
   assert.equal(result.status, "disabled")
   assert.equal(called, false)
 })
