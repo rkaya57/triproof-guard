@@ -7,6 +7,8 @@ on:
     paths:
       - "lib/scamguard/providers/token-2022-rpc.ts"
       - "lib/scamguard/providers/token-2022-rpc.test.ts"
+      - "lib/scamguard/providers/solana-distribution-rpc.ts"
+      - "lib/scamguard/providers/solana-distribution-rpc.test.ts"
       - "lib/scamguard/providers/tokens-xyz.ts"
       - "lib/scamguard/providers/tokens-xyz.test.ts"
       - "lib/scamguard/v2/**"
@@ -47,7 +49,7 @@ jobs:
       - name: V2 holdout evaluator tests
         run: node --import tsx --test lib/scamguard/v2/holdout-evaluation.test.ts
       - name: V2 provider tests
-        run: node --import tsx --test lib/scamguard/providers/tokens-xyz.test.ts lib/scamguard/providers/token-2022-rpc.test.ts
+        run: node --import tsx --test lib/scamguard/providers/tokens-xyz.test.ts lib/scamguard/providers/token-2022-rpc.test.ts lib/scamguard/providers/solana-distribution-rpc.test.ts
       - name: V2 Token-2022 extension tests
         run: node --import tsx --test lib/scamguard/v2/token-2022-extensions.test.ts
       - name: V2 identity and brand tests
@@ -63,6 +65,8 @@ jobs:
           lib/scamguard/providers/tokens-xyz.test.ts
           lib/scamguard/providers/token-2022-rpc.ts
           lib/scamguard/providers/token-2022-rpc.test.ts
+          lib/scamguard/providers/solana-distribution-rpc.ts
+          lib/scamguard/providers/solana-distribution-rpc.test.ts
           lib/scamguard/v2/token-2022-extensions.ts
           lib/scamguard/v2/token-2022-extensions.test.ts
           lib/scamguard/v2/canonical-identity.ts
