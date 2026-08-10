@@ -1,0 +1,75 @@
+name: ScamGuard V2 frozen Holdout run
+
+on:
+  push:
+    branches:
+      - holdout/scamguard-v2-eval-2026-08-10
+    paths:
+      - "data/holdout/scamguard-v2-2026-08-10/**"
+      - "scripts/scamguard-v2-holdout-runner.ts"
+      - ".github/workflows/scamguard-v2-holdout-run.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frozen-holdout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
+      HELIUS_API_KEY: ${{ secrets.HELIUS_API_KEY }}
+      SOLANA_RPC_URL: ${{ secrets.SOLANA_RPC_URL }}
+      ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
+      ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
+      TOKENS_XYZ_API_KEY: ${{ secrets.TOKENS_XYZ_API_KEY }}
+      PHISHING_DATABASE_ENABLED: "true"
+      SCAMGUARD_SANDBOX_ENABLED: "false"
+
+    steps:
+      - name: Checkout evaluation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify frozen engine integrity
+        run: |
+          git cat-file -e 8561f45c72868ae75e8a5bcfeb554b964717d8ff^{commit}
+          git diff --exit-code 8561f45c72868ae75e8a5bcfeb554b964717d8ff -- \
+            lib/scamguard \
+            app/api/scamguard \
+            lib/extension \
+            extension
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check runner and frozen code
+        run: npx tsc --noEmit
+
+      - name: Run frozen V1 vs V2 Holdout
+        id: holdout
+        continue-on-error: true
+        run: node --import tsx scripts/scamguard-v2-holdout-runner.ts
+
+      - name: Upload Holdout report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scamguard-v2-holdout-report
+          path: artifacts/scamguard-v2-holdout-report.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Enforce decision-grade run
+        if: steps.holdout.outcome != 'success'
+        run: |
+          echo "Holdout runner did not complete at decision-grade coverage. Inspect the uploaded report/unscorable reasons."
+          exit 1
