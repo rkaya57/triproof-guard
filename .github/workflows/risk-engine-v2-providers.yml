@@ -40,6 +40,7 @@ jobs:
           lib/scamguard/providers/tokens-xyz.test.ts
           lib/scamguard/providers/phishing-database.test.ts
           lib/scamguard/v2/evidence-fusion.test.ts
+          lib/scamguard/v2/token-2022-extensions.test.ts
 
       - name: Focused lint
         run: >-
@@ -50,3 +51,5 @@ jobs:
           lib/scamguard/providers/phishing-database.test.ts
           lib/scamguard/v2/evidence-fusion.ts
           lib/scamguard/v2/evidence-fusion.test.ts
+          lib/scamguard/v2/token-2022-extensions.ts
+          lib/scamguard/v2/token-2022-extensions.test.ts
