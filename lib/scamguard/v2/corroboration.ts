@@ -41,8 +41,10 @@ function weightedSignal(signal: ScamGuardSignal): WeightedSignal | null {
   return null
 }
 
-function riskLevel(score: number): V2CorroborationAssessment["proposedRiskLevel"] {
-  if (score >= 80) return "CRITICAL"
+function riskLevel(score: number, independentFamilyCount: number): V2CorroborationAssessment["proposedRiskLevel"] {
+  // A very high numeric score from only two evidence families is still capped at HIGH_RISK.
+  // CRITICAL is reserved for convergence across at least three independent evidence families.
+  if (score >= 80 && independentFamilyCount >= 3) return "CRITICAL"
   if (score >= 55) return "HIGH_RISK"
   if (score >= 25) return "CAUTION"
   return "SAFE"
@@ -96,7 +98,7 @@ export function assessV2Corroboration(signals: ScamGuardSignal[]): V2Corroborati
   return {
     mode: "observe_only",
     evidenceScore,
-    proposedRiskLevel: riskLevel(evidenceScore),
+    proposedRiskLevel: riskLevel(evidenceScore, families.length),
     confidence,
     independentFamilies: families,
     familyScores,
