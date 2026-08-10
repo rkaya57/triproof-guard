@@ -4,17 +4,20 @@ import test from "node:test"
 import type { V2CorroborationAssessment } from "./corroboration"
 import { buildEntityContextHint } from "./entity-context-hint"
 
-function assessment(families: V2CorroborationAssessment["independentFamilies"]): V2CorroborationAssessment {
+function assessment(
+  families: V2CorroborationAssessment["independentFamilies"],
+  proposedRiskLevel: V2CorroborationAssessment["proposedRiskLevel"] = "SAFE",
+): V2CorroborationAssessment {
   return {
     mode: "observe_only",
-    evidenceScore: 20,
-    proposedRiskLevel: "SAFE",
-    confidence: "LOW",
+    evidenceScore: proposedRiskLevel === "HIGH_RISK" ? 60 : proposedRiskLevel === "CRITICAL" ? 90 : 20,
+    proposedRiskLevel,
+    confidence: proposedRiskLevel === "HIGH_RISK" || proposedRiskLevel === "CRITICAL" ? "HIGH" : "LOW",
     independentFamilies: families,
     independentSources: [],
     familyScores: {},
     corroborations: [],
-    activationGate: "insufficient",
+    activationGate: proposedRiskLevel === "HIGH_RISK" || proposedRiskLevel === "CRITICAL" ? "corroborated" : "insufficient",
     decisionChanged: false,
   }
 }
@@ -40,6 +43,20 @@ test("infrastructure attribution never offsets phishing or signing evidence", ()
       entityLabel: "Example Bridge",
       entityType: "bridge",
       assessment: assessment([family]),
+    })
+    assert.equal(hint.status, "none")
+    assert.equal(hint.canDowngradeDecision, false)
+    assert.equal(hint.affectsRiskScore, false)
+  }
+})
+
+test("HIGH_RISK or CRITICAL proposals never receive infrastructure de-risking hints", () => {
+  for (const level of ["HIGH_RISK", "CRITICAL"] as const) {
+    const hint = buildEntityContextHint({
+      infrastructureContext: true,
+      entityLabel: "Example Exchange",
+      entityType: "exchange",
+      assessment: assessment(["distribution", "authority_surface"], level),
     })
     assert.equal(hint.status, "none")
     assert.equal(hint.canDowngradeDecision, false)
