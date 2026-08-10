@@ -71,7 +71,7 @@ function riskLevel(
   activationEligibleSourceCount: number,
 ): V2CorroborationAssessment["proposedRiskLevel"] {
   if (score >= 80 && independentFamilyCount >= 3 && activationEligibleSourceCount >= 3) return "CRITICAL"
-  if (score >= 55) return "HIGH_RISK"
+  if (score >= 55 && independentFamilyCount >= 2 && activationEligibleSourceCount >= 2) return "HIGH_RISK"
   if (score >= 25) return "CAUTION"
   return "SAFE"
 }
