@@ -1,7 +1,7 @@
 import type { ScamGuardSignal } from "@/lib/scamguard/engine"
 
-export type V2EvidenceFamily = "threat_intelligence" | "evm_criminal_intelligence" | "evm_rugpull_intelligence" | "evm_mew_darklist_intelligence" | "contract_integrity" | "identity" | "brand_impersonation" | "authority_surface" | "market_health" | "distribution" | "transaction_impact" | "internal_reputation"
-export type V2EvidenceSourceGroup = "phishing.database" | "evm-real-cats" | "evm-rug-pull-dataset" | "evm-mew-darklist" | "evm-rpc-contract" | "tokens.xyz" | "local-brand-registry" | "solana-rpc" | "v1-transaction-decoder" | "triproof-adjudication"
+export type V2EvidenceFamily = "threat_intelligence" | "evm_criminal_intelligence" | "evm_rugpull_intelligence" | "evm_mew_darklist_intelligence" | "evm_goplus_intelligence" | "contract_integrity" | "identity" | "brand_impersonation" | "authority_surface" | "market_health" | "distribution" | "transaction_impact" | "internal_reputation"
+export type V2EvidenceSourceGroup = "phishing.database" | "evm-real-cats" | "evm-rug-pull-dataset" | "evm-mew-darklist" | "goplus-address-security" | "evm-rpc-contract" | "tokens.xyz" | "local-brand-registry" | "solana-rpc" | "v1-transaction-decoder" | "triproof-adjudication"
 
 export type V2CorroborationAssessment = {
   mode: "observe_only"
@@ -24,6 +24,7 @@ const familyCaps: Record<V2EvidenceFamily, number> = {
   evm_criminal_intelligence: 36,
   evm_rugpull_intelligence: 42,
   evm_mew_darklist_intelligence: 38,
+  evm_goplus_intelligence: 42,
   contract_integrity: 14,
   identity: 40,
   brand_impersonation: 32,
@@ -39,6 +40,7 @@ const sourceForFamily: Record<V2EvidenceFamily, V2EvidenceSourceGroup> = {
   evm_criminal_intelligence: "evm-real-cats",
   evm_rugpull_intelligence: "evm-rug-pull-dataset",
   evm_mew_darklist_intelligence: "evm-mew-darklist",
+  evm_goplus_intelligence: "goplus-address-security",
   contract_integrity: "evm-rpc-contract",
   identity: "tokens.xyz",
   market_health: "tokens.xyz",
@@ -55,6 +57,7 @@ function weightedSignal(signal: ScamGuardSignal): WeightedSignal | null {
   if (code === "V2_EVM_REAL_CATS_MATCH") return { family: "evm_criminal_intelligence", weight: 36 }
   if (code === "V2_EVM_RUG_PULL_MATCH") return { family: "evm_rugpull_intelligence", weight: 42 }
   if (code === "V2_EVM_MEW_DARKLIST_MATCH") return { family: "evm_mew_darklist_intelligence", weight: 38 }
+  if (code === "V2_EVM_GOPLUS_MALICIOUS_ADDRESS") return { family: "evm_goplus_intelligence", weight: 42 }
   if (code === "V2_EVM_UNVERIFIED_CONTRACT") return { family: "contract_integrity", weight: 10 }
   if (code === "V2_EVM_PROXY_CONTRACT") return { family: "contract_integrity", weight: 4 }
   if (code === "V2_CANONICAL_IDENTITY_MISMATCH") return { family: "identity", weight: 40 }
@@ -104,7 +107,7 @@ export function assessV2Corroboration(signals: ScamGuardSignal[], options?: { ac
     corroborations.push("Independent phishing-feed and local brand-impersonation evidence agree on the same scan context.")
   }
 
-  const evmThreatFamilies = ["evm_criminal_intelligence", "evm_rugpull_intelligence", "evm_mew_darklist_intelligence"] as const
+  const evmThreatFamilies = ["evm_criminal_intelligence", "evm_rugpull_intelligence", "evm_mew_darklist_intelligence", "evm_goplus_intelligence"] as const
   let evmThreatPairCorroborated = false
   for (let leftIndex = 0; leftIndex < evmThreatFamilies.length; leftIndex += 1) {
     for (let rightIndex = leftIndex + 1; rightIndex < evmThreatFamilies.length; rightIndex += 1) {
@@ -115,13 +118,13 @@ export function assessV2Corroboration(signals: ScamGuardSignal[], options?: { ac
   }
   if (evmThreatPairCorroborated) {
     bonus += 12
-    corroborations.push("Two independently maintained public EVM threat corpora identify the same address.")
+    corroborations.push("Two independently controlled EVM threat-intelligence source groups identify the same address.")
   }
 
   for (const threatFamily of evmThreatFamilies) {
     if (has(threatFamily) && has("contract_integrity") && pairEligible(threatFamily, "contract_integrity")) {
       bonus += 10
-      corroborations.push("Public EVM threat intelligence converges with independently queried contract-integrity evidence.")
+      corroborations.push("EVM threat intelligence converges with independently queried contract-integrity evidence.")
       break
     }
   }
