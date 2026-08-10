@@ -1,6 +1,6 @@
 import type { ScamGuardSignal } from "@/lib/scamguard/engine"
 
-export type V2EvidenceFamily = "threat_intelligence" | "identity" | "brand_impersonation" | "authority_surface" | "market_health"
+export type V2EvidenceFamily = "threat_intelligence" | "identity" | "brand_impersonation" | "authority_surface" | "market_health" | "transaction_impact"
 
 export type V2CorroborationAssessment = {
   mode: "observe_only"
@@ -25,6 +25,7 @@ const familyCaps: Record<V2EvidenceFamily, number> = {
   brand_impersonation: 32,
   authority_surface: 16,
   market_health: 14,
+  transaction_impact: 24,
 }
 
 function weightedSignal(signal: ScamGuardSignal): WeightedSignal | null {
@@ -34,6 +35,10 @@ function weightedSignal(signal: ScamGuardSignal): WeightedSignal | null {
   if (code === "V2_BRAND_HOMOGLYPH" || code === "V2_BRAND_TYPOSQUAT") return { family: "brand_impersonation", weight: 30 }
   if (code === "V2_BRAND_EMBEDDED_BRAND") return { family: "brand_impersonation", weight: 18 }
   if (code.startsWith("V2_TOKEN2022_")) return { family: "authority_surface", weight: signal.severity === "medium" ? 8 : 4 }
+  if (code === "V2_TX_UNLIMITED_APPROVAL") return { family: "transaction_impact", weight: 16 }
+  if (code === "V2_TX_AUTHORITY_CONTROL") return { family: "transaction_impact", weight: 14 }
+  if (code === "V2_TX_DELEGATE_RIGHTS" || code === "V2_TX_TYPED_AUTHORIZATION") return { family: "transaction_impact", weight: 10 }
+  if (code === "V2_TX_ACCOUNT_CLOSURE") return { family: "transaction_impact", weight: 8 }
   if (code === "V2_VERY_LOW_TOKEN_LIQUIDITY" || code === "V2_VERY_LOW_HOLDER_COUNT") return { family: "market_health", weight: 6 }
   if (code === "V2_LOW_TOKEN_LIQUIDITY" || code === "V2_UNUSUAL_VOLUME_TO_LIQUIDITY" || code === "V2_WEAK_MARKET_HEALTH_SCORE") {
     return { family: "market_health", weight: 3 }
@@ -75,6 +80,14 @@ export function assessV2Corroboration(signals: ScamGuardSignal[]): V2Corroborati
   if (has("identity") && has("authority_surface")) {
     bonus += 8
     corroborations.push("Canonical identity mismatch coexists with elevated token authority capabilities.")
+  }
+  if (has("threat_intelligence") && has("transaction_impact")) {
+    bonus += 12
+    corroborations.push("Independent threat intelligence converges with a high-impact signing capability.")
+  }
+  if (has("brand_impersonation") && has("transaction_impact")) {
+    bonus += 8
+    corroborations.push("Brand impersonation evidence converges with a high-impact signing capability.")
   }
   if (has("brand_impersonation") && has("threat_intelligence") && has("identity")) {
     bonus += 8
