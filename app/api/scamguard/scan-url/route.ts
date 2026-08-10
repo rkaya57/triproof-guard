@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { scanScamGuard, type ScamGuardChain } from "@/lib/scamguard/engine"
 import { sandboxRateLimit } from "@/lib/scamguard/sandbox-rate-limit"
 import { scanAccess } from "@/lib/scamguard/scan-access"
+import { applyVerifiedDomainFalsePositiveGuard } from "@/lib/scamguard/verified-domain-guard"
 import { getExtensionSession } from "@/lib/extension/session"
 
 export const runtime = "nodejs"
@@ -46,7 +47,10 @@ export async function POST(request: Request) {
     }))
     : undefined
 
-  return NextResponse.json(await scanScamGuard({ type: "url", value, chain: body?.chain, deepScan: access.deepScan, clientSignals }), {
+  const baseResult = await scanScamGuard({ type: "url", value, chain: body?.chain, deepScan: access.deepScan, clientSignals })
+  const result = applyVerifiedDomainFalsePositiveGuard(value, baseResult)
+
+  return NextResponse.json(result, {
     headers: {
       "Cache-Control": "no-store",
       "X-RateLimit-Remaining": String(rateLimit.remaining),
