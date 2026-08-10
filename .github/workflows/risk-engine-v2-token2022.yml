@@ -38,17 +38,16 @@ jobs:
         run: node --import tsx --test lib/scamguard/v2/shadow-decision.test.ts lib/scamguard/v2/shadow-telemetry.test.ts
       - name: V2 activation policy tests
         run: node --import tsx --test lib/scamguard/v2/activation-policy.test.ts
-      - name: V2 evidence tests
-        run: >-
-          node --import tsx --test
-          lib/scamguard/providers/tokens-xyz.test.ts
-          lib/scamguard/providers/token-2022-rpc.test.ts
-          lib/scamguard/v2/token-2022-extensions.test.ts
-          lib/scamguard/v2/canonical-identity.test.ts
-          lib/scamguard/v2/brand-impersonation.test.ts
-          lib/scamguard/v2/corroboration.test.ts
-          lib/scamguard/v2/evidence-fusion.test.ts
-          lib/scamguard/v2/evidence-fusion-brand.test.ts
+      - name: V2 provider tests
+        run: node --import tsx --test lib/scamguard/providers/tokens-xyz.test.ts lib/scamguard/providers/token-2022-rpc.test.ts
+      - name: V2 Token-2022 extension tests
+        run: node --import tsx --test lib/scamguard/v2/token-2022-extensions.test.ts
+      - name: V2 identity and brand tests
+        run: node --import tsx --test lib/scamguard/v2/canonical-identity.test.ts lib/scamguard/v2/brand-impersonation.test.ts
+      - name: V2 corroboration tests
+        run: node --import tsx --test lib/scamguard/v2/corroboration.test.ts
+      - name: V2 fusion tests
+        run: node --import tsx --test lib/scamguard/v2/evidence-fusion.test.ts lib/scamguard/v2/evidence-fusion-brand.test.ts
       - name: Focused lint
         run: >-
           npx eslint
