@@ -16,6 +16,7 @@ function shadow(overrides: Partial<V2ShadowDecision> = {}): V2ShadowDecision {
     evidenceScore: 72,
     confidence: "HIGH",
     independentFamilies: ["threat_intelligence", "brand_impersonation"],
+    independentSources: ["phishing.database", "local-brand-registry"],
     eligibleForActivationStudy: true,
     productionDecisionChanged: false,
     ...overrides,
@@ -33,35 +34,45 @@ function policy(overrides: Partial<V2ActivationPolicyCandidate> = {}): V2Activat
   }
 }
 
-test("review candidate can become holdout candidate but never production ready", () => {
+test("source-diverse review candidate can become holdout candidate but never production ready", () => {
   const readiness = assessV2ActivationReadiness(shadow(), policy())
   assert.equal(readiness.stage, "holdout_candidate")
   assert.equal(readiness.nextStep, "run_holdout_validation")
   assert.equal(readiness.productionReady, false)
   assert.equal(readiness.holdoutRequired, true)
+  assert.equal(readiness.minimumIndependentSources, 2)
+  assert.equal(readiness.observedIndependentSources, 2)
   assert.ok(readiness.blockers.some((item) => item.includes("holdout validation")))
 })
 
-test("block candidate requires at least three independent evidence families", () => {
+test("block candidate requires three evidence families and three independent sources", () => {
   const readiness = assessV2ActivationReadiness(
-    shadow({ v2ProposedRiskLevel: "CRITICAL" }),
+    shadow({
+      v2ProposedRiskLevel: "CRITICAL",
+      independentFamilies: ["identity", "market_health", "authority_surface"],
+      independentSources: ["tokens.xyz", "solana-rpc"],
+    }),
     policy({ candidateAction: "block_candidate" }),
   )
   assert.equal(readiness.minimumIndependentFamilies, 3)
+  assert.equal(readiness.minimumIndependentSources, 3)
   assert.equal(readiness.stage, "not_eligible")
   assert.equal(readiness.nextStep, "continue_shadow")
+  assert.ok(readiness.blockers.some((item) => item.includes("independently controlled source groups")))
 })
 
-test("three-family critical block candidate is holdout candidate only", () => {
+test("three-family three-source critical block candidate is holdout candidate only", () => {
   const readiness = assessV2ActivationReadiness(
     shadow({
       v2ProposedRiskLevel: "CRITICAL",
       independentFamilies: ["threat_intelligence", "brand_impersonation", "transaction_impact"],
+      independentSources: ["phishing.database", "local-brand-registry", "v1-transaction-decoder"],
     }),
     policy({ candidateAction: "block_candidate" }),
   )
   assert.equal(readiness.stage, "holdout_candidate")
   assert.equal(readiness.productionReady, false)
+  assert.equal(readiness.observedIndependentSources, 3)
 })
 
 test("downgrade candidate is never eligible for automatic activation", () => {
