@@ -24,6 +24,8 @@ import { transactionImpactSignals } from "@/lib/scamguard/v2/transaction-impact-
 
 export type V2EvidenceSource = "tokens.xyz" | "phishing.database" | "solana-rpc" | "local-brand-registry" | "v1-transaction-decoder" | "triproof-adjudication" | "triproof-graph"
 export type ScamGuardV2Input = ScamGuardScanInput & { claimedAsset?: string }
+export type ScamGuardV2EvaluationMode = "live" | "holdout"
+export type ScamGuardV2ObserveOptions = { evaluationMode?: ScamGuardV2EvaluationMode }
 
 export type V2EvidenceProvenance = {
   source: V2EvidenceSource
@@ -57,6 +59,8 @@ export type ScamGuardV2Observation = {
     availableProviders: number
     activationEligibleSources: number
     proposedSignalCount: number
+    evaluationMode: ScamGuardV2EvaluationMode
+    internalEvidenceExcluded: boolean
     decisionChanged: false
   }
 }
@@ -132,7 +136,9 @@ function brandSignals(findings: BrandImpersonationFinding[]): ScamGuardSignal[] 
   return findings.map((finding) => ({ code: `V2_BRAND_${finding.matchType.toUpperCase()}`, severity: finding.confidence === "high" ? "medium" : "low", title: finding.matchType === "homoglyph" ? "Unicode brand impersonation pattern" : finding.matchType === "typosquat" ? "Brand typosquatting pattern" : "Brand name combined with lure wording", detail: `${finding.observedHost} resembles ${finding.brand} but is outside the registered official domains (${finding.officialDomains.join(", ")}). This is local impersonation evidence and requires corroboration for blocking.` }))
 }
 
-export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamGuardV2Observation> {
+export async function observeScamGuardV2(input: ScamGuardV2Input, options: ScamGuardV2ObserveOptions = {}): Promise<ScamGuardV2Observation> {
+  const evaluationMode = options.evaluationMode ?? "live"
+  const allowInternalEvidence = evaluationMode !== "holdout"
   const basePromise = scanScamGuard(input)
   const isSolanaToken = input.type === "token" && (input.chain === "solana" || input.chain === undefined)
   const tokenPromise = isSolanaToken ? inspectTokensXyzAsset(input.value) : Promise.resolve<TokensXyzEvidence | undefined>(undefined)
@@ -141,8 +147,8 @@ export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamG
   const token2022Promise = isSolanaToken ? inspectToken2022Rpc(input.value) : Promise.resolve<Token2022RpcEvidence | undefined>(undefined)
   const distributionPromise = isSolanaToken ? inspectSolanaDistributionRpc(input.value) : Promise.resolve<SolanaDistributionRpcEvidence | undefined>(undefined)
   const walletTarget = input.type === "wallet" ? input.value : input.walletAddress
-  const adjudicationPromise = walletTarget ? inspectInternalAdjudication(walletTarget, input.chain) : Promise.resolve<InternalAdjudicationEvidence | undefined>(undefined)
-  const graphPromise = walletTarget ? inspectInternalGraphContext(walletTarget, input.chain) : Promise.resolve<InternalGraphContextEvidence | undefined>(undefined)
+  const adjudicationPromise = allowInternalEvidence && walletTarget ? inspectInternalAdjudication(walletTarget, input.chain) : Promise.resolve<InternalAdjudicationEvidence | undefined>(undefined)
+  const graphPromise = allowInternalEvidence && walletTarget ? inspectInternalGraphContext(walletTarget, input.chain) : Promise.resolve<InternalGraphContextEvidence | undefined>(undefined)
   const domainValue = input.type === "url" ? input.value : input.sourceUrl
   const domain = domainValue ? hostFromUrl(domainValue) : null
   const phishingPromise = domain ? inspectPhishingDatabase(domain) : Promise.resolve<PhishingDatabaseEvidence | undefined>(undefined)
@@ -208,6 +214,8 @@ export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamG
       availableProviders: provenance.filter((entry) => entry.status === "available").length,
       activationEligibleSources: eligibleSources.length,
       proposedSignalCount: proposedSignals.length,
+      evaluationMode,
+      internalEvidenceExcluded: !allowInternalEvidence,
       decisionChanged: false,
     },
   }
