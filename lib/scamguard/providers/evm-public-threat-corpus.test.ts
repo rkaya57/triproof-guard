@@ -3,6 +3,7 @@ import test from "node:test"
 
 import {
   inspectEvmPublicThreatCorpus,
+  parseMewDarklistAddresses,
   parseRealCatsCriminalAddresses,
   parseValidatedEthereumRugPullAddresses,
   resetEvmPublicThreatCorpusCacheForTests,
@@ -49,10 +50,22 @@ test("rug-pull parser only imports the validated ETH address column", () => {
   assert.equal(values.has(unrelated), false)
 })
 
-test("reports one-source and two-source matches without manufacturing duplicates", async () => {
+test("MyEtherWallet darklist parser imports only valid EVM addresses", () => {
+  const valid = "0x7777777777777777777777777777777777777777"
+  const values = parseMewDarklistAddresses(JSON.stringify([
+    { address: valid, comment: "phishing" },
+    { address: "not-an-address", comment: "invalid" },
+    { comment: "missing" },
+  ]))
+  assert.equal(values.has(valid), true)
+  assert.equal(values.size, 1)
+  assert.equal(parseMewDarklistAddresses("not-json").size, 0)
+})
+
+test("reports independent matches across three separately maintained corpora", async () => {
   process.env.EVM_PUBLIC_THREAT_CORPUS_ENABLED = "true"
-  const shared = "0x7777777777777777777777777777777777777777"
-  const realCatsOnly = "0x8888888888888888888888888888888888888888"
+  const shared = "0x8888888888888888888888888888888888888888"
+  const realCatsOnly = "0x9999999999999999999999999999999999999999"
   let calls = 0
   globalThis.fetch = async (input) => {
     calls += 1
@@ -60,7 +73,10 @@ test("reports one-source and two-source matches without manufacturing duplicates
     if (url.includes("Real-CATS")) {
       return new Response(`address\tlabel\n${shared}\tHack Scam\n${realCatsOnly}\tPhishing\n`, { status: 200 })
     }
-    return new Response(`No.,Chain,address,Losses,Type,Root Causes,Sources,URL\n1,ETH,${shared},Unknown,Combination,Combination,Source,https://example.com\n`, { status: 200 })
+    if (url.includes("rugpull")) {
+      return new Response(`No.,Chain,address,Losses,Type,Root Causes,Sources,URL\n1,ETH,${shared},Unknown,Combination,Combination,Source,https://example.com\n`, { status: 200 })
+    }
+    return new Response(JSON.stringify([{ address: shared, comment: "phishing" }]), { status: 200 })
   }
 
   const sharedResult = await inspectEvmPublicThreatCorpus(shared)
@@ -68,17 +84,17 @@ test("reports one-source and two-source matches without manufacturing duplicates
 
   assert.equal(sharedResult.status, "available")
   assert.equal(sharedResult.matched, true)
-  assert.equal(sharedResult.independentSourceCount, 2)
-  assert.deepEqual(sharedResult.matchedSources.sort(), ["real-cats", "rug-pull-dataset"])
+  assert.equal(sharedResult.independentSourceCount, 3)
+  assert.deepEqual(sharedResult.matchedSources.sort(), ["mew-darklist", "real-cats", "rug-pull-dataset"])
   assert.equal(singleResult.independentSourceCount, 1)
   assert.deepEqual(singleResult.matchedSources, ["real-cats"])
-  assert.equal(calls, 2, "second lookup should reuse the bounded cache")
+  assert.equal(calls, 3, "second lookup should reuse the bounded cache")
 })
 
 test("provider degrades safely if all upstream corpora fail", async () => {
   process.env.EVM_PUBLIC_THREAT_CORPUS_ENABLED = "true"
   globalThis.fetch = async () => new Response("upstream error", { status: 503 })
-  const result = await inspectEvmPublicThreatCorpus("0x9999999999999999999999999999999999999999")
+  const result = await inspectEvmPublicThreatCorpus("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
   assert.equal(result.status, "unavailable")
   assert.equal(result.matched, false)
   assert.match(result.error ?? "", /unavailable/i)
@@ -91,7 +107,7 @@ test("provider can be disabled without network access", async () => {
     called = true
     return new Response("", { status: 200 })
   }
-  const result = await inspectEvmPublicThreatCorpus("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+  const result = await inspectEvmPublicThreatCorpus("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
   assert.equal(result.status, "disabled")
   assert.equal(called, false)
 })
