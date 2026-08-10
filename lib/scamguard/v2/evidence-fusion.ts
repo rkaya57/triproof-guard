@@ -1,6 +1,7 @@
 import type { ScamGuardScanInput, ScamGuardScanResult, ScamGuardSignal } from "@/lib/scamguard/engine"
 import { scanScamGuard } from "@/lib/scamguard/engine"
 import { inspectPhishingDatabase, type PhishingDatabaseEvidence } from "@/lib/scamguard/providers/phishing-database"
+import { inspectSolanaDistributionRpc, type SolanaDistributionRpcEvidence } from "@/lib/scamguard/providers/solana-distribution-rpc"
 import { inspectToken2022Rpc, type Token2022RpcEvidence } from "@/lib/scamguard/providers/token-2022-rpc"
 import {
   inspectTokensXyzAsset,
@@ -21,7 +22,7 @@ export type V2EvidenceProvenance = {
   source: V2EvidenceSource
   status: "available" | "unavailable" | "disabled" | "not_applicable"
   confidence: "low" | "medium" | "high"
-  purpose: "market_health" | "canonical_identity" | "threat_intelligence" | "authority_surface" | "brand_impersonation" | "transaction_impact"
+  purpose: "market_health" | "canonical_identity" | "threat_intelligence" | "authority_surface" | "distribution" | "brand_impersonation" | "transaction_impact"
   note: string
 }
 
@@ -36,6 +37,7 @@ export type ScamGuardV2Observation = {
     canonicalIdentity?: CanonicalIdentityComparison
     phishingDatabase?: PhishingDatabaseEvidence
     token2022?: Token2022RpcEvidence
+    solanaDistribution?: SolanaDistributionRpcEvidence
     brandImpersonation?: BrandImpersonationFinding[]
     transactionImpact?: V2TransactionImpact
   }
@@ -121,6 +123,28 @@ function tokensSignals(evidence: TokensXyzEvidence): ScamGuardSignal[] {
   return signals
 }
 
+function distributionSignals(evidence: SolanaDistributionRpcEvidence): ScamGuardSignal[] {
+  if (evidence.status !== "available") return []
+  const signals: ScamGuardSignal[] = []
+  if (finite(evidence.largestAccountPercent) && evidence.largestAccountPercent >= 50) {
+    signals.push({
+      code: "V2_HIGH_LARGEST_TOKEN_ACCOUNT_CONCENTRATION",
+      severity: "low",
+      title: "High concentration in the largest token account",
+      detail: `The largest token account holds approximately ${evidence.largestAccountPercent.toFixed(2)}% of supply. Token accounts can represent exchanges, vaults, or liquidity infrastructure, so this is distribution context rather than proof of holder control or maliciousness.`,
+    })
+  }
+  if (finite(evidence.top10AccountPercent) && evidence.top10AccountPercent >= 80) {
+    signals.push({
+      code: "V2_HIGH_TOP10_TOKEN_ACCOUNT_CONCENTRATION",
+      severity: "low",
+      title: "High concentration across the ten largest token accounts",
+      detail: `The ten largest token accounts hold approximately ${evidence.top10AccountPercent.toFixed(2)}% of supply. This is an account-concentration signal, not a unique-holder measurement, and requires independent corroboration.`,
+    })
+  }
+  return signals
+}
+
 function phishingSignals(evidence: PhishingDatabaseEvidence): ScamGuardSignal[] {
   if (evidence.status !== "available" || !evidence.matched) return []
   return [{
@@ -171,6 +195,9 @@ export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamG
   const token2022Promise = isSolanaToken
     ? inspectToken2022Rpc(input.value)
     : Promise.resolve<Token2022RpcEvidence | undefined>(undefined)
+  const distributionPromise = isSolanaToken
+    ? inspectSolanaDistributionRpc(input.value)
+    : Promise.resolve<SolanaDistributionRpcEvidence | undefined>(undefined)
   const domainValue = input.type === "url" ? input.value : input.sourceUrl
   const domain = domainValue ? hostFromUrl(domainValue) : null
   const phishingPromise = domain
@@ -178,12 +205,13 @@ export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamG
     : Promise.resolve<PhishingDatabaseEvidence | undefined>(undefined)
   const brandImpersonation = domainValue ? detectBrandImpersonation(domainValue) : []
 
-  const [base, tokensXyz, claimedTokensXyz, phishingDatabase, token2022] = await Promise.all([
+  const [base, tokensXyz, claimedTokensXyz, phishingDatabase, token2022, solanaDistribution] = await Promise.all([
     basePromise,
     tokenPromise,
     claimedTokenPromise,
     phishingPromise,
     token2022Promise,
+    distributionPromise,
   ])
   const canonicalIdentity = claimedTokensXyz ? compareCanonicalIdentity(tokensXyz, claimedTokensXyz) : undefined
   const transactionImpact = input.type === "transaction" ? buildV2TransactionImpact(base) : undefined
@@ -192,6 +220,7 @@ export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamG
     ...(canonicalIdentity?.signal ? [canonicalIdentity.signal] : []),
     ...(phishingDatabase ? phishingSignals(phishingDatabase) : []),
     ...(token2022 ? token2022Signals(token2022) : []),
+    ...(solanaDistribution ? distributionSignals(solanaDistribution) : []),
     ...brandSignals(brandImpersonation),
     ...(transactionImpact ? transactionImpactSignals(transactionImpact) : []),
   ]
@@ -236,6 +265,15 @@ export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamG
         : "Solana RPC account ownership was checked; no Token-2022 extension surface was applicable.",
     })
   }
+  if (solanaDistribution) {
+    provenance.push({
+      source: "solana-rpc",
+      status: solanaDistribution.status,
+      confidence: solanaDistribution.status === "available" ? "high" : "low",
+      purpose: "distribution",
+      note: "Largest-account concentration is computed directly from Solana token-account balances. It is not a unique-holder metric and cannot independently imply malicious control.",
+    })
+  }
   if (domainValue) {
     provenance.push({
       source: "local-brand-registry",
@@ -262,7 +300,7 @@ export async function observeScamGuardV2(input: ScamGuardV2Input): Promise<ScamG
     base,
     proposedSignals,
     proposedAssessment,
-    evidence: { tokensXyz, claimedTokensXyz, canonicalIdentity, phishingDatabase, token2022, brandImpersonation, transactionImpact },
+    evidence: { tokensXyz, claimedTokensXyz, canonicalIdentity, phishingDatabase, token2022, solanaDistribution, brandImpersonation, transactionImpact },
     provenance,
     summary: {
       providerCount: provenance.length,
