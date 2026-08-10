@@ -15,43 +15,48 @@ function shadow(overrides: Partial<V2ShadowDecision> = {}): V2ShadowDecision {
     evidenceScore: 72,
     confidence: "HIGH",
     independentFamilies: ["threat_intelligence", "brand_impersonation"],
+    independentSources: ["phishing.database", "local-brand-registry"],
     eligibleForActivationStudy: true,
     productionDecisionChanged: false,
     ...overrides,
   }
 }
 
-test("corroborated high-risk escalation becomes review candidate only", () => {
+test("corroborated source-diverse high-risk escalation becomes review candidate only", () => {
   const policy = proposeV2ActivationPolicy(shadow())
   assert.equal(policy.candidateAction, "review_candidate")
   assert.equal(policy.requiresHoldoutValidation, true)
   assert.equal(policy.productionActionChanged, false)
 })
 
-test("critical escalation with three independent families becomes block candidate only", () => {
+test("critical escalation with three families and three sources becomes block candidate only", () => {
   const policy = proposeV2ActivationPolicy(shadow({
     v2ProposedRiskLevel: "CRITICAL",
     levelDelta: 2,
     independentFamilies: ["threat_intelligence", "brand_impersonation", "transaction_impact"],
+    independentSources: ["phishing.database", "local-brand-registry", "v1-transaction-decoder"],
   }))
   assert.equal(policy.candidateAction, "block_candidate")
   assert.equal(policy.productionActionChanged, false)
 })
 
-test("critical escalation with only two families cannot become a block candidate", () => {
+test("critical escalation with only two sources cannot become a block candidate", () => {
   const policy = proposeV2ActivationPolicy(shadow({
     v2ProposedRiskLevel: "CRITICAL",
     levelDelta: 2,
+    independentFamilies: ["identity", "market_health", "authority_surface"],
+    independentSources: ["tokens.xyz", "solana-rpc"],
   }))
   assert.equal(policy.candidateAction, "none")
-  assert.match(policy.reason, /at least three independent evidence families/)
+  assert.match(policy.reason, /three independently controlled source groups/)
 })
 
 test("single-source evidence cannot become an activation candidate", () => {
   const policy = proposeV2ActivationPolicy(shadow({
     activationGate: "single_strong_source",
     confidence: "MEDIUM",
-    independentFamilies: ["threat_intelligence"],
+    independentFamilies: ["identity", "market_health"],
+    independentSources: ["tokens.xyz"],
   }))
   assert.equal(policy.candidateAction, "none")
 })
