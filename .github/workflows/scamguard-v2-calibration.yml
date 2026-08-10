@@ -6,6 +6,9 @@ on:
       - feat/risk-engine-v2
     paths:
       - "app/api/scamguard/scan-transaction/route.ts"
+      - "app/api/scamguard/scan-url/route.ts"
+      - "lib/scamguard/verified-domain-guard.ts"
+      - "lib/scamguard/verified-domain-guard.test.ts"
       - "lib/scamguard/providers/**"
       - "lib/scamguard/v2/**"
       - ".github/workflows/scamguard-v2-calibration.yml"
@@ -29,6 +32,7 @@ jobs:
       - name: Calibration safety tests
         run: >-
           node --import tsx --test
+          lib/scamguard/verified-domain-guard.test.ts
           lib/scamguard/providers/evm-public-threat-corpus.test.ts
           lib/scamguard/v2/brand-impersonation.test.ts
           lib/scamguard/v2/evm-threat-corroboration.test.ts
@@ -46,6 +50,9 @@ jobs:
         run: >-
           npx eslint
           app/api/scamguard/scan-transaction/route.ts
+          app/api/scamguard/scan-url/route.ts
+          lib/scamguard/verified-domain-guard.ts
+          lib/scamguard/verified-domain-guard.test.ts
           lib/scamguard/providers/evm-public-threat-corpus.ts
           lib/scamguard/providers/evm-public-threat-corpus.test.ts
           lib/scamguard/v2/brand-impersonation.ts
