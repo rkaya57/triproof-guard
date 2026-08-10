@@ -11,6 +11,8 @@ on:
       - "lib/scamguard/providers/internal-graph-context.test.ts"
       - "lib/scamguard/providers/internal-entity-attribution.ts"
       - "lib/scamguard/providers/internal-entity-attribution.test.ts"
+      - "lib/scamguard/providers/reviewed-community-threat-context.ts"
+      - "lib/scamguard/providers/reviewed-community-threat-context.test.ts"
       - "lib/scamguard/providers/token-2022-rpc.ts"
       - "lib/scamguard/providers/token-2022-rpc.test.ts"
       - "lib/scamguard/providers/solana-distribution-rpc.ts"
@@ -43,7 +45,7 @@ jobs:
       - name: V2 provider quality tests
         run: node --import tsx --test lib/scamguard/v2/provider-quality.test.ts
       - name: V2 internal intelligence tests
-        run: node --import tsx --test lib/scamguard/providers/internal-adjudication.test.ts lib/scamguard/providers/internal-graph-context.test.ts lib/scamguard/providers/internal-entity-attribution.test.ts lib/scamguard/v2/internal-adjudication-corroboration.test.ts
+        run: node --import tsx --test lib/scamguard/providers/internal-adjudication.test.ts lib/scamguard/providers/internal-graph-context.test.ts lib/scamguard/providers/internal-entity-attribution.test.ts lib/scamguard/providers/reviewed-community-threat-context.test.ts lib/scamguard/v2/internal-adjudication-corroboration.test.ts
       - name: V2 transaction impact tests
         run: node --import tsx --test lib/scamguard/v2/transaction-impact.test.ts lib/scamguard/v2/transaction-impact-signals.test.ts
       - name: V2 EVM transaction fusion adversarial tests
@@ -77,6 +79,8 @@ jobs:
           lib/scamguard/providers/internal-graph-context.test.ts
           lib/scamguard/providers/internal-entity-attribution.ts
           lib/scamguard/providers/internal-entity-attribution.test.ts
+          lib/scamguard/providers/reviewed-community-threat-context.ts
+          lib/scamguard/providers/reviewed-community-threat-context.test.ts
           lib/scamguard/providers/tokens-xyz.ts
           lib/scamguard/providers/tokens-xyz.test.ts
           lib/scamguard/providers/token-2022-rpc.ts
