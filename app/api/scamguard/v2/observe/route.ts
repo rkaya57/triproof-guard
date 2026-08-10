@@ -8,6 +8,7 @@ import { inspectReviewedCommunityThreatContext } from "@/lib/scamguard/providers
 import { scanAccess } from "@/lib/scamguard/scan-access"
 import { proposeV2ActivationPolicy } from "@/lib/scamguard/v2/activation-policy"
 import { assessV2ActivationReadiness } from "@/lib/scamguard/v2/activation-readiness"
+import { buildV2ContextTelemetry } from "@/lib/scamguard/v2/context-telemetry"
 import { buildEntityContextHint } from "@/lib/scamguard/v2/entity-context-hint"
 import { observeScamGuardV2 } from "@/lib/scamguard/v2/evidence-fusion"
 import { compareShadowDecision } from "@/lib/scamguard/v2/shadow-decision"
@@ -105,6 +106,22 @@ export async function POST(request: Request) {
       }
     : undefined
 
+  const contextTelemetry = buildV2ContextTelemetry({
+    entityAttribution: entityAttribution
+      ? {
+          attributionConfidence: entityAttribution.attributionConfidence,
+          independentProviderCount: entityAttribution.independentProviderCount,
+        }
+      : undefined,
+    entityHintStatus: entityContextHint.status,
+    reviewedCommunityThreats: reviewedCommunityThreats
+      ? {
+          publishedReports: reviewedCommunityThreats.publishedReports,
+          promotedReports: reviewedCommunityThreats.promotedReports,
+        }
+      : undefined,
+  })
+
   const shadowDecision = compareShadowDecision(observation.base.riskLevel, observation.proposedAssessment)
   const shadowTelemetry = buildShadowTelemetryRecord({
     scanType: type,
@@ -125,6 +142,7 @@ export async function POST(request: Request) {
     entityAttributionContext,
     entityContextHint,
     communityThreatContext,
+    contextTelemetry,
     shadowDecision,
     shadowTelemetry,
     activationPolicy,
