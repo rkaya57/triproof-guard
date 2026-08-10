@@ -27,7 +27,7 @@ type CorpusConfig = {
 
 let corpusCache: CorpusCache | null = null
 
-const evmAddressPattern = /0x[a-fA-F0-9]{40}/g
+const evmAddressPattern = /^0x[a-fA-F0-9]{40}$/
 const defaultTimeoutMs = 5_000
 const defaultTtlMs = 60 * 60 * 1000
 const maxTtlMs = 60 * 60 * 1000
@@ -35,7 +35,7 @@ const maxCorpusBytes = 12 * 1024 * 1024
 
 const defaultUrls: Record<EvmThreatCorpusSource, string> = {
   "real-cats": "https://raw.githubusercontent.com/sjdseu/Real-CATS/main/CE.tsv",
-  "rug-pull-dataset": "https://raw.githubusercontent.com/dianxiang-sun/rug_pull_dataset/main/rugpull_dataset.csv",
+  "rug-pull-dataset": "https://raw.githubusercontent.com/dianxiang-sun/rug_pull_dataset/main/rugpull_full_dataset_new.csv",
 }
 
 function config(): CorpusConfig {
@@ -56,16 +56,58 @@ function config(): CorpusConfig {
 
 function normalizeAddress(value: string) {
   const trimmed = value.trim()
-  return /^0x[a-fA-F0-9]{40}$/.test(trimmed) ? trimmed.toLowerCase() : ""
+  return evmAddressPattern.test(trimmed) ? trimmed.toLowerCase() : ""
 }
 
-export function extractEvmAddresses(text: string) {
+function maliciousRealCatsLabel(label: string) {
+  const normalized = label.trim().toLowerCase()
+  return /(hack|scam|phish|fraud|drain|ransom|ponzi|malware|exploit|heist|criminal)/.test(normalized)
+}
+
+export function parseRealCatsCriminalAddresses(text: string) {
   const addresses = new Set<string>()
-  for (const match of text.matchAll(evmAddressPattern)) addresses.add(match[0].toLowerCase())
+  const lines = text.split(/\r?\n/)
+  for (let index = 1; index < lines.length; index += 1) {
+    const [rawAddress = "", rawLabel = ""] = lines[index].split("\t", 3)
+    const address = normalizeAddress(rawAddress)
+    if (address && maliciousRealCatsLabel(rawLabel)) addresses.add(address)
+  }
   return addresses
 }
 
-async function loadOne(url: string, timeoutMs: number) {
+function csvCells(line: string) {
+  const cells: string[] = []
+  let current = ""
+  let quoted = false
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index]
+    if (char === '"') {
+      if (quoted && line[index + 1] === '"') {
+        current += '"'
+        index += 1
+      } else quoted = !quoted
+    } else if (char === "," && !quoted) {
+      cells.push(current)
+      current = ""
+    } else current += char
+  }
+  cells.push(current)
+  return cells
+}
+
+export function parseValidatedEthereumRugPullAddresses(text: string) {
+  const addresses = new Set<string>()
+  const lines = text.split(/\r?\n/)
+  for (let index = 1; index < lines.length; index += 1) {
+    const cells = csvCells(lines[index])
+    const chain = (cells[1] ?? "").trim().toUpperCase()
+    const address = normalizeAddress(cells[2] ?? "")
+    if (chain === "ETH" && address) addresses.add(address)
+  }
+  return addresses
+}
+
+async function loadOne(source: EvmThreatCorpusSource, url: string, timeoutMs: number) {
   const response = await fetch(url, {
     headers: { Accept: "text/plain,text/csv,*/*" },
     signal: AbortSignal.timeout(timeoutMs),
@@ -76,7 +118,7 @@ async function loadOne(url: string, timeoutMs: number) {
   if (declaredLength > maxCorpusBytes) throw new Error("EVM threat corpus exceeded size limit")
   const text = await response.text()
   if (Buffer.byteLength(text, "utf8") > maxCorpusBytes) throw new Error("EVM threat corpus exceeded size limit")
-  return extractEvmAddresses(text)
+  return source === "real-cats" ? parseRealCatsCriminalAddresses(text) : parseValidatedEthereumRugPullAddresses(text)
 }
 
 async function loadCorpora() {
@@ -84,7 +126,7 @@ async function loadCorpora() {
   if (corpusCache && corpusCache.expiresAt > Date.now()) return corpusCache
 
   const entries = await Promise.allSettled((Object.entries(cfg.urls) as Array<[EvmThreatCorpusSource, string]>).map(async ([source, url]) => {
-    const addresses = await loadOne(url, cfg.timeoutMs)
+    const addresses = await loadOne(source, url, cfg.timeoutMs)
     return [source, addresses] as const
   }))
 
@@ -108,12 +150,8 @@ export async function inspectEvmPublicThreatCorpus(address: string): Promise<Evm
   const normalized = normalizeAddress(address)
   const checkedAt = new Date().toISOString()
   const { enabled } = config()
-  if (!enabled) {
-    return { status: "disabled", source: "evm-public-threat-corpus", address: normalized, matched: false, matchedSources: [], availableSources: [], independentSourceCount: 0, checkedAt }
-  }
-  if (!normalized) {
-    return { status: "unavailable", source: "evm-public-threat-corpus", address: normalized, matched: false, matchedSources: [], availableSources: [], independentSourceCount: 0, checkedAt, error: "Invalid EVM address" }
-  }
+  if (!enabled) return { status: "disabled", source: "evm-public-threat-corpus", address: normalized, matched: false, matchedSources: [], availableSources: [], independentSourceCount: 0, checkedAt }
+  if (!normalized) return { status: "unavailable", source: "evm-public-threat-corpus", address: normalized, matched: false, matchedSources: [], availableSources: [], independentSourceCount: 0, checkedAt, error: "Invalid EVM address" }
 
   try {
     const corpora = await loadCorpora()
