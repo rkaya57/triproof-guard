@@ -54,6 +54,8 @@ jobs:
         run: node --import tsx --test lib/scamguard/v2/evidence-fusion-solana-transaction.test.ts
       - name: V2 cross-surface consistency tests
         run: node --import tsx --test lib/scamguard/v2/cross-surface-consistency.test.ts
+      - name: V2 pre-Holdout adversarial benchmark
+        run: node --import tsx --test lib/scamguard/v2/pre-holdout-benchmark.test.ts
       - name: V2 shadow telemetry tests
         run: node --import tsx --test lib/scamguard/v2/shadow-decision.test.ts lib/scamguard/v2/shadow-telemetry.test.ts
       - name: V2 activation policy tests
@@ -102,6 +104,8 @@ jobs:
           lib/scamguard/v2/entity-context-hint.test.ts
           lib/scamguard/v2/context-telemetry.ts
           lib/scamguard/v2/context-telemetry.test.ts
+          lib/scamguard/v2/pre-holdout-benchmark.ts
+          lib/scamguard/v2/pre-holdout-benchmark.test.ts
           lib/scamguard/v2/shadow-decision.ts
           lib/scamguard/v2/shadow-decision.test.ts
           lib/scamguard/v2/shadow-telemetry.ts
