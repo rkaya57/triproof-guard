@@ -5,6 +5,7 @@ import { getExtensionSession } from "@/lib/extension/session"
 import { scanAccess } from "@/lib/scamguard/scan-access"
 import { observeScamGuardV2 } from "@/lib/scamguard/v2/evidence-fusion"
 import { compareShadowDecision } from "@/lib/scamguard/v2/shadow-decision"
+import { buildShadowTelemetryRecord } from "@/lib/scamguard/v2/shadow-telemetry"
 
 export const runtime = "nodejs"
 
@@ -46,8 +47,16 @@ export async function POST(request: Request) {
     deepScan: access.deepScan,
   })
   const shadowDecision = compareShadowDecision(observation.base.riskLevel, observation.proposedAssessment)
+  const shadowTelemetry = buildShadowTelemetryRecord({
+    scanType: type,
+    chain: observation.base.metadata.chain,
+    shadow: shadowDecision,
+    providerCount: observation.summary.providerCount,
+    availableProviders: observation.summary.availableProviders,
+    proposedSignalCount: observation.summary.proposedSignalCount,
+  })
 
-  return NextResponse.json({ ...observation, shadowDecision }, {
+  return NextResponse.json({ ...observation, shadowDecision, shadowTelemetry }, {
     headers: {
       "Cache-Control": "no-store",
       "X-ScamGuard-V2-Mode": "observe-only",
