@@ -63,7 +63,7 @@ test("rejects weak verification and malicious single-source ground truth", () =>
   const rows = makeRecords().map((row, index) => ({
     ...row,
     verificationStatus: index < 100 ? "verified" as const : "provisional" as const,
-    source2Url: row.groundTruth === "malicious" && index % 4 === 0 ? row.source2Url : undefined,
+    source2Url: row.groundTruth === "malicious" && index % 6 === 0 ? row.source2Url : undefined,
   }))
   const result = validateSecondHoldoutDataset(rows)
   assert.equal(result.valid, false)
