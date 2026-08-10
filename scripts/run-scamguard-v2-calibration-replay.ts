@@ -2,6 +2,7 @@ import { readFile, mkdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 
 import type { ScamGuardChain, ScamGuardRiskLevel, ScamGuardScanType } from "@/lib/scamguard/engine"
+import { applyVerifiedDomainFalsePositiveGuard } from "@/lib/scamguard/verified-domain-guard"
 import { summarizeCalibrationEvidenceCoverage, type CalibrationEvidenceCase } from "@/lib/scamguard/v2/calibration-evidence-coverage"
 import { observeCalibratedScamGuardV2 } from "@/lib/scamguard/v2/calibrated-evidence-fusion"
 import { evaluateScamGuardHoldout, type ScamGuardHoldoutCase } from "@/lib/scamguard/v2/holdout-evaluation"
@@ -80,6 +81,7 @@ function normalizeInput(record: Record<string, string>, resolvedTransaction: str
     value,
     chain,
     claimedAsset: type === "token" && record.tokenName ? record.tokenName : undefined,
+    sourceUrl: record.sourceUrl?.trim() || undefined,
     deepScan: false,
   }
 }
@@ -102,6 +104,7 @@ async function main() {
   const unresolvedTransactions: string[] = []
   let transactionCases = 0
   let transactionCasesWithSourceContext = 0
+  let urlCasesWithProductionGuardChange = 0
 
   for (const record of records) {
     let resolvedTransaction: string | null = null
@@ -117,11 +120,18 @@ async function main() {
     }
 
     try {
+      const input = normalizeInput(record, resolvedTransaction)
       // Holdout mode is intentionally reused here only to exclude internal
       // adjudication and graph history. The dataset itself is SEEN and this
       // report is calibration-only; it is never final validation evidence.
-      const observation = await observeCalibratedScamGuardV2(normalizeInput(record, resolvedTransaction), { evaluationMode: "holdout" })
-      const v1RiskLevel = observation.base.riskLevel
+      const observation = await observeCalibratedScamGuardV2(input, { evaluationMode: "holdout" })
+      const productionBase = input.type === "url"
+        ? applyVerifiedDomainFalsePositiveGuard(input.value, observation.base)
+        : observation.base
+      const productionGuardChanged = productionBase.riskLevel !== observation.base.riskLevel
+      if (productionGuardChanged) urlCasesWithProductionGuardChange += 1
+
+      const v1RiskLevel = productionBase.riskLevel
       const additiveV2RiskLevel = observation.proposedAssessment.proposedRiskLevel
       const effectiveV2RiskLevel = maxRisk(v1RiskLevel, additiveV2RiskLevel)
       const groundTruth = record.groundTruth as "benign" | "malicious"
@@ -140,7 +150,9 @@ async function main() {
         surface: record.surface,
         chain: record.chain,
         groundTruth,
+        rawEngineV1RiskLevel: observation.base.riskLevel,
         v1RiskLevel,
+        productionGuardChanged,
         additiveV2RiskLevel,
         effectiveV2RiskLevel,
         evidenceScore: observation.proposedAssessment.evidenceScore,
@@ -161,17 +173,20 @@ async function main() {
     phishingFeedConfigured: Boolean(process.env.PHISHING_DATABASE_FEED_URL?.trim()),
     solanaRpcConfigured: Boolean(process.env.SOLANA_RPC_URL?.trim()),
     evmRpcConfigured: Boolean(process.env.EVM_RPC_URL?.trim()),
+    goPlusConfigured: Boolean(process.env.GOPLUS_APP_KEY?.trim() && process.env.GOPLUS_APP_SECRET?.trim()),
   }
 
   const report = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     evaluationMode: "calibration_replay",
     seenDataset: true,
     originalDatasetRole: "former_holdout_now_seen_calibration_data",
     activationEligible: false,
     finalValidationEligible: false,
     productionDecisionChanged: false,
-    effectiveV2Policy: "max(v1, additive-v2); automatic downgrade prohibited",
+    effectiveV2Policy: "max(production-v1, additive-v2); automatic downgrade prohibited",
+    productionUrlGuardApplied: true,
+    urlCasesWithProductionGuardChange,
     totalFixtureCases: records.length,
     scoredCases: scored.length,
     unresolvedTransactions,
@@ -206,7 +221,9 @@ async function main() {
     totalFixtureCases: report.totalFixtureCases,
     scoredCases: report.scoredCases,
     unresolvedTransactions: report.unresolvedTransactions.length,
+    urlCasesWithProductionGuardChange: report.urlCasesWithProductionGuardChange,
     sourceContextCoverage: report.sourceContextCoverage,
+    providerParity: report.providerParity,
     headline: report.headline,
   }, null, 2))
 
