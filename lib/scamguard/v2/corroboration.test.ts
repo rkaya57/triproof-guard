@@ -72,6 +72,33 @@ test("Token-2022 capabilities remain bounded without an independent identity sig
   assert.equal(assessment.proposedRiskLevel, "SAFE")
 })
 
+test("transaction-impact capabilities stay below caution when they are the only evidence family", () => {
+  const assessment = assessV2Corroboration([
+    signal("V2_TX_UNLIMITED_APPROVAL", "medium"),
+    signal("V2_TX_AUTHORITY_CONTROL", "medium"),
+    signal("V2_TX_DELEGATE_RIGHTS", "medium"),
+  ])
+
+  assert.equal(assessment.familyScores.transaction_impact, 24)
+  assert.equal(assessment.independentFamilies.length, 1)
+  assert.equal(assessment.activationGate, "insufficient")
+  assert.equal(assessment.proposedRiskLevel, "SAFE")
+})
+
+test("high-impact transaction evidence plus independent phishing intelligence proposes high risk", () => {
+  const assessment = assessV2Corroboration([
+    signal("V2_TX_UNLIMITED_APPROVAL", "medium"),
+    signal("V2_ACTIVE_PHISHING_FEED_MATCH", "critical"),
+  ])
+
+  assert.equal(assessment.activationGate, "corroborated")
+  assert.equal(assessment.proposedRiskLevel, "HIGH_RISK")
+  assert.equal(assessment.confidence, "HIGH")
+  assert.ok(assessment.independentFamilies.includes("transaction_impact"))
+  assert.ok(assessment.independentFamilies.includes("threat_intelligence"))
+  assert.ok(assessment.corroborations.some((item) => item.includes("high-impact signing capability")))
+})
+
 test("canonical mismatch plus weak market evidence is corroborated without changing V1", () => {
   const assessment = assessV2Corroboration([
     signal("V2_CANONICAL_IDENTITY_MISMATCH", "critical"),
