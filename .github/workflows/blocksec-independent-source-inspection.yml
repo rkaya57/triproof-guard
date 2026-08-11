@@ -1,0 +1,79 @@
+name: BlockSec independent phishing dataset inspection
+
+on:
+  push:
+    branches:
+      - feat/risk-engine-v2-calibration
+    paths:
+      - .github/workflows/blocksec-independent-source-inspection.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout calibration repo
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned BlockSec dataset
+        uses: actions/checkout@v4
+        with:
+          repository: blocksecteam/phishing_contract_sigmetrics25
+          ref: b3e7a78eaf96bf09cb617ffda480203deb7516f2
+          path: blocksec-dataset
+          persist-credentials: false
+
+      - name: Inspect dataset schema and integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE='blocksec-dataset/phishing_transactions.log'
+          sha256sum "$FILE" | tee blocksec-phishing-transactions.sha256
+          wc -l "$FILE" | tee blocksec-phishing-transactions.lines
+          ls -lh "$FILE"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from collections import Counter
+
+          p = Path('blocksec-dataset/phishing_transactions.log')
+          samples=[]
+          lengths=Counter()
+          prefixes=Counter()
+          with p.open('r', encoding='utf-8', errors='replace') as f:
+              for i,line in enumerate(f):
+                  raw=line.rstrip('\n')
+                  if i < 20:
+                      samples.append(raw[:1200])
+                  stripped=raw.strip()
+                  if not stripped:
+                      continue
+                  lengths[len(stripped.split())] += 1
+                  prefixes[stripped[:1]] += 1
+                  if i >= 4999:
+                      break
+          report={
+              'sourceRepo':'blocksecteam/phishing_contract_sigmetrics25',
+              'sourceCommit':'b3e7a78eaf96bf09cb617ffda480203deb7516f2',
+              'file':'phishing_transactions.log',
+              'sampleLines':samples,
+              'first5000WhitespaceFieldCounts':dict(lengths),
+              'first5000FirstCharCounts':dict(prefixes),
+          }
+          Path('blocksec-schema-report.json').write_text(json.dumps(report, indent=2))
+          print(json.dumps(report, indent=2))
+          PY
+
+      - name: Upload source inspection evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: blocksec-independent-source-inspection
+          path: |
+            blocksec-phishing-transactions.sha256
+            blocksec-phishing-transactions.lines
+            blocksec-schema-report.json
+          if-no-files-found: error
