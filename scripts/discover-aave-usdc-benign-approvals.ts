@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto"
+import { mkdir, writeFile } from "node:fs/promises"
+import path from "node:path"
 import { Interface, id, zeroPadValue } from "ethers"
 
 const RPCS = [
@@ -11,11 +13,27 @@ const BLOCKSCOUT_API = "https://eth.blockscout.com/api"
 const USDC = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
 const AAVE_POOL = "0x87870bca3f3fd6335c3f4ce8392d69350b4fa4e2"
 const TARGET = Number(process.env.BENIGN_TARGET_CASES || "120")
+const CHALLENGE_TARGET = Number(process.env.BENIGN_CHALLENGE_CASES || "106")
 const MAX_LOOKBACK = Number(process.env.BENIGN_MAX_LOOKBACK_BLOCKS || "1200000")
+const END_BLOCK = process.env.BENIGN_END_BLOCK ? Number(process.env.BENIGN_END_BLOCK) : null
 const LOG_WINDOW = 50_000
 const approvalTopic = id("Approval(address,address,uint256)")
 const iface = new Interface(["function approve(address spender,uint256 amount)"])
+const OUT_DIR = path.join(process.cwd(), "artifacts/scamguard-v2-benign-presigning-controls")
 let lastRpc = RPCS[0]
+
+type Control = {
+  txHash: string
+  blockNumber: number
+  from: string
+  token: string
+  spender: string
+  selector: string
+  method: string
+  groundTruth: "benign"
+  provenance: string
+  sources: string[]
+}
 
 async function rpc<T>(method: string, params: unknown[]): Promise<T> {
   let lastError = "no RPC endpoint available"
@@ -52,14 +70,33 @@ async function discoverLogs(fromBlock: number, toBlock: number) {
   url.searchParams.set("topic0_2_opr", "and")
   const response = await fetch(url, { headers: { accept: "application/json" }, cache: "no-store" })
   if (!response.ok) throw new Error(`Blockscout logs HTTP ${response.status} for ${fromBlock}-${toBlock}`)
-  const payload = await response.json() as { status?: string; message?: string; result?: unknown }
+  const payload = await response.json() as { message?: string; result?: unknown }
   if (!Array.isArray(payload.result)) throw new Error(`Blockscout logs ${fromBlock}-${toBlock}: ${payload.message || "unexpected response"}`)
   return payload.result as Array<{ transactionHash?: string; transaction_hash?: string }>
 }
 
+function selectionKey(control: Control) {
+  return createHash("sha256").update(`scamguard-benign-v1|${control.txHash.toLowerCase()}|${control.from.toLowerCase()}`).digest("hex")
+}
+
+function selectUniqueSenders(controls: Control[], count: number) {
+  const selected: Control[] = []
+  const senders = new Set<string>()
+  for (const control of [...controls].sort((a, b) => selectionKey(a).localeCompare(selectionKey(b)))) {
+    const sender = control.from.toLowerCase()
+    if (senders.has(sender)) continue
+    senders.add(sender)
+    selected.push(control)
+    if (selected.length === count) break
+  }
+  return selected
+}
+
 async function main() {
   const latestHex = await rpc<string>("eth_blockNumber", [])
-  const latest = Number.parseInt(latestHex, 16)
+  const chainLatest = Number.parseInt(latestHex, 16)
+  const latest = END_BLOCK ?? chainLatest
+  if (!Number.isInteger(latest) || latest <= 0 || latest > chainLatest) throw new Error(`Invalid BENIGN_END_BLOCK ${latest}; chain latest is ${chainLatest}`)
   const minBlock = Math.max(0, latest - MAX_LOOKBACK)
   const candidateHashes = new Set<string>()
   let scannedFrom = latest
@@ -76,7 +113,7 @@ async function main() {
     }
   }
 
-  const controls: Array<Record<string, unknown>> = []
+  const controls: Control[] = []
   for (const hash of [...candidateHashes].sort()) {
     if (controls.length >= TARGET) break
     const tx = await rpc<{ hash: string; to?: string; from: string; input: string; blockNumber: string } | null>("eth_getTransactionByHash", [hash])
@@ -104,26 +141,36 @@ async function main() {
     })
   }
 
+  const selectedControls = selectUniqueSenders(controls, CHALLENGE_TARGET)
   const report = {
-    schemaVersion: 5,
+    schemaVersion: 6,
     activationEligible: false,
     selectionUsesModelOutputs: false,
     discoverySource: "blockscout-rest-logs-chunked",
+    selectionPolicy: "successful USDC approvals to official Aave V3 Pool; SHA-256 deterministic ordering; maximum one transaction per sender; no model outputs consulted",
     rpcEndpoints: RPCS,
     lastSuccessfulRpc: lastRpc,
-    latestBlock: latest,
+    chainLatestBlock: chainLatest,
+    endBlock: latest,
     scannedFromBlock: scannedFrom,
     scannedBlocks: latest - scannedFrom + 1,
     logWindowBlocks: LOG_WINDOW,
     windowsScanned,
     candidateApprovalLogs: candidateHashes.size,
     verifiedBenignControls: controls.length,
+    uniqueVerifiedSenders: new Set(controls.map((item) => item.from)).size,
     targetControls: TARGET,
+    challengeTarget: CHALLENGE_TARGET,
+    selectedChallengeControls: selectedControls.length,
     controlsSha256: createHash("sha256").update(JSON.stringify(controls)).digest("hex"),
+    selectedControlsSha256: createHash("sha256").update(JSON.stringify(selectedControls)).digest("hex"),
     controls,
+    selectedControls,
   }
+  await mkdir(OUT_DIR, { recursive: true })
+  await writeFile(path.join(OUT_DIR, "report.json"), JSON.stringify(report, null, 2))
   console.log(JSON.stringify(report, null, 2))
-  if (controls.length < Math.min(60, TARGET)) process.exitCode = 2
+  if (controls.length < TARGET || selectedControls.length < CHALLENGE_TARGET) process.exitCode = 2
 }
 
 main().catch((error) => {
