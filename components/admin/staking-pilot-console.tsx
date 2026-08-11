@@ -132,7 +132,7 @@ export function StakingPilotConsole() {
     setBusy("faucet")
     setError(null)
     try {
-      const connected = wallet ?? await ensureSplTokenAccountWithWallet({ mintAddress: state.config.mint, rpcUrl: state.config.rpcUrl })
+      const connected = await ensureSplTokenAccountWithWallet({ mintAddress: state.config.mint, rpcUrl: state.config.rpcUrl })
       setWallet(connected)
       const result = await callApi("/api/admin/staking/faucet", connected)
       setNotice(`${result.amount ?? state.config.faucetAmount} TRI sent on Devnet. ${result.signature ? `Tx: ${shortAddress(result.signature)}` : ""}`)
@@ -149,7 +149,7 @@ export function StakingPilotConsole() {
     setBusy("stake")
     setError(null)
     try {
-      const connected = wallet ?? await ensureSplTokenAccountWithWallet({ mintAddress: state.config.mint, rpcUrl: state.config.rpcUrl })
+      const connected = await ensureSplTokenAccountWithWallet({ mintAddress: state.config.mint, rpcUrl: state.config.rpcUrl })
       setWallet(connected)
       const amountUnits = toUnits(amount)
       const transfer = await transferSplTokenWithWallet({
