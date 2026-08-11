@@ -1,7 +1,7 @@
 import type { ScamGuardSignal } from "@/lib/scamguard/engine"
 
-export type V2EvidenceFamily = "threat_intelligence" | "evm_criminal_intelligence" | "evm_rugpull_intelligence" | "evm_mew_darklist_intelligence" | "evm_goplus_intelligence" | "contract_integrity" | "identity" | "brand_impersonation" | "authority_surface" | "market_health" | "distribution" | "transaction_impact" | "internal_reputation"
-export type V2EvidenceSourceGroup = "phishing.database" | "evm-real-cats" | "evm-rug-pull-dataset" | "evm-mew-darklist" | "goplus-address-security" | "evm-rpc-contract" | "tokens.xyz" | "local-brand-registry" | "solana-rpc" | "v1-transaction-decoder" | "triproof-adjudication"
+export type V2EvidenceFamily = "threat_intelligence" | "metamask_phishing_intelligence" | "evm_criminal_intelligence" | "evm_rugpull_intelligence" | "evm_mew_darklist_intelligence" | "contract_integrity" | "identity" | "brand_impersonation" | "authority_surface" | "market_health" | "distribution" | "transaction_impact" | "internal_reputation"
+export type V2EvidenceSourceGroup = "phishing.database" | "metamask-eth-phishing-detect" | "evm-real-cats" | "evm-rug-pull-dataset" | "evm-mew-darklist" | "evm-rpc-contract" | "tokens.xyz" | "local-brand-registry" | "solana-rpc" | "v1-transaction-decoder" | "triproof-adjudication"
 
 export type V2CorroborationAssessment = {
   mode: "observe_only"
@@ -21,10 +21,10 @@ type WeightedSignal = { family: V2EvidenceFamily; weight: number }
 
 const familyCaps: Record<V2EvidenceFamily, number> = {
   threat_intelligence: 46,
+  metamask_phishing_intelligence: 46,
   evm_criminal_intelligence: 36,
   evm_rugpull_intelligence: 42,
   evm_mew_darklist_intelligence: 38,
-  evm_goplus_intelligence: 42,
   contract_integrity: 14,
   identity: 40,
   brand_impersonation: 32,
@@ -37,10 +37,10 @@ const familyCaps: Record<V2EvidenceFamily, number> = {
 
 const sourceForFamily: Record<V2EvidenceFamily, V2EvidenceSourceGroup> = {
   threat_intelligence: "phishing.database",
+  metamask_phishing_intelligence: "metamask-eth-phishing-detect",
   evm_criminal_intelligence: "evm-real-cats",
   evm_rugpull_intelligence: "evm-rug-pull-dataset",
   evm_mew_darklist_intelligence: "evm-mew-darklist",
-  evm_goplus_intelligence: "goplus-address-security",
   contract_integrity: "evm-rpc-contract",
   identity: "tokens.xyz",
   market_health: "tokens.xyz",
@@ -54,10 +54,10 @@ const sourceForFamily: Record<V2EvidenceFamily, V2EvidenceSourceGroup> = {
 function weightedSignal(signal: ScamGuardSignal): WeightedSignal | null {
   const code = signal.code ?? ""
   if (code === "V2_ACTIVE_PHISHING_FEED_MATCH") return { family: "threat_intelligence", weight: 46 }
+  if (code === "V2_METAMASK_PHISHING_BLACKLIST_MATCH") return { family: "metamask_phishing_intelligence", weight: 46 }
   if (code === "V2_EVM_REAL_CATS_MATCH") return { family: "evm_criminal_intelligence", weight: 36 }
   if (code === "V2_EVM_RUG_PULL_MATCH") return { family: "evm_rugpull_intelligence", weight: 42 }
   if (code === "V2_EVM_MEW_DARKLIST_MATCH") return { family: "evm_mew_darklist_intelligence", weight: 38 }
-  if (code === "V2_EVM_GOPLUS_MALICIOUS_ADDRESS") return { family: "evm_goplus_intelligence", weight: 42 }
   if (code === "V2_EVM_UNVERIFIED_CONTRACT") return { family: "contract_integrity", weight: 10 }
   if (code === "V2_EVM_PROXY_CONTRACT") return { family: "contract_integrity", weight: 4 }
   if (code === "V2_CANONICAL_IDENTITY_MISMATCH") return { family: "identity", weight: 40 }
@@ -102,12 +102,20 @@ export function assessV2Corroboration(signals: ScamGuardSignal[], options?: { ac
   const sourceEligible = (family: V2EvidenceFamily) => eligibleSet.has(sourceForFamily[family])
   const pairEligible = (left: V2EvidenceFamily, right: V2EvidenceFamily) => sourceEligible(left) && sourceEligible(right)
 
+  if (has("threat_intelligence") && has("metamask_phishing_intelligence") && pairEligible("threat_intelligence", "metamask_phishing_intelligence")) {
+    bonus += 12
+    corroborations.push("Two independently maintained open-source phishing intelligence sources identify the same domain.")
+  }
   if (has("threat_intelligence") && has("brand_impersonation") && pairEligible("threat_intelligence", "brand_impersonation")) {
     bonus += 20
     corroborations.push("Independent phishing-feed and local brand-impersonation evidence agree on the same scan context.")
   }
+  if (has("metamask_phishing_intelligence") && has("brand_impersonation") && pairEligible("metamask_phishing_intelligence", "brand_impersonation")) {
+    bonus += 20
+    corroborations.push("MetaMask phishing intelligence and local brand-impersonation evidence agree on the same scan context.")
+  }
 
-  const evmThreatFamilies = ["evm_criminal_intelligence", "evm_rugpull_intelligence", "evm_mew_darklist_intelligence", "evm_goplus_intelligence"] as const
+  const evmThreatFamilies = ["evm_criminal_intelligence", "evm_rugpull_intelligence", "evm_mew_darklist_intelligence"] as const
   let evmThreatPairCorroborated = false
   for (let leftIndex = 0; leftIndex < evmThreatFamilies.length; leftIndex += 1) {
     for (let rightIndex = leftIndex + 1; rightIndex < evmThreatFamilies.length; rightIndex += 1) {
@@ -118,7 +126,7 @@ export function assessV2Corroboration(signals: ScamGuardSignal[], options?: { ac
   }
   if (evmThreatPairCorroborated) {
     bonus += 12
-    corroborations.push("Two independently controlled EVM threat-intelligence source groups identify the same address.")
+    corroborations.push("Two independently controlled open-source EVM threat-intelligence source groups identify the same address.")
   }
 
   for (const threatFamily of evmThreatFamilies) {
@@ -136,9 +144,12 @@ export function assessV2Corroboration(signals: ScamGuardSignal[], options?: { ac
     bonus += 4
     corroborations.push("Canonical identity mismatch coexists with independently queried Solana account-concentration evidence.")
   }
-  if (has("threat_intelligence") && has("transaction_impact") && pairEligible("threat_intelligence", "transaction_impact")) {
-    bonus += 12
-    corroborations.push("Independent threat intelligence converges with a high-impact signing capability.")
+  for (const threatFamily of ["threat_intelligence", "metamask_phishing_intelligence"] as const) {
+    if (has(threatFamily) && has("transaction_impact") && pairEligible(threatFamily, "transaction_impact")) {
+      bonus += 12
+      corroborations.push("Independent threat intelligence converges with a high-impact signing capability.")
+      break
+    }
   }
   if (has("brand_impersonation") && has("transaction_impact") && pairEligible("brand_impersonation", "transaction_impact")) {
     bonus += 8
@@ -151,10 +162,6 @@ export function assessV2Corroboration(signals: ScamGuardSignal[], options?: { ac
   if (has("internal_reputation") && has("transaction_impact") && pairEligible("internal_reputation", "transaction_impact")) {
     bonus += 8
     corroborations.push("Prior human-confirmed Tri-Proof risk adjudication converges with a high-impact signing capability.")
-  }
-  if (has("brand_impersonation") && has("threat_intelligence") && has("identity") && sourceEligible("brand_impersonation") && sourceEligible("threat_intelligence") && sourceEligible("identity")) {
-    bonus += 8
-    corroborations.push("Three independently controlled impersonation/threat source groups converge.")
   }
 
   const baseScore = families.reduce((sum, family) => sum + (familyScores[family] ?? 0), 0)
