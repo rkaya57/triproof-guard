@@ -7,11 +7,11 @@ const RPCS = [
   "https://ethereum-rpc.publicnode.com",
   "https://eth.llamarpc.com",
 ].filter((value, index, all): value is string => Boolean(value) && all.indexOf(value) === index)
+const BLOCKSCOUT_API = "https://eth.blockscout.com/api"
 const USDC = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
 const AAVE_POOL = "0x87870bca3f3fd6335c3f4ce8392d69350b4fa4e2"
 const TARGET = Number(process.env.BENIGN_TARGET_CASES || "120")
 const MAX_LOOKBACK = Number(process.env.BENIGN_MAX_LOOKBACK_BLOCKS || "1200000")
-const CHUNK = 2_000
 const approvalTopic = id("Approval(address,address,uint256)")
 const iface = new Interface(["function approve(address spender,uint256 amount)"])
 let lastRpc = RPCS[0]
@@ -38,24 +38,33 @@ async function rpc<T>(method: string, params: unknown[]): Promise<T> {
   throw new Error(lastError)
 }
 
+async function discoverLogs(fromBlock: number, toBlock: number) {
+  const spenderTopic = zeroPadValue(AAVE_POOL, 32).toLowerCase()
+  const url = new URL(BLOCKSCOUT_API)
+  url.searchParams.set("module", "logs")
+  url.searchParams.set("action", "getLogs")
+  url.searchParams.set("fromBlock", String(fromBlock))
+  url.searchParams.set("toBlock", String(toBlock))
+  url.searchParams.set("address", USDC)
+  url.searchParams.set("topic0", approvalTopic)
+  url.searchParams.set("topic2", spenderTopic)
+  url.searchParams.set("topic0_2_opr", "and")
+  const response = await fetch(url, { headers: { accept: "application/json" }, cache: "no-store" })
+  if (!response.ok) throw new Error(`Blockscout logs HTTP ${response.status}`)
+  const payload = await response.json() as { status?: string; message?: string; result?: unknown }
+  if (!Array.isArray(payload.result)) throw new Error(`Blockscout logs: ${payload.message || "unexpected response"}`)
+  return payload.result as Array<{ transactionHash?: string; transaction_hash?: string }>
+}
+
 async function main() {
   const latestHex = await rpc<string>("eth_blockNumber", [])
   const latest = Number.parseInt(latestHex, 16)
   const minBlock = Math.max(0, latest - MAX_LOOKBACK)
-  const spenderTopic = zeroPadValue(AAVE_POOL, 32).toLowerCase()
+  const logs = await discoverLogs(minBlock, latest)
   const candidateHashes = new Set<string>()
-  let scannedFrom = latest
-
-  for (let to = latest; to >= minBlock && candidateHashes.size < TARGET * 2; to -= CHUNK) {
-    const from = Math.max(minBlock, to - CHUNK + 1)
-    scannedFrom = from
-    const logs = await rpc<Array<{ transactionHash: string }>>("eth_getLogs", [{
-      address: USDC,
-      fromBlock: `0x${from.toString(16)}`,
-      toBlock: `0x${to.toString(16)}`,
-      topics: [approvalTopic, null, spenderTopic],
-    }])
-    for (const log of logs) candidateHashes.add(log.transactionHash.toLowerCase())
+  for (const log of logs) {
+    const hash = log.transactionHash || log.transaction_hash
+    if (typeof hash === "string" && /^0x[a-fA-F0-9]{64}$/.test(hash)) candidateHashes.add(hash.toLowerCase())
   }
 
   const controls: Array<Record<string, unknown>> = []
@@ -87,14 +96,15 @@ async function main() {
   }
 
   const report = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     activationEligible: false,
     selectionUsesModelOutputs: false,
+    discoverySource: "blockscout-rest-logs",
     rpcEndpoints: RPCS,
     lastSuccessfulRpc: lastRpc,
     latestBlock: latest,
-    scannedFromBlock: scannedFrom,
-    scannedBlocks: latest - scannedFrom + 1,
+    scannedFromBlock: minBlock,
+    scannedBlocks: latest - minBlock + 1,
     candidateApprovalLogs: candidateHashes.size,
     verifiedBenignControls: controls.length,
     targetControls: TARGET,
