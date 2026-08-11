@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     chain: body?.chain,
     sourceUrl: body?.sourceUrl,
   })
-  const result = applyScamGuardV11TransactionHardening(baseResult, value)
+  const result = await applyScamGuardV11TransactionHardening(baseResult, value, body?.sourceUrl)
 
   return NextResponse.json(result, {
     headers: {
