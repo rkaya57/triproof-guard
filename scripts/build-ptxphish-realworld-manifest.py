@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Build a deterministic, leakage-resistant PTXPhish transaction manifest.
+"""Build deterministic, leakage-resistant PTXPhish transaction artifacts.
 
 The upstream workbook is downloaded at runtime and never vendored. Selection is
 based only on upstream category, transaction-hash validity, source availability,
-and a deterministic SHA-256 ordering. No ScamGuard output is consulted.
+and deterministic SHA-256 ordering. No ScamGuard output is consulted.
+
+In addition to the fixed validation manifest, the complete source-backed candidate
+pool is sealed separately so transaction calldata can be classified for
+pre-signing compatibility without changing the already-defined model-blind
+selection policy.
 """
 from __future__ import annotations
 
@@ -23,12 +28,11 @@ URL = os.environ.get(
 OUT = Path("artifacts/ptxphish-realworld")
 XLSX = OUT / "PTXPHISH.xlsx"
 MANIFEST = OUT / "manifest.json"
+CANDIDATE_POOL = OUT / "candidate-pool.json"
 NS = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 TX_RE = re.compile(r"^0x[a-fA-F0-9]{64}$")
 HTTP_RE = re.compile(r"https?://[^\s]+", re.I)
 
-# Pairs observed in PTXPHISH.xlsx row 4. We intentionally select transaction
-# categories that map to signing/transaction risk surfaces supported by ScamGuard.
 CATEGORY_COLUMNS = {
     "approve": (0, 1),
     "permit": (2, 3),
@@ -113,13 +117,16 @@ def deterministic_key(item: dict[str, str]) -> str:
     return hashlib.sha256(seed.encode()).hexdigest()
 
 
+def canonical_sha(value: object) -> str:
+    return hashlib.sha256(json.dumps(value, separators=(",", ":"), sort_keys=True).encode()).hexdigest()
+
+
 def main() -> None:
     body = download()
     rows = parse_rows()
     candidates: list[dict[str, str]] = []
     seen: set[str] = set()
 
-    # First four rows are the workbook title/group/category header rows.
     for row in rows[4:]:
         for category, (tx_col, source_col) in CATEGORY_COLUMNS.items():
             tx_hash = row.get(tx_col, "").lower()
@@ -134,9 +141,26 @@ def main() -> None:
                 "upstream": URL,
             })
 
+    ordered_candidates = sorted(candidates, key=deterministic_key)
     by_category: dict[str, list[dict[str, str]]] = {name: [] for name in CATEGORY_COLUMNS}
-    for item in sorted(candidates, key=deterministic_key):
+    for item in ordered_candidates:
         by_category[item["category"]].append(item)
+
+    corpus_sha = hashlib.sha256(body).hexdigest()
+    candidate_core = {
+        "schemaVersion": 1,
+        "selectionPolicy": "all source-backed valid unique transaction hashes; SHA-256 deterministic ordering; no model outputs consulted",
+        "upstreamUrl": URL,
+        "upstreamSha256": corpus_sha,
+        "cases": ordered_candidates,
+    }
+    candidate_pool_sha = canonical_sha(candidate_core)
+    CANDIDATE_POOL.write_text(json.dumps({
+        **candidate_core,
+        "candidatePoolSha256": candidate_pool_sha,
+        "caseCount": len(ordered_candidates),
+        "categoryAvailable": {k: len(v) for k, v in by_category.items()},
+    }, indent=2), encoding="utf-8")
 
     selected: list[dict[str, str]] = []
     selected_hashes: set[str] = set()
@@ -146,10 +170,7 @@ def main() -> None:
                 selected.append(item)
                 selected_hashes.add(item["txHash"])
 
-    remaining = sorted(
-        (item for item in candidates if item["txHash"] not in selected_hashes),
-        key=deterministic_key,
-    )
+    remaining = [item for item in ordered_candidates if item["txHash"] not in selected_hashes]
     for item in remaining:
         if len(selected) >= TARGET_CASES:
             break
@@ -160,7 +181,6 @@ def main() -> None:
     if len(selected) < TARGET_CASES:
         raise RuntimeError(f"Only {len(selected)} source-backed PTXPhish transactions available; need {TARGET_CASES}")
 
-    corpus_sha = hashlib.sha256(body).hexdigest()
     manifest_core = {
         "schemaVersion": 1,
         "selectionPolicy": "source-backed valid tx hashes; minimum-per-category then SHA-256 deterministic fill; no model outputs consulted",
@@ -169,18 +189,19 @@ def main() -> None:
         "targetCases": TARGET_CASES,
         "cases": selected,
     }
-    canonical = json.dumps(manifest_core, separators=(",", ":"), sort_keys=True).encode()
-    manifest_sha = hashlib.sha256(canonical).hexdigest()
+    manifest_sha = canonical_sha(manifest_core)
     report = {
         **manifest_core,
         "manifestSha256": manifest_sha,
         "availableSourceBackedTransactions": len(candidates),
+        "candidatePoolSha256": candidate_pool_sha,
         "categoryAvailable": {k: len(v) for k, v in by_category.items()},
         "categorySelected": {k: sum(1 for item in selected if item["category"] == k) for k in CATEGORY_COLUMNS},
     }
     MANIFEST.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps({
         "manifestSha256": manifest_sha,
+        "candidatePoolSha256": candidate_pool_sha,
         "upstreamSha256": corpus_sha,
         "selected": len(selected),
         "availableSourceBackedTransactions": len(candidates),
