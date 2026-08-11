@@ -53,6 +53,11 @@ async function main() {
   const fixtureSha256 = createHash("sha256").update(fixtureText).digest("hex")
   const rows = parseCsvObjects(fixtureText)
   if (rows.length !== 200) throw new Error(`Expected exactly 200 second-Holdout candidates, found ${rows.length}`)
+  const structuralFingerprints = rows.map((row) => `${row.surface}:${row.chain}:${row.target.trim().toLowerCase()}`)
+  const uniqueStructuralFingerprints = new Set(structuralFingerprints).size
+  if (uniqueStructuralFingerprints !== rows.length) {
+    throw new Error(`Second-Holdout validation fixture must contain 200 unique surface/chain/target fingerprints; found ${uniqueStructuralFingerprints}`)
+  }
 
   const all: ScamGuardHoldoutCase[] = []
   const controlled: ScamGuardHoldoutCase[] = []
@@ -104,13 +109,14 @@ async function main() {
   }
 
   const report = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     evaluationRole: "second_holdout_candidate_validation",
     fixtureSha256,
     activationEligible: false,
     finalBlindValidationEligible: false,
     reason: "This 200-case candidate set was assembled during calibration and includes a controlled adversarial robustness stratum. It cannot independently activate V2. A fresh real-world blind set is still required for activation.",
     totalFixtureCases: rows.length,
+    uniqueStructuralFingerprints,
     scoredCases: all.length,
     errors,
     composition: {
@@ -130,6 +136,7 @@ async function main() {
     fixtureSha256: report.fixtureSha256,
     activationEligible: report.activationEligible,
     totalFixtureCases: report.totalFixtureCases,
+    uniqueStructuralFingerprints: report.uniqueStructuralFingerprints,
     scoredCases: report.scoredCases,
     errors: report.errors.length,
     composition: report.composition,
