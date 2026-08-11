@@ -17,7 +17,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   ShoppingCart,
-  Sparkles,
   TrendingUp,
   UsersRound,
   WalletCards,
@@ -185,7 +184,7 @@ export default async function Page() {
         ))}
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
+      <section>
         <Card className="glass-panel overflow-hidden border-cyan-400/20">
           <CardHeader className="border-b border-border/70">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -220,27 +219,6 @@ export default async function Page() {
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="glass-panel border-violet-400/20">
-          <CardHeader className="border-b border-border/70">
-            <CardTitle className="flex items-center gap-2 text-white"><ReceiptText className="text-violet-300" /> Recent sales</CardTitle>
-            <CardDescription className="text-slate-300">Latest verified customer payments.</CardDescription>
-          </CardHeader>
-          <CardContent className="divide-y divide-border/70 p-0">
-            {sales.recentSales.length === 0 ? (
-              <p className="p-8 text-center text-sm text-slate-400">No verified sales yet.</p>
-            ) : sales.recentSales.map((sale) => (
-              <div key={sale.id} className="flex items-center justify-between gap-4 p-4 transition-colors hover:bg-white/[0.025]">
-                <div className="min-w-0">
-                  <p className="truncate font-medium text-white">{friendlyPlan(sale.plan)}</p>
-                  <p className="truncate text-xs text-slate-400">{sale.customerName} · {sale.customerEmail}</p>
-                  <p className="mt-1 text-[11px] text-slate-500">{sale.network} · {sale.provider} · {sale.createdAt.toLocaleString()}</p>
-                </div>
-                <div className="text-right"><p className="font-semibold text-emerald-300">{formatUsdc(sale.amountUsdc)} USDC</p><Badge variant="outline" className="mt-1 border-emerald-400/25 text-emerald-200">Verified</Badge></div>
-              </div>
-            ))}
           </CardContent>
         </Card>
       </section>
