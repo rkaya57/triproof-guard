@@ -445,6 +445,22 @@ export async function connectSolanaWallet() {
   return publicKey.toString()
 }
 
+export async function getSplTokenAccountForWallet({
+  mintAddress,
+}: {
+  mintAddress: string
+}) {
+  const web3 = await loadSolanaWeb3()
+  const walletAddress = await connectSolanaWallet()
+  const owner = new web3.PublicKey(walletAddress)
+  const mint = new web3.PublicKey(mintAddress)
+  const tokenProgramId = new web3.PublicKey(TOKEN_PROGRAM_ID)
+  const associatedProgramId = new web3.PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID)
+  const tokenAccount = associatedTokenAddress(web3, mint, owner, tokenProgramId, associatedProgramId)
+
+  return { walletAddress: owner.toString(), tokenAccount: tokenAccount.toString() }
+}
+
 export async function ensureSplTokenAccountWithWallet({
   mintAddress,
   rpcUrl,

@@ -5,6 +5,7 @@ import { ArrowDownToLine, Clock3, ExternalLink, LoaderCircle, LockKeyhole, Spark
 
 import {
   ensureSplTokenAccountWithWallet,
+  getSplTokenAccountForWallet,
   transferSplTokenWithWallet,
 } from "@/lib/billing/solana-wallet-client"
 import { Button } from "@/components/ui/button"
@@ -116,7 +117,7 @@ export function StakingPilotConsole() {
     setBusy("connect")
     setError(null)
     try {
-      const connected = await ensureSplTokenAccountWithWallet({ mintAddress: state.config.mint, rpcUrl: state.config.rpcUrl })
+      const connected = await getSplTokenAccountForWallet({ mintAddress: state.config.mint })
       setWallet(connected)
       setNotice(`Devnet wallet connected: ${shortAddress(connected.walletAddress)}`)
     } catch (reason) {
