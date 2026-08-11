@@ -4,6 +4,7 @@ import {
   type EvmPublicThreatCorpusEvidence,
 } from "@/lib/scamguard/providers/evm-public-threat-corpus"
 import { inspectMetaMaskPhishingConfig } from "@/lib/scamguard/providers/metamask-phishing-config"
+import { inspectSourcifyContractVerification } from "@/lib/scamguard/providers/sourcify-contract-verification"
 import { assessV2Corroboration } from "@/lib/scamguard/v2/corroboration"
 import {
   observeScamGuardV2,
@@ -41,6 +42,21 @@ function transactionThreatSignals(evidence: EvmPublicThreatCorpusEvidence | unde
     detail: "An EVM transaction counterparty appears in a public validated rug-pull dataset. The match is independent threat intelligence and does not alter production V1 decisions during calibration.",
   })
   return signals
+}
+
+function sourcifyThreatCorroborationSignal(input: {
+  status: "available" | "unavailable"
+  isContract?: boolean
+  verifiedBySourcify?: boolean
+  address: string
+} | undefined): ScamGuardSignal[] {
+  if (!input || input.status !== "available" || input.isContract !== true || input.verifiedBySourcify !== false) return []
+  return [{
+    code: "V2_EVM_UNVERIFIED_CONTRACT",
+    severity: "low",
+    title: "Threat-matched contract lacks Sourcify verification record",
+    detail: `${input.address} has contract bytecode according to Ethereum RPC, while Sourcify v2 has no verification record for the same address. This is weak contract-integrity context only and is risk-bearing here solely because an independent EVM threat corpus already matched the counterparty.`,
+  }]
 }
 
 function metaMaskSignal(matched: boolean, domain: string): ScamGuardSignal[] {
@@ -106,6 +122,8 @@ function transactionCounterparty(observation: ScamGuardV2Observation, input: Sca
  * sources; MetaMask eth-phishing-detect adds an independent URL blacklist.
  * For EVM transactions, decoded counterparties are preferred; when the V1
  * decoder cannot identify one, the raw wallet-request `to` target is queried.
+ * Threat-matched contract counterparties receive a second, independent weak
+ * integrity check through RPC bytecode + Sourcify v2 verification lookup.
  * Production V1 decisions remain unchanged.
  */
 export async function observeCalibratedScamGuardV2(
@@ -118,6 +136,10 @@ export async function observeCalibratedScamGuardV2(
     ? await inspectEvmPublicThreatCorpus(counterparty)
     : undefined
   const corpus = observation.evidence.evmThreatCorpus ?? transactionCorpus
+  const threatMatched = Boolean(transactionCorpus?.status === "available" && transactionCorpus.matched)
+  const sourcify = counterparty && threatMatched
+    ? await inspectSourcifyContractVerification(counterparty)
+    : undefined
   const extras = [] as ReturnType<typeof assessProviderQuality>[]
   const extraSignals: ScamGuardSignal[] = []
 
@@ -135,6 +157,15 @@ export async function observeCalibratedScamGuardV2(
       }),
     )
     extraSignals.push(...transactionThreatSignals(transactionCorpus))
+  }
+
+  if (sourcify) {
+    extras.push(assessProviderQuality({
+      source: "evm-rpc-contract",
+      available: sourcify.status === "available",
+      checkedAt: sourcify.checkedAt,
+    }))
+    extraSignals.push(...sourcifyThreatCorroborationSignal(sourcify))
   }
 
   if (corpus) {
