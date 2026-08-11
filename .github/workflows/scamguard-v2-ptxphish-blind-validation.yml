@@ -1,0 +1,51 @@
+name: ScamGuard V2 sealed PTXPhish blind validation
+
+on:
+  push:
+    branches:
+      - feat/risk-engine-v2-calibration
+    paths:
+      - "scripts/build-ptxphish-realworld-manifest.py"
+      - "scripts/run-scamguard-v2-ptxphish-blind-validation.ts"
+      - ".github/workflows/scamguard-v2-ptxphish-blind-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  EVM_RPC_URL: ${{ secrets.EVM_RPC_URL }}
+  EVM_PUBLIC_THREAT_CORPUS_ENABLED: "true"
+  METAMASK_PHISHING_CONFIG_ENABLED: "true"
+  SCAMGUARD_SANDBOX_ENABLED: "false"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Rebuild sealed PTXPhish manifest
+        run: python scripts/build-ptxphish-realworld-manifest.py
+      - name: Run sealed real-world malicious transaction validation
+        run: node --import tsx scripts/run-scamguard-v2-ptxphish-blind-validation.ts
+      - name: Upload validation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: scamguard-v2-ptxphish-blind-validation
+          path: artifacts/ptxphish-realworld-validation/report.json
+          if-no-files-found: error
