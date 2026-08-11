@@ -100,27 +100,27 @@ const routeTitles = [
   { href: "/dashboard/net", title: "Tri Proof Net", eyebrow: "Internal document office and approval workflow" },
   { href: "/dashboard/settings", title: "Settings", eyebrow: "Workspace preferences" },
   { href: "/dashboard/analysis", title: "Analysis Report", eyebrow: "Risk decision center" },
-  { href: "/dashboard", title: "Overview", eyebrow: "Web3 Campaign Wallet Risk Analysis" },
+  { href: "/dashboard", title: "Overview", eyebrow: "Web3 campaign security workspace" },
 ]
 
 function getRouteTitle(pathname: string) {
-  return (
-    routeTitles.find((route) => pathname === route.href || (route.href !== "/dashboard" && pathname.startsWith(route.href))) ??
-    routeTitles[routeTitles.length - 1]
-  )
+  return routeTitles.find((route) => pathname === route.href || (route.href !== "/dashboard" && pathname.startsWith(route.href))) ?? routeTitles[routeTitles.length - 1]
 }
 
-export function DashboardShell({
-  children,
-  isAdmin = false,
-}: {
-  children: React.ReactNode
-  isAdmin?: boolean
-}) {
+function routeSection(pathname: string) {
+  if (pathname.startsWith("/dashboard/admin") || pathname.startsWith("/dashboard/net")) return "Administration"
+  if (pathname.startsWith("/dashboard/analysis") || pathname.startsWith("/dashboard/campaigns") || pathname.startsWith("/dashboard/reports") || pathname.startsWith("/dashboard/new-analysis")) return "Analysis"
+  if (pathname.startsWith("/dashboard/developer") || pathname.startsWith("/dashboard/policies")) return "Integrations"
+  if (pathname.startsWith("/dashboard/settings")) return "Account"
+  return "Workspace"
+}
+
+export function DashboardShell({ children, isAdmin = false }: { children: React.ReactNode; isAdmin?: boolean }) {
   const pathname = usePathname()
   const router = useRouter()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const routeTitle = getRouteTitle(pathname)
+  const section = routeSection(pathname)
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" })
@@ -130,76 +130,47 @@ export function DashboardShell({
 
   function navLinkClass(href: string, admin = false) {
     const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href))
-
     return cn(
-      buttonVariants({ variant: active ? "secondary" : "ghost" }),
-      "hover-lift h-auto min-w-0 flex-col items-start gap-2 whitespace-normal px-3 py-3 text-left text-xs leading-tight transition-all sm:text-sm lg:w-full lg:flex-row lg:items-center lg:justify-start lg:gap-2 lg:whitespace-nowrap lg:py-2",
-      active && "nav-glow-active border-primary/30 bg-primary/10 text-primary",
-      admin && "border-yellow-400/20 text-yellow-100 hover:bg-yellow-400/10 hover:text-yellow-100"
+      buttonVariants({ variant: "ghost" }),
+      "group h-auto min-w-0 justify-start gap-3 whitespace-normal rounded-xl border border-transparent px-3 py-2.5 text-left text-xs leading-tight transition-all sm:text-sm lg:w-full lg:whitespace-nowrap",
+      "text-slate-400 hover:border-cyan-400/15 hover:bg-cyan-400/[0.04] hover:text-slate-100",
+      active && "border-cyan-400/25 bg-[linear-gradient(90deg,rgba(34,211,238,.11),rgba(59,130,246,.05),transparent)] text-cyan-100 shadow-[inset_3px_0_0_rgba(34,211,238,.75)]",
+      admin && !active && "text-amber-100/70 hover:border-amber-400/15 hover:bg-amber-400/[0.04] hover:text-amber-100",
+      admin && active && "border-amber-400/25 bg-amber-400/[0.06] text-amber-100 shadow-[inset_3px_0_0_rgba(251,191,36,.75)]"
     )
   }
 
   return (
-    <div className="premium-page min-h-screen bg-background text-foreground lg:grid lg:grid-cols-[280px_1fr]">
-      <aside className="premium-sidebar sticky top-0 z-40 border-b border-border bg-sidebar/95 backdrop-blur-xl lg:min-h-screen lg:border-b-0 lg:border-r">
-        <div className="relative z-10 px-4 py-3 sm:px-5 lg:flex lg:min-h-screen lg:flex-col lg:gap-6 lg:px-4 lg:py-4">
-          <div className="flex items-center justify-between gap-3">
-            <Link href="/" className="group flex min-w-0 items-center gap-3 px-1">
-              <span className="glow-primary flex size-11 shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 transition-transform group-hover:scale-105">
-                <Image
-                  src="/logo.svg"
-                  alt="Tri-Proof Guard"
-                  width={32}
-                  height={32}
-                  priority
-                  className="rounded-lg"
-                />
+    <div className="relative min-h-screen overflow-x-hidden bg-[#050914] text-foreground lg:grid lg:grid-cols-[264px_minmax(0,1fr)]">
+      <div className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(circle_at_18%_8%,rgba(6,182,212,.08),transparent_28%),radial-gradient(circle_at_82%_0%,rgba(124,58,237,.08),transparent_30%),linear-gradient(rgba(30,41,59,.10)_1px,transparent_1px),linear-gradient(90deg,rgba(30,41,59,.10)_1px,transparent_1px)] bg-[size:auto,auto,48px_48px,48px_48px]" />
+
+      <aside className="relative z-40 border-b border-white/[0.06] bg-[#07101f]/95 backdrop-blur-2xl lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
+        <div className="flex h-full flex-col px-4 py-4">
+          <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] pb-4">
+            <Link href="/" className="group flex min-w-0 items-center gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-cyan-400/[0.06] shadow-[0_0_30px_rgba(34,211,238,.08)]">
+                <Image src="/logo.svg" alt="Tri-Proof Protocol" width={29} height={29} priority className="rounded-lg" />
               </span>
-              <div className="flex min-w-0 flex-col">
-                <span className="truncate text-sm font-semibold">Tri-Proof Guard</span>
-                <span className="truncate font-mono text-[10px] uppercase tracking-[0.22em] text-primary/75">
-                  Risk console
-                </span>
+              <div className="min-w-0">
+                <span className="block truncate text-sm font-semibold tracking-tight text-white">Tri-Proof Protocol</span>
+                <span className="block truncate font-mono text-[9px] uppercase tracking-[0.22em] text-cyan-300/60">Security Console</span>
               </div>
             </Link>
-
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-lg"
-              className="shrink-0 lg:hidden"
-              aria-expanded={mobileNavOpen}
-              aria-controls="dashboard-mobile-navigation"
-              onClick={() => setMobileNavOpen((open) => !open)}
-            >
+            <Button type="button" variant="outline" size="icon-lg" className="shrink-0 border-white/10 bg-white/[0.02] lg:hidden" aria-expanded={mobileNavOpen} aria-controls="dashboard-mobile-navigation" onClick={() => setMobileNavOpen((open) => !open)}>
               {mobileNavOpen ? <X aria-hidden /> : <Menu aria-hidden />}
               <span className="sr-only">Toggle dashboard navigation</span>
             </Button>
           </div>
 
-          <div
-            id="dashboard-mobile-navigation"
-            className={cn(
-              "mt-3 gap-4 lg:mt-0 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col",
-              mobileNavOpen ? "grid" : "hidden lg:flex"
-            )}
-          >
-            <nav className="grid max-h-[min(66vh,38rem)] gap-3 overflow-y-auto overscroll-contain pr-1 lg:max-h-none lg:gap-4 lg:overflow-visible lg:pr-0">
+          <div id="dashboard-mobile-navigation" className={cn("mt-4 gap-5 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col", mobileNavOpen ? "grid" : "hidden lg:flex")}>
+            <nav className="grid max-h-[min(68vh,42rem)] gap-4 overflow-y-auto overscroll-contain pr-1 lg:max-h-none lg:flex-1 lg:overflow-y-auto">
               {navGroups.map((group) => (
-                <div key={group.label} className="grid gap-2">
-                  <p className="px-1 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/80">
-                    {group.label}
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-1">
+                <div key={group.label} className="grid gap-1.5">
+                  <p className="px-2 font-mono text-[9px] uppercase tracking-[0.2em] text-slate-600">{group.label}</p>
+                  <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-1">
                     {group.items.map((item) => (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setMobileNavOpen(false)}
-                        className={navLinkClass(item.href)}
-                        title={item.label}
-                      >
-                        <item.icon data-icon="inline-start" className="size-4" />
+                      <Link key={item.href} href={item.href} onClick={() => setMobileNavOpen(false)} className={navLinkClass(item.href)} title={item.label}>
+                        <item.icon className="size-4 shrink-0 text-current opacity-80 transition-transform group-hover:scale-105" />
                         <span className="break-words lg:truncate">{item.label}</span>
                       </Link>
                     ))}
@@ -208,20 +179,12 @@ export function DashboardShell({
               ))}
 
               {isAdmin && (
-                <div className="grid gap-2 border-t border-yellow-400/15 pt-3">
-                  <p className="px-1 font-mono text-[10px] uppercase tracking-[0.18em] text-yellow-200/70">
-                    Administration
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-1">
+                <div className="grid gap-1.5 border-t border-amber-400/10 pt-4">
+                  <p className="px-2 font-mono text-[9px] uppercase tracking-[0.2em] text-amber-300/45">Administration</p>
+                  <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-1">
                     {adminNavItems.map((item) => (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setMobileNavOpen(false)}
-                        className={navLinkClass(item.href, true)}
-                        title={item.label}
-                      >
-                        <item.icon data-icon="inline-start" className="size-4" />
+                      <Link key={item.href} href={item.href} onClick={() => setMobileNavOpen(false)} className={navLinkClass(item.href, true)} title={item.label}>
+                        <item.icon className="size-4 shrink-0 opacity-80" />
                         <span className="break-words lg:truncate">{item.label}</span>
                       </Link>
                     ))}
@@ -230,38 +193,43 @@ export function DashboardShell({
               )}
             </nav>
 
-            <div className="glass-panel premium-card hidden rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground lg:block">
-              <div className="mb-2 flex items-center gap-2 text-foreground">
-                <Sparkles className="text-primary" />
-                Guard Product
-              </div>
-              <p>Wallet risk analysis, clustering, Gray Zone review and exports.</p>
-              <div className="mt-4 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-primary/80">
-                <span className="pulse-dot" /> Batch queue ready
-              </div>
+            <div className="hidden rounded-2xl border border-cyan-400/10 bg-[linear-gradient(135deg,rgba(8,47,73,.24),rgba(15,23,42,.5))] p-4 lg:block">
+              <div className="flex items-center gap-2 text-xs font-medium text-slate-200"><Sparkles className="size-4 text-cyan-300" /> Security workspace</div>
+              <p className="mt-2 text-xs leading-5 text-slate-500">Sybil intelligence, pre-sign protection and explainable evidence in one console.</p>
+              <div className="mt-3 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.18em] text-emerald-300/70"><span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_9px_rgba(52,211,153,.8)]" /> Production online</div>
             </div>
 
-            <Button variant="outline" onClick={logout} className="hover-lift w-full justify-center lg:mt-auto">
-              <LogOut data-icon="inline-start" />
-              <span>Logout</span>
+            <Button variant="outline" onClick={logout} className="w-full justify-center border-white/10 bg-white/[0.02] text-slate-300 hover:bg-rose-400/[0.05] hover:text-rose-200 lg:mt-1">
+              <LogOut className="size-4" /> Logout
             </Button>
           </div>
         </div>
       </aside>
 
-      <div className="min-w-0">
-        <header className="scan-accent border-b border-border bg-background/80 px-5 py-4 backdrop-blur-xl sm:px-8">
-          <div className="flex flex-col gap-2 reveal-up">
-            <span className="cyber-chip w-fit">
-              {routeTitle.eyebrow}
-            </span>
-            <div className="flex items-center gap-2">
-              <h1 className="text-gradient animate-gradient-text text-2xl font-semibold">{routeTitle.title}</h1>
-              <ChevronDown className="size-4 text-primary/60 lg:hidden" aria-hidden />
+      <div className="relative z-10 min-w-0">
+        <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-[#050914]/80 px-5 py-3.5 backdrop-blur-2xl sm:px-7 xl:px-9">
+          <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-4">
+            <div className="min-w-0">
+              <div className="mb-1 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.18em] text-slate-500">
+                <span>{section}</span><span className="text-cyan-400/50">/</span><span className="truncate text-cyan-300/70">{routeTitle.eyebrow}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <h1 className="truncate text-xl font-semibold tracking-tight text-white sm:text-2xl">{routeTitle.title}</h1>
+                <ChevronDown className="size-4 shrink-0 text-cyan-300/40 lg:hidden" aria-hidden />
+              </div>
+            </div>
+            <div className="hidden items-center gap-3 sm:flex">
+              <div className="flex items-center gap-2 rounded-full border border-emerald-400/15 bg-emerald-400/[0.04] px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.16em] text-emerald-300/80">
+                <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,.8)]" /> Live production
+              </div>
+              <Link href="/dashboard/new-analysis" className={cn(buttonVariants({ size: "sm" }), "border border-cyan-300/20 bg-cyan-400/90 text-slate-950 shadow-[0_0_24px_rgba(34,211,238,.12)] hover:bg-cyan-300")}>New analysis</Link>
             </div>
           </div>
         </header>
-        <main className="px-5 py-6 sm:px-8">{children}</main>
+
+        <main className="px-4 py-5 sm:px-7 sm:py-7 xl:px-9">
+          <div className="mx-auto w-full max-w-[1600px]">{children}</div>
+        </main>
       </div>
     </div>
   )
