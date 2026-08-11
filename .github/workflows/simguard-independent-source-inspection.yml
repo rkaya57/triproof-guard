@@ -1,0 +1,58 @@
+name: SimGuard independent source inspection
+
+on:
+  push:
+    branches:
+      - feat/risk-engine-v2-calibration
+    paths:
+      - .github/workflows/simguard-independent-source-inspection.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Inspect anonymous research repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPO_ID='Blockchain-Transaction-Simulation-Phishing-BE81'
+          BASE="https://anonymous.4open.science/api/repo/${REPO_ID}"
+          curl --fail --silent --show-error --location --retry 3 --max-time 60 \
+            "${BASE}/files/" -o simguard-files.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          tree = json.loads(Path('simguard-files.json').read_text())
+          files = []
+          def walk(node, prefix=''):
+              if not isinstance(node, dict):
+                  return
+              for name, value in node.items():
+                  path = f'{prefix}/{name}' if prefix else name
+                  if isinstance(value, dict) and 'size' in value:
+                      files.append((path, value.get('size')))
+                  else:
+                      walk(value, path)
+          walk(tree)
+          files.sort()
+          print(json.dumps({'fileCount': len(files), 'files': files}, indent=2))
+          Path('simguard-file-list.json').write_text(json.dumps({'fileCount': len(files), 'files': files}, indent=2))
+          PY
+
+      - name: Upload source tree evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: simguard-independent-source-tree
+          path: |
+            simguard-files.json
+            simguard-file-list.json
+          if-no-files-found: error
