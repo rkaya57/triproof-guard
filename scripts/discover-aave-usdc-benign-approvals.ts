@@ -1,27 +1,40 @@
 import { createHash } from "node:crypto"
 import { Interface, id, zeroPadValue } from "ethers"
 
-const RPC = process.env.EVM_RPC_URL?.trim() || "https://ethereum-rpc.publicnode.com"
+const RPCS = [
+  process.env.EVM_RPC_URL?.trim(),
+  "https://ethereum-rpc.publicnode.com",
+  "https://eth.llamarpc.com",
+].filter((value, index, all): value is string => Boolean(value) && all.indexOf(value) === index)
 const USDC = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
 const AAVE_POOL = "0x87870bca3f3fd6335c3f4ce8392d69350b4fa4e2"
 const TARGET = Number(process.env.BENIGN_TARGET_CASES || "120")
 const MAX_LOOKBACK = Number(process.env.BENIGN_MAX_LOOKBACK_BLOCKS || "1200000")
-const CHUNK = 10_000
+const CHUNK = 2_000
 const approvalTopic = id("Approval(address,address,uint256)")
 const iface = new Interface(["function approve(address spender,uint256 amount)"])
+let lastRpc = RPCS[0]
 
 async function rpc<T>(method: string, params: unknown[]): Promise<T> {
-  const response = await fetch(RPC, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-    cache: "no-store",
-  })
-  if (!response.ok) throw new Error(`${method} HTTP ${response.status}`)
-  const payload = await response.json() as { result?: T; error?: { message?: string } }
-  if (payload.error) throw new Error(`${method}: ${payload.error.message || "RPC error"}`)
-  if (payload.result === undefined) throw new Error(`${method}: missing result`)
-  return payload.result
+  let lastError = "no RPC endpoint available"
+  for (const endpoint of RPCS) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+        cache: "no-store",
+      })
+      if (!response.ok) { lastError = `${endpoint} ${method} HTTP ${response.status}`; continue }
+      const payload = await response.json() as { result?: T; error?: { message?: string } }
+      if (payload.error || payload.result === undefined) { lastError = `${endpoint} ${method}: ${payload.error?.message || "missing result"}`; continue }
+      lastRpc = endpoint
+      return payload.result
+    } catch (error) {
+      lastError = `${endpoint} ${method}: ${error instanceof Error ? error.message : String(error)}`
+    }
+  }
+  throw new Error(lastError)
 }
 
 async function main() {
@@ -73,10 +86,11 @@ async function main() {
   }
 
   const report = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     activationEligible: false,
     selectionUsesModelOutputs: false,
-    rpc: RPC,
+    rpcEndpoints: RPCS,
+    lastSuccessfulRpc: lastRpc,
     latestBlock: latest,
     scannedFromBlock: scannedFrom,
     scannedBlocks: latest - scannedFrom + 1,
