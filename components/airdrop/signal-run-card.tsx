@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
+  Activity,
+  BadgeCheck,
   CheckCircle2,
   CircleAlert,
   Crosshair,
@@ -9,12 +11,15 @@ import {
   Loader2,
   LockKeyhole,
   Play,
+  Radio,
+  ScanEye,
   ShieldCheck,
   ShieldX,
   Sparkles,
   TimerReset,
   Trophy,
   XCircle,
+  Zap,
 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -101,7 +106,6 @@ export function SignalRunCard() {
   useEffect(() => { sessionRef.current = session }, [session])
 
   const activeCard = session?.cards[index] ?? null
-  const completion = session ? Math.round((answers.length / session.cards.length) * 100) : 0
 
   async function submitRound(finalAnswers: Array<{ cardId: string; decision: Decision }>) {
     const active = sessionRef.current
@@ -209,53 +213,57 @@ export function SignalRunCard() {
   }, [loading, registered, session, state?.status])
 
   return (
-    <Card className="overflow-hidden border-cyan-400/25 bg-[#061525] shadow-[0_20px_70px_rgba(0,0,0,0.28)]">
-      <CardHeader className="border-b border-cyan-400/15 bg-[#071a2b]">
+    <Card className="relative overflow-hidden border-cyan-400/35 bg-[#041222] shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-cyan-200/80" />
+      <CardHeader className="relative border-b border-cyan-400/15 bg-[#06192b]">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex gap-4">
-            <span className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-cyan-300/25 bg-cyan-300/10 text-cyan-200"><Crosshair className="size-6" /></span>
+            <span className="relative flex size-12 shrink-0 items-center justify-center rounded-lg border border-cyan-300/35 bg-cyan-300/10 text-cyan-200 shadow-[0_0_28px_rgba(34,211,238,0.14)]"><Crosshair className="size-6" /><span className="absolute right-1.5 top-1.5 size-1.5 animate-pulse rounded-full bg-emerald-300" /></span>
             <div>
-              <div className="mb-2 flex flex-wrap items-center gap-2"><Badge variant="outline" className="border-cyan-300/30 text-cyan-100">Daily game</Badge><Badge variant="outline" className="border-emerald-300/30 text-emerald-100">Up to 105 pts</Badge></div>
+              <div className="mb-2 flex flex-wrap items-center gap-2"><Badge variant="outline" className="border-cyan-300/30 bg-cyan-300/[0.06] text-cyan-100"><Radio className="size-3" /> Daily game</Badge><Badge variant="outline" className="border-emerald-300/30 bg-emerald-300/[0.06] text-emerald-100"><Zap className="size-3" /> Up to 105 pts</Badge></div>
               <CardTitle className="text-2xl text-white">Signal Run</CardTitle>
               <CardDescription className="mt-2 max-w-2xl leading-6 text-slate-300">Classify live security signals as safe or block before the timer closes. Pass with 6 of 8 correct decisions.</CardDescription>
             </div>
           </div>
-          <Badge variant="outline" className={session ? "border-amber-300/35 bg-amber-300/10 text-amber-100" : state?.status === "COMPLETED" ? "border-emerald-300/35 bg-emerald-300/10 text-emerald-100" : "border-cyan-300/30 bg-cyan-300/10 text-cyan-100"}>{statusLabel}</Badge>
+          <div className="flex items-center gap-3 self-start">
+            <div className="hidden border-r border-cyan-400/15 pr-3 text-right sm:block"><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">Secure feed</p><p className="mt-1 flex items-center justify-end gap-1.5 text-xs text-emerald-200"><span className="size-1.5 animate-pulse rounded-full bg-emerald-300" /> Live</p></div>
+            <Badge variant="outline" className={session ? "border-amber-300/35 bg-amber-300/10 text-amber-100" : state?.status === "COMPLETED" ? "border-emerald-300/35 bg-emerald-300/10 text-emerald-100" : "border-cyan-300/30 bg-cyan-300/10 text-cyan-100"}>{statusLabel}</Badge>
+          </div>
         </div>
       </CardHeader>
 
       <CardContent className="p-4 sm:p-5">
         {loading ? <div className="h-52 animate-pulse rounded-lg border border-cyan-400/15 bg-slate-950/60" /> : session && activeCard ? (
           <div className="grid gap-5 xl:grid-cols-[1fr_300px]">
-            <section className="relative overflow-hidden rounded-lg border border-cyan-300/25 bg-slate-950/50 p-5 sm:p-6">
-              <div className="pointer-events-none absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(34,211,238,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,0.12)_1px,transparent_1px)] [background-size:28px_28px]" />
+            <section className="relative overflow-hidden rounded-lg border border-cyan-300/30 bg-[#061426] p-5 shadow-[inset_0_0_0_1px_rgba(34,211,238,0.03)] sm:p-6">
+              <div className="pointer-events-none absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(34,211,238,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,0.12)_1px,transparent_1px)] [background-size:28px_28px]" />
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-cyan-300/70" />
               <div className="relative">
-                <div className="flex flex-wrap items-center justify-between gap-3"><span className="font-mono text-xs uppercase tracking-[0.16em] text-cyan-200">Signal {index + 1} / {session.cards.length}</span><span className={`flex items-center gap-2 font-mono text-lg ${secondsLeft <= 10 ? "text-rose-200" : "text-amber-200"}`}><Gauge className="size-4" /> {secondsLeft}s</span></div>
-                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800"><div className="h-full bg-cyan-300 transition-[width] duration-200" style={{ width: `${Math.max(0, (secondsLeft / 45) * 100)}%` }} /></div>
-                <p className="mt-8 font-mono text-xs uppercase tracking-[0.15em] text-slate-500">{activeCard.category}</p>
-                <h3 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">{activeCard.title}</h3>
+                <div className="flex flex-wrap items-center justify-between gap-3"><span className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.16em] text-cyan-200"><Activity className="size-3.5" /> Signal {index + 1} / {session.cards.length}</span><span className={`flex items-center gap-2 rounded-md border px-2.5 py-1 font-mono text-lg ${secondsLeft <= 10 ? "border-rose-300/35 bg-rose-300/10 text-rose-200" : "border-amber-300/30 bg-amber-300/[0.06] text-amber-200"}`}><Gauge className="size-4" /> {secondsLeft}s</span></div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full border border-cyan-300/10 bg-slate-950"><div className="h-full bg-cyan-300 transition-[width] duration-200" style={{ width: `${Math.max(0, (secondsLeft / 45) * 100)}%` }} /></div>
+                <div className="mt-7 flex items-start gap-4"><span className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-cyan-300/25 bg-cyan-300/10 text-cyan-200"><ScanEye className="size-5" /></span><div><p className="font-mono text-xs uppercase tracking-[0.15em] text-slate-500">{activeCard.category}</p><h3 className="mt-1 text-2xl font-semibold text-white sm:text-3xl">{activeCard.title}</h3></div></div>
                 <p className="mt-3 max-w-2xl text-base leading-7 text-slate-300">{activeCard.description}</p>
-                <div className="mt-6 grid gap-2 sm:grid-cols-3">{activeCard.signals.map((signal) => <div key={signal} className="border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-300">{signal}</div>)}</div>
+                <div className="mt-6 grid gap-2 sm:grid-cols-3">{activeCard.signals.map((signal) => <div key={signal} className="flex items-center gap-2 border border-slate-700 bg-slate-950/75 px-3 py-2 text-xs text-slate-300"><span className="size-1.5 shrink-0 rounded-full bg-cyan-300" />{signal}</div>)}</div>
                 <div className="mt-7 grid gap-3 sm:grid-cols-2">
-                  <Button type="button" onClick={() => choose("SAFE")} disabled={choiceLocked || submitting} className="h-14 bg-emerald-300 text-emerald-950 hover:bg-emerald-200"><ShieldCheck className="size-5" /> Safe signal</Button>
-                  <Button type="button" onClick={() => choose("BLOCK")} disabled={choiceLocked || submitting} className="h-14 bg-rose-300 text-rose-950 hover:bg-rose-200"><ShieldX className="size-5" /> Block signal</Button>
+                  <Button type="button" onClick={() => choose("SAFE")} disabled={choiceLocked || submitting} className="h-14 border border-emerald-200/40 bg-emerald-300 text-emerald-950 shadow-[0_8px_26px_rgba(52,211,153,0.18)] hover:bg-emerald-200"><ShieldCheck className="size-5" /> Safe signal <BadgeCheck className="ml-auto size-4" /></Button>
+                  <Button type="button" onClick={() => choose("BLOCK")} disabled={choiceLocked || submitting} className="h-14 border border-rose-100/40 bg-rose-300 text-rose-950 shadow-[0_8px_26px_rgba(251,113,133,0.16)] hover:bg-rose-200"><ShieldX className="size-5" /> Block signal <XCircle className="ml-auto size-4" /></Button>
                 </div>
               </div>
             </section>
             <aside className="grid content-start gap-3">
-              <div className="border border-slate-700 bg-slate-950/55 p-4"><p className="text-xs uppercase tracking-[0.15em] text-slate-500">Decision progress</p><p className="mt-2 font-mono text-3xl text-white">{answers.length}<span className="text-slate-600">/8</span></p><div className="mt-4 grid grid-cols-4 gap-2">{session.cards.map((card, cardIndex) => <span key={card.id} className={`h-2.5 ${cardIndex < answers.length ? "bg-cyan-300" : cardIndex === index ? "bg-amber-300" : "bg-slate-800"}`} />)}</div></div>
-              <div className="border border-amber-300/20 bg-amber-300/[0.05] p-4 text-sm leading-6 text-amber-50"><TimerReset className="mb-2 size-4 text-amber-200" />One wrong answer does not end the run. Read every signal before you classify it.</div>
+              <div className="border border-cyan-300/20 bg-[#081a2e] p-4"><div className="flex items-center justify-between"><p className="text-xs uppercase tracking-[0.15em] text-slate-500">Decision progress</p><Crosshair className="size-4 text-cyan-200" /></div><p className="mt-2 font-mono text-3xl text-white">{answers.length}<span className="text-slate-600">/8</span></p><div className="mt-4 grid grid-cols-4 gap-2">{session.cards.map((card, cardIndex) => <span key={card.id} className={`h-2.5 border ${cardIndex < answers.length ? "border-cyan-200/40 bg-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.7)]" : cardIndex === index ? "border-amber-200/50 bg-amber-300" : "border-slate-700 bg-slate-900"}`} />)}</div></div>
+              <div className="border border-amber-300/25 bg-amber-300/[0.06] p-4 text-sm leading-6 text-amber-50"><TimerReset className="mb-2 size-4 text-amber-200" /><p className="font-medium text-amber-100">Mission rule</p><p className="mt-1 text-amber-50/80">One wrong answer does not end the run. Read every signal before you classify it.</p></div>
             </aside>
           </div>
         ) : (
           <div className="grid gap-5 xl:grid-cols-[1fr_auto] xl:items-end">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="border border-slate-700 bg-slate-950/50 p-4"><p className="text-xs uppercase tracking-[0.14em] text-slate-500">Daily attempts</p><p className="mt-2 font-mono text-2xl text-white">{state?.attemptsRemaining ?? 3}<span className="text-slate-600">/3</span></p></div>
-              <div className="border border-slate-700 bg-slate-950/50 p-4"><p className="text-xs uppercase tracking-[0.14em] text-slate-500">Best score</p><p className="mt-2 font-mono text-2xl text-white">{state?.bestCorrectAnswers ?? 0}<span className="text-slate-600">/8</span></p></div>
-              <div className="border border-slate-700 bg-slate-950/50 p-4"><p className="text-xs uppercase tracking-[0.14em] text-slate-500">Current streak</p><p className="mt-2 flex items-center gap-2 font-mono text-2xl text-white"><Sparkles className="size-5 text-amber-300" />{state?.streak ?? 0} days</p></div>
+            <div><div className="mb-4 flex items-center gap-2 font-mono text-xs uppercase tracking-[0.15em] text-cyan-200"><Radio className="size-3.5 animate-pulse" /> Daily security drill</div><div className="grid gap-3 sm:grid-cols-3">
+              <div className="relative overflow-hidden border border-cyan-300/20 bg-slate-950/60 p-4"><div className="absolute inset-x-0 top-0 h-px bg-cyan-200/70" /><p className="text-xs uppercase tracking-[0.14em] text-slate-500">Daily attempts</p><p className="mt-2 font-mono text-2xl text-white">{state?.attemptsRemaining ?? 3}<span className="text-slate-600">/3</span></p></div>
+              <div className="relative overflow-hidden border border-emerald-300/20 bg-slate-950/60 p-4"><div className="absolute inset-x-0 top-0 h-px bg-emerald-200/70" /><p className="text-xs uppercase tracking-[0.14em] text-slate-500">Best score</p><p className="mt-2 font-mono text-2xl text-white">{state?.bestCorrectAnswers ?? 0}<span className="text-slate-600">/8</span></p></div>
+              <div className="relative overflow-hidden border border-amber-300/20 bg-slate-950/60 p-4"><div className="absolute inset-x-0 top-0 h-px bg-amber-200/70" /><p className="text-xs uppercase tracking-[0.14em] text-slate-500">Current streak</p><p className="mt-2 flex items-center gap-2 font-mono text-2xl text-white"><Sparkles className="size-5 text-amber-300" />{state?.streak ?? 0} days</p></div>
+            </div></div>
+            {!registered ? <Button disabled className="h-12"><LockKeyhole /> Create profile to play</Button> : state?.status === "COMPLETED" ? <Button disabled className="h-12 border border-emerald-300/35 bg-emerald-300/15 text-emerald-100"><CheckCircle2 /> +{state.pointsAwarded} points earned</Button> : state?.status === "EXHAUSTED" ? <Button disabled className="h-12"><XCircle /> New run at UTC reset</Button> : <Button onClick={() => void start()} disabled={starting} className="h-12 border border-cyan-100/30 bg-cyan-300 px-6 text-slate-950 shadow-[0_10px_30px_rgba(34,211,238,0.22)] hover:bg-cyan-200">{starting ? <Loader2 className="animate-spin" /> : <Play />} Start daily run</Button>}
             </div>
-            {!registered ? <Button disabled className="h-12"><LockKeyhole /> Create profile to play</Button> : state?.status === "COMPLETED" ? <Button disabled className="h-12 border border-emerald-300/35 bg-emerald-300/15 text-emerald-100"><CheckCircle2 /> +{state.pointsAwarded} points earned</Button> : state?.status === "EXHAUSTED" ? <Button disabled className="h-12"><XCircle /> New run at UTC reset</Button> : <Button onClick={() => void start()} disabled={starting} className="h-12 bg-cyan-300 text-slate-950 hover:bg-cyan-200">{starting ? <Loader2 className="animate-spin" /> : <Play />} Start daily run</Button>}
-          </div>
         )}
         {(notice || error) && <div className={`mt-4 flex gap-3 border p-3 text-sm ${error ? "border-rose-300/25 bg-rose-300/[0.08] text-rose-100" : "border-emerald-300/25 bg-emerald-300/[0.08] text-emerald-100"}`}>{error ? <CircleAlert className="mt-0.5 size-4 shrink-0" /> : <Trophy className="mt-0.5 size-4 shrink-0" />}<span>{error ?? notice}</span></div>}
       </CardContent>
