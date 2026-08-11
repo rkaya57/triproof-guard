@@ -6,6 +6,7 @@ on:
       - feat/risk-engine-v2-calibration
     paths:
       - "scripts/generate-scamguard-v2-second-holdout-candidates.mjs"
+      - "scripts/refine-scamguard-v2-second-holdout-candidates.mjs"
       - ".github/workflows/scamguard-v2-second-holdout-generate.yml"
   workflow_dispatch:
 
@@ -28,6 +29,8 @@ jobs:
           node-version: 24
       - name: Generate deterministic candidate ledger
         run: node scripts/generate-scamguard-v2-second-holdout-candidates.mjs
+      - name: Refine first-party EVM negative transactions
+        run: node scripts/refine-scamguard-v2-second-holdout-candidates.mjs
       - name: Commit generated ledger when changed
         run: |
           if git diff --quiet -- lib/scamguard/v2/fixtures/second-holdout-candidates.csv; then
@@ -37,5 +40,5 @@ jobs:
           git config user.name "Tri-Proof Protocol"
           git config user.email "actions@users.noreply.github.com"
           git add lib/scamguard/v2/fixtures/second-holdout-candidates.csv
-          git commit -m "Generate 200-case ScamGuard V2 second Holdout ledger"
+          git commit -m "Generate refined 200-case ScamGuard V2 candidate ledger"
           git push origin HEAD:feat/risk-engine-v2-calibration
