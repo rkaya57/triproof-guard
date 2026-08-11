@@ -50,18 +50,48 @@ jobs:
             --max-time 600 "$URL" -o phishinghook.zip
           sha256sum phishinghook.zip | tee phishinghook.zip.sha256
           unzip -l phishinghook.zip > phishinghook-zip-list.txt
+
+          # Extract only the nested unique-contract dataset archive. Do not
+          # persist the 217 MB parent archive as a workflow artifact.
+          unzip -p phishinghook.zip \
+            phishinghook/artifact/dataset/contracts/unique_contracts.zip \
+            > unique_contracts.zip
+          sha256sum unique_contracts.zip | tee unique_contracts.zip.sha256
+          unzip -l unique_contracts.zip > unique-contracts-list.txt
+
           python - <<'PY'
           from pathlib import Path
-          import re, json
-          lines=Path('phishinghook-zip-list.txt').read_text(errors='replace').splitlines()
-          paths=[]
-          for line in lines:
-              m=re.match(r'\s*\d+\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+(.+)$', line)
-              if m: paths.append(m.group(1).strip())
-          interesting=[p for p in paths if any(k in p.lower() for k in ['csv','json','dataset','malware','phish','contract','address','label'])]
-          report={'fileCount':len(paths),'interestingCount':len(interesting),'interestingPaths':interesting[:500]}
+          import re, json, zipfile
+
+          def zip_paths(list_file):
+              paths=[]
+              for line in Path(list_file).read_text(errors='replace').splitlines():
+                  m=re.match(r'\s*\d+\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+(.+)$', line)
+                  if m: paths.append(m.group(1).strip())
+              return paths
+
+          parent_paths=zip_paths('phishinghook-zip-list.txt')
+          unique_paths=zip_paths('unique-contracts-list.txt')
+          sample=[]
+          with zipfile.ZipFile('unique_contracts.zip') as z:
+              files=[i for i in z.infolist() if not i.is_dir()]
+              for info in files[:12]:
+                  row={'name':info.filename,'size':info.file_size}
+                  if info.file_size <= 32768:
+                      raw=z.read(info.filename)
+                      try:
+                          text=raw.decode('utf-8', errors='replace')
+                          row['preview']=text[:1200]
+                      except Exception:
+                          pass
+                  sample.append(row)
+          report={
+              'parentFileCount':len(parent_paths),
+              'uniqueContractArchiveEntries':len(unique_paths),
+              'sampleEntries':sample,
+          }
           print(json.dumps(report, indent=2))
-          Path('phishinghook-archive-inspection.json').write_text(json.dumps(report, indent=2))
+          Path('phishinghook-unique-contracts-inspection.json').write_text(json.dumps(report, indent=2))
           PY
 
       - name: Upload inspection evidence
@@ -73,5 +103,7 @@ jobs:
             phishinghook-record-files.json
             phishinghook.zip.sha256
             phishinghook-zip-list.txt
-            phishinghook-archive-inspection.json
+            unique_contracts.zip.sha256
+            unique-contracts-list.txt
+            phishinghook-unique-contracts-inspection.json
           if-no-files-found: error
