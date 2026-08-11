@@ -249,6 +249,7 @@ model User {
   airdropProfile             AirdropProfile?
   airdropSubmissions         AirdropSubmission[]   @relation("AirdropSubmissionUser")
   reviewedAirdropSubmissions AirdropSubmission[]   @relation("AirdropSubmissionReviewer")
+  airdropSignalRunSessions   AirdropSignalRunSession[]
   airdropThreatRewards       AirdropThreatReportReward[] @relation("AirdropThreatReportRewardReporter")
   scamGuardIntelEntries      ScamGuardIntelEntry[]
   reviewedScamGuardFeedback  ScamGuardFeedbackEvent[] @relation("ScamGuardFeedbackReviewer")
@@ -910,6 +911,7 @@ model AirdropProfile {
   totalPoints       Int                 @default(0)
   eligibilityStatus String              @default("registered")
   submissions       AirdropSubmission[]
+  signalRunSessions AirdropSignalRunSession[]
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
@@ -960,6 +962,31 @@ model AirdropSubmission {
   @@index([status, createdAt])
   @@index([profileId])
   @@index([reviewedById])
+}
+
+model AirdropSignalRunSession {
+  id                 String         @id @default(cuid())
+  userId             String
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId          String
+  profile            AirdropProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  challengeDate      String
+  challengeSet       Json
+  status             String         @default("ACTIVE")
+  attemptCount       Int            @default(0)
+  bestCorrectAnswers Int            @default(0)
+  correctAnswers     Int            @default(0)
+  pointsAwarded      Int            @default(0)
+  streak             Int            @default(0)
+  startedAt          DateTime       @default(now())
+  expiresAt          DateTime
+  completedAt        DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@unique([userId, challengeDate])
+  @@index([profileId, challengeDate])
+  @@index([challengeDate, status])
 }
 
 model StakingPosition {

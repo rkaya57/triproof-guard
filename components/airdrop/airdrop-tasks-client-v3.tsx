@@ -193,7 +193,12 @@ export function AirdropTasksClientV3() {
     }
   }
 
-  useEffect(() => { void refresh() }, [])
+  useEffect(() => {
+    void refresh()
+    const syncPoints = () => { void refresh(true) }
+    window.addEventListener("airdrop:points-updated", syncPoints)
+    return () => window.removeEventListener("airdrop:points-updated", syncPoints)
+  }, [])
 
   const completion = useMemo(() => {
     if (!data?.tasks.length) return 0

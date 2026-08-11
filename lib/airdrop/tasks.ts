@@ -184,6 +184,7 @@ export function isAirdropSchemaMissing(error: unknown) {
     "airdropprofile",
     "airdropsubmission",
     "airdropthreatreportreward",
+    "airdropsignalrunsession",
   ].some((model) => message.includes(model))
   const describesMissingSchema =
     message.includes("does not exist") ||
