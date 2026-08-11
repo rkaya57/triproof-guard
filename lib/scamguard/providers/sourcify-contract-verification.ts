@@ -82,6 +82,10 @@ async function lookupSourcify(address: string) {
   }
 }
 
+export function resetSourcifyContractVerificationForTests() {
+  cache.clear()
+}
+
 export async function inspectSourcifyContractVerification(rawAddress: string): Promise<SourcifyContractVerificationEvidence> {
   const address = rawAddress.trim().toLowerCase()
   const checkedAt = new Date().toISOString()
