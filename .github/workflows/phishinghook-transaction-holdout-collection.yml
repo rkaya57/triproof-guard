@@ -1,0 +1,78 @@
+name: PhishingHook transaction holdout collection
+
+on:
+  push:
+    branches:
+      - feat/risk-engine-v2-calibration
+    paths:
+      - scripts/build-phishinghook-transaction-holdout.py
+      - .github/workflows/phishinghook-transaction-holdout-collection.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PHISHINGHOOK_TARGET_PER_CLASS: 100
+      PHISHINGHOOK_MAX_SOURCE_PER_CLASS: 500
+      PHISHINGHOOK_REQUEST_SLEEP: 0.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Rebuild sealed PhishingHook source lists
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 --retry-delay 2 \
+            --max-time 600 \
+            "https://zenodo.org/api/records/15076626/files/phishinghook.zip/content" \
+            -o phishinghook.zip
+          printf '%s  %s\n' \
+            'a3a0adf6b344e142a84e7106b01389c483af710f7ddacc6bebbde8f322fdaf6d' \
+            'phishinghook.zip' | sha256sum --check
+          unzip -p phishinghook.zip \
+            phishinghook/artifact/dataset/contracts/unique_contracts.zip \
+            > unique_contracts.zip
+          printf '%s  %s\n' \
+            'dbfe72489e5b92030b87c05d8331c4ffa21dc81109880d1ad54e6d911ccd8368' \
+            'unique_contracts.zip' | sha256sum --check
+          python - <<'PY'
+          import zipfile
+          from pathlib import Path
+          with zipfile.ZipFile('unique_contracts.zip') as z:
+              for source, out in [
+                  ('unique_phishing.txt','phishinghook-malicious-contracts.txt'),
+                  ('unique_benign.txt','phishinghook-benign-contracts.txt'),
+              ]:
+                  rows=[line.strip().lower() for line in z.read(source).decode().splitlines() if line.strip()]
+                  Path(out).write_text('\n'.join(sorted(set(rows)))+'\n')
+          PY
+          printf '%s  %s\n' \
+            'e70c83fc77943862681cafc096676416fbdf55257dff834d969281c4ee651061' \
+            'phishinghook-malicious-contracts.txt' | sha256sum --check
+          printf '%s  %s\n' \
+            '29f6f38bdde36c4d756d61a399bc0172402702946ef883ca525178fe9f03e417' \
+            'phishinghook-benign-contracts.txt' | sha256sum --check
+          rm -f phishinghook.zip unique_contracts.zip
+
+      - name: Collect real on-chain transaction holdout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/build-phishinghook-transaction-holdout.py | tee phishinghook-holdout-collection.log
+
+      - name: Upload frozen holdout manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: phishinghook-transaction-holdout
+          path: |
+            artifacts/phishinghook-transaction-holdout/manifest.json
+            artifacts/phishinghook-transaction-holdout/report.json
+            phishinghook-holdout-collection.log
+          if-no-files-found: error
+          retention-days: 90
