@@ -1,0 +1,66 @@
+name: ScamGuard V2 sealed pre-signing challenge validation
+
+on:
+  push:
+    branches:
+      - feat/risk-engine-v2-calibration
+    paths:
+      - "scripts/build-ptxphish-realworld-manifest.py"
+      - "scripts/inspect-ptxphish-presigning-compatibility.ts"
+      - "scripts/discover-aave-usdc-benign-approvals.ts"
+      - "scripts/run-scamguard-v2-presigning-challenge-validation.ts"
+      - "lib/scamguard/providers/**"
+      - "lib/scamguard/v2/calibrated-evidence-fusion.ts"
+      - "lib/scamguard/v2/corroboration.ts"
+      - "lib/scamguard/v2/transaction-impact.ts"
+      - "lib/scamguard/v2/transaction-impact-signals.ts"
+      - ".github/workflows/scamguard-v2-presigning-challenge-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  EVM_RPC_URL: ${{ secrets.EVM_RPC_URL }}
+  EVM_PUBLIC_THREAT_CORPUS_ENABLED: "true"
+  METAMASK_PHISHING_CONFIG_ENABLED: "true"
+  SCAMGUARD_SANDBOX_ENABLED: "false"
+  BENIGN_TARGET_CASES: "120"
+  BENIGN_CHALLENGE_CASES: "106"
+  BENIGN_END_BLOCK: "25731971"
+  BENIGN_MAX_LOOKBACK_BLOCKS: "1200000"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Rebuild PTXPhish candidate pool
+        run: python scripts/build-ptxphish-realworld-manifest.py
+      - name: Classify real pre-signing malicious transactions
+        run: node --import tsx scripts/inspect-ptxphish-presigning-compatibility.ts
+      - name: Rebuild frozen real benign controls
+        run: node --import tsx scripts/discover-aave-usdc-benign-approvals.ts > benign-discovery.log
+      - name: Run sealed 212-case challenge
+        run: node --import tsx scripts/run-scamguard-v2-presigning-challenge-validation.ts
+      - name: Upload challenge evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: scamguard-v2-presigning-challenge-validation
+          path: |
+            artifacts/ptxphish-presigning-inspection/report.json
+            artifacts/scamguard-v2-benign-presigning-controls/report.json
+            artifacts/scamguard-v2-presigning-challenge/report.json
+            benign-discovery.log
+          if-no-files-found: error
