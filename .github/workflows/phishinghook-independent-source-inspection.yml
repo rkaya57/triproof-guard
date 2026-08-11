@@ -1,0 +1,77 @@
+name: PhishingHook independent source inspection
+
+on:
+  push:
+    branches:
+      - feat/risk-engine-v2-calibration
+    paths:
+      - .github/workflows/phishinghook-independent-source-inspection.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download and inspect Zenodo artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          RECORD='15076626'
+          curl --fail --silent --show-error --location --retry 3 --max-time 60 \
+            "https://zenodo.org/api/records/${RECORD}" -o phishinghook-record.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('phishinghook-record.json').read_text())
+          rows=[]
+          for f in r.get('files',[]):
+              rows.append({
+                  'key': f.get('key'),
+                  'size': f.get('size'),
+                  'checksum': f.get('checksum'),
+                  'download': (f.get('links') or {}).get('content') or (f.get('links') or {}).get('self'),
+              })
+          print(json.dumps({'record': r.get('id'), 'files': rows}, indent=2))
+          Path('phishinghook-record-files.json').write_text(json.dumps(rows, indent=2))
+          ziprow=next((x for x in rows if x.get('key')=='phishinghook.zip'),None)
+          if not ziprow or not ziprow.get('download'):
+              raise SystemExit('phishinghook.zip download URL missing')
+          Path('phishinghook-download-url.txt').write_text(ziprow['download'])
+          PY
+          URL="$(cat phishinghook-download-url.txt)"
+          curl --fail --silent --show-error --location --retry 3 --retry-delay 2 \
+            --max-time 600 "$URL" -o phishinghook.zip
+          sha256sum phishinghook.zip | tee phishinghook.zip.sha256
+          unzip -l phishinghook.zip > phishinghook-zip-list.txt
+          python - <<'PY'
+          from pathlib import Path
+          import re, json
+          lines=Path('phishinghook-zip-list.txt').read_text(errors='replace').splitlines()
+          paths=[]
+          for line in lines:
+              m=re.match(r'\s*\d+\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+(.+)$', line)
+              if m: paths.append(m.group(1).strip())
+          interesting=[p for p in paths if any(k in p.lower() for k in ['csv','json','dataset','malware','phish','contract','address','label'])]
+          report={'fileCount':len(paths),'interestingCount':len(interesting),'interestingPaths':interesting[:500]}
+          print(json.dumps(report, indent=2))
+          Path('phishinghook-archive-inspection.json').write_text(json.dumps(report, indent=2))
+          PY
+
+      - name: Upload inspection evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: phishinghook-independent-source-tree
+          path: |
+            phishinghook-record.json
+            phishinghook-record-files.json
+            phishinghook.zip.sha256
+            phishinghook-zip-list.txt
+            phishinghook-archive-inspection.json
+          if-no-files-found: error
