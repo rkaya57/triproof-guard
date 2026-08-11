@@ -44,6 +44,10 @@ for(const row of table){
   row[ix.collectorNote]="Controlled benign no-value call to a first-party documented protocol contract from a deterministic format-valid sender and the official project origin; deterministic semantic negative"
   changed++
 }
+const refinedTargets=table
+  .filter((row)=>row[ix.chain]==="evm"&&row[ix.surface]==="transaction"&&row[ix.groundTruth]==="benign"&&row[ix.provenanceId].includes("controlled-benign-evm-tx"))
+  .map((row)=>row[ix.target])
+if(new Set(refinedTargets).size!==refinedTargets.length)throw new Error("Refined EVM benign transaction targets must be unique")
 await writeFile(FILE,[headers.map(escape).join(","),...table.map((r)=>r.map(escape).join(","))].join("\n")+"\n")
-console.log(JSON.stringify({changed},null,2))
+console.log(JSON.stringify({changed,uniqueRefinedTargets:new Set(refinedTargets).size},null,2))
 if(changed!==8)throw new Error(`Expected to refine 8 EVM benign transaction cases, changed ${changed}`)
