@@ -1,0 +1,38 @@
+name: ScamGuard V2 second Holdout intake integrity
+
+on:
+  pull_request:
+    branches:
+      - feat/risk-engine-v2
+    paths:
+      - "lib/scamguard/v2/fixtures/second-holdout-candidates.csv"
+      - "lib/scamguard/v2/second-holdout-candidate.ts"
+      - "lib/scamguard/v2/second-holdout-collection-plan.ts"
+      - "lib/scamguard/v2/second-holdout-dataset-contract.ts"
+      - "scripts/report-scamguard-v2-second-holdout-readiness.ts"
+      - ".github/workflows/scamguard-v2-second-holdout-readiness.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  intake-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Report collection readiness
+        run: node --import tsx scripts/report-scamguard-v2-second-holdout-readiness.ts
+      - name: Focused lint
+        run: npx eslint scripts/report-scamguard-v2-second-holdout-readiness.ts
