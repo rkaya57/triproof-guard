@@ -1,5 +1,5 @@
 import type { ScamGuardScanResult } from "@/lib/scamguard/engine"
-import { decodeV11EvmTransaction } from "@/lib/scamguard/v1_1-evm-hardening"
+import { decodeV11EvmTransaction } from "@/lib/scamguard/v1-1-evm-hardening"
 
 const riskRank = {
   SAFE: 0,
