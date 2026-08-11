@@ -7,11 +7,17 @@ on:
     paths:
       - "lib/scamguard/v1-1-evm-hardening.ts"
       - "lib/scamguard/v1-1-evm-hardening.test.ts"
+      - "lib/scamguard/v1_1-postprocess.ts"
+      - "lib/scamguard/v1_1-postprocess.test.ts"
+      - "app/api/scamguard/scan-transaction/route.ts"
       - ".github/workflows/scamguard-v1-1-hardening.yml"
   pull_request:
     paths:
       - "lib/scamguard/v1-1-evm-hardening.ts"
       - "lib/scamguard/v1-1-evm-hardening.test.ts"
+      - "lib/scamguard/v1_1-postprocess.ts"
+      - "lib/scamguard/v1_1-postprocess.test.ts"
+      - "app/api/scamguard/scan-transaction/route.ts"
       - ".github/workflows/scamguard-v1-1-hardening.yml"
 
 permissions:
@@ -31,4 +37,8 @@ jobs:
       - name: Type-check
         run: npx tsc --noEmit
       - name: Run V1.1 focused tests
-        run: node --import tsx --test lib/scamguard/v1-1-evm-hardening.test.ts
+        run: |
+          node --import tsx --test lib/scamguard/v1-1-evm-hardening.test.ts
+          node --import tsx --test lib/scamguard/v1_1-postprocess.test.ts
+      - name: Run existing ScamGuard engine regression
+        run: node --import tsx --test lib/scamguard/engine.test.ts
