@@ -1,19 +1,11 @@
 import { readFile } from "node:fs/promises"
 import path from "node:path"
 
+import { parseCsvObjects } from "@/lib/scamguard/v2/csv"
 import { candidateFingerprint, validateCandidateIntake, type SecondHoldoutCandidate } from "@/lib/scamguard/v2/second-holdout-candidate"
 
 const CANDIDATES = path.join(process.cwd(), "lib/scamguard/v2/fixtures/second-holdout-candidates.csv")
 const SEEN = path.join(process.cwd(), "lib/scamguard/v2/fixtures/holdout-150.csv")
-
-function parseCsv(text: string) {
-  const lines = text.trim().split(/\r?\n/)
-  const headers = lines.shift()?.split(",") ?? []
-  return lines.filter(Boolean).map((line) => {
-    const values = line.split(",")
-    return Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]))
-  })
-}
 
 function candidateFromRow(row: Record<string, string>): SecondHoldoutCandidate {
   return {
@@ -35,8 +27,8 @@ function candidateFromRow(row: Record<string, string>): SecondHoldoutCandidate {
 }
 
 async function main() {
-  const candidates = parseCsv(await readFile(CANDIDATES, "utf8")).map(candidateFromRow)
-  const seenRows = parseCsv(await readFile(SEEN, "utf8"))
+  const candidates = parseCsvObjects(await readFile(CANDIDATES, "utf8")).map(candidateFromRow)
+  const seenRows = parseCsvObjects(await readFile(SEEN, "utf8"))
   const seenIds = new Set(seenRows.map((row) => row.id.trim()).filter(Boolean))
   const seenFingerprints = new Set(seenRows.map((row) => candidateFingerprint({
     id: row.id,
