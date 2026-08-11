@@ -20,14 +20,13 @@ jobs:
     timeout-minutes: 35
     env:
       TOKENS_XYZ_API_KEY: ${{ secrets.TOKENS_XYZ_API_KEY }}
-      GOPLUS_APP_KEY: ${{ secrets.GOPLUS_APP_KEY }}
-      GOPLUS_APP_SECRET: ${{ secrets.GOPLUS_APP_SECRET }}
       PHISHING_DATABASE_FEED_URL: "https://openphish.com/feed.txt"
       SOLANA_RPC_URL: ${{ secrets.SOLANA_RPC_URL }}
       EVM_RPC_URL: ${{ secrets.EVM_RPC_URL }}
       EVM_REPLAY_RPC_URL: "https://ethereum-rpc.publicnode.com"
       SCAMGUARD_SANDBOX_ENABLED: "false"
       EVM_PUBLIC_THREAT_CORPUS_ENABLED: "true"
+      METAMASK_PHISHING_CONFIG_ENABLED: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -74,6 +73,6 @@ jobs:
             process.exit(1)
           }
           console.log(`Seen-set replay coverage ${(coverage * 100).toFixed(2)}%. Archive misses remain explicit in the report.`)
-          console.log(`GoPlus optional provider configured: ${Boolean(process.env.GOPLUS_APP_KEY && process.env.GOPLUS_APP_SECRET)}`)
+          console.log('Credential-free open-source threat intelligence is enabled for calibration.')
           console.log('Diagnostic only: this result is NOT final validation and cannot activate V2.')
           NODE
