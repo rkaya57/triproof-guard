@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 
@@ -48,7 +49,9 @@ async function main() {
   process.env.EVM_PUBLIC_THREAT_CORPUS_ENABLED = process.env.EVM_PUBLIC_THREAT_CORPUS_ENABLED ?? "true"
   process.env.METAMASK_PHISHING_CONFIG_ENABLED = process.env.METAMASK_PHISHING_CONFIG_ENABLED ?? "true"
 
-  const rows = parseCsvObjects(await readFile(FIXTURE, "utf8"))
+  const fixtureText = await readFile(FIXTURE, "utf8")
+  const fixtureSha256 = createHash("sha256").update(fixtureText).digest("hex")
+  const rows = parseCsvObjects(fixtureText)
   if (rows.length !== 200) throw new Error(`Expected exactly 200 second-Holdout candidates, found ${rows.length}`)
 
   const all: ScamGuardHoldoutCase[] = []
@@ -57,8 +60,6 @@ async function main() {
   const details: Array<Record<string, unknown>> = []
   const errors: Array<{ id: string; error: string }> = []
 
-  // Deliberately sequential: providers use bounded caches and the public RPCs
-  // should not be flooded by a validation job.
   for (const row of rows) {
     try {
       const input = {
@@ -103,8 +104,9 @@ async function main() {
   }
 
   const report = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     evaluationRole: "second_holdout_candidate_validation",
+    fixtureSha256,
     activationEligible: false,
     finalBlindValidationEligible: false,
     reason: "This 200-case candidate set was assembled during calibration and includes a controlled adversarial robustness stratum. It cannot independently activate V2. A fresh real-world blind set is still required for activation.",
@@ -125,6 +127,7 @@ async function main() {
   await writeFile(path.join(OUT_DIR, "report.json"), JSON.stringify(report, null, 2))
   console.log(JSON.stringify({
     evaluationRole: report.evaluationRole,
+    fixtureSha256: report.fixtureSha256,
     activationEligible: report.activationEligible,
     totalFixtureCases: report.totalFixtureCases,
     scoredCases: report.scoredCases,
