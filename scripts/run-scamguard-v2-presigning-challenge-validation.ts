@@ -4,6 +4,7 @@ import path from "node:path"
 
 import type { ScamGuardRiskLevel } from "@/lib/scamguard/engine"
 import { observeCalibratedScamGuardV2 } from "@/lib/scamguard/v2/calibrated-evidence-fusion"
+import { applyPresigningPolicy } from "@/lib/scamguard/v2/presigning-policy"
 
 const MALICIOUS_REPORT = path.join(process.cwd(), "artifacts/ptxphish-presigning-inspection/report.json")
 const BENIGN_REPORT = path.join(process.cwd(), "artifacts/scamguard-v2-benign-presigning-controls/report.json")
@@ -12,52 +13,15 @@ const EXPECTED_MALICIOUS_SHA = "747211560fa6a0244b115d0d7fcc896073057a6bc4c3acdf
 const EXPECTED_BENIGN_END_BLOCK = 25731971
 const EXPECTED_PER_CLASS = 106
 const RPC = process.env.EVM_RPC_URL?.trim() || "https://ethereum-rpc.publicnode.com"
-const riskRank: Record<ScamGuardRiskLevel, number> = { SAFE: 0, CAUTION: 1, HIGH_RISK: 2, CRITICAL: 3 }
 
-type MaliciousCase = {
-  txHash: string
-  category: string
-  sourceUrl: string
-  from: string
-  to: string
-  selector: string
-  selectorFamily: string
-}
-type MaliciousReport = {
-  compatibleSha256: string
-  compatibleCount: number
-  cases: MaliciousCase[]
-}
-type BenignCase = {
-  txHash: string
-  blockNumber: number
-  from: string
-  token: string
-  spender: string
-  selector: string
-  method: string
-  groundTruth: "benign"
-  sources: string[]
-}
-type BenignReport = {
-  endBlock: number
-  selectedControlsSha256: string
-  selectedChallengeControls: number
-  uniqueVerifiedSenders: number
-  selectedControls: BenignCase[]
-}
-type ChallengeCase = {
-  txHash: string
-  groundTruth: "benign" | "malicious"
-  stratum: "ptxphish_proxy_upgrade" | "aave_usdc_approval"
-  provenanceUrls: string[]
-}
+type MaliciousCase = { txHash: string; category: string; sourceUrl: string; from: string; to: string; selector: string; selectorFamily: string }
+type MaliciousReport = { compatibleSha256: string; compatibleCount: number; cases: MaliciousCase[] }
+type BenignCase = { txHash: string; blockNumber: number; from: string; token: string; spender: string; selector: string; method: string; groundTruth: "benign"; sources: string[] }
+type BenignReport = { endBlock: number; selectedControlsSha256: string; selectedChallengeControls: number; uniqueVerifiedSenders: number; selectedControls: BenignCase[] }
+type ChallengeCase = { txHash: string; groundTruth: "benign" | "malicious"; stratum: "ptxphish_proxy_upgrade" | "aave_usdc_approval"; provenanceUrls: string[] }
 type RpcTransaction = { hash: string; from?: string; to?: string | null; input?: string; value?: string }
 type RpcResponse = { id: number; result?: RpcTransaction | null; error?: { message?: string } }
 
-function maxRisk(a: ScamGuardRiskLevel, b: ScamGuardRiskLevel) {
-  return riskRank[a] >= riskRank[b] ? a : b
-}
 function bucket(level: ScamGuardRiskLevel): "safe" | "review" | "malicious" {
   if (level === "SAFE") return "safe"
   if (level === "CAUTION") return "review"
@@ -74,23 +38,13 @@ function summarize(rows: Array<{ groundTruth: "benign" | "malicious"; risk: Scam
   const benignReview = benignRows.filter((row) => bucket(row.risk) === "review").length
   const tn = benignRows.filter((row) => bucket(row.risk) === "safe").length
   return {
-    total: rows.length,
-    maliciousCases: maliciousRows.length,
-    benignCases: benignRows.length,
-    tp,
-    fp,
-    tn,
-    maliciousReview,
-    maliciousSafe,
-    benignReview,
-    precision: ratio(tp, tp + fp),
-    strictRecall: ratio(tp, maliciousRows.length),
+    total: rows.length, maliciousCases: maliciousRows.length, benignCases: benignRows.length,
+    tp, fp, tn, maliciousReview, maliciousSafe, benignReview,
+    precision: ratio(tp, tp + fp), strictRecall: ratio(tp, maliciousRows.length),
     protectedRecall: ratio(tp + maliciousReview, maliciousRows.length),
     falseNegativeSafeRate: ratio(maliciousSafe, maliciousRows.length),
-    falsePositiveRate: ratio(fp, benignRows.length),
-    benignSafeRate: ratio(tn, benignRows.length),
-    benignReviewRate: ratio(benignReview, benignRows.length),
-    strictAccuracy: ratio(tp + tn, rows.length),
+    falsePositiveRate: ratio(fp, benignRows.length), benignSafeRate: ratio(tn, benignRows.length),
+    benignReviewRate: ratio(benignReview, benignRows.length), strictAccuracy: ratio(tp + tn, rows.length),
   }
 }
 
@@ -144,9 +98,10 @@ async function main() {
   const hashes = cases.map((item) => item.txHash)
   if (new Set(hashes).size !== cases.length) throw new Error("Challenge contains duplicate transaction hashes")
   const manifestCore = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     evaluationRole: "sealed_presigning_challenge_validation",
     activationEligible: false,
+    postChallengePolicyIteration: true,
     maliciousSourceSha256: malicious.compatibleSha256,
     benignSourceSha256: benign.selectedControlsSha256,
     cases: cases.map(({ txHash, groundTruth, stratum }) => ({ txHash, groundTruth, stratum })),
@@ -163,25 +118,19 @@ async function main() {
 
   const details = await mapWithConcurrency(cases, 4, async (item) => {
     const tx = found.get(item.txHash)!
-    const value = JSON.stringify({ method: "eth_sendTransaction", params: [{ from: tx.from, to: tx.to ?? undefined, data: tx.input ?? "0x", value: tx.value ?? "0x0" }] })
+    const data = tx.input ?? "0x"
+    const value = JSON.stringify({ method: "eth_sendTransaction", params: [{ from: tx.from, to: tx.to ?? undefined, data, value: tx.value ?? "0x0" }] })
     const observation = await observeCalibratedScamGuardV2({ type: "transaction", chain: "evm", value, deepScan: false }, { evaluationMode: "holdout" })
     const v1Risk = observation.base.riskLevel
-    const v2Risk = maxRisk(v1Risk, observation.proposedAssessment.proposedRiskLevel)
+    const fusionOnlyRisk = observation.proposedAssessment.proposedRiskLevel
+    const policy = applyPresigningPolicy({ baseRisk: v1Risk, proposedRisk: fusionOnlyRisk, transaction: { to: tx.to, data } })
     return {
-      txHash: item.txHash,
-      groundTruth: item.groundTruth,
-      stratum: item.stratum,
-      provenanceUrls: item.provenanceUrls,
-      from: tx.from,
-      to: tx.to,
-      selector: (tx.input ?? "0x").slice(0, 10).toLowerCase(),
-      v1Risk,
-      proposedV2Risk: observation.proposedAssessment.proposedRiskLevel,
-      v2Risk,
-      evidenceScore: observation.proposedAssessment.evidenceScore,
-      activationGate: observation.proposedAssessment.activationGate,
-      independentFamilies: observation.proposedAssessment.independentFamilies,
-      independentSources: observation.proposedAssessment.independentSources,
+      txHash: item.txHash, groundTruth: item.groundTruth, stratum: item.stratum, provenanceUrls: item.provenanceUrls,
+      from: tx.from, to: tx.to, selector: data.slice(0, 10).toLowerCase(),
+      v1Risk, proposedV2Risk: fusionOnlyRisk, v2Risk: policy.riskLevel,
+      policyMode: policy.mode, policyReasonCodes: policy.reasonCodes, policyNotes: policy.notes,
+      evidenceScore: observation.proposedAssessment.evidenceScore, activationGate: observation.proposedAssessment.activationGate,
+      independentFamilies: observation.proposedAssessment.independentFamilies, independentSources: observation.proposedAssessment.independentSources,
       proposedSignalCodes: observation.proposedSignals.map((signal) => signal.code),
     }
   })
@@ -189,34 +138,32 @@ async function main() {
   const v1 = summarize(details.map((row) => ({ groundTruth: row.groundTruth, risk: row.v1Risk })))
   const v2 = summarize(details.map((row) => ({ groundTruth: row.groundTruth, risk: row.v2Risk })))
   const report = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     evaluationRole: "sealed_presigning_challenge_validation",
     activationEligible: false,
     representativeActivationEligible: false,
-    reason: "Both strata are real on-chain pre-signing-compatible transactions and selection is model-independent, but the malicious stratum is proxy upgradeTo while the benign stratum is Aave USDC approve. Method-family confounding makes this an error-discovery/challenge gate, not a representative production activation gate.",
-    challengeManifestSha256,
-    maliciousSourceSha256: malicious.compatibleSha256,
-    benignSourceSha256: benign.selectedControlsSha256,
-    casesPerClass: EXPECTED_PER_CLASS,
-    totalCases: cases.length,
-    rpcFailures: failures,
-    v1,
-    v2,
+    postChallengePolicyIteration: true,
+    reason: "This exact challenge exposed decoder/policy gaps and was then used to design the calibration-only presigning policy. It is now a regression/training set and cannot support activation. Fresh untouched holdout data is required. Malicious and benign strata also remain method-family confounded.",
+    challengeManifestSha256, maliciousSourceSha256: malicious.compatibleSha256, benignSourceSha256: benign.selectedControlsSha256,
+    casesPerClass: EXPECTED_PER_CLASS, totalCases: cases.length, rpcFailures: failures,
+    v1, v2,
     deltas: {
-      precision: v2.precision - v1.precision,
-      strictRecall: v2.strictRecall - v1.strictRecall,
-      protectedRecall: v2.protectedRecall - v1.protectedRecall,
-      falseNegativeSafeRate: v2.falseNegativeSafeRate - v1.falseNegativeSafeRate,
-      falsePositiveRate: v2.falsePositiveRate - v1.falsePositiveRate,
-      benignSafeRate: v2.benignSafeRate - v1.benignSafeRate,
-      benignReviewRate: v2.benignReviewRate - v1.benignReviewRate,
-      strictAccuracy: v2.strictAccuracy - v1.strictAccuracy,
+      precision: v2.precision - v1.precision, strictRecall: v2.strictRecall - v1.strictRecall,
+      protectedRecall: v2.protectedRecall - v1.protectedRecall, falseNegativeSafeRate: v2.falseNegativeSafeRate - v1.falseNegativeSafeRate,
+      falsePositiveRate: v2.falsePositiveRate - v1.falsePositiveRate, benignSafeRate: v2.benignSafeRate - v1.benignSafeRate,
+      benignReviewRate: v2.benignReviewRate - v1.benignReviewRate, strictAccuracy: v2.strictAccuracy - v1.strictAccuracy,
+    },
+    policyDiagnostics: {
+      escalated: details.filter((row) => row.policyMode === "escalated").length,
+      trustedFlowAttenuated: details.filter((row) => row.policyMode === "trusted_flow_attenuation").length,
+      unchanged: details.filter((row) => row.policyMode === "unchanged").length,
+      reasonCodes: Object.fromEntries([...new Set(details.flatMap((row) => row.policyReasonCodes))].sort().map((code) => [code, details.filter((row) => row.policyReasonCodes.includes(code)).length])),
     },
     details,
   }
   await mkdir(OUT_DIR, { recursive: true })
   await writeFile(path.join(OUT_DIR, "report.json"), JSON.stringify(report, null, 2))
-  console.log(JSON.stringify({ evaluationRole: report.evaluationRole, activationEligible: report.activationEligible, challengeManifestSha256, maliciousSourceSha256: report.maliciousSourceSha256, benignSourceSha256: report.benignSourceSha256, totalCases: report.totalCases, v1, v2, deltas: report.deltas }, null, 2))
+  console.log(JSON.stringify({ evaluationRole: report.evaluationRole, activationEligible: report.activationEligible, postChallengePolicyIteration: true, challengeManifestSha256, totalCases: report.totalCases, v1, v2, deltas: report.deltas, policyDiagnostics: report.policyDiagnostics }, null, 2))
 }
 
 main().catch((error) => {
