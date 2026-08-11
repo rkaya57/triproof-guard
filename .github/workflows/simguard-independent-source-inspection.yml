@@ -24,9 +24,19 @@ jobs:
         run: |
           set -euo pipefail
           REPO_ID='Blockchain-Transaction-Simulation-Phishing-BE81'
+          ROOT="https://anonymous.4open.science/r/${REPO_ID}"
           BASE="https://anonymous.4open.science/api/repo/${REPO_ID}"
+          UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36'
+
+          # Establish the same read-only session a normal browser uses before
+          # requesting the public repository-file API.
+          curl --silent --show-error --location --max-time 60 \
+            --user-agent "$UA" --cookie-jar anonymous.cookies "$ROOT" -o anonymous-root.html || true
           curl --fail --silent --show-error --location --retry 3 --max-time 60 \
+            --user-agent "$UA" --referer "$ROOT" --cookie anonymous.cookies \
+            -H 'Accept: application/json,text/plain,*/*' \
             "${BASE}/files/" -o simguard-files.json
+
           python - <<'PY'
           import json
           from pathlib import Path
