@@ -6,6 +6,7 @@ on:
       - feat/risk-engine-v2-calibration
     paths:
       - "scripts/build-ptxphish-realworld-manifest.py"
+      - "scripts/inspect-ptxphish-presigning-compatibility.ts"
       - "scripts/run-scamguard-v2-ptxphish-blind-validation.ts"
       - "lib/scamguard/providers/sourcify-contract-verification.ts"
       - "lib/scamguard/v2/calibrated-evidence-fusion.ts"
@@ -44,13 +45,19 @@ jobs:
         run: npm ci
       - name: Type check
         run: npx tsc --noEmit
-      - name: Rebuild sealed PTXPhish manifest
+      - name: Rebuild sealed PTXPhish manifest and candidate pool
         run: python scripts/build-ptxphish-realworld-manifest.py
+      - name: Classify pre-signing-compatible transaction surfaces
+        run: node --import tsx scripts/inspect-ptxphish-presigning-compatibility.ts
       - name: Run sealed real-world malicious transaction validation
         run: node --import tsx scripts/run-scamguard-v2-ptxphish-blind-validation.ts
-      - name: Upload validation report
+      - name: Upload validation reports
         uses: actions/upload-artifact@v4
         with:
           name: scamguard-v2-ptxphish-blind-validation
-          path: artifacts/ptxphish-realworld-validation/report.json
+          path: |
+            artifacts/ptxphish-realworld/manifest.json
+            artifacts/ptxphish-realworld/candidate-pool.json
+            artifacts/ptxphish-presigning-inspection/report.json
+            artifacts/ptxphish-realworld-validation/report.json
           if-no-files-found: error
