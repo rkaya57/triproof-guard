@@ -32,13 +32,13 @@ function transactionThreatSignals(evidence: EvmPublicThreatCorpusEvidence | unde
     code: "V2_EVM_REAL_CATS_MATCH",
     severity: "high",
     title: "Transaction counterparty matched Real-CATS criminal Ethereum corpus",
-    detail: "A decoded EVM transaction counterparty appears in the independently maintained Real-CATS criminal-address corpus. Counterparty intelligence is additive and still requires corroboration before HIGH_RISK activation.",
+    detail: "An EVM transaction counterparty appears in the independently maintained Real-CATS criminal-address corpus. Counterparty intelligence is additive and still requires corroboration before HIGH_RISK activation.",
   })
   if (evidence.matchedSources.includes("rug-pull-dataset")) signals.push({
     code: "V2_EVM_RUG_PULL_MATCH",
     severity: "high",
     title: "Transaction counterparty matched validated rug-pull corpus",
-    detail: "A decoded EVM transaction counterparty appears in a public validated rug-pull dataset. The match is independent threat intelligence and does not alter production V1 decisions during calibration.",
+    detail: "An EVM transaction counterparty appears in a public validated rug-pull dataset. The match is independent threat intelligence and does not alter production V1 decisions during calibration.",
   })
   return signals
 }
@@ -59,12 +59,37 @@ function domainCandidate(input: ScamGuardV2Input) {
   try { return new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`).hostname } catch { return null }
 }
 
+function rawEvmTransactionTarget(input: ScamGuardV2Input) {
+  if (input.type !== "transaction" || input.chain !== "evm") return null
+  try {
+    const payload = JSON.parse(input.value) as {
+      method?: string
+      params?: Array<{
+        to?: unknown
+        calls?: Array<{ to?: unknown }>
+      }>
+    }
+    const direct = payload.params?.[0]?.to
+    if (typeof direct === "string" && evmAddressPattern.test(direct.trim())) return direct.trim().toLowerCase()
+    const calls = payload.params?.[0]?.calls
+    if (Array.isArray(calls)) {
+      for (const call of calls) {
+        if (typeof call?.to === "string" && evmAddressPattern.test(call.to.trim())) return call.to.trim().toLowerCase()
+      }
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
 function transactionCounterparty(observation: ScamGuardV2Observation, input: ScamGuardV2Input) {
   if (input.type !== "transaction" || input.chain !== "evm") return null
   const decoded = observation.base.metadata.decodedIntent
   const candidates = [
     decoded?.spender,
     decoded?.recipient,
+    rawEvmTransactionTarget(input),
     decoded?.contractTarget,
     observation.base.metadata.contractIntelligence?.target,
   ]
@@ -79,8 +104,9 @@ function transactionCounterparty(observation: ScamGuardV2Observation, input: Sca
  * Calibration-only adapter using credential-free, open-source intelligence.
  * MEW, Real-CATS and the rug-pull corpus remain independently maintained EVM
  * sources; MetaMask eth-phishing-detect adds an independent URL blacklist.
- * For EVM transactions, decoded counterparties are queried against the same
- * independent corpora. Production V1 decisions remain unchanged.
+ * For EVM transactions, decoded counterparties are preferred; when the V1
+ * decoder cannot identify one, the raw wallet-request `to` target is queried.
+ * Production V1 decisions remain unchanged.
  */
 export async function observeCalibratedScamGuardV2(
   input: ScamGuardV2Input,
