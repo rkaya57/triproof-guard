@@ -61,6 +61,8 @@ async function main() {
   }
 
   const validation = validateSecondHoldoutDataset(candidates.map(toSecondHoldoutRecord), seenIds)
+  const controlled = candidates.filter((candidate) => candidate.provenanceId.includes("-controlled-"))
+  const registryOrFirstParty = candidates.filter((candidate) => !candidate.provenanceId.includes("-controlled-"))
   const projectCounts = Object.fromEntries(secondHoldoutCollectionPlan.contexts.map((context) => {
     const rows = candidates.filter((candidate) => candidate.projectId === context.id)
     return [context.id, {
@@ -84,6 +86,12 @@ async function main() {
     transactionSourceContextCoverage: validation.transactionSourceContextCoverage,
     verifiedCoverage: validation.verifiedCoverage,
     maliciousDualSourceCoverage: validation.maliciousDualSourceCoverage,
+    composition: {
+      controlledCases: controlled.length,
+      controlledMalicious: controlled.filter((candidate) => candidate.groundTruth === "malicious").length,
+      registryOrFirstPartyCases: registryOrFirstParty.length,
+      note: "Controlled adversarial cases measure deterministic robustness and must be reported separately from real-world/registry field cases.",
+    },
     projectCounts,
     intakeBlockers,
     readinessBlockers: validation.blockers,
