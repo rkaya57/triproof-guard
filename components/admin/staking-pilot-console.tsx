@@ -132,7 +132,7 @@ export function StakingPilotConsole() {
     setBusy("faucet")
     setError(null)
     try {
-      const connected = await ensureSplTokenAccountWithWallet({ mintAddress: state.config.mint, rpcUrl: state.config.rpcUrl })
+      const connected = await getSplTokenAccountForWallet({ mintAddress: state.config.mint })
       setWallet(connected)
       const result = await callApi("/api/admin/staking/faucet", connected)
       setNotice(`${result.amount ?? state.config.faucetAmount} TRI sent on Devnet. ${result.signature ? `Tx: ${shortAddress(result.signature)}` : ""}`)

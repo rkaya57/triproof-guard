@@ -4,9 +4,12 @@ import { getStakingServerConfig, TRI_DECIMALS, TRI_DEVNET_MINT } from "@/lib/sta
 
 const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 const TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+const ASSOCIATED_TOKEN_PROGRAM_ID = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+const SYSTEM_PROGRAM_ID = "11111111111111111111111111111111"
 const signaturePattern = /^[1-9A-HJ-NP-Za-km-z]{64,96}$/
 
 type AccountMeta = { address: string; isSigner: boolean; isWritable: boolean }
+type SerializedInstruction = { programId: string; accounts: AccountMeta[]; data: Uint8Array }
 type ParsedInstruction = {
   program?: string
   parsed?: { type?: string; info?: Record<string, unknown> }
@@ -148,23 +151,47 @@ export async function verifyStakeTransfer({ signature, walletAddress, amountUnit
   if (!matching) throw new Error("No matching TRI transfer to the staking vault was found.")
 }
 
-async function assertRecipientTokenAccount(rpcUrl: string, tokenAccount: string, walletAddress: string) {
+async function recipientTokenAccountExists(rpcUrl: string, tokenAccount: string, walletAddress: string) {
   const result = await rpc<{
     value?: { data?: { parsed?: { info?: { mint?: unknown; owner?: unknown } } } } | null
   }>(rpcUrl, "getAccountInfo", [tokenAccount, { encoding: "jsonParsed", commitment: "confirmed" }])
+  if (!result.value) return false
   const info = result.value?.data?.parsed?.info
   if (String(info?.mint ?? "") !== TRI_DEVNET_MINT || String(info?.owner ?? "") !== walletAddress) {
     throw new Error("The selected recipient token account does not belong to this wallet or TRI mint.")
   }
+  return true
 }
 
-function serializeTransfer({ payer, source, destination, amount, blockhash }: { payer: string; source: string; destination: string; amount: bigint; blockhash: string }) {
-  const instructionAccounts: AccountMeta[] = [
-    { address: source, isSigner: false, isWritable: true },
-    { address: TRI_DEVNET_MINT, isSigner: false, isWritable: false },
-    { address: destination, isSigner: false, isWritable: true },
-    { address: payer, isSigner: true, isWritable: false },
-  ]
+function createAssociatedTokenAccountInstruction({ payer, tokenAccount, walletAddress }: { payer: string; tokenAccount: string; walletAddress: string }): SerializedInstruction {
+  return {
+    programId: ASSOCIATED_TOKEN_PROGRAM_ID,
+    accounts: [
+      { address: payer, isSigner: true, isWritable: true },
+      { address: tokenAccount, isSigner: false, isWritable: true },
+      { address: walletAddress, isSigner: false, isWritable: false },
+      { address: TRI_DEVNET_MINT, isSigner: false, isWritable: false },
+      { address: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false },
+      { address: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    ],
+    data: new Uint8Array(),
+  }
+}
+
+function createTransferCheckedInstruction({ payer, source, destination, amount }: { payer: string; source: string; destination: string; amount: bigint }): SerializedInstruction {
+  return {
+    programId: TOKEN_PROGRAM_ID,
+    accounts: [
+      { address: source, isSigner: false, isWritable: true },
+      { address: TRI_DEVNET_MINT, isSigner: false, isWritable: false },
+      { address: destination, isSigner: false, isWritable: true },
+      { address: payer, isSigner: true, isWritable: false },
+    ],
+    data: transferCheckedData(amount),
+  }
+}
+
+function serializeTransaction({ payer, blockhash, instructions }: { payer: string; blockhash: string; instructions: SerializedInstruction[] }) {
   const accountMap = new Map<string, AccountMeta>()
   const add = (account: AccountMeta) => {
     const existing = accountMap.get(account.address)
@@ -173,48 +200,60 @@ function serializeTransfer({ payer, source, destination, amount, blockhash }: { 
       : account)
   }
   add({ address: payer, isSigner: true, isWritable: true })
-  instructionAccounts.forEach(add)
-  add({ address: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false })
+  instructions.forEach((instruction) => {
+    instruction.accounts.forEach(add)
+    add({ address: instruction.programId, isSigner: false, isWritable: false })
+  })
 
-  const accountKeys = Array.from(accountMap.values()).sort((left, right) =>
-    Number(right.isSigner) - Number(left.isSigner) || Number(right.isWritable) - Number(left.isWritable)
-  )
+  const accounts = Array.from(accountMap.values())
+  const accountKeys = [
+    ...accounts.filter((account) => account.isSigner && account.isWritable),
+    ...accounts.filter((account) => account.isSigner && !account.isWritable),
+    ...accounts.filter((account) => !account.isSigner && account.isWritable),
+    ...accounts.filter((account) => !account.isSigner && !account.isWritable),
+  ]
   const index = new Map(accountKeys.map((account, position) => [account.address, position]))
+  const readonlySigners = accountKeys.filter((account) => account.isSigner && !account.isWritable).length
   const readonlyUnsigned = accountKeys.filter((account) => !account.isSigner && !account.isWritable).length
-  const header = Uint8Array.from([1, 0, readonlyUnsigned])
+  const header = Uint8Array.from([accountKeys.filter((account) => account.isSigner).length, readonlySigners, readonlyUnsigned])
   const accountBytes = concat(...accountKeys.map((account) => decodeBase58(account.address)))
-  const programIndex = index.get(TOKEN_PROGRAM_ID)
-  if (programIndex === undefined) throw new Error("Could not build token transfer instruction.")
-  const instruction = concat(
-    Uint8Array.of(programIndex),
-    compactU16(instructionAccounts.length),
-    Uint8Array.from(instructionAccounts.map((account) => index.get(account.address) ?? 0)),
-    compactU16(10),
-    transferCheckedData(amount)
-  )
+  const compiledInstructions = instructions.map((instruction) => {
+    const programIndex = index.get(instruction.programId)
+    if (programIndex === undefined) throw new Error("Could not build token transfer instruction.")
+    return concat(
+      Uint8Array.of(programIndex),
+      compactU16(instruction.accounts.length),
+      Uint8Array.from(instruction.accounts.map((account) => index.get(account.address) ?? 0)),
+      compactU16(instruction.data.length),
+      instruction.data
+    )
+  })
   return concat(
     header,
     compactU16(accountKeys.length),
     accountBytes,
     decodeBase58(blockhash),
-    compactU16(1),
-    instruction
+    compactU16(compiledInstructions.length),
+    ...compiledInstructions
   )
 }
 
 export async function sendVaultTriTransfer({ destinationTokenAccount, walletAddress, amountUnits }: { destinationTokenAccount: string; walletAddress: string; amountUnits: bigint }) {
   if (amountUnits <= 0n) throw new Error("Transfer amount must be positive.")
   const config = getStakingServerConfig()
-  await assertRecipientTokenAccount(config.rpcUrl, destinationTokenAccount, walletAddress)
+  const recipientExists = await recipientTokenAccountExists(config.rpcUrl, destinationTokenAccount, walletAddress)
   const signer = keypairFromSecret(config.vaultSecretKey)
   const latest = await rpc<{ value: { blockhash: string } }>(config.rpcUrl, "getLatestBlockhash", [{ commitment: "confirmed" }])
-  const message = serializeTransfer({
-    payer: signer.publicKey,
-    source: config.vaultTokenAccount,
-    destination: destinationTokenAccount,
-    amount: amountUnits,
-    blockhash: latest.value.blockhash,
-  })
+  const instructions = [
+    ...(recipientExists ? [] : [createAssociatedTokenAccountInstruction({ payer: signer.publicKey, tokenAccount: destinationTokenAccount, walletAddress })]),
+    createTransferCheckedInstruction({
+      payer: signer.publicKey,
+      source: config.vaultTokenAccount,
+      destination: destinationTokenAccount,
+      amount: amountUnits,
+    }),
+  ]
+  const message = serializeTransaction({ payer: signer.publicKey, blockhash: latest.value.blockhash, instructions })
   const signature = new Uint8Array(sign(null, Buffer.from(message), signer.privateKey))
   const rawTransaction = concat(compactU16(1), signature, message)
   const signatureText = await rpc<string>(config.rpcUrl, "sendTransaction", [
