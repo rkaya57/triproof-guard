@@ -29,37 +29,51 @@ function word(address: string) {
   return address.toLowerCase().replace(/^0x/, "").padStart(64, "0")
 }
 
-test("V1.1 raises upgradeTo from SAFE to CAUTION but not higher", () => {
+test("V1.1 raises upgradeTo from SAFE to CAUTION but not higher", async () => {
   const calldata = `0x3659cfe6${word("0x1111111111111111111111111111111111111111")}`
-  const result = applyScamGuardV11TransactionHardening(baseResult(), calldata)
+  const result = await applyScamGuardV11TransactionHardening(baseResult(), calldata)
   assert.equal(result.riskLevel, "CAUTION")
   assert.equal(result.score, 45)
   assert.equal(result.metadata.decodedIntent?.category, "authority")
   assert.ok(result.signals.some((signal) => signal.code === "V11_AUTHORITY_CHANGE"))
 })
 
-test("V1.1 never downgrades a stronger V1 decision", () => {
+test("V1.1 decodes calldata inside JSON transaction values", async () => {
+  const maxUint = "f".repeat(64)
+  const calldata = `0x095ea7b3${word("0x2222222222222222222222222222222222222222")}${maxUint}`
+  const raw = JSON.stringify({
+    to: "0x3333333333333333333333333333333333333333",
+    data: calldata,
+  })
+  const result = await applyScamGuardV11TransactionHardening(baseResult(), raw)
+  assert.equal(result.riskLevel, "CAUTION")
+  assert.equal(result.metadata.decodedIntent?.spender, "0x2222222222222222222222222222222222222222")
+  assert.equal(result.metadata.decodedIntent?.contractTarget, "0x3333333333333333333333333333333333333333")
+  assert.ok(result.signals.some((signal) => signal.code === "V11_UNLIMITED_APPROVAL"))
+})
+
+test("V1.1 never downgrades a stronger V1 decision", async () => {
   const input = baseResult()
   input.riskLevel = "CRITICAL"
   input.score = 95
   const calldata = `0x3659cfe6${word("0x1111111111111111111111111111111111111111")}`
-  const result = applyScamGuardV11TransactionHardening(input, calldata)
+  const result = await applyScamGuardV11TransactionHardening(input, calldata)
   assert.equal(result.riskLevel, "CRITICAL")
   assert.equal(result.score, 95)
 })
 
-test("V1.1 flags unlimited approval conservatively", () => {
+test("V1.1 flags unlimited approval conservatively", async () => {
   const maxUint = "f".repeat(64)
   const calldata = `0x095ea7b3${word("0x2222222222222222222222222222222222222222")}${maxUint}`
-  const result = applyScamGuardV11TransactionHardening(baseResult(), calldata)
+  const result = await applyScamGuardV11TransactionHardening(baseResult(), calldata)
   assert.equal(result.riskLevel, "CAUTION")
   assert.equal(result.metadata.decodedIntent?.spender, "0x2222222222222222222222222222222222222222")
   assert.ok(result.signals.some((signal) => signal.code === "V11_UNLIMITED_APPROVAL"))
 })
 
-test("V1.1 leaves ordinary limited approval risk unchanged", () => {
+test("V1.1 leaves ordinary limited approval risk unchanged", async () => {
   const calldata = `0x095ea7b3${word("0x2222222222222222222222222222222222222222")}${"1".padStart(64, "0")}`
-  const result = applyScamGuardV11TransactionHardening(baseResult(), calldata)
+  const result = await applyScamGuardV11TransactionHardening(baseResult(), calldata)
   assert.equal(result.riskLevel, "SAFE")
   assert.equal(result.score, 10)
   assert.equal(result.metadata.decodedIntent?.category, "approval")
