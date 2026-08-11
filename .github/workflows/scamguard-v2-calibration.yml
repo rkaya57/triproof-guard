@@ -36,6 +36,7 @@ jobs:
           lib/scamguard/verified-domain-guard.test.ts
           lib/scamguard/providers/evm-public-threat-corpus.test.ts
           lib/scamguard/providers/metamask-phishing-config.test.ts
+          lib/scamguard/providers/sourcify-contract-verification.test.ts
           lib/scamguard/v2/brand-impersonation.test.ts
           lib/scamguard/v2/evm-threat-corroboration.test.ts
           lib/scamguard/v2/corroboration.test.ts
@@ -63,6 +64,8 @@ jobs:
           lib/scamguard/providers/evm-public-threat-corpus.test.ts
           lib/scamguard/providers/metamask-phishing-config.ts
           lib/scamguard/providers/metamask-phishing-config.test.ts
+          lib/scamguard/providers/sourcify-contract-verification.ts
+          lib/scamguard/providers/sourcify-contract-verification.test.ts
           lib/scamguard/v2/brand-impersonation.ts
           lib/scamguard/v2/brand-impersonation.test.ts
           lib/scamguard/v2/corroboration.ts
