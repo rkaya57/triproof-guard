@@ -1,0 +1,86 @@
+name: ScamGuard V2 calibration
+
+on:
+  pull_request:
+    branches:
+      - feat/risk-engine-v2
+    paths:
+      - "app/api/scamguard/scan-transaction/route.ts"
+      - "app/api/scamguard/scan-url/route.ts"
+      - "lib/scamguard/verified-domain-guard.ts"
+      - "lib/scamguard/verified-domain-guard.test.ts"
+      - "lib/scamguard/providers/**"
+      - "lib/scamguard/v2/**"
+      - "scripts/validate-scamguard-v2-second-holdout-candidates.ts"
+      - ".github/workflows/scamguard-v2-calibration.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  calibration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Calibration safety tests
+        run: >-
+          node --import tsx --test
+          lib/scamguard/verified-domain-guard.test.ts
+          lib/scamguard/providers/evm-public-threat-corpus.test.ts
+          lib/scamguard/providers/metamask-phishing-config.test.ts
+          lib/scamguard/providers/sourcify-contract-verification.test.ts
+          lib/scamguard/v2/brand-impersonation.test.ts
+          lib/scamguard/v2/evm-threat-corroboration.test.ts
+          lib/scamguard/v2/corroboration.test.ts
+          lib/scamguard/v2/provider-quality.test.ts
+          lib/scamguard/v2/evidence-fusion.test.ts
+          lib/scamguard/v2/evidence-fusion-transaction.test.ts
+          lib/scamguard/v2/evidence-fusion-solana-transaction.test.ts
+          lib/scamguard/v2/runtime-shadow.test.ts
+          lib/scamguard/v2/shadow-telemetry.test.ts
+          lib/scamguard/v2/cross-surface-consistency.test.ts
+          lib/scamguard/v2/holdout-leakage-guard.test.ts
+          lib/scamguard/v2/second-holdout-dataset-contract.test.ts
+          lib/scamguard/v2/second-holdout-collection-plan.test.ts
+          lib/scamguard/v2/second-holdout-candidate.test.ts
+      - name: Validate second Holdout candidate ledger
+        run: node --import tsx scripts/validate-scamguard-v2-second-holdout-candidates.ts
+      - name: Focused lint
+        run: >-
+          npx eslint
+          app/api/scamguard/scan-transaction/route.ts
+          app/api/scamguard/scan-url/route.ts
+          lib/scamguard/verified-domain-guard.ts
+          lib/scamguard/verified-domain-guard.test.ts
+          lib/scamguard/providers/evm-public-threat-corpus.ts
+          lib/scamguard/providers/evm-public-threat-corpus.test.ts
+          lib/scamguard/providers/metamask-phishing-config.ts
+          lib/scamguard/providers/metamask-phishing-config.test.ts
+          lib/scamguard/providers/sourcify-contract-verification.ts
+          lib/scamguard/providers/sourcify-contract-verification.test.ts
+          lib/scamguard/v2/brand-impersonation.ts
+          lib/scamguard/v2/brand-impersonation.test.ts
+          lib/scamguard/v2/corroboration.ts
+          lib/scamguard/v2/evm-threat-corroboration.test.ts
+          lib/scamguard/v2/provider-quality.ts
+          lib/scamguard/v2/evidence-fusion.ts
+          lib/scamguard/v2/calibrated-evidence-fusion.ts
+          lib/scamguard/v2/runtime-shadow.ts
+          lib/scamguard/v2/runtime-shadow.test.ts
+          lib/scamguard/v2/shadow-telemetry.ts
+          lib/scamguard/v2/shadow-telemetry.test.ts
+          lib/scamguard/v2/second-holdout-dataset-contract.ts
+          lib/scamguard/v2/second-holdout-dataset-contract.test.ts
+          lib/scamguard/v2/second-holdout-collection-plan.ts
+          lib/scamguard/v2/second-holdout-collection-plan.test.ts
+          lib/scamguard/v2/second-holdout-candidate.ts
+          lib/scamguard/v2/second-holdout-candidate.test.ts
+          scripts/validate-scamguard-v2-second-holdout-candidates.ts

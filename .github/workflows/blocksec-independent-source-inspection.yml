@@ -1,0 +1,72 @@
+name: BlockSec independent phishing dataset inspection
+
+on:
+  push:
+    branches:
+      - feat/risk-engine-v2-calibration
+    paths:
+      - .github/workflows/blocksec-independent-source-inspection.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout calibration repo
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned BlockSec dataset
+        uses: actions/checkout@v4
+        with:
+          repository: blocksecteam/phishing_contract_sigmetrics25
+          ref: b3e7a78eaf96bf09cb617ffda480203deb7516f2
+          path: blocksec-dataset
+          persist-credentials: false
+
+      - name: Inspect dataset schema and integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          TX='blocksec-dataset/phishing_transactions.log'
+          CONTRACTS='blocksec-dataset/phishing_contracts.log'
+          sha256sum "$TX" "$CONTRACTS" | tee blocksec-source-files.sha256
+          wc -l "$TX" "$CONTRACTS" | tee blocksec-source-files.lines
+          python - <<'PY'
+          import json,re
+          from pathlib import Path
+          from collections import Counter
+
+          report={
+            'sourceRepo':'blocksecteam/phishing_contract_sigmetrics25',
+            'sourceCommit':'b3e7a78eaf96bf09cb617ffda480203deb7516f2',
+          }
+          for key,name in [('transactions','phishing_transactions.log'),('contracts','phishing_contracts.log')]:
+              p=Path('blocksec-dataset')/name
+              samples=[]; lengths=Counter(); valid_tx=0; valid_addr=0; total=0
+              with p.open('r',encoding='utf-8',errors='replace') as f:
+                  for line in f:
+                      raw=line.strip()
+                      if not raw: continue
+                      total+=1
+                      if len(samples)<20: samples.append(raw[:1000])
+                      lengths[len(raw.split())]+=1
+                      valid_tx += bool(re.fullmatch(r'0x[a-fA-F0-9]{64}',raw))
+                      valid_addr += bool(re.fullmatch(r'0x[a-fA-F0-9]{40}',raw))
+              report[key]={'file':name,'lines':total,'sampleLines':samples,'whitespaceFieldCounts':dict(lengths),'validTxHashes':valid_tx,'validAddresses':valid_addr}
+          Path('blocksec-schema-report.json').write_text(json.dumps(report,indent=2))
+          print(json.dumps(report,indent=2))
+          PY
+
+      - name: Upload source inspection evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: blocksec-independent-source-inspection
+          path: |
+            blocksec-source-files.sha256
+            blocksec-source-files.lines
+            blocksec-schema-report.json
+          if-no-files-found: error

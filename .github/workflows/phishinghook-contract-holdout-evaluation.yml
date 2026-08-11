@@ -1,0 +1,64 @@
+name: PhishingHook contract holdout evaluation
+
+on:
+  push:
+    branches:
+      - feat/risk-engine-v2-calibration
+    paths:
+      - scripts/run-scamguard-v2-phishinghook-contract-holdout.ts
+      - lib/scamguard/v2/**
+      - lib/scamguard/**
+      - .github/workflows/phishinghook-contract-holdout-evaluation.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download sealed PhishingHook contract source
+        uses: actions/download-artifact@v4
+        with:
+          name: phishinghook-independent-source-tree
+          path: phishinghook-contract-source
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: rkaya57/triproof-guard
+          run-id: 31500360138
+
+      - name: Type-check evaluator
+        run: npx tsc --noEmit
+
+      - name: Evaluate fresh address-level holdout
+        shell: bash
+        env:
+          EVM_PUBLIC_THREAT_CORPUS_ENABLED: "true"
+          SCAMGUARD_SANDBOX_ENABLED: "false"
+        run: |
+          set -euo pipefail
+          npx tsx scripts/run-scamguard-v2-phishinghook-contract-holdout.ts | tee phishinghook-contract-holdout.log
+
+      - name: Upload evaluation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: phishinghook-contract-holdout-evaluation
+          path: |
+            artifacts/scamguard-v2-phishinghook-contract-holdout/report.json
+            phishinghook-contract-holdout.log
+          if-no-files-found: error
+          retention-days: 90

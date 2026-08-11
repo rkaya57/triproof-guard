@@ -1,0 +1,78 @@
+name: ScamGuard V2 seen-set calibration replay
+
+on:
+  pull_request:
+    branches:
+      - feat/risk-engine-v2
+    paths:
+      - "scripts/run-scamguard-v2-calibration-replay.ts"
+      - "lib/scamguard/providers/**"
+      - "lib/scamguard/v2/**"
+      - ".github/workflows/scamguard-v2-calibration-replay.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  calibration-replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      TOKENS_XYZ_API_KEY: ${{ secrets.TOKENS_XYZ_API_KEY }}
+      PHISHING_DATABASE_FEED_URL: "https://openphish.com/feed.txt"
+      SOLANA_RPC_URL: ${{ secrets.SOLANA_RPC_URL }}
+      EVM_RPC_URL: ${{ secrets.EVM_RPC_URL }}
+      EVM_REPLAY_RPC_URL: "https://ethereum-rpc.publicnode.com"
+      SCAMGUARD_SANDBOX_ENABLED: "false"
+      EVM_PUBLIC_THREAT_CORPUS_ENABLED: "true"
+      METAMASK_PHISHING_CONFIG_ENABLED: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Run seen-set calibration replay
+        id: replay
+        continue-on-error: true
+        run: node --import tsx scripts/run-scamguard-v2-calibration-replay.ts
+      - name: Upload calibration report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scamguard-v2-seen-set-calibration-report
+          path: artifacts/scamguard-v2-calibration-replay/report.json
+          if-no-files-found: warn
+      - name: Enforce diagnostic completeness
+        if: always()
+        run: |
+          if [ -z "$TOKENS_XYZ_API_KEY" ]; then
+            echo "TOKENS_XYZ_API_KEY is missing; calibration replay lacks required baseline provider parity."
+            exit 1
+          fi
+          if [ ! -f artifacts/scamguard-v2-calibration-replay/report.json ]; then
+            echo "Calibration replay did not produce a report."
+            exit 1
+          fi
+          node - <<'NODE'
+          const report = require('./artifacts/scamguard-v2-calibration-replay/report.json')
+          const coverage = report.totalFixtureCases ? report.scoredCases / report.totalFixtureCases : 0
+          if (coverage < 0.98) {
+            console.error(`Seen-set replay coverage ${(coverage * 100).toFixed(2)}% is below the 98% diagnostic floor.`)
+            process.exit(1)
+          }
+          if (report.finalValidationEligible !== false || report.activationEligible !== false || report.seenDataset !== true) {
+            console.error('Calibration replay safety flags are invalid.')
+            process.exit(1)
+          }
+          console.log(`Seen-set replay coverage ${(coverage * 100).toFixed(2)}%. Archive misses remain explicit in the report.`)
+          console.log('Credential-free open-source threat intelligence is enabled for calibration.')
+          console.log('Diagnostic only: this result is NOT final validation and cannot activate V2.')
+          NODE

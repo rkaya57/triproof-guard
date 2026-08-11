@@ -11,9 +11,12 @@ export type BrandImpersonationFinding = {
 }
 
 const brandRegistry = [
-  { brand: "phantom", domains: ["phantom.app"] },
+  { brand: "phantom", domains: ["phantom.com", "phantom.app"] },
   { brand: "solflare", domains: ["solflare.com"] },
   { brand: "jupiter", domains: ["jup.ag", "jupiter.ag"] },
+  { brand: "raydium", domains: ["raydium.io"] },
+  { brand: "metamask", domains: ["metamask.io"] },
+  { brand: "uniswap", domains: ["uniswap.org"] },
   { brand: "magiceden", domains: ["magiceden.io"] },
   { brand: "tensor", domains: ["tensor.trade"] },
   { brand: "backpack", domains: ["backpack.app"] },
@@ -43,9 +46,7 @@ function rawHost(value: string) {
   const withoutScheme = trimmed.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
   const authority = withoutScheme.split(/[/?#]/, 1)[0] ?? ""
   const withoutCredentials = authority.includes("@") ? authority.slice(authority.lastIndexOf("@") + 1) : authority
-  const withoutPort = withoutCredentials.startsWith("[")
-    ? withoutCredentials
-    : withoutCredentials.replace(/:\d+$/, "")
+  const withoutPort = withoutCredentials.startsWith("[") ? withoutCredentials : withoutCredentials.replace(/:\d+$/, "")
   return withoutPort.toLowerCase().replace(/^www\./, "").replace(/\.$/, "")
 }
 
@@ -70,10 +71,7 @@ function skeleton(value: string) {
 }
 
 function visualSkeleton(value: string) {
-  return value
-    .replace(/rn/g, "m")
-    .replace(/vv/g, "w")
-    .replace(/cl/g, "d")
+  return value.replace(/rn/g, "m").replace(/vv/g, "w").replace(/cl/g, "d")
 }
 
 function editDistance(left: string, right: string) {
@@ -85,11 +83,7 @@ function editDistance(left: string, right: string) {
   for (let i = 1; i <= left.length; i += 1) {
     current[0] = i
     for (let j = 1; j <= right.length; j += 1) {
-      current[j] = Math.min(
-        current[j - 1] + 1,
-        previous[j] + 1,
-        previous[j - 1] + (left[i - 1] === right[j - 1] ? 0 : 1),
-      )
+      current[j] = Math.min(current[j - 1] + 1, previous[j] + 1, previous[j - 1] + (left[i - 1] === right[j - 1] ? 0 : 1))
     }
     for (let j = 0; j <= right.length; j += 1) previous[j] = current[j]
   }
@@ -118,47 +112,19 @@ export function detectBrandImpersonation(value: string): BrandImpersonationFindi
       const changedBySkeleton = normalizedLabel !== asciiRaw
 
       if (normalizedLabel === brand && changedBySkeleton) {
-        findings.push({
-          brand,
-          officialDomains: [...entry.domains],
-          observedHost,
-          observedLabel,
-          normalizedLabel,
-          matchType: "homoglyph",
-          confidence: "high",
-          note: `A Unicode lookalike label normalizes to the ${brand} brand while the host is outside official domains.`,
-        })
+        findings.push({ brand, officialDomains: [...entry.domains], observedHost, observedLabel, normalizedLabel, matchType: "homoglyph", confidence: "high", note: `A Unicode lookalike label normalizes to the ${brand} brand while the host is outside official domains.` })
         break
       }
 
       const comparableLabel = visualSkeleton(normalizedLabel.replace(/-/g, ""))
       const distance = editDistance(comparableLabel, brand)
       if ((distance === 1 || (distance === 0 && comparableLabel !== normalizedLabel.replace(/-/g, ""))) && normalizedLabel.length >= Math.max(4, brand.length - 1)) {
-        findings.push({
-          brand,
-          officialDomains: [...entry.domains],
-          observedHost,
-          observedLabel,
-          normalizedLabel,
-          matchType: "typosquat",
-          confidence: "high",
-          distance,
-          note: `A hostname label is visually equivalent or one edit away from the ${brand} brand while using a non-official domain.`,
-        })
+        findings.push({ brand, officialDomains: [...entry.domains], observedHost, observedLabel, normalizedLabel, matchType: "typosquat", confidence: "high", distance, note: `A hostname label is visually equivalent or one edit away from the ${brand} brand while using a non-official domain.` })
         break
       }
 
       if (normalizedLabel !== brand && normalizedLabel.includes(brand) && /(?:claim|airdrop|wallet|verify|secure|login|app|support)/.test(normalizedLabel.replace(brand, ""))) {
-        findings.push({
-          brand,
-          officialDomains: [...entry.domains],
-          observedHost,
-          observedLabel,
-          normalizedLabel,
-          matchType: "embedded_brand",
-          confidence: "medium",
-          note: `A non-official hostname embeds the ${brand} brand together with a security, wallet, or claim lure term.`,
-        })
+        findings.push({ brand, officialDomains: [...entry.domains], observedHost, observedLabel, normalizedLabel, matchType: "embedded_brand", confidence: "medium", note: `A non-official hostname embeds the ${brand} brand together with a security, wallet, or claim lure term.` })
         break
       }
     }

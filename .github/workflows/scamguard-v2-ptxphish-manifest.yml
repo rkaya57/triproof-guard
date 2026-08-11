@@ -1,0 +1,33 @@
+name: ScamGuard V2 PTXPhish real-world manifest
+
+on:
+  push:
+    branches:
+      - feat/risk-engine-v2-calibration
+    paths:
+      - "scripts/build-ptxphish-realworld-manifest.py"
+      - ".github/workflows/scamguard-v2-ptxphish-manifest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-manifest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build deterministic source-backed manifest
+        run: python scripts/build-ptxphish-realworld-manifest.py
+      - name: Upload frozen manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: ptxphish-realworld-manifest
+          path: artifacts/ptxphish-realworld/manifest.json
+          if-no-files-found: error

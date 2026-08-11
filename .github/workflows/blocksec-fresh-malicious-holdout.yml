@@ -1,0 +1,59 @@
+name: ScamGuard V2 fresh BlockSec malicious holdout
+
+on:
+  push:
+    branches:
+      - feat/risk-engine-v2-calibration
+    paths:
+      - scripts/run-blocksec-fresh-malicious-holdout.ts
+      - .github/workflows/blocksec-fresh-malicious-holdout.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  EVM_RPC_URL: ${{ secrets.EVM_RPC_URL }}
+  EVM_PUBLIC_THREAT_CORPUS_ENABLED: "true"
+  METAMASK_PHISHING_CONFIG_ENABLED: "true"
+  SCAMGUARD_SANDBOX_ENABLED: "false"
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout calibration repo
+        uses: actions/checkout@v4
+      - name: Checkout pinned BlockSec dataset
+        uses: actions/checkout@v4
+        with:
+          repository: blocksecteam/phishing_contract_sigmetrics25
+          ref: b3e7a78eaf96bf09cb617ffda480203deb7516f2
+          path: blocksec-dataset
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Rebuild retired PTXPhish set only for overlap exclusion
+        run: |
+          python scripts/build-ptxphish-realworld-manifest.py
+          node --import tsx scripts/inspect-ptxphish-presigning-compatibility.ts
+      - name: Seal then evaluate fresh BlockSec malicious holdout
+        run: node --import tsx scripts/run-blocksec-fresh-malicious-holdout.ts | tee blocksec-holdout.log
+      - name: Upload sealed holdout evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: scamguard-v2-blocksec-fresh-malicious-holdout
+          path: |
+            artifacts/blocksec-fresh-malicious-holdout/manifest.json
+            artifacts/blocksec-fresh-malicious-holdout/report.json
+            blocksec-holdout.log
+          if-no-files-found: error

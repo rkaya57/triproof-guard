@@ -14,7 +14,12 @@ export type V2ProviderQuality = {
 const remoteCacheBoundsMs: Partial<Record<V2EvidenceSourceGroup, number>> = {
   "tokens.xyz": 60 * 60 * 1000,
   "phishing.database": 60 * 60 * 1000,
+  "metamask-eth-phishing-detect": 60 * 60 * 1000,
   "solana-rpc": 60 * 60 * 1000,
+  "evm-real-cats": 60 * 60 * 1000,
+  "evm-rug-pull-dataset": 60 * 60 * 1000,
+  "evm-mew-darklist": 60 * 60 * 1000,
+  "evm-rpc-contract": 60 * 60 * 1000,
 }
 
 const localSources = new Set<V2EvidenceSourceGroup>([

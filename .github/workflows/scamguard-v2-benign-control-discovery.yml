@@ -1,0 +1,43 @@
+name: ScamGuard V2 benign pre-signing control discovery
+
+on:
+  push:
+    branches:
+      - feat/risk-engine-v2-calibration
+    paths:
+      - "scripts/discover-aave-usdc-benign-approvals.ts"
+      - ".github/workflows/scamguard-v2-benign-control-discovery.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  EVM_RPC_URL: ${{ secrets.EVM_RPC_URL }}
+  BENIGN_TARGET_CASES: "120"
+  BENIGN_MAX_LOOKBACK_BLOCKS: "1200000"
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Discover verified benign Aave USDC approvals
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx scripts/discover-aave-usdc-benign-approvals.ts | tee benign-controls.json
+      - name: Upload discovery report
+        uses: actions/upload-artifact@v4
+        with:
+          name: scamguard-v2-benign-presigning-controls
+          path: benign-controls.json
+          if-no-files-found: error

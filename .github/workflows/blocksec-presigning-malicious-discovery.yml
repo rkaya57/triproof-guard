@@ -1,0 +1,147 @@
+name: BlockSec fresh pre-signing malicious discovery
+
+on:
+  push:
+    branches:
+      - feat/risk-engine-v2-calibration
+    paths:
+      - .github/workflows/blocksec-presigning-malicious-discovery.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TARGET_COMPATIBLE: '160'
+      MAX_CANDIDATES: '8000'
+    steps:
+      - name: Checkout calibration repo
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned BlockSec dataset
+        uses: actions/checkout@v4
+        with:
+          repository: blocksecteam/phishing_contract_sigmetrics25
+          ref: b3e7a78eaf96bf09cb617ffda480203deb7516f2
+          path: blocksec-dataset
+          persist-credentials: false
+
+      - name: Resolve deterministic candidates without consulting ScamGuard
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/discover.mjs <<'JS'
+          import { createHash } from 'node:crypto'
+          import { readFile, writeFile } from 'node:fs/promises'
+
+          const DATASET = 'blocksec-dataset/phishing_transactions.log'
+          const EXPECTED_DATASET_SHA = '6d6eeaafc9c901b068479b2e5dba929c0ff8056fc982d56a12faf7d2fcec4362'
+          const TARGET = Number(process.env.TARGET_COMPATIBLE || '160')
+          const MAX = Number(process.env.MAX_CANDIDATES || '8000')
+          const RPCS = [
+            process.env.EVM_RPC_URL?.trim(),
+            'https://ethereum-rpc.publicnode.com',
+            'https://eth.llamarpc.com',
+            'https://eth.blockscout.com/api/eth-rpc',
+          ].filter(Boolean)
+          const selectors = new Map([
+            ['0x095ea7b3', { method: 'approve(address,uint256)', family: 'approval' }],
+            ['0xa22cb465', { method: 'setApprovalForAll(address,bool)', family: 'approval_for_all' }],
+            ['0xd505accf', { method: 'permit(address,address,uint256,uint256,uint8,bytes32,bytes32)', family: 'permit' }],
+            ['0x8fcbaf0c', { method: 'daiPermit(address,address,uint256,uint256,bool,uint8,bytes32,bytes32)', family: 'permit' }],
+            ['0x3659cfe6', { method: 'upgradeTo(address)', family: 'proxy_upgrade' }],
+            ['0x4f1ef286', { method: 'upgradeToAndCall(address,bytes)', family: 'proxy_upgrade' }],
+          ])
+          const sha = (s) => createHash('sha256').update(s).digest('hex')
+          const raw = await readFile(DATASET, 'utf8')
+          const datasetSha = createHash('sha256').update(raw).digest('hex')
+          if (datasetSha !== EXPECTED_DATASET_SHA) throw new Error(`dataset SHA drift: ${datasetSha}`)
+          const hashes = [...new Set(raw.split(/\r?\n/).map(x => x.trim().toLowerCase()).filter(x => /^0x[a-f0-9]{64}$/.test(x)))]
+            .sort((a,b) => sha(a).localeCompare(sha(b)))
+            .slice(0, MAX)
+
+          async function batchRpc(batch) {
+            let last = 'no endpoint'
+            for (const endpoint of RPCS) {
+              try {
+                const body = batch.map((hash, i) => ({ jsonrpc:'2.0', id:i+1, method:'eth_getTransactionByHash', params:[hash] }))
+                const r = await fetch(endpoint, { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(body) })
+                if (!r.ok) { last=`${endpoint} HTTP ${r.status}`; continue }
+                const payload = await r.json()
+                if (!Array.isArray(payload)) { last=`${endpoint} non-batch response`; continue }
+                return { endpoint, payload }
+              } catch (e) { last = `${endpoint}: ${e?.message || e}` }
+            }
+            throw new Error(last)
+          }
+
+          const compatible=[]
+          const selectorCounts={}
+          let resolved=0, missing=0, scanned=0, lastRpc=''
+          for (let start=0; start<hashes.length && compatible.length<TARGET; start+=40) {
+            const batch=hashes.slice(start,start+40)
+            const {endpoint,payload}=await batchRpc(batch)
+            lastRpc=endpoint
+            const byId=new Map(payload.map(row => [row.id,row]))
+            for (let i=0;i<batch.length;i++) {
+              scanned++
+              const tx=byId.get(i+1)?.result
+              if (!tx?.hash) { missing++; continue }
+              resolved++
+              const data=(tx.input || '0x').toLowerCase()
+              const sel=/^0x[a-f0-9]{8}/.test(data) ? data.slice(0,10) : data === '0x' ? '0x' : 'short'
+              selectorCounts[sel]=(selectorCounts[sel]||0)+1
+              const known=selectors.get(sel)
+              if (!known || !tx.from || !tx.to) continue
+              compatible.push({
+                txHash: tx.hash.toLowerCase(),
+                sourceRank: start+i,
+                from: tx.from.toLowerCase(),
+                to: tx.to.toLowerCase(),
+                selector: sel,
+                method: known.method,
+                family: known.family,
+                inputLengthBytes: Math.max(0,(data.length-2)/2),
+                groundTruth: 'malicious',
+                provenance: 'BlockSec SIGMETRICS 2025 phishing_transactions.log; selected by SHA-256(txHash) order before any ScamGuard evaluation',
+              })
+              if (compatible.length >= TARGET) break
+            }
+          }
+          const byFamily=Object.fromEntries([...new Set(compatible.map(x=>x.family))].sort().map(f=>[f,compatible.filter(x=>x.family===f).length]))
+          const core={
+            schemaVersion:1,
+            activationCandidate:true,
+            selectionUsesModelOutputs:false,
+            sourceRepo:'blocksecteam/phishing_contract_sigmetrics25',
+            sourceCommit:'b3e7a78eaf96bf09cb617ffda480203deb7516f2',
+            sourceFile:'phishing_transactions.log',
+            sourceFileSha256:datasetSha,
+            selectionRule:`dedupe tx hashes; sort ascending by SHA-256(lowercase txHash); inspect at most ${MAX}; stop after ${TARGET} explicit pre-signing selector matches`,
+            targetCompatible:TARGET,
+            maxCandidates:MAX,
+            scannedCandidates:scanned,
+            resolvedCandidates:resolved,
+            rpcMissing:missing,
+            lastSuccessfulRpc:lastRpc,
+            compatibleCount:compatible.length,
+            compatibleByFamily:byFamily,
+            cases:compatible,
+          }
+          const compatibleSha256=createHash('sha256').update(JSON.stringify(core)).digest('hex')
+          const report={...core,compatibleSha256,topSelectors:Object.fromEntries(Object.entries(selectorCounts).sort((a,b)=>b[1]-a[1]).slice(0,30))}
+          await writeFile('blocksec-presigning-malicious-discovery.json',JSON.stringify(report,null,2))
+          console.log(JSON.stringify({sourceFileSha256:datasetSha,scannedCandidates:scanned,resolvedCandidates:resolved,rpcMissing:missing,compatibleCount:compatible.length,compatibleByFamily:byFamily,compatibleSha256,topSelectors:report.topSelectors},null,2))
+          JS
+          node /tmp/discover.mjs
+
+      - name: Upload discovery evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: blocksec-presigning-malicious-discovery
+          path: blocksec-presigning-malicious-discovery.json
+          if-no-files-found: error

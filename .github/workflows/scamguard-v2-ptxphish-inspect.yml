@@ -1,0 +1,33 @@
+name: ScamGuard V2 PTXPhish inspection
+
+on:
+  push:
+    branches:
+      - feat/risk-engine-v2-calibration
+    paths:
+      - "scripts/inspect-ptxphish-dataset.py"
+      - ".github/workflows/scamguard-v2-ptxphish-inspect.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Inspect PTXPhish workbook
+        run: python scripts/inspect-ptxphish-dataset.py
+      - name: Upload inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: ptxphish-inspection
+          path: artifacts/ptxphish-inspection/inspection.json
+          if-no-files-found: error
