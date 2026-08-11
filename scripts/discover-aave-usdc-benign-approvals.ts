@@ -12,6 +12,7 @@ const USDC = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
 const AAVE_POOL = "0x87870bca3f3fd6335c3f4ce8392d69350b4fa4e2"
 const TARGET = Number(process.env.BENIGN_TARGET_CASES || "120")
 const MAX_LOOKBACK = Number(process.env.BENIGN_MAX_LOOKBACK_BLOCKS || "1200000")
+const LOG_WINDOW = 50_000
 const approvalTopic = id("Approval(address,address,uint256)")
 const iface = new Interface(["function approve(address spender,uint256 amount)"])
 let lastRpc = RPCS[0]
@@ -50,9 +51,9 @@ async function discoverLogs(fromBlock: number, toBlock: number) {
   url.searchParams.set("topic2", spenderTopic)
   url.searchParams.set("topic0_2_opr", "and")
   const response = await fetch(url, { headers: { accept: "application/json" }, cache: "no-store" })
-  if (!response.ok) throw new Error(`Blockscout logs HTTP ${response.status}`)
+  if (!response.ok) throw new Error(`Blockscout logs HTTP ${response.status} for ${fromBlock}-${toBlock}`)
   const payload = await response.json() as { status?: string; message?: string; result?: unknown }
-  if (!Array.isArray(payload.result)) throw new Error(`Blockscout logs: ${payload.message || "unexpected response"}`)
+  if (!Array.isArray(payload.result)) throw new Error(`Blockscout logs ${fromBlock}-${toBlock}: ${payload.message || "unexpected response"}`)
   return payload.result as Array<{ transactionHash?: string; transaction_hash?: string }>
 }
 
@@ -60,11 +61,19 @@ async function main() {
   const latestHex = await rpc<string>("eth_blockNumber", [])
   const latest = Number.parseInt(latestHex, 16)
   const minBlock = Math.max(0, latest - MAX_LOOKBACK)
-  const logs = await discoverLogs(minBlock, latest)
   const candidateHashes = new Set<string>()
-  for (const log of logs) {
-    const hash = log.transactionHash || log.transaction_hash
-    if (typeof hash === "string" && /^0x[a-fA-F0-9]{64}$/.test(hash)) candidateHashes.add(hash.toLowerCase())
+  let scannedFrom = latest
+  let windowsScanned = 0
+
+  for (let to = latest; to >= minBlock && candidateHashes.size < TARGET * 2; to -= LOG_WINDOW) {
+    const from = Math.max(minBlock, to - LOG_WINDOW + 1)
+    const logs = await discoverLogs(from, to)
+    windowsScanned++
+    scannedFrom = from
+    for (const log of logs) {
+      const hash = log.transactionHash || log.transaction_hash
+      if (typeof hash === "string" && /^0x[a-fA-F0-9]{64}$/.test(hash)) candidateHashes.add(hash.toLowerCase())
+    }
   }
 
   const controls: Array<Record<string, unknown>> = []
@@ -96,15 +105,17 @@ async function main() {
   }
 
   const report = {
-    schemaVersion: 4,
+    schemaVersion: 5,
     activationEligible: false,
     selectionUsesModelOutputs: false,
-    discoverySource: "blockscout-rest-logs",
+    discoverySource: "blockscout-rest-logs-chunked",
     rpcEndpoints: RPCS,
     lastSuccessfulRpc: lastRpc,
     latestBlock: latest,
-    scannedFromBlock: minBlock,
-    scannedBlocks: latest - minBlock + 1,
+    scannedFromBlock: scannedFrom,
+    scannedBlocks: latest - scannedFrom + 1,
+    logWindowBlocks: LOG_WINDOW,
+    windowsScanned,
     candidateApprovalLogs: candidateHashes.size,
     verifiedBenignControls: controls.length,
     targetControls: TARGET,
