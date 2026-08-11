@@ -13,6 +13,38 @@ function maxRisk(current: ScamGuardScanResult["riskLevel"], minimum: ScamGuardSc
   return riskRank[current] >= riskRank[minimum] ? current : minimum
 }
 
+function extractEvmCall(rawTransactionValue: string) {
+  const trimmed = rawTransactionValue.trim()
+  if (/^0x[0-9a-fA-F]+$/.test(trimmed)) return { data: trimmed, to: undefined as string | undefined }
+
+  try {
+    const parsed = JSON.parse(trimmed) as {
+      data?: unknown
+      input?: unknown
+      to?: unknown
+      params?: Array<{ data?: unknown; input?: unknown; to?: unknown }>
+    }
+    const first = parsed.params?.[0]
+    const data = typeof parsed.data === "string"
+      ? parsed.data
+      : typeof parsed.input === "string"
+        ? parsed.input
+        : typeof first?.data === "string"
+          ? first.data
+          : typeof first?.input === "string"
+            ? first.input
+            : undefined
+    const to = typeof parsed.to === "string"
+      ? parsed.to
+      : typeof first?.to === "string"
+        ? first.to
+        : undefined
+    return { data, to }
+  } catch {
+    return { data: undefined as string | undefined, to: undefined as string | undefined }
+  }
+}
+
 export async function applyScamGuardV11TransactionHardening(
   result: ScamGuardScanResult,
   rawTransactionValue: string,
@@ -20,20 +52,8 @@ export async function applyScamGuardV11TransactionHardening(
 ): Promise<ScamGuardScanResult> {
   if (result.type !== "transaction") return result
 
-  let parsedTo: string | undefined
-  try {
-    const parsed = JSON.parse(rawTransactionValue) as { to?: unknown; params?: Array<{ to?: unknown }> }
-    const candidate = typeof parsed.to === "string"
-      ? parsed.to
-      : typeof parsed.params?.[0]?.to === "string"
-        ? parsed.params[0].to
-        : undefined
-    parsedTo = candidate
-  } catch {
-    parsedTo = undefined
-  }
-
-  const decoded = decodeV11EvmIntent(rawTransactionValue, parsedTo)
+  const call = extractEvmCall(rawTransactionValue)
+  const decoded = decodeV11EvmIntent(call.data, call.to)
   const counterparties = v11CounterpartyCandidates(decoded)
   const threatIntel = await checkV11ExactThreatIntel({ sourceUrl, counterparties })
 
