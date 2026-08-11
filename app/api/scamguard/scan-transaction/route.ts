@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import { scanScamGuard, type ScamGuardChain } from "@/lib/scamguard/engine"
 import { scanAccess } from "@/lib/scamguard/scan-access"
+import { applyScamGuardV11TransactionHardening } from "@/lib/scamguard/v1_1-postprocess"
 import { getExtensionSession } from "@/lib/extension/session"
 
 export const runtime = "nodejs"
@@ -19,15 +20,21 @@ export async function POST(request: Request) {
   const access = await scanAccess(false, extensionSession?.user)
   if (access.error) return access.error
 
-  return NextResponse.json(
-    await scanScamGuard({ type: "transaction", value, walletAddress: body?.walletAddress, chain: body?.chain, sourceUrl: body?.sourceUrl }),
-    {
-      headers: {
-        "Cache-Control": "no-store",
-        "X-ScamGuard-Plan": access.plan.name,
-        "X-ScamGuard-Daily-Limit": String(access.plan.dailyScanLimit),
-        "X-ScamGuard-Scans-Used": String(access.scanCount),
-      },
-    }
-  )
+  const baseResult = await scanScamGuard({
+    type: "transaction",
+    value,
+    walletAddress: body?.walletAddress,
+    chain: body?.chain,
+    sourceUrl: body?.sourceUrl,
+  })
+  const result = applyScamGuardV11TransactionHardening(baseResult, value)
+
+  return NextResponse.json(result, {
+    headers: {
+      "Cache-Control": "no-store",
+      "X-ScamGuard-Plan": access.plan.name,
+      "X-ScamGuard-Daily-Limit": String(access.plan.dailyScanLimit),
+      "X-ScamGuard-Scans-Used": String(access.scanCount),
+    },
+  })
 }
