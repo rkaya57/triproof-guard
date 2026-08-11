@@ -3,6 +3,7 @@ import { Interface, id, zeroPadValue } from "ethers"
 
 const RPCS = [
   process.env.EVM_RPC_URL?.trim(),
+  "https://eth.blockscout.com/api/eth-rpc",
   "https://ethereum-rpc.publicnode.com",
   "https://eth.llamarpc.com",
 ].filter((value, index, all): value is string => Boolean(value) && all.indexOf(value) === index)
@@ -86,7 +87,7 @@ async function main() {
   }
 
   const report = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     activationEligible: false,
     selectionUsesModelOutputs: false,
     rpcEndpoints: RPCS,
