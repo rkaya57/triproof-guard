@@ -1,0 +1,34 @@
+name: ScamGuard V1.1 hardening
+
+on:
+  push:
+    branches:
+      - feat/scamguard-v1-1-hardening
+    paths:
+      - "lib/scamguard/v1-1-evm-hardening.ts"
+      - "lib/scamguard/v1-1-evm-hardening.test.ts"
+      - ".github/workflows/scamguard-v1-1-hardening.yml"
+  pull_request:
+    paths:
+      - "lib/scamguard/v1-1-evm-hardening.ts"
+      - "lib/scamguard/v1-1-evm-hardening.test.ts"
+      - ".github/workflows/scamguard-v1-1-hardening.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  hardening:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Type-check
+        run: npx tsc --noEmit
+      - name: Run V1.1 focused tests
+        run: node --import tsx --test lib/scamguard/v1-1-evm-hardening.test.ts
