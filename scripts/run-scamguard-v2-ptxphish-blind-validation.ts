@@ -145,17 +145,30 @@ async function main() {
     }, { evaluationMode: "holdout" })
     const v1Risk = observation.base.riskLevel
     const v2Risk = maxRisk(v1Risk, observation.proposedAssessment.proposedRiskLevel)
+    const decoded = observation.base.metadata.decodedIntent
+    const threat = observation.evidence.evmThreatCorpus
     return {
       txHash: item.txHash,
       category: item.category,
       provenanceUrl: item.sourceUrl,
+      from: tx.from,
       to: tx.to,
       selector: (tx.input ?? "0x").slice(0, 10),
+      decodedMethod: decoded?.method,
+      decodedCategory: decoded?.category,
+      decodedSpender: decoded?.spender,
+      decodedRecipient: decoded?.recipient,
+      decodedContractTarget: decoded?.contractTarget,
+      contractIntelligenceTarget: observation.base.metadata.contractIntelligence?.target,
+      threatQueriedAddress: threat?.address,
+      threatMatchedSources: threat?.matchedSources ?? [],
+      threatAvailableSources: threat?.availableSources ?? [],
       v1Risk,
       proposedV2Risk: observation.proposedAssessment.proposedRiskLevel,
       v2Risk,
       evidenceScore: observation.proposedAssessment.evidenceScore,
       activationGate: observation.proposedAssessment.activationGate,
+      independentFamilies: observation.proposedAssessment.independentFamilies,
       independentSources: observation.proposedAssessment.independentSources,
       proposedSignalCodes: observation.proposedSignals.map((signal) => signal.code),
     }
@@ -174,10 +187,10 @@ async function main() {
   }))
 
   const report = {
-    schemaVersion: 1,
-    evaluationRole: "sealed_ptxphish_realworld_malicious_transaction_validation",
+    schemaVersion: 2,
+    evaluationRole: "sealed_ptxphish_post_execution_realworld_transaction_validation",
     activationEligible: false,
-    reason: "This is an independent real-world malicious transaction stratum. Activation still requires benign real-world controls and the full multi-surface blind gate.",
+    reason: "PTXPhish contains real phishing/execution transactions and is used here as a post-execution counterparty/detection stratum, not as a pure pre-signing activation benchmark. Activation still requires fresh benign controls and a pre-signing-compatible multi-surface blind gate.",
     manifestSha256: manifest.manifestSha256,
     upstreamSha256: manifest.upstreamSha256,
     sealedCases: manifest.cases.length,
@@ -191,6 +204,15 @@ async function main() {
       falseNegativeRate: summarize(v2Rows).falseNegativeRate - summarize(v1Rows).falseNegativeRate,
       reviewRate: summarize(v2Rows).reviewRate - summarize(v1Rows).reviewRate,
     },
+    diagnostics: {
+      threatMatches: details.filter((row) => row.threatMatchedSources.length > 0).length,
+      threatMatchesBySource: {
+        realCats: details.filter((row) => row.threatMatchedSources.includes("real-cats")).length,
+        rugPullDataset: details.filter((row) => row.threatMatchedSources.includes("rug-pull-dataset")).length,
+        mewDarklist: details.filter((row) => row.threatMatchedSources.includes("mew-darklist")).length,
+      },
+      decodedCategories: Object.fromEntries([...new Set(details.map((row) => row.decodedCategory ?? "unknown"))].sort().map((category) => [category, details.filter((row) => (row.decodedCategory ?? "unknown") === category).length])),
+    },
     byCategory,
     details,
   }
@@ -203,6 +225,7 @@ async function main() {
     sealedCases: report.sealedCases,
     resolvedCases: report.resolvedCases,
     rpcFailures: report.rpcFailures.length,
+    diagnostics: report.diagnostics,
     v1: report.v1,
     v2: report.v2,
     deltas: report.deltas,
