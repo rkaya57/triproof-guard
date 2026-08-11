@@ -1,5 +1,5 @@
 import type { ScamGuardScanResult } from "@/lib/scamguard/engine"
-import { decodeV11EvmTransaction } from "@/lib/scamguard/v1-1-evm-hardening"
+import { decodeV11EvmIntent } from "@/lib/scamguard/v1-1-evm-hardening"
 
 const riskRank = {
   SAFE: 0,
@@ -18,15 +18,18 @@ export function applyScamGuardV11TransactionHardening(
 ): ScamGuardScanResult {
   if (result.type !== "transaction") return result
 
-  const decoded = decodeV11EvmTransaction(rawTransactionValue)
-  if (!decoded || decoded.category === "unknown") return result
+  const decoded = decodeV11EvmIntent(rawTransactionValue)
+  if (decoded.category === "unknown") return result
 
   const signals = [...result.signals]
   const warnings = [...(result.metadata.decodedIntent?.warnings ?? [])]
   let score = result.score
   let riskLevel = result.riskLevel
 
-  if (decoded.highImpactAuthorityChange) {
+  const highImpactAuthorityChange = decoded.category === "authority" && decoded.highImpact
+  const unlimitedApproval = decoded.reasonCodes.includes("UNLIMITED_APPROVAL") || decoded.reasonCodes.includes("OPERATOR_APPROVAL_ENABLED")
+
+  if (highImpactAuthorityChange) {
     signals.push({
       code: "V11_AUTHORITY_CHANGE",
       severity: "medium",
@@ -38,7 +41,7 @@ export function applyScamGuardV11TransactionHardening(
     riskLevel = maxRisk(riskLevel, "CAUTION")
   }
 
-  if (decoded.unlimitedApproval) {
+  if (unlimitedApproval) {
     signals.push({
       code: "V11_UNLIMITED_APPROVAL",
       severity: "medium",
