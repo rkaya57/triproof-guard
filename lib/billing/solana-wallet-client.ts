@@ -54,6 +54,9 @@ type ConnectionInstance = {
       confirmationStatus?: "processed" | "confirmed" | "finalized" | null
     } | null>
   }>
+  getTokenAccountBalance(publicKey: PublicKeyInstance, commitment: "confirmed"): Promise<{
+    value?: { amount?: string }
+  }>
 }
 
 type SolanaWeb3 = {
@@ -297,11 +300,13 @@ async function sendSolanaPayment({
   treasuryAddress,
   reference,
   memo,
+  rpcUrl,
   buildPaymentInstruction,
 }: {
   treasuryAddress: string
   reference: string
   memo: string
+  rpcUrl?: string
   buildPaymentInstruction: (input: {
     web3: SolanaWeb3
     owner: PublicKeyInstance
@@ -319,7 +324,7 @@ async function sendSolanaPayment({
   }
 
   const web3 = await loadSolanaWeb3()
-  const connection = new web3.Connection(process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? DEFAULT_RPC_URL, "confirmed")
+  const connection = new web3.Connection(rpcUrl ?? process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? DEFAULT_RPC_URL, "confirmed")
   const connected = await wallet.connect()
   const publicKey = connected?.publicKey ?? wallet.publicKey
 
@@ -426,5 +431,97 @@ export async function paySolanaSolWithWallet({
     buildPaymentInstruction: async ({ web3, owner, treasury, referenceKey }) => [
       createNativeTransferInstruction(web3, owner, treasury, amountLamports, referenceKey),
     ],
+  })
+}
+
+export async function connectSolanaWallet() {
+  const wallet = await waitForWalletProvider()
+  if (!wallet) {
+    throw new Error("Phantom or Solflare was not detected. Unlock the extension and reload this page.")
+  }
+  const connected = await wallet.connect()
+  const publicKey = connected?.publicKey ?? wallet.publicKey
+  if (!publicKey) throw new Error("Wallet connection failed.")
+  return publicKey.toString()
+}
+
+export async function ensureSplTokenAccountWithWallet({
+  mintAddress,
+  rpcUrl,
+}: {
+  mintAddress: string
+  rpcUrl: string
+}) {
+  const wallet = await waitForWalletProvider()
+  if (!wallet) throw new Error("Phantom or Solflare was not detected.")
+  const web3 = await loadSolanaWeb3()
+  const connected = await wallet.connect()
+  const publicKey = connected?.publicKey ?? wallet.publicKey
+  if (!publicKey) throw new Error("Wallet connection failed.")
+
+  const owner = new web3.PublicKey(publicKey.toString())
+  const mint = new web3.PublicKey(mintAddress)
+  const tokenProgramId = new web3.PublicKey(TOKEN_PROGRAM_ID)
+  const associatedProgramId = new web3.PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID)
+  const ata = associatedTokenAddress(web3, mint, owner, tokenProgramId, associatedProgramId)
+  const connection = new web3.Connection(rpcUrl, "confirmed")
+
+  if (!(await connection.getAccountInfo(ata, "confirmed"))) {
+    const transaction = new web3.Transaction().add(
+      createAssociatedTokenAccountInstruction(web3, owner, ata, owner, mint, tokenProgramId, associatedProgramId)
+    )
+    const latest = await connection.getLatestBlockhash("confirmed")
+    transaction.feePayer = owner
+    transaction.recentBlockhash = latest.blockhash
+    const submitted = await wallet.signAndSendTransaction(transaction)
+    const signature = typeof submitted === "string" ? submitted : submitted.signature
+    if (!signature) throw new Error("Wallet did not return an account-creation signature.")
+    await confirmSubmittedTransaction(connection, signature, latest)
+  }
+
+  return { walletAddress: owner.toString(), tokenAccount: ata.toString() }
+}
+
+export async function transferSplTokenWithWallet({
+  mintAddress,
+  destinationTokenAccount,
+  amountUnits,
+  rpcUrl,
+  memo = "Tri-Proof Devnet staking",
+}: {
+  mintAddress: string
+  destinationTokenAccount: string
+  amountUnits: string
+  rpcUrl: string
+  memo?: string
+}) {
+  if (!/^\d+$/.test(amountUnits) || BigInt(amountUnits) <= 0n) {
+    throw new Error("Invalid token amount.")
+  }
+
+  const reference = await connectSolanaWallet()
+  return sendSolanaPayment({
+    treasuryAddress: destinationTokenAccount,
+    reference,
+    memo,
+    rpcUrl,
+    buildPaymentInstruction: async ({ web3, owner, treasury, referenceKey }) => {
+      const mint = new web3.PublicKey(mintAddress)
+      const tokenProgramId = new web3.PublicKey(TOKEN_PROGRAM_ID)
+      const associatedProgramId = new web3.PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID)
+      const sourceAta = associatedTokenAddress(web3, mint, owner, tokenProgramId, associatedProgramId)
+      return [
+        createTransferCheckedInstruction(
+          web3,
+          sourceAta,
+          mint,
+          treasury,
+          owner,
+          BigInt(amountUnits),
+          tokenProgramId,
+          referenceKey
+        ),
+      ]
+    },
   })
 }

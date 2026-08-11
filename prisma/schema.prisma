@@ -212,6 +212,24 @@ enum FormalRecipientKind {
   INFO
 }
 
+enum StakingPositionStatus {
+  ACTIVE
+  UNSTAKE_PENDING
+  WITHDRAWN
+}
+
+enum StakingPayoutKind {
+  FAUCET
+  REWARD
+  UNSTAKE
+}
+
+enum StakingPayoutStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
 model User {
   id                         String                @id @default(cuid())
   name                       String
@@ -241,6 +259,8 @@ model User {
   extensionConnectRequests   ExtensionConnectRequest[]
   formalDocuments            FormalDocument[]           @relation("FormalDocumentAuthor")
   formalDocumentAudits       FormalDocumentAudit[]      @relation("FormalDocumentAuditActor")
+  stakingPositions           StakingPosition[]
+  stakingPayouts             StakingPayout[]
   createdAt                  DateTime              @default(now())
   updatedAt                  DateTime              @updatedAt
 }
@@ -940,6 +960,49 @@ model AirdropSubmission {
   @@index([status, createdAt])
   @@index([profileId])
   @@index([reviewedById])
+}
+
+model StakingPosition {
+  id                    String                @id @default(cuid())
+  userId                String
+  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walletAddress         String
+  tokenAccount          String
+  stakeTxSignature      String                @unique
+  principalUnits        BigInt
+  accruedRewardUnits    BigInt                @default(0)
+  rewardCheckpointAt    DateTime              @default(now())
+  status                StakingPositionStatus @default(ACTIVE)
+  unstakeRequestedAt    DateTime?
+  unstakeAvailableAt    DateTime?
+  withdrawnAt           DateTime?
+  payouts               StakingPayout[]
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  @@index([userId, status, createdAt])
+  @@index([walletAddress, status])
+}
+
+model StakingPayout {
+  id                  String              @id @default(cuid())
+  userId              String
+  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  positionId          String?
+  position            StakingPosition?    @relation(fields: [positionId], references: [id], onDelete: SetNull)
+  kind                StakingPayoutKind
+  status              StakingPayoutStatus @default(PENDING)
+  recipientWallet     String
+  recipientTokenAccount String
+  amountUnits         BigInt
+  txSignature         String?             @unique
+  failureReason       String?             @db.Text
+  completedAt         DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@index([userId, kind, createdAt])
+  @@index([positionId, kind, status])
 }
 
 model ScamGuardIntelEntry {
