@@ -7,6 +7,8 @@ on:
     paths:
       - "lib/scamguard/v1-1-evm-hardening.ts"
       - "lib/scamguard/v1-1-evm-hardening.test.ts"
+      - "lib/scamguard/v1-1-threat-intel.ts"
+      - "lib/scamguard/v1-1-threat-intel.test.ts"
       - "lib/scamguard/v1_1-postprocess.ts"
       - "lib/scamguard/v1_1-postprocess.test.ts"
       - "app/api/scamguard/scan-transaction/route.ts"
@@ -15,6 +17,8 @@ on:
     paths:
       - "lib/scamguard/v1-1-evm-hardening.ts"
       - "lib/scamguard/v1-1-evm-hardening.test.ts"
+      - "lib/scamguard/v1-1-threat-intel.ts"
+      - "lib/scamguard/v1-1-threat-intel.test.ts"
       - "lib/scamguard/v1_1-postprocess.ts"
       - "lib/scamguard/v1_1-postprocess.test.ts"
       - "app/api/scamguard/scan-transaction/route.ts"
@@ -39,6 +43,7 @@ jobs:
       - name: Run V1.1 focused tests
         run: |
           node --import tsx --test lib/scamguard/v1-1-evm-hardening.test.ts
+          node --import tsx --test lib/scamguard/v1-1-threat-intel.test.ts
           node --import tsx --test lib/scamguard/v1_1-postprocess.test.ts
       - name: Run existing ScamGuard engine regression
         run: node --import tsx --test lib/scamguard/engine.test.ts
