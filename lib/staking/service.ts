@@ -83,6 +83,7 @@ async function failPayout(payoutId: string, error: unknown) {
 
 export async function getStakingState(userId: string) {
   const config = getStakingServerConfig()
+  const { faucetAmountUnits, ...publicConfig } = getStakingPublicConfig()
   const now = new Date()
   const [positions, latestFaucet] = await Promise.all([
     db.stakingPosition.findMany({ where: { userId }, orderBy: { createdAt: "desc" } }),
@@ -104,9 +105,9 @@ export async function getStakingState(userId: string) {
 
   return {
     config: {
-      ...getStakingPublicConfig(),
+      ...publicConfig,
       vaultTokenAccount: config.vaultTokenAccount,
-      faucetAmount: formatTriUnits(config.faucetAmountUnits),
+      faucetAmount: formatTriUnits(faucetAmountUnits),
     },
     summary: {
       activePrincipal: formatTriUnits(activePrincipal),
