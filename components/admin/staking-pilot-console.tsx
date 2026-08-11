@@ -73,10 +73,21 @@ export function StakingPilotConsole() {
   const [error, setError] = useState<string | null>(null)
 
   const reload = useCallback(async () => {
-    const response = await fetch("/api/admin/staking", { cache: "no-store" })
-    const payload = await response.json()
-    if (!response.ok) throw new Error(actionError(payload))
-    setState(payload)
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 15_000)
+    try {
+      const response = await fetch("/api/admin/staking", { cache: "no-store", signal: controller.signal })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(actionError(payload))
+      setState(payload)
+    } catch (reason) {
+      if (reason instanceof DOMException && reason.name === "AbortError") {
+        throw new Error("The staking service did not respond within 15 seconds. Please try again.")
+      }
+      throw reason
+    } finally {
+      window.clearTimeout(timeout)
+    }
   }, [])
 
   useEffect(() => {
@@ -171,6 +182,21 @@ export function StakingPilotConsole() {
   }
 
   if (!state) {
+    if (error) {
+      return (
+        <Card className="glass-panel mx-auto max-w-2xl border-rose-400/30">
+          <CardHeader>
+            <CardTitle className="text-rose-100">Staking pilot could not load</CardTitle>
+            <CardDescription className="text-slate-300">{error}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => { setError(null); reload().catch((reason) => setError(reason instanceof Error ? reason.message : "Could not load staking pilot.")) }}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      )
+    }
     return <div className="flex min-h-72 items-center justify-center text-sm text-slate-400"><LoaderCircle className="mr-2 size-4 animate-spin" /> Loading Devnet pilot</div>
   }
 
