@@ -7,6 +7,7 @@ on:
     paths:
       - "scripts/build-ptxphish-realworld-manifest.py"
       - "scripts/run-scamguard-v2-ptxphish-blind-validation.ts"
+      - "lib/scamguard/providers/sourcify-contract-verification.ts"
       - "lib/scamguard/v2/calibrated-evidence-fusion.ts"
       - "lib/scamguard/v2/corroboration.ts"
       - "lib/scamguard/v2/transaction-impact.ts"
