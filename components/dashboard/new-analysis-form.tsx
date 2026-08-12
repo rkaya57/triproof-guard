@@ -231,7 +231,7 @@ export function NewAnalysisForm() {
   const supportedEnrichmentChains = supportedChains.filter((supportedChain) => enrichableChains.has(supportedChain))
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto w-full max-w-4xl">
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>New Analysis</CardTitle>
