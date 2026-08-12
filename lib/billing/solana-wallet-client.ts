@@ -12,6 +12,7 @@ type WalletProvider = {
   publicKey?: { toString(): string }
   connect(): Promise<{ publicKey?: { toString(): string } } | void>
   signAndSendTransaction(transaction: TransactionInstance): Promise<{ signature?: string } | string>
+  signTransaction?(transaction: TransactionInstance): Promise<TransactionInstance>
   isPhantom?: boolean
   isSolflare?: boolean
 }
@@ -37,6 +38,7 @@ type TransactionInstructionInput = {
 
 type TransactionInstance = {
   add(...instructions: TransactionInstructionInstance[]): TransactionInstance
+  serialize(): Uint8Array
   feePayer?: PublicKeyInstance
   recentBlockhash?: string
 }
@@ -56,6 +58,7 @@ type ConnectionInstance = {
   getTokenAccountBalance(publicKey: PublicKeyInstance, commitment: "confirmed"): Promise<{
     value?: { amount?: string }
   }>
+  sendRawTransaction(serializedTransaction: Uint8Array): Promise<string>
 }
 
 type SolanaWeb3 = {
@@ -176,6 +179,37 @@ async function confirmSubmittedTransaction(
   )
 }
 
+async function submitWalletTransaction({
+  wallet,
+  transaction,
+  connection,
+}: {
+  wallet: WalletProvider
+  transaction: TransactionInstance
+  connection: ConnectionInstance
+}) {
+  try {
+    // Signing locally and broadcasting through this connection guarantees that
+    // a Devnet transaction does not get sent through a wallet's Mainnet RPC.
+    if (wallet.signTransaction) {
+      const signed = await wallet.signTransaction(transaction)
+      return await connection.sendRawTransaction(signed.serialize())
+    }
+
+    const result = await wallet.signAndSendTransaction(transaction)
+    const signature = typeof result === "string" ? result : result.signature
+    if (!signature) throw new Error("Wallet did not return a transaction signature.")
+    return signature
+  } catch (error) {
+    if (isBlockHeightExpiredError(error)) {
+      throw new Error(
+        "The wallet approval expired before submission. Reload the checkout and approve the new payment request promptly."
+      )
+    }
+    throw error
+  }
+}
+
 async function loadSolanaWeb3() {
   const browserWindow = window as BrowserWindow
   if (browserWindow.solanaWeb3) return browserWindow.solanaWeb3
@@ -272,7 +306,7 @@ function createTransferCheckedInstruction(
   owner: PublicKeyInstance,
   amount: bigint,
   tokenProgramId: PublicKeyInstance,
-  reference: PublicKeyInstance
+  reference?: PublicKeyInstance
 ) {
   return new web3.TransactionInstruction({
     programId: tokenProgramId,
@@ -281,7 +315,7 @@ function createTransferCheckedInstruction(
       { pubkey: mint, isSigner: false, isWritable: false },
       { pubkey: destination, isSigner: false, isWritable: true },
       { pubkey: owner, isSigner: true, isWritable: false },
-      solanaPayReferenceAccountMeta(reference),
+      ...(reference ? [solanaPayReferenceAccountMeta(reference)] : []),
     ],
     data: transferCheckedData(amount),
   })
@@ -358,19 +392,7 @@ async function sendSolanaPayment({
   transaction.feePayer = owner
   transaction.recentBlockhash = latest.blockhash
 
-  let result: { signature?: string } | string
-  try {
-    result = await wallet.signAndSendTransaction(transaction)
-  } catch (error) {
-    if (isBlockHeightExpiredError(error)) {
-      throw new Error(
-        "The wallet approval expired before submission. Reload the checkout and approve the new payment request promptly."
-      )
-    }
-    throw error
-  }
-  const signature = typeof result === "string" ? result : result.signature
-  if (!signature) throw new Error("Wallet did not return a transaction signature.")
+  const signature = await submitWalletTransaction({ wallet, transaction, connection })
 
   await confirmSubmittedTransaction(connection, signature)
 
@@ -498,9 +520,7 @@ export async function ensureSplTokenAccountWithWallet({
     const latest = await connection.getLatestBlockhash("confirmed")
     transaction.feePayer = owner
     transaction.recentBlockhash = latest.blockhash
-    const submitted = await wallet.signAndSendTransaction(transaction)
-    const signature = typeof submitted === "string" ? submitted : submitted.signature
-    if (!signature) throw new Error("Wallet did not return an account-creation signature.")
+    const signature = await submitWalletTransaction({ wallet, transaction, connection })
     await confirmSubmittedTransaction(connection, signature)
   }
 
@@ -530,7 +550,7 @@ export async function transferSplTokenWithWallet({
     reference,
     memo,
     rpcUrl,
-    buildPaymentInstruction: async ({ web3, owner, treasury, referenceKey }) => {
+    buildPaymentInstruction: async ({ web3, owner, treasury }) => {
       const mint = new web3.PublicKey(mintAddress)
       const tokenProgramId = new web3.PublicKey(TOKEN_PROGRAM_ID)
       const associatedProgramId = new web3.PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID)
@@ -543,8 +563,7 @@ export async function transferSplTokenWithWallet({
           treasury,
           owner,
           BigInt(amountUnits),
-          tokenProgramId,
-          referenceKey
+          tokenProgramId
         ),
       ]
     },
