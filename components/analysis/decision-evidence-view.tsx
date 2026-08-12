@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react"
 import {
   AlertTriangle,
   ArrowLeft,
@@ -39,6 +39,26 @@ type DecisionEvidenceViewProps = {
 
 type StatusFilter = "all" | WalletStatus
 type ConfidenceFilter = "all" | DecisionEvidenceConfidence
+
+function graphFocusFromSearch(search: string) {
+  const params = new URLSearchParams(search)
+  return {
+    wallet: params.get("wallet")?.trim() || null,
+    cluster: params.get("cluster")?.trim() || null,
+  }
+}
+
+function subscribeToLocation() {
+  return () => undefined
+}
+
+function clientLocationSearch() {
+  return window.location.search
+}
+
+function serverLocationSearch() {
+  return ""
+}
 
 const statusOrder: Record<WalletStatus, number> = {
   rejected: 3,
@@ -130,11 +150,17 @@ function WalletStatusIcon({ status }: { status: WalletStatus }) {
   return <XCircle className="mr-1 size-3.5" />
 }
 
-function WalletEvidenceCard({ wallet }: { wallet: WalletRiskResult }) {
+function WalletEvidenceCard({
+  wallet,
+  open,
+}: {
+  wallet: WalletRiskResult
+  open: boolean
+}) {
   const explanation = wallet.decisionEvidence
 
   return (
-    <details className="group rounded-xl border border-border bg-background/45 open:border-primary/35 open:bg-primary/[0.03]">
+    <details open={open} className="group rounded-xl border border-border bg-background/45 open:border-primary/35 open:bg-primary/[0.03]">
       <summary className="cursor-pointer list-none p-4 marker:hidden sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
@@ -300,10 +326,12 @@ function WalletEvidenceCard({ wallet }: { wallet: WalletRiskResult }) {
 }
 
 export function DecisionEvidenceView({ analysisId }: DecisionEvidenceViewProps) {
+  const locationSearch = useSyncExternalStore(subscribeToLocation, clientLocationSearch, serverLocationSearch)
+  const graphFocus = useMemo(() => graphFocusFromSearch(locationSearch), [locationSearch])
   const [analysis, setAnalysis] = useState<AnalysisDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [query, setQuery] = useState("")
+  const [query, setQuery] = useState(graphFocus.wallet ?? graphFocus.cluster ?? "")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>("all")
 
@@ -337,7 +365,7 @@ export function DecisionEvidenceView({ analysisId }: DecisionEvidenceViewProps) 
 
   const wallets = useMemo(() => {
     if (!analysis) return []
-    const normalizedQuery = query.trim().toLowerCase()
+    const normalizedQuery = (query || graphFocus.wallet || graphFocus.cluster || "").trim().toLowerCase()
 
     return analysis.wallets
       .filter((wallet) => {
@@ -359,7 +387,7 @@ export function DecisionEvidenceView({ analysisId }: DecisionEvidenceViewProps) 
           right.riskScore - left.riskScore ||
           left.walletAddress.localeCompare(right.walletAddress)
       )
-  }, [analysis, confidenceFilter, query, statusFilter])
+  }, [analysis, confidenceFilter, graphFocus.cluster, graphFocus.wallet, query, statusFilter])
 
   if (loading) {
     return (
@@ -491,6 +519,13 @@ export function DecisionEvidenceView({ analysisId }: DecisionEvidenceViewProps) 
           </Card>
         </section>
 
+        {graphFocus.wallet && (
+          <div className="rounded-lg border border-primary/25 bg-primary/[0.05] px-4 py-3 text-sm text-muted-foreground">
+            Focused from relationship graph: <span className="font-mono text-foreground">{shortAddress(graphFocus.wallet)}</span>
+            {graphFocus.cluster ? ` · ${graphFocus.cluster}` : ""}
+          </div>
+        )}
+
         <Card className="glass-panel">
           <CardHeader>
             <CardTitle>Evidence explorer</CardTitle>
@@ -558,7 +593,11 @@ export function DecisionEvidenceView({ analysisId }: DecisionEvidenceViewProps) 
         <section className="grid gap-3">
           {wallets.length > 0 ? (
             wallets.map((wallet) => (
-              <WalletEvidenceCard key={wallet.walletAddress} wallet={wallet} />
+              <WalletEvidenceCard
+                key={wallet.walletAddress}
+                wallet={wallet}
+                open={wallet.walletAddress === graphFocus.wallet}
+              />
             ))
           ) : (
             <Card className="glass-panel">

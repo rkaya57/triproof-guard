@@ -2,14 +2,26 @@ import { Prisma } from "@prisma/client"
 import { NextResponse } from "next/server"
 
 import { getCurrentUser } from "@/lib/auth/session"
+import { buildExplainableDecision } from "@/lib/campaign-security/decision-evidence"
 import { db } from "@/lib/db/prisma"
+import { parseVisualDecisionProofRequest } from "@/lib/graph/visual-decision-proof"
+import type {
+  EnrichmentStatus,
+  FeedbackLabel,
+  SuggestedAction,
+  WalletRiskResult,
+  WalletStatus,
+} from "@/types"
 
 export const runtime = "nodejs"
 
-function boundedLimit(value: string | null) {
-  const parsed = Number.parseInt(value ?? "120", 10)
-  if (!Number.isFinite(parsed)) return 120
-  return Math.min(Math.max(parsed, 20), 250)
+const privateNoStoreHeaders = { "Cache-Control": "private, no-store" }
+
+function privateJson(body: unknown, init?: Omit<ResponseInit, "headers">) {
+  return NextResponse.json(body, {
+    ...init,
+    headers: privateNoStoreHeaders,
+  })
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -85,17 +97,173 @@ async function latestAiRelationshipInsight(analysisId: string) {
   }
 }
 
+async function selectedCluster(
+  analysisId: string,
+  clusterLabel: string | null,
+  limit: number
+) {
+  if (!clusterLabel) return null
+
+  const cluster = await db.cluster.findFirst({
+    where: { analysisId, clusterLabel },
+    select: {
+      clusterLabel: true,
+      walletCount: true,
+      reasons: true,
+    },
+  })
+  if (!cluster) return null
+
+  const members = await db.walletAnalysis.findMany({
+    where: { analysisId, clusterId: clusterLabel },
+    orderBy: [{ riskScore: "desc" }, { walletAddress: "asc" }],
+    take: limit,
+    select: {
+      walletAddress: true,
+      status: true,
+      riskScore: true,
+      graphComponentId: true,
+    },
+  })
+
+  return {
+    label: cluster.clusterLabel,
+    walletCount: cluster.walletCount,
+    reasons: stringArray(cluster.reasons, 8),
+    members: members.map((member) => ({
+      walletAddress: member.walletAddress,
+      status: member.status as WalletStatus,
+      riskScore: member.riskScore,
+      graphComponentId: member.graphComponentId,
+    })),
+    truncated: members.length < cluster.walletCount,
+  }
+}
+
+async function selectedWalletFocus(analysisId: string, nodeKey: string | null) {
+  if (!nodeKey) return null
+
+  const node = await db.walletGraphNode.findFirst({
+    where: { analysisId, nodeKey },
+    select: { walletAddress: true },
+  })
+  if (!node?.walletAddress) return null
+
+  const [wallet, review] = await Promise.all([
+    db.walletAnalysis.findFirst({
+      where: { analysisId, walletAddress: node.walletAddress },
+      select: {
+        walletAddress: true,
+        chain: true,
+        entityLabel: true,
+        entityType: true,
+        entityRiskReason: true,
+        riskScore: true,
+        riskLevel: true,
+        status: true,
+        recommendedAction: true,
+        statusExplanation: true,
+        fundingSource: true,
+        txCount: true,
+        walletAgeDays: true,
+        totalVolume: true,
+        contractsCount: true,
+        campaignActionsCount: true,
+        clusterId: true,
+        graphComponentId: true,
+        graphRiskScore: true,
+        reasons: true,
+        firstSeen: true,
+        lastSeen: true,
+        nativeBalance: true,
+        tokenCount: true,
+        uniqueCounterparties: true,
+        lastActiveDaysAgo: true,
+        isContract: true,
+        enrichmentProvider: true,
+        enrichmentStatus: true,
+      },
+    }),
+    db.teamReview.findUnique({
+      where: { analysisId_walletAddress: { analysisId, walletAddress: node.walletAddress } },
+      include: { reviewer: { select: { name: true } } },
+    }),
+  ])
+  if (!wallet) return null
+
+  const walletResult: WalletRiskResult = {
+    walletAddress: wallet.walletAddress,
+    chain: wallet.chain,
+    entityLabel: wallet.entityLabel,
+    entityType: wallet.entityType,
+    entityRiskReason: wallet.entityRiskReason,
+    riskScore: wallet.riskScore,
+    riskLevel: wallet.riskLevel,
+    status: wallet.status,
+    recommendedAction: wallet.recommendedAction,
+    statusExplanation: wallet.statusExplanation ?? "No stored decision explanation.",
+    fundingSource: wallet.fundingSource,
+    txCount: wallet.txCount,
+    walletAgeDays: wallet.walletAgeDays,
+    totalVolume: wallet.totalVolume,
+    contractsCount: wallet.contractsCount,
+    campaignActionsCount: wallet.campaignActionsCount,
+    clusterId: wallet.clusterId,
+    graphComponentId: wallet.graphComponentId,
+    graphRiskScore: wallet.graphRiskScore,
+    reasons: stringArray(wallet.reasons, 100),
+    firstSeen: wallet.firstSeen?.toISOString() ?? null,
+    lastSeen: wallet.lastSeen?.toISOString() ?? null,
+    nativeBalance: wallet.nativeBalance,
+    tokenCount: wallet.tokenCount,
+    uniqueCounterparties: wallet.uniqueCounterparties,
+    lastActiveDaysAgo: wallet.lastActiveDaysAgo,
+    isContract: wallet.isContract,
+    enrichmentProvider: wallet.enrichmentProvider,
+    enrichmentStatus: wallet.enrichmentStatus as EnrichmentStatus | null,
+    teamReview: review
+      ? {
+          finalStatus: review.finalStatus as WalletStatus,
+          feedbackLabel: review.feedbackLabel as FeedbackLabel | null,
+          notes: review.notes,
+          reviewerName: review.reviewer.name,
+          updatedAt: review.updatedAt.toISOString(),
+        }
+      : null,
+  }
+  const evidence = buildExplainableDecision(walletResult)
+
+  return {
+    walletAddress: wallet.walletAddress,
+    risk: { score: wallet.riskScore, level: wallet.riskLevel },
+    decision: {
+      status: wallet.status,
+      recommendedAction: wallet.recommendedAction,
+      explanation: walletResult.statusExplanation,
+    },
+    evidence,
+    provider:
+      wallet.enrichmentProvider || wallet.enrichmentStatus
+        ? {
+            name: wallet.enrichmentProvider ?? "Provider not recorded",
+            status: wallet.enrichmentStatus as EnrichmentStatus | null,
+          }
+        : null,
+  }
+}
+
 export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!user) return privateJson({ error: "Unauthorized" }, { status: 401 })
 
   const { id } = await context.params
   const url = new URL(request.url)
-  const requestedComponent = url.searchParams.get("component")?.trim() || null
-  const limit = boundedLimit(url.searchParams.get("limit"))
+  const parsedRequest = parseVisualDecisionProofRequest(url.searchParams)
+  if (!parsedRequest.ok) return privateJson({ error: parsedRequest.error }, { status: 400 })
+  const { component: requestedComponent, node: requestedNode, cluster: requestedCluster, limit, focusOnly } = parsedRequest.value
 
   const analysis = await db.analysis.findFirst({
     where: { id, project: { userId: user.id } },
@@ -106,13 +274,27 @@ export async function GET(
   })
 
   if (!analysis) {
-    return NextResponse.json({ error: "Analysis not found" }, { status: 404 })
+    return privateJson({ error: "Analysis not found" }, { status: 404 })
   }
   if (!analysis.graphSummary) {
-    return NextResponse.json({
+    return privateJson({
       graph: null,
       aiInsight: null,
+      clusterIndex: [],
+      cluster: null,
+      focus: null,
       message: "This analysis predates graph intelligence. Run a new analysis to create graph evidence.",
+    })
+  }
+
+  if (focusOnly) {
+    const focus = await selectedWalletFocus(id, requestedNode)
+    return privateJson({
+      graph: null,
+      aiInsight: null,
+      clusterIndex: [],
+      cluster: null,
+      focus,
     })
   }
 
@@ -131,13 +313,25 @@ export async function GET(
     analysisId: id,
     ...(componentId ? { componentId } : {}),
   }
-  const [edges, aiInsight] = await Promise.all([
+  const [edges, aiInsight, clusterIndex, cluster] = await Promise.all([
     db.walletGraphEdge.findMany({
       where: edgeWhere,
       orderBy: [{ isRiskBearing: "desc" }, { confidence: "desc" }, { edgeKey: "asc" }],
       take: limit,
     }),
     latestAiRelationshipInsight(id),
+    db.cluster.findMany({
+      where: { analysisId: id },
+      orderBy: [{ averageRiskScore: "desc" }, { clusterLabel: "asc" }],
+      take: 24,
+      select: {
+        clusterLabel: true,
+        walletCount: true,
+        averageRiskScore: true,
+        suggestedAction: true,
+      },
+    }),
+    selectedCluster(id, requestedCluster, limit),
   ])
   const nodeKeys = Array.from(
     new Set(edges.flatMap((edge) => [edge.sourceKey, edge.targetKey]))
@@ -151,7 +345,7 @@ export async function GET(
     take: limit,
   })
 
-  return NextResponse.json({
+  return privateJson({
     graph: {
       componentId,
       nodes: nodes.map((node) => ({
@@ -183,5 +377,13 @@ export async function GET(
       truncated: edges.length >= limit || nodes.length >= limit,
     },
     aiInsight,
+    clusterIndex: clusterIndex.map((item) => ({
+      label: item.clusterLabel,
+      walletCount: item.walletCount,
+      averageRiskScore: item.averageRiskScore,
+      suggestedAction: item.suggestedAction as SuggestedAction,
+    })),
+    cluster,
+    focus: null,
   })
 }
