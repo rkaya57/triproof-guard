@@ -4,6 +4,7 @@ const TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 const ASSOCIATED_TOKEN_PROGRAM_ID = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
 const MEMO_PROGRAM_ID = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+const TRI_TOKEN_DECIMALS = 9
 const TRANSACTION_CONFIRMATION_TIMEOUT_MS = 25_000
 const SIGNATURE_STATUS_TIMEOUT_MS = 6_000
 const SIGNATURE_STATUS_POLL_INTERVAL_MS = 1_000
@@ -245,12 +246,12 @@ function amountToUsdcUnits(amount: string) {
   return BigInt(Math.round(value * 1_000_000))
 }
 
-function transferCheckedData(amount: bigint) {
+function transferCheckedData(amount: bigint, decimals = 6) {
   const data = new Uint8Array(10)
   data[0] = 12
   const view = new DataView(data.buffer)
   view.setBigUint64(1, amount, true)
-  data[9] = 6
+  data[9] = decimals
   return data
 }
 
@@ -306,7 +307,8 @@ function createTransferCheckedInstruction(
   owner: PublicKeyInstance,
   amount: bigint,
   tokenProgramId: PublicKeyInstance,
-  reference?: PublicKeyInstance
+  reference?: PublicKeyInstance,
+  decimals = 6
 ) {
   return new web3.TransactionInstruction({
     programId: tokenProgramId,
@@ -317,7 +319,7 @@ function createTransferCheckedInstruction(
       { pubkey: owner, isSigner: true, isWritable: false },
       ...(reference ? [solanaPayReferenceAccountMeta(reference)] : []),
     ],
-    data: transferCheckedData(amount),
+    data: transferCheckedData(amount, decimals),
   })
 }
 
@@ -563,7 +565,9 @@ export async function transferSplTokenWithWallet({
           treasury,
           owner,
           BigInt(amountUnits),
-          tokenProgramId
+          tokenProgramId,
+          undefined,
+          TRI_TOKEN_DECIMALS
         ),
       ]
     },
