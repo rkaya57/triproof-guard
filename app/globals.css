@@ -408,6 +408,55 @@
   }
 }
 
+@keyframes signal-run-scanline {
+  from { transform: translateY(-140%); opacity: 0; }
+  18% { opacity: 0.85; }
+  50% { opacity: 0.4; }
+  to { transform: translateY(680%); opacity: 0; }
+}
+
+@keyframes signal-run-card-in {
+  from { opacity: 0; transform: translateY(22px) scale(0.97); filter: blur(4px); }
+  to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+@keyframes signal-run-safe-capture {
+  0% { transform: translateX(0) rotate(0); opacity: 1; }
+  100% { transform: translateX(-26%) rotate(-4deg) scale(0.93); opacity: 0.3; }
+}
+
+@keyframes signal-run-block-capture {
+  0% { transform: translateX(0) rotate(0); opacity: 1; }
+  100% { transform: translateX(26%) rotate(4deg) scale(0.93); opacity: 0.3; }
+}
+
+@keyframes signal-run-capture-pop {
+  0% { opacity: 0; transform: scale(0.78); }
+  55% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 0; transform: scale(1); }
+}
+
+.signal-run-scanline {
+  background: linear-gradient(180deg, transparent, color-mix(in oklab, var(--guard-cyan), transparent 34%), transparent);
+  animation: signal-run-scanline 3.8s linear infinite;
+}
+
+.signal-run-card {
+  animation: signal-run-card-in 0.38s ease-out both;
+}
+
+.signal-run-card-safe {
+  animation: signal-run-safe-capture 0.5s ease-in both;
+}
+
+.signal-run-card-block {
+  animation: signal-run-block-capture 0.5s ease-in both;
+}
+
+.signal-run-capture {
+  animation: signal-run-capture-pop 0.5s ease-out both;
+}
+
 .float {
   animation: float 6s ease-in-out infinite;
 }
@@ -441,6 +490,14 @@
   .glow-orb,
   .animate-gradient-text,
   .bar-pulse {
+    animation: none;
+  }
+
+  .signal-run-scanline,
+  .signal-run-card,
+  .signal-run-card-safe,
+  .signal-run-card-block,
+  .signal-run-capture {
     animation: none;
   }
 }

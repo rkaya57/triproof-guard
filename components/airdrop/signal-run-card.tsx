@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   CircleAlert,
   Crosshair,
+  Gamepad2,
   Gauge,
   Loader2,
   LockKeyhole,
@@ -81,10 +82,12 @@ export function SignalRunCard() {
   const [starting, setStarting] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [choiceLocked, setChoiceLocked] = useState(false)
+  const [lastDecision, setLastDecision] = useState<Decision | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const answersRef = useRef<Array<{ cardId: string; decision: Decision }>>([])
   const sessionRef = useRef<ActiveSession | null>(null)
+  const chooseRef = useRef<(decision: Decision) => void>(() => undefined)
 
   async function load() {
     setLoading(true)
@@ -180,6 +183,7 @@ export function SignalRunCard() {
       setIndex(0)
       setAnswers([])
       setChoiceLocked(false)
+      setLastDecision(null)
       setSecondsLeft(Math.max(0, Math.ceil((new Date(body.session.expiresAt).getTime() - Date.now()) / 1000)))
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not start Signal Run.")
@@ -191,17 +195,31 @@ export function SignalRunCard() {
   function choose(decision: Decision) {
     if (!activeCard || choiceLocked || submitting) return
     setChoiceLocked(true)
+    setLastDecision(decision)
     const nextAnswers = [...answersRef.current, { cardId: activeCard.id, decision }]
     setAnswers(nextAnswers)
     if (index === (session?.cards.length ?? 1) - 1) {
-      window.setTimeout(() => { void submitRound(nextAnswers) }, 260)
+      window.setTimeout(() => { void submitRound(nextAnswers) }, 520)
       return
     }
     window.setTimeout(() => {
       setIndex((value) => value + 1)
       setChoiceLocked(false)
-    }, 220)
+      setLastDecision(null)
+    }, 500)
   }
+
+  chooseRef.current = choose
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat || !sessionRef.current) return
+      if (event.key === "ArrowLeft" || event.key.toLowerCase() === "a") chooseRef.current("SAFE")
+      if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") chooseRef.current("BLOCK")
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [])
 
   const statusLabel = useMemo(() => {
     if (loading) return "Checking daily run"
@@ -237,8 +255,9 @@ export function SignalRunCard() {
           <div className="grid gap-5 xl:grid-cols-[1fr_300px]">
             <section className="relative overflow-hidden rounded-lg border border-cyan-300/30 bg-[#061426] p-5 shadow-[inset_0_0_0_1px_rgba(34,211,238,0.03)] sm:p-6">
               <div className="pointer-events-none absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(34,211,238,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,0.12)_1px,transparent_1px)] [background-size:28px_28px]" />
+              <div className="signal-run-scanline pointer-events-none absolute inset-x-0 top-0 h-24" />
               <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-cyan-300/70" />
-              <div className="relative">
+              <div key={activeCard.id} className={`signal-run-card relative ${lastDecision ? `signal-run-card-${lastDecision.toLowerCase()}` : ""}`}>
                 <div className="flex flex-wrap items-center justify-between gap-3"><span className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.16em] text-cyan-200"><Activity className="size-3.5" /> Signal {index + 1} / {session.cards.length}</span><span className={`flex items-center gap-2 rounded-md border px-2.5 py-1 font-mono text-lg ${secondsLeft <= 10 ? "border-rose-300/35 bg-rose-300/10 text-rose-200" : "border-amber-300/30 bg-amber-300/[0.06] text-amber-200"}`}><Gauge className="size-4" /> {secondsLeft}s</span></div>
                 <div className="mt-3 h-2 overflow-hidden rounded-full border border-cyan-300/10 bg-slate-950"><div className="h-full bg-cyan-300 transition-[width] duration-200" style={{ width: `${Math.max(0, (secondsLeft / 45) * 100)}%` }} /></div>
                 <div className="mt-7 flex items-start gap-4"><span className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-cyan-300/25 bg-cyan-300/10 text-cyan-200"><ScanEye className="size-5" /></span><div><p className="font-mono text-xs uppercase tracking-[0.15em] text-slate-500">{activeCard.category}</p><h3 className="mt-1 text-2xl font-semibold text-white sm:text-3xl">{activeCard.title}</h3></div></div>
@@ -248,11 +267,13 @@ export function SignalRunCard() {
                   <Button type="button" onClick={() => choose("SAFE")} disabled={choiceLocked || submitting} className="h-14 border border-emerald-200/40 bg-emerald-300 text-emerald-950 shadow-[0_8px_26px_rgba(52,211,153,0.18)] hover:bg-emerald-200"><ShieldCheck className="size-5" /> Safe signal <BadgeCheck className="ml-auto size-4" /></Button>
                   <Button type="button" onClick={() => choose("BLOCK")} disabled={choiceLocked || submitting} className="h-14 border border-rose-100/40 bg-rose-300 text-rose-950 shadow-[0_8px_26px_rgba(251,113,133,0.16)] hover:bg-rose-200"><ShieldX className="size-5" /> Block signal <XCircle className="ml-auto size-4" /></Button>
                 </div>
+                {lastDecision && <div className={`pointer-events-none absolute inset-0 grid place-items-center ${lastDecision === "SAFE" ? "text-emerald-200" : "text-rose-200"}`}><div className={`signal-run-capture border px-5 py-3 text-center font-mono text-sm font-bold uppercase tracking-[0.2em] ${lastDecision === "SAFE" ? "border-emerald-200/60 bg-emerald-300/15" : "border-rose-200/60 bg-rose-300/15"}`}>{lastDecision === "SAFE" ? "Safe route captured" : "Threat blocked"}</div></div>}
               </div>
             </section>
             <aside className="grid content-start gap-3">
               <div className="border border-cyan-300/20 bg-[#081a2e] p-4"><div className="flex items-center justify-between"><p className="text-xs uppercase tracking-[0.15em] text-slate-500">Decision progress</p><Crosshair className="size-4 text-cyan-200" /></div><p className="mt-2 font-mono text-3xl text-white">{answers.length}<span className="text-slate-600">/8</span></p><div className="mt-4 grid grid-cols-4 gap-2">{session.cards.map((card, cardIndex) => <span key={card.id} className={`h-2.5 border ${cardIndex < answers.length ? "border-cyan-200/40 bg-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.7)]" : cardIndex === index ? "border-amber-200/50 bg-amber-300" : "border-slate-700 bg-slate-900"}`} />)}</div></div>
               <div className="border border-amber-300/25 bg-amber-300/[0.06] p-4 text-sm leading-6 text-amber-50"><TimerReset className="mb-2 size-4 text-amber-200" /><p className="font-medium text-amber-100">Mission rule</p><p className="mt-1 text-amber-50/80">One wrong answer does not end the run. Read every signal before you classify it.</p></div>
+              <div className="border border-fuchsia-300/20 bg-fuchsia-300/[0.06] p-4"><div className="flex items-center justify-between"><p className="text-xs uppercase tracking-[0.15em] text-fuchsia-100">Round energy</p><Gamepad2 className="size-4 text-fuchsia-200" /></div><div className="mt-3 flex h-2 gap-1">{Array.from({ length: 8 }).map((_, energyIndex) => <span key={energyIndex} className={`flex-1 ${energyIndex < answers.length ? "bg-fuchsia-300 shadow-[0_0_10px_rgba(232,121,249,.8)]" : "bg-slate-800"}`} />)}</div><p className="mt-3 text-xs text-fuchsia-100/75">Clear all eight signals to finish the run.</p></div>
             </aside>
           </div>
         ) : (
