@@ -130,11 +130,17 @@ function WalletStatusIcon({ status }: { status: WalletStatus }) {
   return <XCircle className="mr-1 size-3.5" />
 }
 
-function WalletEvidenceCard({ wallet }: { wallet: WalletRiskResult }) {
+function WalletEvidenceCard({
+  wallet,
+  open,
+}: {
+  wallet: WalletRiskResult
+  open: boolean
+}) {
   const explanation = wallet.decisionEvidence
 
   return (
-    <details className="group rounded-xl border border-border bg-background/45 open:border-primary/35 open:bg-primary/[0.03]">
+    <details open={open} className="group rounded-xl border border-border bg-background/45 open:border-primary/35 open:bg-primary/[0.03]">
       <summary className="cursor-pointer list-none p-4 marker:hidden sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
@@ -304,8 +310,19 @@ export function DecisionEvidenceView({ analysisId }: DecisionEvidenceViewProps) 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [query, setQuery] = useState("")
+  const [focusedWallet, setFocusedWallet] = useState<string | null>(null)
+  const [focusedCluster, setFocusedCluster] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>("all")
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const wallet = params.get("wallet")?.trim() || null
+    const cluster = params.get("cluster")?.trim() || null
+    setFocusedWallet(wallet)
+    setFocusedCluster(cluster)
+    if (wallet || cluster) setQuery(wallet ?? cluster ?? "")
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -491,6 +508,13 @@ export function DecisionEvidenceView({ analysisId }: DecisionEvidenceViewProps) 
           </Card>
         </section>
 
+        {focusedWallet && (
+          <div className="rounded-lg border border-primary/25 bg-primary/[0.05] px-4 py-3 text-sm text-muted-foreground">
+            Focused from relationship graph: <span className="font-mono text-foreground">{shortAddress(focusedWallet)}</span>
+            {focusedCluster ? ` · ${focusedCluster}` : ""}
+          </div>
+        )}
+
         <Card className="glass-panel">
           <CardHeader>
             <CardTitle>Evidence explorer</CardTitle>
@@ -558,7 +582,11 @@ export function DecisionEvidenceView({ analysisId }: DecisionEvidenceViewProps) 
         <section className="grid gap-3">
           {wallets.length > 0 ? (
             wallets.map((wallet) => (
-              <WalletEvidenceCard key={wallet.walletAddress} wallet={wallet} />
+              <WalletEvidenceCard
+                key={wallet.walletAddress}
+                wallet={wallet}
+                open={wallet.walletAddress === focusedWallet}
+              />
             ))
           ) : (
             <Card className="glass-panel">

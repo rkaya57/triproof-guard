@@ -255,6 +255,44 @@ export type WalletGraphData = WalletGraphSummary & {
   edges: WalletGraphEdge[]
 }
 
+export type VisualDecisionProofClusterIndex = {
+  label: string
+  walletCount: number
+  averageRiskScore: number
+  suggestedAction: SuggestedAction
+}
+
+export type VisualDecisionProofCluster = {
+  label: string
+  walletCount: number
+  reasons: string[]
+  members: Array<{
+    walletAddress: string
+    status: WalletStatus
+    riskScore: number
+    graphComponentId: string | null
+  }>
+  truncated: boolean
+}
+
+export type VisualDecisionProofFocus = {
+  walletAddress: string
+  risk: {
+    score: number
+    level: RiskLevel
+  }
+  decision: {
+    status: WalletStatus
+    recommendedAction: SuggestedAction
+    explanation: string
+  }
+  evidence: ExplainableWalletDecision
+  provider: {
+    name: string
+    status: EnrichmentStatus | null
+  } | null
+}
+
 export type AiBriefSource = "gemini" | "fallback"
 
 export type AiBriefDriver = {
