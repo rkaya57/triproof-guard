@@ -493,7 +493,6 @@ export function WalletGraphIntelligencePanel({
   const [clusterLabel, setClusterLabel] = useState<string | null>(null)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
   const [focus, setFocus] = useState<VisualDecisionProofFocus | null>(null)
-  const [focusLoading, setFocusLoading] = useState(false)
   const [loading, setLoading] = useState(Boolean(summary))
   const [error, setError] = useState("")
   const [retryNonce, setRetryNonce] = useState(0)
@@ -541,14 +540,10 @@ export function WalletGraphIntelligencePanel({
   }, [analysisId, clusterLabel, componentId, retryNonce, summary])
 
   useEffect(() => {
-    if (!selectedNode) {
-      setFocus(null)
-      return
-    }
+    if (!selectedNode) return
 
     const controller = new AbortController()
     const params = new URLSearchParams({ view: "focus", node: selectedNode })
-    setFocusLoading(true)
 
     fetch(`/api/analysis/${analysisId}/graph?${params.toString()}`, {
       cache: "no-store",
@@ -563,7 +558,6 @@ export function WalletGraphIntelligencePanel({
       .catch((caught: Error) => {
         if (caught.name !== "AbortError") setFocus(null)
       })
-      .finally(() => setFocusLoading(false))
 
     return () => controller.abort()
   }, [analysisId, selectedNode])
@@ -576,6 +570,7 @@ export function WalletGraphIntelligencePanel({
     () => payload?.nodes.find((node) => node.nodeKey === selectedNode) ?? null,
     [payload, selectedNode]
   )
+  const visibleFocus = selectedNode ? focus : null
   const activeEdges = useMemo(
     () =>
       payload?.edges.filter(
@@ -909,42 +904,38 @@ export function WalletGraphIntelligencePanel({
 
                   <div className="rounded-xl border border-primary/20 bg-primary/[0.035] p-4">
                     <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Decision evidence drawer</p>
-                    {focusLoading ? (
-                      <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-                        <Loader2 className="size-4 animate-spin text-primary" /> Loading stored decision context
-                      </div>
-                    ) : focus ? (
+                    {visibleFocus ? (
                       <>
                         <div className="mt-3 grid grid-cols-2 gap-2">
                           <div className="rounded-lg border border-border/70 bg-background/55 p-3">
                             <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Risk assessment</p>
-                            <p className="mt-1 text-base font-semibold">{focus.risk.score} · {focus.risk.level}</p>
+                            <p className="mt-1 text-base font-semibold">{visibleFocus.risk.score} · {visibleFocus.risk.level}</p>
                           </div>
                           <div className="rounded-lg border border-border/70 bg-background/55 p-3">
                             <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Policy decision</p>
-                            <p className="mt-1 text-sm font-semibold">{decisionLabel(focus.decision.status)}</p>
+                            <p className="mt-1 text-sm font-semibold">{decisionLabel(visibleFocus.decision.status)}</p>
                           </div>
                         </div>
-                        <p className="mt-3 text-sm leading-6 text-muted-foreground">{focus.decision.explanation}</p>
+                        <p className="mt-3 text-sm leading-6 text-muted-foreground">{visibleFocus.decision.explanation}</p>
                         <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                          <Badge variant="outline">Confidence · {focus.evidence.evidenceConfidence}</Badge>
-                          <Badge variant="outline">Risk families · {focus.evidence.independentRiskFamilyCount}</Badge>
-                          <Badge variant="outline">Coverage · {focus.evidence.limitations.length ? "limited" : "recorded"}</Badge>
-                          {focus.provider && <Badge variant="outline">{focus.provider.name} · {focus.provider.status ?? "status not recorded"}</Badge>}
+                          <Badge variant="outline">Confidence · {visibleFocus.evidence.evidenceConfidence}</Badge>
+                          <Badge variant="outline">Risk families · {visibleFocus.evidence.independentRiskFamilyCount}</Badge>
+                          <Badge variant="outline">Coverage · {visibleFocus.evidence.limitations.length ? "limited" : "recorded"}</Badge>
+                          {visibleFocus.provider && <Badge variant="outline">{visibleFocus.provider.name} · {visibleFocus.provider.status ?? "status not recorded"}</Badge>}
                         </div>
                         <div className="mt-3 space-y-2">
-                          {focus.evidence.evidence.slice(0, 4).map((item) => (
+                          {visibleFocus.evidence.evidence.slice(0, 4).map((item) => (
                             <div key={`${item.code}-${item.family}`} className="rounded-lg border border-border/70 bg-background/50 p-3">
                               <p className="text-xs font-medium">{item.title}</p>
                               <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.description}</p>
                             </div>
                           ))}
                         </div>
-                        {focus.evidence.limitations.length > 0 && (
-                          <p className="mt-3 text-xs leading-5 text-amber-200">Limitations: {focus.evidence.limitations.join(" ")}</p>
+                        {visibleFocus.evidence.limitations.length > 0 && (
+                          <p className="mt-3 text-xs leading-5 text-amber-200">Limitations: {visibleFocus.evidence.limitations.join(" ")}</p>
                         )}
                         <Link
-                          href={`/dashboard/analysis/${analysisId}/evidence?wallet=${encodeURIComponent(focus.walletAddress)}${selectedCluster ? `&cluster=${encodeURIComponent(selectedCluster.label)}` : ""}`}
+                          href={`/dashboard/analysis/${analysisId}/evidence?wallet=${encodeURIComponent(visibleFocus.walletAddress)}${selectedCluster ? `&cluster=${encodeURIComponent(selectedCluster.label)}` : ""}`}
                           className="mt-4 inline-flex text-sm font-medium text-primary hover:underline"
                         >
                           Open full decision evidence

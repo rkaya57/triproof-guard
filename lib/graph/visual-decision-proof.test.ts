@@ -64,7 +64,7 @@ test("uses canonical decision labels without redefining stored statuses", () => 
 
   const source = readFileSync("components/analysis/wallet-graph-intelligence.tsx", "utf8")
   assert.match(source, /import \{ decisionLabel \} from "@\/lib\/decision-labels"/)
-  assert.match(source, /decisionLabel\(focus\.decision\.status\)/)
+  assert.match(source, /decisionLabel\(visibleFocus\.decision\.status\)/)
 })
 
 test("uses the persisted cluster label relationship for member retrieval", () => {

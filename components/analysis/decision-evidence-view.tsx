@@ -40,6 +40,17 @@ type DecisionEvidenceViewProps = {
 type StatusFilter = "all" | WalletStatus
 type ConfidenceFilter = "all" | DecisionEvidenceConfidence
 
+function initialGraphFocus() {
+  if (typeof window === "undefined") {
+    return { wallet: null, cluster: null }
+  }
+  const params = new URLSearchParams(window.location.search)
+  return {
+    wallet: params.get("wallet")?.trim() || null,
+    cluster: params.get("cluster")?.trim() || null,
+  }
+}
+
 const statusOrder: Record<WalletStatus, number> = {
   rejected: 3,
   manual_review: 2,
@@ -306,23 +317,13 @@ function WalletEvidenceCard({
 }
 
 export function DecisionEvidenceView({ analysisId }: DecisionEvidenceViewProps) {
+  const [graphFocus] = useState(initialGraphFocus)
   const [analysis, setAnalysis] = useState<AnalysisDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [query, setQuery] = useState("")
-  const [focusedWallet, setFocusedWallet] = useState<string | null>(null)
-  const [focusedCluster, setFocusedCluster] = useState<string | null>(null)
+  const [query, setQuery] = useState(graphFocus.wallet ?? graphFocus.cluster ?? "")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>("all")
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const wallet = params.get("wallet")?.trim() || null
-    const cluster = params.get("cluster")?.trim() || null
-    setFocusedWallet(wallet)
-    setFocusedCluster(cluster)
-    if (wallet || cluster) setQuery(wallet ?? cluster ?? "")
-  }, [])
 
   useEffect(() => {
     let active = true
@@ -508,10 +509,10 @@ export function DecisionEvidenceView({ analysisId }: DecisionEvidenceViewProps) 
           </Card>
         </section>
 
-        {focusedWallet && (
+        {graphFocus.wallet && (
           <div className="rounded-lg border border-primary/25 bg-primary/[0.05] px-4 py-3 text-sm text-muted-foreground">
-            Focused from relationship graph: <span className="font-mono text-foreground">{shortAddress(focusedWallet)}</span>
-            {focusedCluster ? ` · ${focusedCluster}` : ""}
+            Focused from relationship graph: <span className="font-mono text-foreground">{shortAddress(graphFocus.wallet)}</span>
+            {graphFocus.cluster ? ` · ${graphFocus.cluster}` : ""}
           </div>
         )}
 
@@ -585,7 +586,7 @@ export function DecisionEvidenceView({ analysisId }: DecisionEvidenceViewProps) 
               <WalletEvidenceCard
                 key={wallet.walletAddress}
                 wallet={wallet}
-                open={wallet.walletAddress === focusedWallet}
+                open={wallet.walletAddress === graphFocus.wallet}
               />
             ))
           ) : (
