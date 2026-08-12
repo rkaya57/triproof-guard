@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react"
 import {
   AlertTriangle,
   ArrowLeft,
@@ -40,15 +40,24 @@ type DecisionEvidenceViewProps = {
 type StatusFilter = "all" | WalletStatus
 type ConfidenceFilter = "all" | DecisionEvidenceConfidence
 
-function initialGraphFocus() {
-  if (typeof window === "undefined") {
-    return { wallet: null, cluster: null }
-  }
-  const params = new URLSearchParams(window.location.search)
+function graphFocusFromSearch(search: string) {
+  const params = new URLSearchParams(search)
   return {
     wallet: params.get("wallet")?.trim() || null,
     cluster: params.get("cluster")?.trim() || null,
   }
+}
+
+function subscribeToLocation() {
+  return () => undefined
+}
+
+function clientLocationSearch() {
+  return window.location.search
+}
+
+function serverLocationSearch() {
+  return ""
 }
 
 const statusOrder: Record<WalletStatus, number> = {
@@ -317,7 +326,8 @@ function WalletEvidenceCard({
 }
 
 export function DecisionEvidenceView({ analysisId }: DecisionEvidenceViewProps) {
-  const [graphFocus] = useState(initialGraphFocus)
+  const locationSearch = useSyncExternalStore(subscribeToLocation, clientLocationSearch, serverLocationSearch)
+  const graphFocus = useMemo(() => graphFocusFromSearch(locationSearch), [locationSearch])
   const [analysis, setAnalysis] = useState<AnalysisDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -355,7 +365,7 @@ export function DecisionEvidenceView({ analysisId }: DecisionEvidenceViewProps) 
 
   const wallets = useMemo(() => {
     if (!analysis) return []
-    const normalizedQuery = query.trim().toLowerCase()
+    const normalizedQuery = (query || graphFocus.wallet || graphFocus.cluster || "").trim().toLowerCase()
 
     return analysis.wallets
       .filter((wallet) => {
@@ -377,7 +387,7 @@ export function DecisionEvidenceView({ analysisId }: DecisionEvidenceViewProps) 
           right.riskScore - left.riskScore ||
           left.walletAddress.localeCompare(right.walletAddress)
       )
-  }, [analysis, confidenceFilter, query, statusFilter])
+  }, [analysis, confidenceFilter, graphFocus.cluster, graphFocus.wallet, query, statusFilter])
 
   if (loading) {
     return (

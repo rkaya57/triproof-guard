@@ -67,6 +67,12 @@ test("uses canonical decision labels without redefining stored statuses", () => 
   assert.match(source, /decisionLabel\(visibleFocus\.decision\.status\)/)
 })
 
+test("reads graph deep-link focus after hydration without changing stored decision data", () => {
+  const source = readFileSync("components/analysis/decision-evidence-view.tsx", "utf8")
+  assert.match(source, /useSyncExternalStore\(subscribeToLocation, clientLocationSearch, serverLocationSearch\)/)
+  assert.match(source, /graphFocusFromSearch\(locationSearch\)/)
+})
+
 test("uses the persisted cluster label relationship for member retrieval", () => {
   const route = readFileSync("app/api/analysis/[id]/graph/route.ts", "utf8")
   const serializer = readFileSync("lib/analysis/serializers.ts", "utf8")
