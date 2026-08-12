@@ -4,6 +4,9 @@ const TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 const ASSOCIATED_TOKEN_PROGRAM_ID = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
 const MEMO_PROGRAM_ID = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+const TRANSACTION_CONFIRMATION_TIMEOUT_MS = 25_000
+const SIGNATURE_STATUS_TIMEOUT_MS = 6_000
+const SIGNATURE_STATUS_POLL_INTERVAL_MS = 1_000
 
 type WalletProvider = {
   publicKey?: { toString(): string }
@@ -41,10 +44,6 @@ type TransactionInstance = {
 type ConnectionInstance = {
   getAccountInfo(publicKey: PublicKeyInstance, commitment: "confirmed"): Promise<unknown | null>
   getLatestBlockhash(commitment: "confirmed"): Promise<{ blockhash: string; lastValidBlockHeight: number }>
-  confirmTransaction(
-    strategy: { signature: string; blockhash: string; lastValidBlockHeight: number },
-    commitment: "confirmed"
-  ): Promise<{ value?: { err?: unknown } }>
   getSignatureStatuses(
     signatures: string[],
     config: { searchTransactionHistory: boolean }
@@ -131,40 +130,50 @@ function isBlockHeightExpiredError(error: unknown) {
 
 async function confirmSubmittedTransaction(
   connection: ConnectionInstance,
-  signature: string,
-  latest: { blockhash: string; lastValidBlockHeight: number }
+  signature: string
 ) {
-  try {
-    const confirmation = await connection.confirmTransaction(
-      { signature, blockhash: latest.blockhash, lastValidBlockHeight: latest.lastValidBlockHeight },
-      "confirmed"
-    )
-    if (confirmation.value?.err) {
-      throw new Error(`Solana rejected the transaction: ${JSON.stringify(confirmation.value.err)}`)
-    }
-  } catch (error) {
-    const status = await connection
-      .getSignatureStatuses([signature], { searchTransactionHistory: true })
-      .then((response) => response.value?.[0] ?? null)
-      .catch(() => null)
+  const deadline = Date.now() + TRANSACTION_CONFIRMATION_TIMEOUT_MS
+  let lastError: unknown = null
 
-    if (
-      status &&
-      !status.err &&
-      (status.confirmationStatus === "confirmed" || status.confirmationStatus === "finalized")
-    ) {
-      return
+  while (Date.now() < deadline) {
+    try {
+      const status = await Promise.race([
+        connection
+          .getSignatureStatuses([signature], { searchTransactionHistory: true })
+          .then((response) => response.value?.[0] ?? null),
+        new Promise<null>((_, reject) => {
+          setTimeout(
+            () => reject(new Error("Devnet did not respond while checking the transaction.")),
+            SIGNATURE_STATUS_TIMEOUT_MS
+          )
+        }),
+      ])
+
+      if (status?.err) {
+        throw new Error(`Solana rejected the transaction: ${JSON.stringify(status.err)}`)
+      }
+      if (status?.confirmationStatus === "confirmed" || status?.confirmationStatus === "finalized") {
+        return
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("Solana rejected the transaction:")) {
+        throw error
+      }
+      if (isBlockHeightExpiredError(error)) {
+        throw new Error(
+          "The wallet approval expired before the payment reached Solana. No payment was recorded. Click Pay again and approve the new request promptly."
+        )
+      }
+      lastError = error
     }
-    if (status?.err) {
-      throw new Error(`Solana rejected the transaction: ${JSON.stringify(status.err)}`)
-    }
-    if (isBlockHeightExpiredError(error)) {
-      throw new Error(
-        "The wallet approval expired before the payment reached Solana. No payment was recorded. Click Pay again and approve the new request promptly."
-      )
-    }
-    throw error
+
+    await new Promise((resolve) => setTimeout(resolve, SIGNATURE_STATUS_POLL_INTERVAL_MS))
   }
+
+  const reason = lastError instanceof Error ? ` ${lastError.message}` : ""
+  throw new Error(
+    `The transaction was submitted but Devnet did not confirm it within ${TRANSACTION_CONFIRMATION_TIMEOUT_MS / 1_000} seconds. Check your wallet activity before trying again.${reason}`
+  )
 }
 
 async function loadSolanaWeb3() {
@@ -363,7 +372,7 @@ async function sendSolanaPayment({
   const signature = typeof result === "string" ? result : result.signature
   if (!signature) throw new Error("Wallet did not return a transaction signature.")
 
-  await confirmSubmittedTransaction(connection, signature, latest)
+  await confirmSubmittedTransaction(connection, signature)
 
   return { signature }
 }
@@ -492,7 +501,7 @@ export async function ensureSplTokenAccountWithWallet({
     const submitted = await wallet.signAndSendTransaction(transaction)
     const signature = typeof submitted === "string" ? submitted : submitted.signature
     if (!signature) throw new Error("Wallet did not return an account-creation signature.")
-    await confirmSubmittedTransaction(connection, signature, latest)
+    await confirmSubmittedTransaction(connection, signature)
   }
 
   return { walletAddress: owner.toString(), tokenAccount: ata.toString() }
