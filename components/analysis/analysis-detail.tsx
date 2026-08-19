@@ -25,10 +25,8 @@ import {
   RotateCcw,
   Search,
   Share2,
-  ShieldX,
   SlidersHorizontal,
   Users,
-  WalletCards,
   Webhook,
   X,
 } from "lucide-react"
@@ -569,7 +567,7 @@ function DecisionCenterPanel({ analysis, exportPath }: { analysis: AnalysisDetai
           <div className="rounded-xl border border-border bg-background/35 p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="text-sm font-medium">Evidence concentration</p>
-              <Badge variant="outline">Top reason codes</Badge>
+              <Badge variant="outline">Top decision context codes</Badge>
             </div>
             <div className="grid gap-2">
               {decision.topReasonCodes.length ? (
@@ -619,7 +617,7 @@ function AnalysisSnapshotPanel({
   const metrics = [
     ["Wallets evaluated", formatNumber(analysis.totalWallets), "Valid rows included in scoring."],
     ["Average risk", String(analysis.averageRiskScore), "Deterministic 0–100 risk score."],
-    ["Graph clusters", formatNumber(analysis.suspiciousClustersCount), "Risk-relevant funding/behavior groups."],
+    ["Risk-engine clusters", formatNumber(analysis.suspiciousClustersCount), "Persisted risk/review clusters; separate from relationship graph components."],
     ["Known entities", formatNumber(knownEntitiesCount), `${formatNumber(exchangeServiceWalletsCount)} exchange/service entities.`],
     ["Provider coverage", `${coverageRate}%`, `${formatNumber(enrichedCount)}/${formatNumber(analysis.totalWallets)} wallets enriched.`],
     ["Evidence warnings", formatNumber(warningCount), warningCount ? "Provider or evidence caveats require attention." : "No provider warnings recorded."],
@@ -658,7 +656,7 @@ function PolicySimulator({ analysis }: { analysis: AnalysisDetailType }) {
           Campaign Policy Simulator
         </CardTitle>
         <CardDescription>
-          Preview how stricter or looser thresholds change the decision list while keeping provider outages in Manual Review and non-user accounts excluded.
+          Scenario preview using score bands plus selected provider/account safeguards. The Decision Package shows the current final wallet statuses.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 md:grid-cols-3">
@@ -672,7 +670,7 @@ function PolicySimulator({ analysis }: { analysis: AnalysisDetailType }) {
           >
             <div className="mb-3 flex items-center justify-between gap-2">
               <p className="font-medium">{scenario.label}</p>
-              {scenario.policy === currentPolicy && <Badge variant="secondary">Current</Badge>}
+              {scenario.policy === currentPolicy && <Badge variant="secondary">Current preset</Badge>}
             </div>
             <div className="grid gap-2 text-sm">
               <div className="flex items-center justify-between text-green-200">
@@ -1051,7 +1049,7 @@ function ReviewDrawer({
             <DetailRow label="Risk level">
               <RiskBadge level={wallet.riskLevel} />
             </DetailRow>
-            <DetailRow label="Status">
+            <DetailRow label="Policy decision">
               <StatusBadge status={wallet.status} />
             </DetailRow>
             <DetailRow label="Recommended action">
@@ -1096,14 +1094,14 @@ function ReviewDrawer({
             </div>
           </DetailRow>
 
-          <DetailRow label="Why this action?">
+          <DetailRow label="Decision explanation">
             <p className="text-sm text-muted-foreground">
               {wallet.statusExplanation ??
-                "Status is based on risk score and contextual wallet signals."}
+                "Policy decision is based on risk score and contextual wallet signals."}
             </p>
           </DetailRow>
 
-          <DetailRow label="Reason codes">
+          <DetailRow label="Decision context codes">
             <div className="flex flex-wrap gap-2">
               {getWalletReasonCodes(wallet).map((code) => (
                 <Badge key={code} variant="outline" className="border-primary/30 bg-primary/10 font-mono text-xs text-primary">
@@ -1113,7 +1111,7 @@ function ReviewDrawer({
             </div>
           </DetailRow>
 
-          <DetailRow label="All risk reasons">
+          <DetailRow label="All decision context">
             <div className="flex flex-col gap-2">
               {wallet.reasons.map((reason) => (
                 <div key={reason} className="rounded-md bg-background/70 px-3 py-2 text-xs text-muted-foreground">
@@ -1511,7 +1509,7 @@ export function AnalysisDetail({
               <div>
                 <CardTitle>Campaign Decision Engine</CardTitle>
                 <CardDescription className="mt-1">
-                  {campaignPolicy.label} for {campaignPolicy.scope}. The deterministic score is translated through a transparent 0–100 policy spectrum.
+                  {campaignPolicy.label} for {campaignPolicy.scope}. Score bands are a policy-preview aid. Final decisions may also apply evidence sufficiency, corroboration, account-state and eligibility safeguards.
                 </CardDescription>
               </div>
               <Badge variant="outline" className="border-primary/30 bg-primary/10 capitalize text-primary">
@@ -1558,7 +1556,7 @@ export function AnalysisDetail({
               ))}
             </div>
             <div className="rounded-lg border border-primary/15 bg-primary/5 px-4 py-3 text-xs leading-5 text-muted-foreground">
-              Policy thresholds are decision rules, not proof of identity or malicious intent. Provider failures and unresolved evidence remain subject to manual-review safeguards.
+              Score bands are a policy-preview aid. Final decisions may also apply evidence sufficiency, corroboration, account-state and eligibility safeguards.
             </div>
           </CardContent>
         </Card>
@@ -1613,7 +1611,7 @@ export function AnalysisDetail({
             </div>
 
             <p className="text-xs leading-5 text-muted-foreground">
-              Reason codes, graph context and the campaign-scoped proof identifier are retained for explainable review. Evidence traceability does not establish common ownership, automation, Sybil behavior or malicious intent by itself.
+              Decision context codes, graph context and the campaign-scoped proof identifier are retained for explainable review. Evidence traceability does not establish common ownership, automation, Sybil behavior or malicious intent by itself.
             </p>
           </CardContent>
         </Card>
@@ -1621,9 +1619,9 @@ export function AnalysisDetail({
 
       <Card className="glass-panel premium-card">
         <CardHeader>
-          <CardTitle>Explainable Reason Codes</CardTitle>
+          <CardTitle>Decision Context Codes</CardTitle>
           <CardDescription>
-            Human-readable evidence is normalized into compact codes for API responses, clean-list exports and manual-review workflows.
+            Codes may represent risk signals, corroborating evidence, eligibility exclusions, neutralizing context, coverage limitations or human-review context.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -1708,7 +1706,7 @@ export function AnalysisDetail({
         <CardContent className="flex items-start gap-3 p-4 text-sm text-muted-foreground">
           <Gauge className="mt-0.5 text-primary" />
           <p>
-            Risk Score is the numeric risk signal. Status is the operational decision
+            Risk Score is the numeric risk signal. Policy decision is the operational decision
             recommendation and also considers contextual signals such as known entities,
             suspicious clusters and shared funding sources.
           </p>
@@ -1957,7 +1955,7 @@ export function AnalysisDetail({
                     className="w-[14%]"
                   />
                   <SortableHead
-                    label="Status"
+                    label="Policy decision"
                     sortValue="status"
                     activeKey={sortKey}
                     direction={sortDir}

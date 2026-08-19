@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertTriangle,
   ArrowRight,
-  Building2,
   CircleDot,
   Copy,
   GitBranch,
@@ -475,7 +474,7 @@ function componentById(summary: WalletGraphSummary, componentId: string | null) 
 }
 
 function componentTabLabel(component: WalletGraphComponent) {
-  return graphComponentLabel(component).replace(" cluster", "")
+  return graphComponentLabel(component).replace(" cluster", "").replace(/^Funding\b/, "Funding-linked")
 }
 
 export function WalletGraphIntelligencePanel({
@@ -656,7 +655,7 @@ export function WalletGraphIntelligencePanel({
                 [CircleDot, "Evidence links", summary.totalEdges],
                 [Users, "Connected wallets", summary.connectedWallets],
                 [Share2, "Referral links", summary.referralLinks],
-                [AlertTriangle, "Review-priority components", summary.highRiskComponents],
+                [AlertTriangle, "High-severity relationship components", summary.highRiskComponents],
                 [ShieldCheck, "Neutral services", summary.neutralServiceFunders],
               ].map(([Icon, label, value]) => {
                 const MetricIcon = Icon as typeof CircleDot
@@ -678,7 +677,7 @@ export function WalletGraphIntelligencePanel({
                     <Badge variant="outline" className={severityStyles[currentComponent.severity]}>
                       {currentComponent.severity} context
                     </Badge>
-                    <span className="font-mono text-[11px] text-muted-foreground">{currentComponent.componentId}</span>
+                    <span className="font-mono text-[11px] text-muted-foreground">Relationship component ID: {currentComponent.componentId}</span>
                   </div>
                   <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">{deterministicInsight}</p>
                   <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -726,7 +725,7 @@ export function WalletGraphIntelligencePanel({
                     <GitBranch className="size-4 shrink-0" />
                     <span className="min-w-0 text-left">
                       <span className="block truncate text-xs font-medium">{componentTabLabel(component)}</span>
-                      <span className="block font-mono text-[10px] opacity-65">{component.componentId}</span>
+                      <span className="block font-mono text-[10px] opacity-65">Relationship component ID: {component.componentId}</span>
                     </span>
                   </Button>
                 ))}
