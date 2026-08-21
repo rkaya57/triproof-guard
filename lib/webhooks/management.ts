@@ -1,6 +1,6 @@
 import {
   isSupportedWebhookEvent,
-  type SUPPORTED_WEBHOOK_EVENTS,
+  SUPPORTED_WEBHOOK_EVENTS,
 } from "@/lib/webhooks/campaign-events"
 
 export type SupportedWebhookEvent = (typeof SUPPORTED_WEBHOOK_EVENTS)[number]
