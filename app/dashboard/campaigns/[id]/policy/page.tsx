@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 
 import { CampaignPolicyExplorer } from "@/components/dashboard/campaign-policy-explorer"
+import { CampaignPolicySimulator } from "@/components/dashboard/campaign-policy-simulator"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { requirePageUser } from "@/lib/auth/page"
 import { loadCampaignPolicyReport } from "@/lib/campaign-policy/server"
@@ -62,5 +63,10 @@ export default async function CampaignPolicyPage({
     )
   }
 
-  return <CampaignPolicyExplorer report={result.report} />
+  return (
+    <div className="flex flex-col gap-6">
+      <CampaignPolicySimulator report={result.report} />
+      <CampaignPolicyExplorer report={result.report} />
+    </div>
+  )
 }
