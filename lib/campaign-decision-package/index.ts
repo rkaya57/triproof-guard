@@ -269,28 +269,22 @@ export function buildCampaignDecisionPackage(input: {
     })
   }
 
-  const packageWalletByIdentity = new Map(
-    packageWallets.map((wallet) => [chainAddressKey(wallet.walletAddress, wallet.chain), wallet]),
-  )
-  const clusters = input.analysis.clusters.map((cluster) => {
-    const clusterCounts = executionCounts()
-    for (const memberAddress of cluster.walletAddresses) {
-      const sourceMember = input.analysis.wallets.find(
-        (wallet) => wallet.clusterId === cluster.clusterLabel && wallet.walletAddress === memberAddress,
-      )
-      if (!sourceMember) continue
-      const packaged = packageWalletByIdentity.get(chainAddressKey(sourceMember.walletAddress, sourceMember.chain))
-      if (packaged) clusterCounts[packaged.executionAction] += 1
-    }
-    return {
-      clusterLabel: cluster.clusterLabel,
-      walletCount: cluster.walletCount,
-      averageRiskScore: cluster.averageRiskScore,
-      groupingFamilies: storedGroupingFamilies(cluster.reasons).map((family) => family.label),
-      latestReviewDisposition: reviews.get(cluster.clusterLabel)?.disposition ?? null,
-      executionCounts: clusterCounts,
-    }
-  })
+  const clusterExecutionCounts = new Map<string, Record<CampaignExecutionAction, number>>()
+  for (const wallet of packageWallets) {
+    if (!wallet.clusterId) continue
+    const clusterCounts = clusterExecutionCounts.get(wallet.clusterId) ?? executionCounts()
+    clusterCounts[wallet.executionAction] += 1
+    clusterExecutionCounts.set(wallet.clusterId, clusterCounts)
+  }
+
+  const clusters = input.analysis.clusters.map((cluster) => ({
+    clusterLabel: cluster.clusterLabel,
+    walletCount: cluster.walletCount,
+    averageRiskScore: cluster.averageRiskScore,
+    groupingFamilies: storedGroupingFamilies(cluster.reasons).map((family) => family.label),
+    latestReviewDisposition: reviews.get(cluster.clusterLabel)?.disposition ?? null,
+    executionCounts: clusterExecutionCounts.get(cluster.clusterLabel) ?? executionCounts(),
+  }))
 
   return {
     schemaVersion: CAMPAIGN_DECISION_PACKAGE_SCHEMA_VERSION,
