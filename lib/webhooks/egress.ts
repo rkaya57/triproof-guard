@@ -32,6 +32,7 @@ export class WebhookEgressBlockedError extends Error {
 }
 
 const DEFAULT_TIMEOUT_MS = 10_000
+const DEFAULT_DNS_TIMEOUT_MS = 3_000
 const DEFAULT_MAX_RESPONSE_BYTES = 65_536
 
 function boundedPositiveInteger(name: string, fallback: number, maximum: number) {
@@ -43,6 +44,7 @@ function boundedPositiveInteger(name: string, fallback: number, maximum: number)
 function webhookEgressConfig() {
   return {
     timeoutMs: boundedPositiveInteger("WEBHOOK_EGRESS_TIMEOUT_MS", DEFAULT_TIMEOUT_MS, 30_000),
+    dnsTimeoutMs: boundedPositiveInteger("WEBHOOK_EGRESS_DNS_TIMEOUT_MS", DEFAULT_DNS_TIMEOUT_MS, 10_000),
     maxResponseBytes: boundedPositiveInteger(
       "WEBHOOK_EGRESS_MAX_RESPONSE_BYTES",
       DEFAULT_MAX_RESPONSE_BYTES,
@@ -83,9 +85,31 @@ export async function defaultWebhookResolver(hostname: string): Promise<WebhookR
     .map((entry) => ({ address: entry.address, family: entry.family }))
 }
 
+async function resolveWebhookAddresses(
+  hostname: string,
+  resolver: WebhookResolver,
+  timeoutMs: number,
+): Promise<WebhookResolvedAddress[]> {
+  let timer: NodeJS.Timeout | undefined
+  try {
+    return await Promise.race([
+      resolver(hostname),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          reject(new WebhookEgressBlockedError("Webhook DNS resolution timed out."))
+        }, timeoutMs)
+        timer.unref?.()
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 export async function resolveWebhookEgressTarget(
   value: string | URL,
   resolver: WebhookResolver = defaultWebhookResolver,
+  options: { dnsTimeoutMs?: number } = {},
 ): Promise<WebhookEgressTarget> {
   const url = typeof value === "string" ? new URL(value) : new URL(value.toString())
   const production = process.env.NODE_ENV === "production"
@@ -104,12 +128,17 @@ export async function resolveWebhookEgressTarget(
   }
 
   const hostname = normalizedHostname(url.hostname)
+  const config = webhookEgressConfig()
+  const dnsTimeoutMs = Math.min(
+    Math.max(1, options.dnsTimeoutMs ?? config.dnsTimeoutMs),
+    10_000,
+  )
   const addresses = ipaddr.isValid(hostname)
     ? [{
         address: hostname,
         family: ipaddr.process(hostname).kind() === "ipv4" ? 4 as const : 6 as const,
       }]
-    : await resolver(hostname)
+    : await resolveWebhookAddresses(hostname, resolver, dnsTimeoutMs)
 
   if (!addresses.length) {
     throw new WebhookEgressBlockedError("Webhook destination did not resolve to a public address.")
