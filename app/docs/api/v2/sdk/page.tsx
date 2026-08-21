@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Braces, Code2, PackageCheck, Webhook } from "lucide-react"
+import { Activity, Braces, Code2, PackageCheck, Webhook } from "lucide-react"
 
 import { PublicTopNav } from "@/components/layout/public-top-nav"
 import { Badge } from "@/components/ui/badge"
@@ -44,11 +44,21 @@ const webhookExample = `const endpoint = await triProof.createWebhook({
 })
 
 // Save endpoint.secret when the endpoint is created.
-await triProof.updateWebhook(endpoint.id, { isActive: false })`
+const endpointState = await triProof.getWebhook(endpoint.id)
+console.log(endpointState.health)
+
+const failed = await triProof.listWebhookDeliveries(endpoint.id, {
+  status: "failed",
+  limit: 25,
+})
+
+if (failed.deliveries[0]) {
+  await triProof.retryWebhookDelivery(endpoint.id, failed.deliveries[0].id)
+}`
 
 export const metadata = {
   title: "Tri-Proof TypeScript SDK — Campaign API v2",
-  description: "Publish-ready TypeScript client surface for Campaign API v2 and API Growth webhook management.",
+  description: "Publish-ready TypeScript client surface for Campaign API v2, webhook management and delivery observability.",
 }
 
 export default function CampaignSdkDocsPage() {
@@ -69,7 +79,7 @@ export default function CampaignSdkDocsPage() {
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-4 px-5 py-14 sm:px-8 md:grid-cols-3">
+      <section className="mx-auto grid max-w-7xl gap-4 px-5 py-14 sm:px-8 md:grid-cols-2 xl:grid-cols-4">
         <Card className="glass-panel premium-card">
           <CardHeader><PackageCheck className="text-primary" /><CardTitle>Publish-ready package</CardTitle><CardDescription>`packages/triproof-sdk` has its own package manifest, TypeScript build configuration, declarations and prepack build.</CardDescription></CardHeader>
         </Card>
@@ -78,6 +88,9 @@ export default function CampaignSdkDocsPage() {
         </Card>
         <Card className="glass-panel premium-card">
           <CardHeader><Webhook className="text-primary" /><CardTitle>Webhook management</CardTitle><CardDescription>API Growth keys can create, inspect, pause, update and delete signed webhook endpoints through `/api/v2/webhooks`.</CardDescription></CardHeader>
+        </Card>
+        <Card className="glass-panel premium-card">
+          <CardHeader><Activity className="text-primary" /><CardTitle>Delivery observability</CardTitle><CardDescription>Inspect endpoint health, page through delivery history and retry a failed persisted delivery without creating a new event.</CardDescription></CardHeader>
         </Card>
       </section>
 
@@ -91,7 +104,7 @@ export default function CampaignSdkDocsPage() {
           <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{operationExample}</code></pre></CardContent>
         </Card>
         <Card className="glass-panel premium-card">
-          <CardHeader><CardTitle>Webhook CRUD</CardTitle><CardDescription>The signing secret is returned only when an endpoint is created.</CardDescription></CardHeader>
+          <CardHeader><CardTitle>Webhook health and retry</CardTitle><CardDescription>Manual retry increments the same delivery attempt record and cannot replay a successful delivery.</CardDescription></CardHeader>
           <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{webhookExample}</code></pre></CardContent>
         </Card>
       </section>
@@ -101,7 +114,7 @@ export default function CampaignSdkDocsPage() {
           <CardHeader>
             <CardTitle>Compatibility boundary</CardTitle>
             <CardDescription>
-              Legacy `createAnalysis` and `getAnalysis` methods remain available for v1 one-off integrations. New campaign integrations should use Campaign API v2 methods. SDK calls do not change the underlying decision semantics or bypass API-plan and wallet-analysis billing gates.
+              Legacy `createAnalysis` and `getAnalysis` methods remain available for v1 one-off integrations. Delivery health is operational telemetry only; it is not wallet risk evidence and cannot change campaign decisions. Manual retry reuses the stored payload and secure egress path and does not create a second campaign event.
             </CardDescription>
           </CardHeader>
         </Card>
