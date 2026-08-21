@@ -37,8 +37,19 @@ function funding(
   } satisfies RawOnchainObservation)
 }
 
+function twoHopLineageEvents() {
+  return [
+    funding(walletA, walletB, "0x41"),
+    funding(walletB, root, "0x42"),
+    funding(walletC, walletD, "0x43"),
+    funding(walletD, root, "0x44"),
+    funding(walletE, walletF, "0x45"),
+    funding(walletF, root, "0x46"),
+  ]
+}
+
 describe("funding relationship engine", () => {
-  it("creates FUNDED_BY evidence without treating one transfer as a Sybil conclusion", () => {
+  it("creates FUNDED_BY evidence without treating unknown direct funding as a Sybil conclusion", () => {
     const relationships = deriveFundingRelationships([
       funding(walletA, root, "0x01"),
     ])
@@ -49,22 +60,42 @@ describe("funding relationship engine", () => {
     assert.equal(edge?.sourceAddress, walletA)
     assert.equal(edge?.targetAddress, root)
     assert.equal(edge?.riskBearing, false)
+    assert.equal(edge?.suppressionReason, "direct_funding_requires_corroboration")
     assert.equal(edge?.hopCount, 1)
   })
 
-  it("uses a bounded star topology for a corroboratable same-funder cohort", () => {
-    const events = [
+  it("keeps a three-wallet same-funder cohort visible but non-risk-bearing without corroboration", () => {
+    const relationships = deriveFundingRelationships([
       funding(walletA, root, "0x11"),
       funding(walletB, root, "0x12"),
       funding(walletC, root, "0x13"),
-    ]
-    const relationships = deriveFundingRelationships(events)
+    ])
     const sameFunder = relationships.filter((edge) => edge.kind === "SAME_FUNDER")
 
     assert.equal(sameFunder.length, 2)
     assert.ok(sameFunder.every((edge) => edge.cohortSize === 3))
+    assert.ok(sameFunder.every((edge) => !edge.riskBearing))
+    assert.ok(
+      sameFunder.every(
+        (edge) => edge.suppressionReason === "same_funder_requires_temporal_or_other_corroboration",
+      ),
+    )
+  })
+
+  it("makes a four-wallet tight funding burst risk-bearing", () => {
+    const relationships = deriveFundingRelationships([
+      funding(walletA, root, "0x14", "2026-08-01T00:00:00.000Z"),
+      funding(walletB, root, "0x15", "2026-08-01T02:00:00.000Z"),
+      funding(walletC, root, "0x16", "2026-08-01T04:00:00.000Z"),
+      funding(walletD, root, "0x17", "2026-08-01T06:00:00.000Z"),
+    ])
+    const sameFunder = relationships.filter((edge) => edge.kind === "SAME_FUNDER")
+
+    assert.equal(sameFunder.length, 3)
     assert.ok(sameFunder.every((edge) => edge.riskBearing))
-    assert.ok(sameFunder.every((edge) => edge.viaAddress === root))
+    assert.ok(sameFunder.every((edge) => edge.suppressionReason === null))
+    assert.ok(sameFunder.every((edge) => edge.metadata.burstFunding === true))
+    assert.ok(sameFunder.every((edge) => edge.metadata.fundingSpreadHours === 6))
   })
 
   it("does not make a two-wallet same-funder pattern risk-bearing", () => {
@@ -79,7 +110,7 @@ describe("funding relationship engine", () => {
     assert.equal(sameFunder[0]?.suppressionReason, "insufficient_same_funder_cohort")
   })
 
-  it("neutralizes known bridge fan-out even for a large funding cohort", () => {
+  it("neutralizes known bridge fan-out even when timestamps form a burst", () => {
     const optimismPortal = "0xbEb5Fc579115071764c7423A4f12eDde41f106Ed"
     const relationships = deriveFundingRelationships([
       funding(walletA, optimismPortal, "0x31"),
@@ -96,23 +127,57 @@ describe("funding relationship engine", () => {
     )
   })
 
-  it("derives a shared two-hop funding lineage across distinct direct funders", () => {
+  it("lets campaign policy suppress an otherwise suspicious trusted funding source", () => {
+    const context = {
+      trustedFundingSources: {
+        [`ethereum:${root}`]: "Treasury distributor",
+      },
+    }
     const relationships = deriveFundingRelationships([
-      funding(walletA, walletB, "0x41"),
-      funding(walletB, root, "0x42"),
-      funding(walletC, walletD, "0x43"),
-      funding(walletD, root, "0x44"),
-      funding(walletE, walletF, "0x45"),
-      funding(walletF, root, "0x46"),
-    ])
+      funding(walletA, root, "0x35"),
+      funding(walletB, root, "0x36"),
+      funding(walletC, root, "0x37"),
+      funding(walletD, root, "0x38"),
+    ], context)
+    const sameFunder = relationships.filter((edge) => edge.kind === "SAME_FUNDER")
+
+    assert.equal(sameFunder.length, 3)
+    assert.ok(sameFunder.every((edge) => !edge.riskBearing))
+    assert.ok(
+      sameFunder.every((edge) => edge.suppressionReason === "trusted_funding_source_fanout"),
+    )
+    assert.ok(sameFunder.every((edge) => edge.metadata.trustedFundingSource === true))
+  })
+
+  it("derives shared two-hop lineage but requires independent corroboration", () => {
+    const relationships = deriveFundingRelationships(twoHopLineageEvents())
     const lineage = relationships.filter((edge) => edge.kind === "SAME_FUNDING_LINEAGE")
 
     assert.equal(lineage.length, 2)
     assert.ok(lineage.every((edge) => edge.viaAddress === root))
     assert.ok(lineage.every((edge) => edge.hopCount === 2))
     assert.ok(lineage.every((edge) => edge.cohortSize === 3))
-    assert.ok(lineage.every((edge) => edge.riskBearing))
+    assert.ok(lineage.every((edge) => !edge.riskBearing))
+    assert.ok(
+      lineage.every(
+        (edge) => edge.suppressionReason === "funding_lineage_requires_independent_corroboration",
+      ),
+    )
     assert.ok(lineage.every((edge) => edge.evidenceEventKeys.length === 4))
+  })
+
+  it("makes shared lineage risk-bearing when the common ancestor is known-bad", () => {
+    const relationships = deriveFundingRelationships(twoHopLineageEvents(), {
+      knownBadFundingSources: {
+        [`ethereum:${root}`]: "Confirmed attacker treasury",
+      },
+    })
+    const lineage = relationships.filter((edge) => edge.kind === "SAME_FUNDING_LINEAGE")
+
+    assert.equal(lineage.length, 2)
+    assert.ok(lineage.every((edge) => edge.riskBearing))
+    assert.ok(lineage.every((edge) => edge.suppressionReason === null))
+    assert.ok(lineage.every((edge) => edge.metadata.knownBadFundingSource === true))
   })
 
   it("caps lineage expansion and stops cycles", () => {
