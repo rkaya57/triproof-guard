@@ -109,6 +109,61 @@ function campaignSnapshot(project: CampaignProjectInput, networks: string[]) {
   }
 }
 
+async function resolvePersistedCampaignPolicy(
+  tx: Prisma.TransactionClient,
+  campaignId: string,
+  riskPolicy: RiskPolicy,
+) {
+  const definition = buildPersistedCampaignPolicyDefinition(riskPolicy)
+  const policyHash = persistedPolicyHash(riskPolicy)
+  const existing = await tx.campaignPolicy.findFirst({
+    where: { campaignId, policyHash },
+    orderBy: { version: "desc" },
+  })
+
+  if (existing) {
+    await tx.campaignPolicy.updateMany({
+      where: {
+        campaignId,
+        isActive: true,
+        id: { not: existing.id },
+      },
+      data: { isActive: false },
+    })
+
+    if (existing.isActive) return existing
+
+    return tx.campaignPolicy.update({
+      where: { id: existing.id },
+      data: { isActive: true },
+    })
+  }
+
+  const latest = await tx.campaignPolicy.findFirst({
+    where: { campaignId },
+    orderBy: { version: "desc" },
+    select: { version: true },
+  })
+
+  await tx.campaignPolicy.updateMany({
+    where: { campaignId, isActive: true },
+    data: { isActive: false },
+  })
+
+  const version = (latest?.version ?? 0) + 1
+  return tx.campaignPolicy.create({
+    data: {
+      campaignId,
+      name: `${riskPolicy[0].toUpperCase()}${riskPolicy.slice(1)} campaign policy`,
+      version,
+      preset: riskPolicy,
+      policyHash,
+      definition,
+      isActive: true,
+    },
+  })
+}
+
 export async function persistNewCampaignAnalysis(
   tx: Prisma.TransactionClient,
   input: {
@@ -119,8 +174,6 @@ export async function persistNewCampaignAnalysis(
 ) {
   const { project, analysis, riskPolicy } = input
   const networks = normalizeCampaignNetworks(project.chain)
-  const definition = buildPersistedCampaignPolicyDefinition(riskPolicy)
-  const policyHash = persistedPolicyHash(riskPolicy)
   const now = new Date()
 
   const campaign = await tx.campaign.upsert({
@@ -152,29 +205,7 @@ export async function persistNewCampaignAnalysis(
     },
   })
 
-  const policy = await tx.campaignPolicy.upsert({
-    where: {
-      campaignId_version: {
-        campaignId: campaign.id,
-        version: 1,
-      },
-    },
-    create: {
-      campaignId: campaign.id,
-      name: `${riskPolicy[0].toUpperCase()}${riskPolicy.slice(1)} campaign policy`,
-      version: 1,
-      preset: riskPolicy,
-      policyHash,
-      definition,
-      isActive: true,
-    },
-    update: {
-      preset: riskPolicy,
-      policyHash,
-      definition,
-      isActive: true,
-    },
-  })
+  const policy = await resolvePersistedCampaignPolicy(tx, campaign.id, riskPolicy)
 
   const analysisRun = await tx.campaignAnalysisRun.upsert({
     where: { legacyAnalysisId: analysis.id },
@@ -269,6 +300,7 @@ export async function syncCompletedCampaignAnalysis(analysisId: string) {
       campaignId: persisted.campaign.id,
       analysisRunId: persisted.analysisRun.id,
       policyId: persisted.policy.id,
+      policyVersion: persisted.policy.version,
       decisionsWritten: decisions.length,
     }
   })
