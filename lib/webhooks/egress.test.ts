@@ -45,6 +45,17 @@ test("delivery-time DNS validation fails closed when the hostname has no public 
   )
 })
 
+test("delivery-time DNS resolution has a bounded fail-closed timeout", async () => {
+  await assert.rejects(
+    resolveWebhookEgressTarget(
+      "https://hooks.example.com/triproof",
+      async () => new Promise(() => undefined),
+      { dnsTimeoutMs: 10 },
+    ),
+    (error) => error instanceof WebhookEgressBlockedError && /DNS resolution timed out/i.test(error.message),
+  )
+})
+
 test("public-only DNS answers produce a deterministic pinned target", async () => {
   const target = await resolveWebhookEgressTarget("https://hooks.example.com/triproof", async () => [
     { address: "2606:4700:4700::1111", family: 6 },
