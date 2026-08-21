@@ -33,14 +33,16 @@ export async function POST(request: Request) {
 
     try {
       const eventResult = await syncNormalizedFundingEvents(analysisId)
-      console.info("Normalized funding event sync completed", {
+      console.info("Normalized funding provenance sync completed", {
         analysisId,
-        attempted: eventResult.attempted,
-        written: eventResult.written,
+        eventsAttempted: eventResult.attempted,
+        eventsWritten: eventResult.written,
+        relationshipsAttempted: eventResult.relationshipsAttempted,
+        relationshipsWritten: eventResult.relationshipsWritten,
         skipped: eventResult.skipped,
       })
     } catch (error) {
-      console.error("Normalized funding event sync failed", {
+      console.error("Normalized funding provenance sync failed", {
         analysisId,
         error: error instanceof Error ? error.message : String(error),
       })
