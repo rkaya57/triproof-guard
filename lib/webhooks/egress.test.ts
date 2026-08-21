@@ -49,7 +49,7 @@ test("delivery-time DNS resolution has a bounded fail-closed timeout", async () 
   await assert.rejects(
     resolveWebhookEgressTarget(
       "https://hooks.example.com/triproof",
-      async () => new Promise(() => undefined),
+      async () => new Promise<never>(() => undefined),
       { dnsTimeoutMs: 10 },
     ),
     (error) => error instanceof WebhookEgressBlockedError && /DNS resolution timed out/i.test(error.message),
