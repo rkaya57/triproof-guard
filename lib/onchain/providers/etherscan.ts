@@ -295,6 +295,7 @@ async function enrichWallet(
     normalTxCount: normalTxs.length,
     tokenTxCount: tokenTxs.length,
     historyTruncated,
+    firstFundingTxHash: summary.firstFundingTxHash,
     deployerAddress: data.evmDeployerAddress,
     factoryAddress: data.evmFactoryAddress,
     deploymentTransactionHash: creationProvenance.transactionHash,
