@@ -46,6 +46,10 @@ export type ClusterAnalystProposalRecord = {
   createdAt: string
 }
 
+type SplitNormalizationResult =
+  | { members: ClusterAnalystProposalMemberRef[]; error: null }
+  | { members: null; error: string }
+
 export function normalizeClusterAnalystProposalType(value: unknown): ClusterAnalystProposalType | null {
   return clusterAnalystProposalTypes.includes(value as ClusterAnalystProposalType)
     ? (value as ClusterAnalystProposalType)
@@ -77,11 +81,17 @@ function normalizeMemberRef(value: unknown): ClusterAnalystProposalMemberRef | n
   return { walletAddress, chain }
 }
 
-function normalizeSplitMembers(report: ClusterInvestigationReport, rawMembers: unknown) {
-  if (!Array.isArray(rawMembers)) return { error: "split_cluster requires a members array" } as const
-  if (rawMembers.length < 1) return { error: "split_cluster requires at least one member" } as const
+function normalizeSplitMembers(
+  report: ClusterInvestigationReport,
+  rawMembers: unknown,
+): SplitNormalizationResult {
+  if (!Array.isArray(rawMembers)) return { members: null, error: "split_cluster requires a members array" }
+  if (rawMembers.length < 1) return { members: null, error: "split_cluster requires at least one member" }
   if (rawMembers.length > MAX_SPLIT_PROPOSAL_MEMBERS) {
-    return { error: `split_cluster is limited to ${MAX_SPLIT_PROPOSAL_MEMBERS} proposed members in v1` } as const
+    return {
+      members: null,
+      error: `split_cluster is limited to ${MAX_SPLIT_PROPOSAL_MEMBERS} proposed members in v1`,
+    }
   }
 
   const currentByKey = new Map(
@@ -95,21 +105,25 @@ function normalizeSplitMembers(report: ClusterInvestigationReport, rawMembers: u
 
   for (const rawMember of rawMembers) {
     const member = normalizeMemberRef(rawMember)
-    if (!member) return { error: "split_cluster members must include walletAddress and chain" } as const
+    if (!member) {
+      return { members: null, error: "split_cluster members must include walletAddress and chain" }
+    }
     const key = chainAddressKey(member.walletAddress, member.chain)
     const current = currentByKey.get(key)
-    if (!current) return { error: "split_cluster can only reference current cluster members" } as const
+    if (!current) return { members: null, error: "split_cluster can only reference current cluster members" }
     if (seen.has(key)) continue
     seen.add(key)
     normalized.push(current)
   }
 
-  if (!normalized.length) return { error: "split_cluster requires at least one unique current member" } as const
+  if (!normalized.length) {
+    return { members: null, error: "split_cluster requires at least one unique current member" }
+  }
   if (normalized.length >= report.members.length) {
-    return { error: "split_cluster must leave at least one wallet in the stored cluster" } as const
+    return { members: null, error: "split_cluster must leave at least one wallet in the stored cluster" }
   }
 
-  return { members: normalized } as const
+  return { members: normalized, error: null }
 }
 
 export function normalizeClusterAnalystProposal(
@@ -148,7 +162,7 @@ export function normalizeClusterAnalystProposal(
 
   if (proposalType === "split_cluster") {
     const split = normalizeSplitMembers(report, rawPayload.members)
-    if ("error" in split) return { proposal: null, error: split.error }
+    if (split.error) return { proposal: null, error: split.error }
     return { proposal: { proposalType, payload: { members: split.members }, notes }, error: null }
   }
 
