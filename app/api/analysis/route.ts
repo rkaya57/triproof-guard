@@ -2,7 +2,10 @@ import { NextResponse } from "next/server"
 
 import { isAdminEmail } from "@/lib/auth/admin"
 import { getCurrentUser } from "@/lib/auth/session"
-import { persistNewCampaignAnalysis } from "@/lib/campaigns/persistence"
+import {
+  buildCampaignInputHash,
+  persistNewCampaignAnalysis,
+} from "@/lib/campaigns/persistence"
 import { parseWalletCsv } from "@/lib/csv/parser"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
@@ -117,6 +120,7 @@ export async function POST(request: Request) {
       )
     }
 
+    const inputHash = buildCampaignInputHash(parsedCsv.wallets)
     const mode = parsedForm.data.analysisMode as AnalysisMode
     const config = getOnChainConfig()
     const chainEnrichable = isEnrichableChain(parsedForm.data.chain)
@@ -231,7 +235,7 @@ export async function POST(request: Request) {
 
       await persistNewCampaignAnalysis(tx, {
         project,
-        analysis,
+        analysis: { ...analysis, inputHash },
         riskPolicy: parsedForm.data.riskPolicy as RiskPolicy,
       })
 
