@@ -215,7 +215,7 @@ function graphDescription(edge: WalletGraphEdge) {
   return `${edge.kind.replaceAll("_", " ")} relationship at ${edge.confidence}% confidence.${evidence}`
 }
 
-function timelineForWalletActivity(analysis: AnalysisDetail, memberAddresses: Set<string>) {
+function timelineForWalletActivity(analysis: AnalysisDetail, memberAddresses: Set<string | null>) {
   const items: ClusterInvestigationTimelineItem[] = []
   for (const wallet of analysis.wallets) {
     if (!memberAddresses.has(wallet.walletAddress)) continue
@@ -275,7 +275,7 @@ export function buildClusterInvestigation(input: {
     .filter((wallet) => wallet.clusterId === cluster.clusterLabel)
     .sort((left, right) => right.riskScore - left.riskScore || left.walletAddress.localeCompare(right.walletAddress))
 
-  const memberAddresses = new Set(members.map((wallet) => wallet.walletAddress))
+  const memberAddresses = new Set<string | null>(members.map((wallet) => wallet.walletAddress))
   const memberKeys = new Set(
     members.map((wallet) => chainAddressKey(wallet.walletAddress, wallet.chain)),
   )
