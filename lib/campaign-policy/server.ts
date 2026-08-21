@@ -8,6 +8,7 @@ import type { RiskPolicy } from "@/types"
 export type CampaignPolicyLoadResult = {
   campaignId: string
   campaignName: string
+  baselinePreset: RiskPolicy | null
   report: CampaignPolicyReport | null
 }
 
@@ -40,13 +41,16 @@ export async function loadCampaignPolicyReport(
     return {
       campaignId: detail.campaign.id,
       campaignName: detail.campaign.name,
+      baselinePreset: null,
       report: null,
     }
   }
 
+  const baselinePreset = detail.latestAnalysis.riskPolicy ?? "balanced"
   return {
     campaignId: detail.campaign.id,
     campaignName: detail.campaign.name,
+    baselinePreset,
     report: buildCampaignPolicyReport({
       analysis: detail.latestAnalysis,
       memory,
