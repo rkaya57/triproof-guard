@@ -218,7 +218,7 @@ export function WebhookManager() {
   }
 
   function renderDelivery(endpoint: Endpoint, delivery: Delivery) {
-    const retryable = endpoint.isActive && delivery.status !== "delivered" && delivery.attemptCount < 10
+    const retryable = endpoint.isActive && delivery.status === "failed" && delivery.attemptCount < 10
     return (
       <div key={delivery.id} className="grid gap-1 rounded-lg border border-border/70 bg-background/40 p-2.5 text-xs sm:grid-cols-[1fr_auto] sm:items-center">
         <div className="min-w-0">
