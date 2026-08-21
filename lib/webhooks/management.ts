@@ -2,6 +2,7 @@ import {
   isSupportedWebhookEvent,
   SUPPORTED_WEBHOOK_EVENTS,
 } from "@/lib/webhooks/campaign-events"
+import { isAllowedWebhookHostname } from "@/lib/webhooks/egress"
 
 export type SupportedWebhookEvent = (typeof SUPPORTED_WEBHOOK_EVENTS)[number]
 
@@ -13,6 +14,7 @@ export function normalizeWebhookUrl(value: unknown, options: { production?: bool
     if (production && url.protocol !== "https:") return null
     if (!production && url.protocol !== "https:" && url.protocol !== "http:") return null
     if (url.username || url.password) return null
+    if (!isAllowedWebhookHostname(url.hostname)) return null
     url.hash = ""
     return url.toString()
   } catch {
