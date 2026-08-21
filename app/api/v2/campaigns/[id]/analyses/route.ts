@@ -14,19 +14,29 @@ import {
   isBillingCreditError,
   prepareAnalysisBillingGate,
 } from "@/lib/billing/credits"
-import { buildCampaignInputHash, persistNewCampaignAnalysis } from "@/lib/campaigns/persistence"
 import { normalizeCampaignRunInput } from "@/lib/campaigns/intake"
+import { buildCampaignInputHash, persistNewCampaignAnalysis } from "@/lib/campaigns/persistence"
 import { loadCampaignRunContext } from "@/lib/campaigns/self-service"
+import { parseWalletCsv } from "@/lib/csv/parser"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
 import { getOnChainConfig } from "@/lib/onchain/enrichment-types"
 import { getOnChainProvider } from "@/lib/onchain/provider-router"
+import type { Chain } from "@/types"
 
 export const runtime = "nodejs"
 export const maxDuration = 300
 
 const freeTrialWalletLimit = Number.parseInt(process.env.FREE_TRIAL_WALLET_LIMIT ?? "100", 10)
 const apiWalletLimit = Number.parseInt(process.env.TRIPROOF_API_MAX_WALLETS ?? "50000", 10)
+
+type CampaignRunRequestInput = {
+  body: Record<string, unknown>
+  inputFormat: "json" | "csv"
+  sourceFileName: string
+  intakeIssues: string[]
+  duplicateIssues: string[]
+}
 
 function errorCode(error: unknown) {
   return typeof error === "object" && error !== null && "code" in error
@@ -62,6 +72,48 @@ function intakeStatus(code: string | null) {
   return 400
 }
 
+function csvIssueText(value: unknown) {
+  if (typeof value === "string") return value
+  if (!value || typeof value !== "object") return String(value)
+  const item = value as { row?: unknown; issue?: unknown }
+  const row = typeof item.row === "number" ? `row ${item.row}: ` : ""
+  return `${row}${String(item.issue ?? "CSV input issue")}`
+}
+
+async function parseCampaignRunRequest(request: Request, chain: Chain): Promise<CampaignRunRequestInput | null> {
+  const contentType = request.headers.get("content-type")?.toLowerCase() ?? ""
+  if (contentType.includes("multipart/form-data")) {
+    const formData = await request.formData()
+    const file = formData.get("csvFile")
+    if (!(file instanceof File) || file.size === 0) return null
+
+    const parsed = parseWalletCsv(await file.text(), chain)
+    return {
+      body: {
+        wallets: parsed.wallets,
+        analysisMode: formData.get("analysisMode") ?? "onchain",
+        riskPolicy: formData.get("riskPolicy") ?? undefined,
+      },
+      inputFormat: "csv",
+      sourceFileName: file.name.slice(0, 255) || "campaign-wallets.csv",
+      intakeIssues: parsed.issues.map(csvIssueText),
+      duplicateIssues: parsed.duplicates.map(csvIssueText),
+    }
+  }
+
+  try {
+    return {
+      body: (await request.json()) as Record<string, unknown>,
+      inputFormat: "json",
+      sourceFileName: "api-v2-campaign-run.json",
+      intakeIssues: [],
+      duplicateIssues: [],
+    }
+  } catch {
+    return null
+  }
+}
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
@@ -70,23 +122,30 @@ export async function POST(
   if (auth.error) return auth.error
   const { id } = await context.params
 
-  let body: Record<string, unknown>
-  try {
-    body = (await request.json()) as Record<string, unknown>
-  } catch {
-    return apiError("Invalid JSON body", 400)
-  }
-
   const campaignContext = await loadCampaignRunContext(id, auth.user.id)
   if (!campaignContext) return apiError("Campaign not found", 404)
 
-  const normalized = normalizeCampaignRunInput(body, campaignContext.runContext, apiWalletLimit)
-  if (!normalized.value) {
-    return apiError(normalized.error, intakeStatus(normalized.code), { code: normalized.code })
+  const chain = campaignContext.runContext.chain as Chain
+  const parsedRequest = await parseCampaignRunRequest(request, chain)
+  if (!parsedRequest) {
+    return apiError(
+      "Invalid analysis input. Send JSON wallets or multipart/form-data with csvFile.",
+      400,
+      { code: "INVALID_ANALYSIS_INPUT" },
+    )
   }
 
-  const { wallets, issues, analysisMode } = normalized.value
-  const chain = campaignContext.runContext.chain
+  const normalized = normalizeCampaignRunInput(parsedRequest.body, campaignContext.runContext, apiWalletLimit)
+  if (!normalized.value) {
+    return apiError(normalized.error, intakeStatus(normalized.code), {
+      code: normalized.code,
+      issues: parsedRequest.intakeIssues,
+      duplicates: parsedRequest.duplicateIssues,
+    })
+  }
+
+  const { wallets, analysisMode } = normalized.value
+  const issues = [...parsedRequest.intakeIssues, ...normalized.value.issues]
   const riskPolicy = campaignContext.runContext.riskPolicy
   const config = getOnChainConfig()
   if (!config.enabled) return apiError("Real on-chain analysis is disabled", 503)
@@ -131,15 +190,19 @@ export async function POST(
           projectId: campaignContext.project.id,
           status: "processing",
           totalWallets: wallets.length,
-          csvFileName: "api-v2-campaign-run.json",
+          csvFileName: parsedRequest.sourceFileName,
           analysisMode,
           enrichmentStatus: "pending",
           enrichmentWarnings: [
             "Campaign-native API v2 run.",
+            `Input format: ${parsedRequest.inputFormat}.`,
             `Campaign policy: ${riskPolicy}.`,
             `Capacity profile: ${capacity.profile}.`,
             `Analysis batch size: ${walletBatchSize}.`,
             `Estimated provider requests: ${capacity.estimatedRequests}.`,
+            ...(parsedRequest.duplicateIssues.length
+              ? [`CSV duplicates ignored: ${parsedRequest.duplicateIssues.length}.`]
+              : []),
           ],
         },
       })
@@ -162,6 +225,8 @@ export async function POST(
         analysisId: analysis.id,
         metadata: {
           source: isAdmin ? "admin_api_v2_campaign_run" : "api_v2_campaign_run",
+          inputFormat: parsedRequest.inputFormat,
+          sourceFileName: parsedRequest.sourceFileName,
           campaignId: campaignContext.project.id,
           walletCount: wallets.length,
           chain,
@@ -198,6 +263,8 @@ export async function POST(
       status: "processing",
       walletCount: wallets.length,
       inputHash,
+      inputFormat: parsedRequest.inputFormat,
+      sourceFileName: parsedRequest.sourceFileName,
       batchCount: created.batchCount,
       walletBatchSize,
       chain,
@@ -208,6 +275,7 @@ export async function POST(
       provider: capacity.provider ?? selection.provider.id,
       capacity,
       issues,
+      duplicates: parsedRequest.duplicateIssues,
       billing: {
         source: created.billingGate.source,
         creditsDeducted: created.billingGate.creditsToDeduct,
