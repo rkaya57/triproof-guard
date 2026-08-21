@@ -1,4 +1,8 @@
 import { decisionCsvLabel } from "@/lib/decision-labels"
+import {
+  canonicalFundingEvidenceCodes,
+  canonicalFundingEvidenceSummary,
+} from "@/lib/exports/funding-evidence"
 import type { WalletRiskResult, WalletStatus } from "@/types"
 
 function escapeCsv(value: unknown) {
@@ -58,6 +62,10 @@ export function walletsToCsv(wallets: WalletRiskResult[], full = false) {
     "reputation_label",
     "policy_reason",
     "entity_risk_reason",
+    "decision_evidence_confidence",
+    "canonical_funding_evidence_codes",
+    "canonical_funding_evidence_summary",
+    "canonical_funding_evidence_supplemental_only",
   ]
   const headers = full ? fullHeaders : baseHeaders
   const rows = wallets.map((wallet) => {
@@ -75,6 +83,7 @@ export function walletsToCsv(wallets: WalletRiskResult[], full = false) {
       wallet.reasons,
       wallet.statusExplanation,
     ]
+    const canonicalCodes = canonicalFundingEvidenceCodes(wallet)
     const fullValues = [
       ...baseValues,
       wallet.chain,
@@ -101,6 +110,10 @@ export function walletsToCsv(wallets: WalletRiskResult[], full = false) {
       wallet.reputationLabel ?? "",
       wallet.policyReason ?? "",
       wallet.entityRiskReason ?? "",
+      wallet.decisionEvidence?.evidenceConfidence ?? "",
+      canonicalCodes,
+      canonicalFundingEvidenceSummary(wallet),
+      canonicalCodes.length > 0 ? "true" : "",
     ]
 
     return (full ? fullValues : baseValues).map(escapeCsv).join(",")
