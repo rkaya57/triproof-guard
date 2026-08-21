@@ -13,8 +13,15 @@ test("production webhook URLs require HTTPS and reject embedded credentials", ()
   assert.equal(normalizeWebhookUrl("https://user:pass@example.com/hooks", { production: true }), null)
 })
 
-test("development webhook URLs allow HTTP but not unrelated protocols", () => {
-  assert.equal(normalizeWebhookUrl("http://localhost:3001/hook", { production: false }), "http://localhost:3001/hook")
+test("webhook registration rejects local and private destinations before delivery", () => {
+  assert.equal(normalizeWebhookUrl("http://localhost:3001/hook", { production: false }), null)
+  assert.equal(normalizeWebhookUrl("https://127.0.0.1/hook", { production: true }), null)
+  assert.equal(normalizeWebhookUrl("https://169.254.169.254/latest/meta-data", { production: true }), null)
+  assert.equal(normalizeWebhookUrl("https://service.internal/hook", { production: true }), null)
+})
+
+test("development webhook URLs may use HTTP only for public destinations", () => {
+  assert.equal(normalizeWebhookUrl("http://example.com/hook", { production: false }), "http://example.com/hook")
   assert.equal(normalizeWebhookUrl("ftp://example.com/hook", { production: false }), null)
 })
 
