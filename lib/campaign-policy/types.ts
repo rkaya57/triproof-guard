@@ -23,6 +23,11 @@ export type CampaignPolicyRuleCode =
   | "RECURRENCE_CONTEXT_ONLY"
   | "CURRENT_DECISION_BASELINE"
 
+export type CampaignPolicyThresholds = {
+  corroboratedRejectScore: number
+  corroboratedFamilyCount: number
+}
+
 export type CampaignPolicyMatchedRule = {
   code: CampaignPolicyRuleCode
   title: string
@@ -73,6 +78,7 @@ export type CampaignPolicyReport = {
   campaignName: string
   analysisId: string
   preset: RiskPolicy
+  thresholds: CampaignPolicyThresholds
   generatedAt: string
   summary: {
     approveRecommendations: number
