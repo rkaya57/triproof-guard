@@ -13,6 +13,7 @@ export async function loadCampaignDetail(projectId: string, userId: string) {
       notes: true,
       createdAt: true,
       updatedAt: true,
+      _count: { select: { analyses: true } },
       analyses: {
         select: {
           id: true,
@@ -35,23 +36,46 @@ export async function loadCampaignDetail(projectId: string, userId: string) {
   if (!project) return null
 
   const latestId = project.analyses[0]?.id
-  const latest = latestId
-    ? await db.analysis.findFirst({
-        where: { id: latestId, project: { userId } },
-        include: {
-          project: true,
-          wallets: { orderBy: [{ riskScore: "desc" }, { walletAddress: "asc" }] },
-          clusters: { orderBy: [{ averageRiskScore: "desc" }, { clusterLabel: "asc" }] },
-          teamReviews: { include: { reviewer: { select: { name: true } } } },
-          feedbackEvents: true,
-          graphSummary: true,
-          aiBrief: true,
-        },
-      })
-    : null
+  const [latest, persistedCampaign] = await Promise.all([
+    latestId
+      ? db.analysis.findFirst({
+          where: { id: latestId, project: { userId } },
+          include: {
+            project: true,
+            wallets: { orderBy: [{ riskScore: "desc" }, { walletAddress: "asc" }] },
+            clusters: { orderBy: [{ averageRiskScore: "desc" }, { clusterLabel: "asc" }] },
+            teamReviews: { include: { reviewer: { select: { name: true } } } },
+            feedbackEvents: true,
+            graphSummary: true,
+            aiBrief: true,
+          },
+        })
+      : Promise.resolve(null),
+    db.campaign.findUnique({
+      where: { legacyProjectId: project.id },
+      select: {
+        networks: true,
+        lifecycle: true,
+        startsAt: true,
+        endsAt: true,
+        rewardPoolUsd: true,
+        metadata: true,
+      },
+    }),
+  ])
 
   return {
-    campaign: buildCampaignRecord(project),
+    campaign: buildCampaignRecord(project, {
+      lifecycle: persistedCampaign?.lifecycle,
+      networks: persistedCampaign?.networks,
+      startsAt: persistedCampaign?.startsAt,
+      endsAt: persistedCampaign?.endsAt,
+      rewardPoolUsd: persistedCampaign?.rewardPoolUsd
+        ? Number(persistedCampaign.rewardPoolUsd)
+        : null,
+      metadata: persistedCampaign?.metadata ?? null,
+      analysisRunCount: project._count.analyses,
+    }),
     latestAnalysis: latest ? serializeAnalysis(latest) : null,
   }
 }
