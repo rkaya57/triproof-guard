@@ -1,0 +1,54 @@
+enum OnchainEventChainFamily {
+  solana
+  evm
+}
+
+enum PersistedOnchainEventKind {
+  native_transfer
+  token_transfer
+  contract_interaction
+  bridge_transfer
+  account_creation
+  unknown
+}
+
+enum PersistedOnchainEventDirection {
+  inbound
+  outbound
+  self
+  unknown
+}
+
+model NormalizedOnchainEvent {
+  id                  String                         @id @default(cuid())
+  analysisRunId       String
+  analysisRun         CampaignAnalysisRun            @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
+  eventKey            String
+  chain               String
+  chainFamily         OnchainEventChainFamily
+  txHash              String
+  eventIndex          Int
+  walletAddress       String
+  fromAddress         String?
+  toAddress           String?
+  counterpartyAddress String?
+  kind                PersistedOnchainEventKind
+  direction           PersistedOnchainEventDirection
+  assetSymbol         String?
+  assetAddress        String?
+  amount              Decimal?                       @db.Decimal(38, 18)
+  observedAt          DateTime?
+  blockRef            String?
+  provider            String
+  confidence          Int
+  metadata            Json
+  createdAt           DateTime                       @default(now())
+
+  @@unique([analysisRunId, eventKey])
+  @@index([analysisRunId, walletAddress, observedAt])
+  @@index([analysisRunId, counterpartyAddress, observedAt])
+  @@index([analysisRunId, kind, direction])
+  @@index([chain, walletAddress, observedAt])
+  @@index([chain, counterpartyAddress, observedAt])
+  @@index([txHash])
+}
