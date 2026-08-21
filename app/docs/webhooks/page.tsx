@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowRight, KeyRound, Webhook } from "lucide-react"
+import { ArrowRight, KeyRound, ShieldCheck, Webhook } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
@@ -84,11 +84,19 @@ export default function WebhookDocsPage() {
       </section>
 
       <section className="border-y border-border bg-primary/[0.03]">
-        <div className="mx-auto max-w-7xl px-5 py-12 sm:px-8">
-          <h2 className="text-2xl font-semibold">Existing Team Policy events remain supported</h2>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            `policy.blocked` and `policy.review` remain valid subscription types. Campaign Webhooks v1 extends the event surface without removing the existing Team Policy integration.
-          </p>
+        <div className="mx-auto grid max-w-7xl gap-6 px-5 py-12 sm:px-8 lg:grid-cols-2">
+          <div>
+            <h2 className="text-2xl font-semibold">Existing Team Policy events remain supported</h2>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              `policy.blocked` and `policy.review` remain valid subscription types. Campaign Webhooks v1 extends the event surface without removing the existing Team Policy integration.
+            </p>
+          </div>
+          <div>
+            <div className="flex items-center gap-2"><ShieldCheck className="text-primary" /><h2 className="text-2xl font-semibold">Outbound delivery is fail-closed</h2></div>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              Webhook destinations must resolve only to public routable addresses. DNS is validated again for every initial delivery and retry, the connection is pinned to a validated address, and HTTP redirects are not followed. Localhost, private, link-local, metadata and internal destinations are blocked.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -108,7 +116,7 @@ export default function WebhookDocsPage() {
           <CardHeader>
             <CardTitle>Operational boundaries</CardTitle>
             <CardDescription>
-              Webhook delivery never changes a stored wallet decision. Policy-change events describe a version that applies to future runs only. Lifecycle events describe campaign state transitions. A failed customer endpoint does not roll back a completed analysis, policy activation, or lifecycle transaction.
+              Webhook delivery never changes a stored wallet decision. Policy-change events describe a version that applies to future runs only. Lifecycle events describe campaign state transitions. A failed or blocked customer endpoint does not roll back a completed analysis, policy activation, or lifecycle transaction.
             </CardDescription>
           </CardHeader>
         </Card>
