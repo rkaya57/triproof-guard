@@ -219,7 +219,7 @@ test("bridge context needs independent non-bridge grouping evidence", () => {
   assert.equal(bridgeOnlyAssessment.primary.id, "unclassified")
 })
 
-test("Possible Shared Operator requires multiple independent families plus risk-bearing provenance", () => {
+test("Possible Shared Operator is secondary to a more concrete supported archetype", () => {
   const source = report()
   setFamilies(source, [
     family("funding", "Funding evidence: shared first observed funding source"),
@@ -243,8 +243,10 @@ test("Possible Shared Operator requires multiple independent families plus risk-
   }]
 
   const assessment = assessClusterArchetypes(source)
-  assert.equal(assessment.primary.id, "possible_shared_operator")
-  assert.ok(assessment.primary.caveats.some((item) => item.includes("never a common-control finding")))
+  assert.equal(assessment.primary.id, "funding_farm")
+  const operator = assessment.candidates.find((item) => item.id === "possible_shared_operator")
+  assert.ok(operator)
+  assert.ok(operator.caveats.some((item) => item.includes("never a common-control finding")))
 })
 
 test("shared funding or one relationship family alone never creates a control archetype", () => {
@@ -284,6 +286,6 @@ test("archetype assessment is read-only and preserves explicit attribution bound
 
   assert.equal(JSON.stringify(source), before)
   assert.ok(assessment.boundaries.some((item) => item.includes("do not change risk scores")))
-  assert.ok(assessment.boundaries.some((item) => item.includes("not proof that one person or entity controls")))
+  assert.ok(assessment.boundaries.some((item) => item.includes("No archetype is proof that one person or entity controls")))
   assert.equal(source.members[0]!.status, "manual_review")
 })
