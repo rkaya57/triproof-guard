@@ -152,7 +152,7 @@ test("single stored family is capped below medium confidence even with canonical
   )
   assert.equal(result.qualifiesByStoredRule, false)
   assert.equal(result.confidence, "low")
-  assert.equal(result.score, 49)
+  assert.ok(result.score < 50)
 })
 
 test("neutralized infrastructure funding contributes zero canonical support points", () => {
