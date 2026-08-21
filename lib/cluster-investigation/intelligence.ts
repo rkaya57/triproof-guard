@@ -1,8 +1,9 @@
+import { chainAddressKey } from "@/lib/address-normalization"
 import type {
   ClusterGroupingFamily,
   ClusterInvestigationReport,
 } from "@/lib/cluster-investigation/builder"
-import type { DecisionEvidenceFamily } from "@/types"
+import type { AnalysisDetail, DecisionEvidenceFamily } from "@/types"
 
 export const CLUSTER_SUPPORT_INTELLIGENCE_SCHEMA_VERSION = "tri-proof-cluster-support-intelligence-v1" as const
 
@@ -67,12 +68,32 @@ function confidenceBand(score: number, qualifiesByStoredRule: boolean): ClusterS
   return "low"
 }
 
-export function assessClusterSupport(report: ClusterInvestigationReport): ClusterSupportIntelligence {
+function riskEvidenceFamiliesForWallet(analysis: AnalysisDetail | undefined, chain: string, walletAddress: string) {
+  if (!analysis) return new Set<DecisionEvidenceFamily>()
+  const key = chainAddressKey(walletAddress, chain)
+  const wallet = analysis.wallets.find(
+    (candidate) => chainAddressKey(candidate.walletAddress, candidate.chain) === key,
+  )
+  if (!wallet?.decisionEvidence) return new Set<DecisionEvidenceFamily>()
+
+  return new Set(
+    wallet.decisionEvidence.evidence
+      .filter((item) => item.effect === "risk_signal" || item.effect === "corroborating_signal")
+      .map((item) => item.family),
+  )
+}
+
+export function assessClusterSupport(
+  report: ClusterInvestigationReport,
+  analysis?: AnalysisDetail,
+): ClusterSupportIntelligence {
   const memberCount = report.members.length
   const familySupport = report.grouping.families.map((family) => {
     const decisionFamily = decisionFamilyByGroupingFamily[family.family]
     const supportedMembers = decisionFamily
-      ? report.members.filter((member) => member.riskEvidenceFamilies.includes(decisionFamily)).length
+      ? report.members.filter((member) =>
+          riskEvidenceFamiliesForWallet(analysis, member.chain, member.walletAddress).has(decisionFamily),
+        ).length
       : 0
 
     return {
@@ -81,7 +102,7 @@ export function assessClusterSupport(report: ClusterInvestigationReport): Cluste
       memberRiskEvidenceFamily: decisionFamily,
       supportedMembers,
       memberCount,
-      memberCoverage: decisionFamily ? boundedRatio(supportedMembers, memberCount) : null,
+      memberCoverage: decisionFamily && analysis ? boundedRatio(supportedMembers, memberCount) : null,
     }
   })
 
@@ -135,13 +156,19 @@ export function assessClusterSupport(report: ClusterInvestigationReport): Cluste
     : Math.min(49, rawScore)
 
   const limitations: string[] = []
-  const unsupportedFamilies = familySupport.filter(
-    (item) => item.memberRiskEvidenceFamily && item.supportedMembers === 0,
-  )
-  if (unsupportedFamilies.length) {
+  if (!analysis) {
     limitations.push(
-      `The serialized wallet-level risk/corroborating Decision Evidence does not independently mirror these stored grouping families: ${unsupportedFamilies.map((item) => item.label).join(", ")}. This is treated as an evidence-coverage limitation, not evidence against the stored cluster.`,
+      "Wallet-level risk/corroborating Decision Evidence was not supplied to this assessment, so member evidence coverage contributes zero points.",
     )
+  } else {
+    const unsupportedFamilies = familySupport.filter(
+      (item) => item.memberRiskEvidenceFamily && item.supportedMembers === 0,
+    )
+    if (unsupportedFamilies.length) {
+      limitations.push(
+        `The serialized wallet-level risk/corroborating Decision Evidence does not independently mirror these stored grouping families: ${unsupportedFamilies.map((item) => item.label).join(", ")}. This is treated as an evidence-coverage limitation, not evidence against the stored cluster.`,
+      )
+    }
   }
   if (familySupport.some((item) => item.memberRiskEvidenceFamily === null)) {
     limitations.push(
