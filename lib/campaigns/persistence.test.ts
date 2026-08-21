@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
 import {
+  buildCampaignInputHash,
   buildPersistedCampaignPolicyDefinition,
   campaignDecisionState,
   persistedPolicyHash,
@@ -9,21 +10,39 @@ import {
 } from "@/lib/campaigns/persistence"
 
 describe("campaign persistence policy snapshots", () => {
-  it("persists the expected thresholds for each policy preset", () => {
-    assert.deepEqual(buildPersistedCampaignPolicyDefinition("conservative").thresholds, {
-      allowMax: 35,
-      reviewMax: 74,
-      excludeMin: 75,
+  it("persists the actual risk-engine v1.8 configuration for each preset", () => {
+    assert.deepEqual(buildPersistedCampaignPolicyDefinition("conservative").engineConfig, {
+      approveMax: 35,
+      manualMax: 74,
+      rejectMin: 90,
+      hardRejectMin: 85,
+      noDataAction: "manual_review",
+      clusterRejectSize: 14,
+      clusterReviewSize: 5,
+      scoreMultiplier: 0.9,
+      label: "Conservative",
     })
-    assert.deepEqual(buildPersistedCampaignPolicyDefinition("balanced").thresholds, {
-      allowMax: 35,
-      reviewMax: 59,
-      excludeMin: 60,
+    assert.deepEqual(buildPersistedCampaignPolicyDefinition("balanced").engineConfig, {
+      approveMax: 35,
+      manualMax: 59,
+      rejectMin: 80,
+      hardRejectMin: 70,
+      noDataAction: "reject",
+      clusterRejectSize: 10,
+      clusterReviewSize: 4,
+      scoreMultiplier: 1,
+      label: "Balanced",
     })
-    assert.deepEqual(buildPersistedCampaignPolicyDefinition("strict").thresholds, {
-      allowMax: 25,
-      reviewMax: 49,
-      excludeMin: 50,
+    assert.deepEqual(buildPersistedCampaignPolicyDefinition("strict").engineConfig, {
+      approveMax: 25,
+      manualMax: 49,
+      rejectMin: 70,
+      hardRejectMin: 55,
+      noDataAction: "reject",
+      clusterRejectSize: 6,
+      clusterReviewSize: 3,
+      scoreMultiplier: 1.15,
+      label: "Strict",
     })
   })
 
@@ -35,6 +54,24 @@ describe("campaign persistence policy snapshots", () => {
     assert.equal(first.length, 64)
     assert.notEqual(first, persistedPolicyHash("strict"))
     assert.notEqual(first, persistedPolicyHash("conservative"))
+  })
+
+  it("creates a deterministic wallet-set input hash independent of row order", () => {
+    const first = buildCampaignInputHash([
+      { chain: "Solana", walletAddress: "WalletB" },
+      { chain: "Base", walletAddress: "0xABC" },
+    ])
+    const second = buildCampaignInputHash([
+      { chain: "base", walletAddress: "0xABC" },
+      { chain: "solana", walletAddress: "WalletB" },
+    ])
+
+    assert.equal(first, second)
+    assert.equal(first.length, 64)
+    assert.notEqual(
+      first,
+      buildCampaignInputHash([{ chain: "Solana", walletAddress: "WalletC" }]),
+    )
   })
 })
 
