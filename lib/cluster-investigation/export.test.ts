@@ -1,6 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
+// Case Brief is part of the same customer-facing investigation package.
+import "@/lib/cluster-investigation/case-brief.test"
 import type { ClusterInvestigationReport } from "@/lib/cluster-investigation/builder"
 import {
   buildClusterInvestigationCsvExport,
