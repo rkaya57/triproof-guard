@@ -117,14 +117,20 @@ export async function PATCH(
     })
     if (!existing) return apiError("Webhook endpoint not found", 404)
 
+    const data: {
+      url?: string
+      eventTypes?: string[]
+      isActive?: boolean
+      description?: string | null
+    } = {}
+    if (url) data.url = url
+    if (eventTypes) data.eventTypes = eventTypes
+    if (typeof body.isActive === "boolean") data.isActive = body.isActive
+    if (description !== undefined) data.description = description
+
     const endpoint = await db.webhookEndpoint.update({
       where: { id },
-      data: {
-        url,
-        eventTypes,
-        isActive: typeof body.isActive === "boolean" ? body.isActive : undefined,
-        description,
-      },
+      data,
     })
 
     return Response.json({
