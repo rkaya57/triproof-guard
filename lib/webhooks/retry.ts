@@ -34,6 +34,22 @@ export class WebhookRetryConflictError extends Error {
   }
 }
 
+export function assertWebhookRetryAllowed(input: {
+  status: string
+  isActive: boolean
+  attemptCount: number
+}) {
+  if (input.status === "delivered") {
+    throw new WebhookRetryConflictError("Delivered webhooks cannot be sent again.", "WEBHOOK_ALREADY_DELIVERED")
+  }
+  if (!input.isActive) {
+    throw new WebhookRetryConflictError("Resume the webhook endpoint before retrying delivery.", "WEBHOOK_ENDPOINT_PAUSED")
+  }
+  if (input.attemptCount >= ABSOLUTE_WEBHOOK_MAX_ATTEMPTS) {
+    throw new WebhookRetryConflictError("Webhook delivery has reached the maximum attempt count.", "WEBHOOK_MAX_ATTEMPTS_REACHED")
+  }
+}
+
 function safeLimit(value = DEFAULT_WEBHOOK_RETRY_LIMIT) {
   if (!Number.isFinite(value)) return 10
   return Math.min(50, Math.max(1, value))
@@ -109,15 +125,11 @@ export async function retrySingleWebhookDelivery(input: {
   })
   if (!delivery) return null
 
-  if (delivery.status === "delivered") {
-    throw new WebhookRetryConflictError("Delivered webhooks cannot be sent again.", "WEBHOOK_ALREADY_DELIVERED")
-  }
-  if (!delivery.endpoint.isActive) {
-    throw new WebhookRetryConflictError("Resume the webhook endpoint before retrying delivery.", "WEBHOOK_ENDPOINT_PAUSED")
-  }
-  if (delivery.attemptCount >= ABSOLUTE_WEBHOOK_MAX_ATTEMPTS) {
-    throw new WebhookRetryConflictError("Webhook delivery has reached the maximum attempt count.", "WEBHOOK_MAX_ATTEMPTS_REACHED")
-  }
+  assertWebhookRetryAllowed({
+    status: delivery.status,
+    isActive: delivery.endpoint.isActive,
+    attemptCount: delivery.attemptCount,
+  })
 
   return executeWebhookDeliveryAttempt(delivery)
 }
