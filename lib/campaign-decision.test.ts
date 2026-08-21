@@ -9,6 +9,7 @@ import "@/lib/campaigns/operations.test"
 import "@/lib/cluster-investigation/archetypes.test"
 import "@/lib/cluster-investigation/forensic-graph.test"
 import "@/lib/cluster-investigation/proposals.test"
+import "@/lib/webhooks/campaign-events.test"
 import { normalizeReasonCode } from "@/lib/campaign-decision"
 
 test("reason codes distinguish account state from non-user account evidence", () => {
