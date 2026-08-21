@@ -4,6 +4,7 @@ import test from "node:test"
 // Keep customer-facing execution and forensic-interpretation surfaces inside the decision-safety gate.
 import "@/lib/campaign-decision-package/index.test"
 import "@/lib/campaign-decision-package/export.test"
+import "@/lib/campaigns/intake.test"
 import "@/lib/cluster-investigation/archetypes.test"
 import "@/lib/cluster-investigation/forensic-graph.test"
 import "@/lib/cluster-investigation/proposals.test"
