@@ -133,10 +133,11 @@ export function buildCrossClusterComparison(input: {
 }): CrossClusterComparisonReport {
   const requestedLabels = Array.from(
     new Set(input.clusterLabels.map((label) => label.trim()).filter(Boolean)),
-  ).slice(0, MAX_COMPARED_CLUSTERS)
+  )
   const selectedClusters = requestedLabels
     .map((label) => input.analysis.clusters.find((cluster) => cluster.clusterLabel === label))
     .filter((cluster): cluster is AnalysisDetail["clusters"][number] => Boolean(cluster))
+    .slice(0, MAX_COMPARED_CLUSTERS)
 
   const membersByCluster = new Map<string, Set<string>>()
   const clusters: ClusterComparisonItem[] = selectedClusters.map((cluster) => {
