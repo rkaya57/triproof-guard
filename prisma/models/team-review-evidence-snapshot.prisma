@@ -1,0 +1,19 @@
+model TeamReviewEvidenceSnapshot {
+  id               String        @id @default(cuid())
+  analysisId       String
+  teamReviewId     String?
+  walletAddress    String
+  chain            String
+  reviewerId       String
+  previousStatus   WalletStatus
+  finalStatus      WalletStatus
+  feedbackLabel    FeedbackLabel?
+  source           String
+  evidence         Json
+  createdAt        DateTime      @default(now())
+
+  @@index([analysisId, createdAt])
+  @@index([analysisId, walletAddress, createdAt])
+  @@index([teamReviewId, createdAt])
+  @@index([reviewerId, createdAt])
+}
