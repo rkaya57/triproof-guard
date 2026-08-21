@@ -77,6 +77,9 @@ export type CampaignPolicyReport = {
   campaignId: string
   campaignName: string
   analysisId: string
+  /** Policy stored on the analyzed campaign/run. This is the simulator baseline. */
+  analysisPreset: RiskPolicy
+  /** Preset used to generate this read-only report; may be a temporary URL preview. */
   preset: RiskPolicy
   thresholds: CampaignPolicyThresholds
   generatedAt: string
