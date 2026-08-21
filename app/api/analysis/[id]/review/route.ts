@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server"
 import type { Prisma } from "@prisma/client"
 
+import { chainAddressKey } from "@/lib/address-normalization"
 import { getCurrentUser } from "@/lib/auth/session"
+import { loadReviewEvidenceSnapshots } from "@/lib/campaign-security/review-evidence-snapshot"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
 import type { FeedbackLabel, WalletStatus } from "@/types"
@@ -94,6 +96,23 @@ export async function POST(
 
     const result = await db.$transaction(async (tx: Prisma.TransactionClient) => {
       const previousStatus = wallet.status
+      const evidenceSnapshots = await loadReviewEvidenceSnapshots(
+        id,
+        [
+          {
+            walletAddress: wallet.walletAddress,
+            chain: wallet.chain,
+            status: wallet.status,
+            riskScore: wallet.riskScore,
+            riskLevel: wallet.riskLevel,
+            recommendedAction: wallet.recommendedAction,
+          },
+        ],
+        tx,
+      )
+      const evidenceSnapshot = evidenceSnapshots.get(
+        chainAddressKey(wallet.walletAddress, wallet.chain),
+      )
       const statusExplanation = `Team review override: final status set to ${finalStatus.replace("_", " ")}${feedbackLabel ? ` with feedback ${feedbackLabel.replace(/_/g, " ")}` : ""}. Original Tri-Proof status was ${previousStatus.replace("_", " ")}.`
 
       const updatedWallet = await tx.walletAnalysis.update({
@@ -129,6 +148,23 @@ export async function POST(
         },
       })
 
+      if (evidenceSnapshot) {
+        await tx.teamReviewEvidenceSnapshot.create({
+          data: {
+            analysisId: id,
+            teamReviewId: review.id,
+            walletAddress: wallet.walletAddress,
+            chain: wallet.chain,
+            reviewerId: user.id,
+            previousStatus,
+            finalStatus,
+            feedbackLabel,
+            source,
+            evidence: evidenceSnapshot as unknown as Prisma.InputJsonValue,
+          },
+        })
+      }
+
       if (feedbackLabel) {
         await tx.feedbackEvent.create({
           data: {
@@ -149,7 +185,7 @@ export async function POST(
       }
 
       const counts = await updateAnalysisCounts(tx, id)
-      return { review, wallet: updatedWallet, counts }
+      return { review, wallet: updatedWallet, counts, evidenceSnapshotCaptured: Boolean(evidenceSnapshot) }
     })
 
     return NextResponse.json({
@@ -168,6 +204,7 @@ export async function POST(
         statusExplanation: result.wallet.statusExplanation,
       },
       counts: result.counts,
+      evidenceSnapshotCaptured: result.evidenceSnapshotCaptured,
     })
   } catch (error) {
     if (isDatabaseConnectionError(error)) {
