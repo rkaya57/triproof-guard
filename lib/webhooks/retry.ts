@@ -9,6 +9,7 @@ import { webhookHeaders } from "@/lib/webhooks/sign"
 
 const DEFAULT_WEBHOOK_RETRY_LIMIT = Number.parseInt(process.env.WEBHOOK_RETRY_LIMIT ?? "10", 10)
 const DEFAULT_WEBHOOK_MAX_ATTEMPTS = Number.parseInt(process.env.WEBHOOK_MAX_ATTEMPTS ?? "3", 10)
+const DEFAULT_PENDING_RETRY_AGE_MS = 60_000
 export const ABSOLUTE_WEBHOOK_MAX_ATTEMPTS = 10
 
 type DeliveryWithEndpoint = {
@@ -45,6 +46,9 @@ export function assertWebhookRetryAllowed(input: {
 }) {
   if (input.status === "delivered") {
     throw new WebhookRetryConflictError("Delivered webhooks cannot be sent again.", "WEBHOOK_ALREADY_DELIVERED")
+  }
+  if (input.status === "pending") {
+    throw new WebhookRetryConflictError("Pending webhook delivery may still be in progress.", "WEBHOOK_RETRY_IN_PROGRESS")
   }
   if (!input.isActive) {
     throw new WebhookRetryConflictError("Resume the webhook endpoint before retrying delivery.", "WEBHOOK_ENDPOINT_PAUSED")
@@ -173,9 +177,13 @@ export async function retryWebhookDeliveries({
 } = {}) {
   const deliveryLimit = safeLimit(limit)
   const attemptLimit = safeMaxAttempts(maxAttempts)
+  const stalePendingBefore = new Date(Date.now() - DEFAULT_PENDING_RETRY_AGE_MS)
   const deliveries = await db.webhookDelivery.findMany({
     where: {
-      status: { in: ["pending", "failed"] },
+      OR: [
+        { status: "failed" },
+        { status: "pending", createdAt: { lte: stalePendingBefore } },
+      ],
       attemptCount: { lt: attemptLimit },
       endpoint: { isActive: true },
     },
