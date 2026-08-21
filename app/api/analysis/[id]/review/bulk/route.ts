@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server"
 import type { Prisma } from "@prisma/client"
 
+import { chainAddressKey } from "@/lib/address-normalization"
 import { getCurrentUser } from "@/lib/auth/session"
+import { loadReviewEvidenceSnapshots } from "@/lib/campaign-security/review-evidence-snapshot"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
 import type { FeedbackLabel, WalletStatus } from "@/types"
@@ -104,6 +106,20 @@ export async function POST(
     }
 
     const result = await db.$transaction(async (tx: Prisma.TransactionClient) => {
+      const evidenceSnapshots = await loadReviewEvidenceSnapshots(
+        id,
+        wallets.map((wallet) => ({
+          walletAddress: wallet.walletAddress,
+          chain: wallet.chain,
+          status: wallet.status,
+          riskScore: wallet.riskScore,
+          riskLevel: wallet.riskLevel,
+          recommendedAction: wallet.recommendedAction,
+        })),
+        tx,
+      )
+      const snapshotRows: Prisma.TeamReviewEvidenceSnapshotCreateManyInput[] = []
+
       for (const wallet of wallets) {
         const previousStatus = wallet.status
         const statusExplanation = `Team bulk review override: final status set to ${finalStatus.replace("_", " ")}${feedbackLabel ? ` with feedback ${feedbackLabel.replace(/_/g, " ")}` : ""}. Original Tri-Proof status was ${previousStatus.replace("_", " ")}.`
@@ -117,7 +133,7 @@ export async function POST(
           },
         })
 
-        await tx.teamReview.upsert({
+        const review = await tx.teamReview.upsert({
           where: { analysisId_walletAddress: { analysisId: id, walletAddress: wallet.walletAddress } },
           update: {
             walletAnalysisId: wallet.id,
@@ -141,6 +157,24 @@ export async function POST(
           },
         })
 
+        const evidenceSnapshot = evidenceSnapshots.get(
+          chainAddressKey(wallet.walletAddress, wallet.chain),
+        )
+        if (evidenceSnapshot) {
+          snapshotRows.push({
+            analysisId: id,
+            teamReviewId: review.id,
+            walletAddress: wallet.walletAddress,
+            chain: wallet.chain,
+            reviewerId: user.id,
+            previousStatus,
+            finalStatus,
+            feedbackLabel,
+            source,
+            evidence: evidenceSnapshot as unknown as Prisma.InputJsonValue,
+          })
+        }
+
         if (feedbackLabel) {
           await tx.feedbackEvent.create({
             data: {
@@ -161,8 +195,12 @@ export async function POST(
         }
       }
 
+      if (snapshotRows.length) {
+        await tx.teamReviewEvidenceSnapshot.createMany({ data: snapshotRows })
+      }
+
       const counts = await updateAnalysisCounts(tx, id)
-      return { counts }
+      return { counts, evidenceSnapshotsCaptured: snapshotRows.length }
     })
 
     return NextResponse.json({
@@ -171,6 +209,7 @@ export async function POST(
       finalStatus,
       feedbackLabel,
       counts: result.counts,
+      evidenceSnapshotsCaptured: result.evidenceSnapshotsCaptured,
       missingWallets: addresses.filter((address) => !wallets.some((wallet) => wallet.walletAddress === address)),
     })
   } catch (error) {
