@@ -1,4 +1,8 @@
 import { apiError, getApiUser } from "@/lib/api/auth"
+import {
+  CampaignOperationError,
+  changeCampaignLifecycle,
+} from "@/lib/campaigns/operations-server"
 import { riskPolicyFromNotes } from "@/lib/campaigns/persistence"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
@@ -113,6 +117,7 @@ export async function GET(
       links: {
         self: `/api/v2/campaigns/${project.id}`,
         analyses: `/api/v2/campaigns/${project.id}/analyses`,
+        policy: `/api/v2/campaigns/${project.id}/policy`,
         decisions: `/api/v2/campaigns/${project.id}/decisions`,
         dashboard: `/dashboard/campaigns/${project.id}`,
       },
@@ -122,6 +127,61 @@ export async function GET(
       headers: { "Cache-Control": "private, no-store" },
     })
   } catch (error) {
+    if (isDatabaseConnectionError(error)) return apiError("Database is required for API usage", 503)
+    throw error
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  const auth = await getApiUser(request)
+  if (auth.error) return auth.error
+  const { id } = await context.params
+
+  let body: Record<string, unknown>
+  try {
+    body = (await request.json()) as Record<string, unknown>
+  } catch {
+    return apiError("Invalid JSON body", 400)
+  }
+
+  if (!("lifecycle" in body)) {
+    return apiError(
+      "Campaign Operations v1 PATCH currently requires lifecycle. Use the dedicated policy endpoint for policy changes.",
+      400,
+      { code: "LIFECYCLE_REQUIRED" },
+    )
+  }
+
+  try {
+    const result = await db.$transaction((tx) => changeCampaignLifecycle(tx, {
+      campaignId: id,
+      userId: auth.user.id,
+      actor: { id: auth.user.id, name: auth.user.name },
+      lifecycle: body.lifecycle,
+      source: request.headers.get("authorization") ? "api-v2" : "dashboard-v2",
+    }))
+
+    return Response.json({
+      id: result.campaignId,
+      object: "campaign_lifecycle_change",
+      apiVersion: "v2",
+      previousLifecycle: result.previousLifecycle,
+      lifecycle: result.lifecycle,
+      boundaries: result.boundaries,
+      links: {
+        campaign: `/api/v2/campaigns/${result.campaignId}`,
+        analyses: `/api/v2/campaigns/${result.campaignId}/analyses`,
+      },
+    }, {
+      headers: { "Cache-Control": "private, no-store" },
+    })
+  } catch (error) {
+    if (error instanceof CampaignOperationError) {
+      return apiError(error.message, error.status, { code: error.code })
+    }
     if (isDatabaseConnectionError(error)) return apiError("Database is required for API usage", 503)
     throw error
   }
