@@ -23,7 +23,7 @@ export async function GET(
     const result = await loadClusterInvestigation(id, user.id, normalizedClusterLabel)
     if (!result) return NextResponse.json({ error: "Analysis not found" }, { status: 404 })
     if (!result.report) return NextResponse.json({ error: "Cluster not found" }, { status: 404 })
-    return NextResponse.json({ report: result.report })
+    return NextResponse.json({ report: result.report, intelligence: result.intelligence })
   } catch (error) {
     if (isDatabaseConnectionError(error)) {
       return NextResponse.json(
