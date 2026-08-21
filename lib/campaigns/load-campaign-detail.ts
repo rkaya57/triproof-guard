@@ -1,4 +1,5 @@
 import { serializeAnalysis } from "@/lib/analysis/serializers"
+import { buildCampaignRecord } from "@/lib/campaigns/model"
 import { db } from "@/lib/db/prisma"
 
 export async function loadCampaignDetail(projectId: string, userId: string) {
@@ -50,17 +51,7 @@ export async function loadCampaignDetail(projectId: string, userId: string) {
     : null
 
   return {
-    campaign: {
-      ...project,
-      createdAt: project.createdAt.toISOString(),
-      updatedAt: project.updatedAt.toISOString(),
-      analyses: project.analyses.map((analysis) => ({
-        ...analysis,
-        status: String(analysis.status),
-        createdAt: analysis.createdAt.toISOString(),
-        completedAt: analysis.completedAt?.toISOString() ?? null,
-      })),
-    },
+    campaign: buildCampaignRecord(project),
     latestAnalysis: latest ? serializeAnalysis(latest) : null,
   }
 }
