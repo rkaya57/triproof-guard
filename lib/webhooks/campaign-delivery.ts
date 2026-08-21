@@ -5,6 +5,10 @@ import {
   type CampaignWebhookEventType,
   webhookEventEnabled,
 } from "@/lib/webhooks/campaign-events"
+import {
+  sendWebhookRequest,
+  webhookDeliveryErrorMessage,
+} from "@/lib/webhooks/egress"
 import { webhookHeaders } from "@/lib/webhooks/sign"
 
 type CampaignWebhookPayload = {
@@ -56,21 +60,20 @@ export async function deliverCampaignWebhookEvent(input: {
     })
 
     try {
-      const response = await fetch(endpoint.url, {
-        method: "POST",
+      const response = await sendWebhookRequest({
+        url: endpoint.url,
         headers: webhookHeaders(payloadString, endpoint.secret),
         body: payloadString,
       })
-      const responseBody = (await response.text().catch(() => "")).slice(0, 4000)
       await db.webhookDelivery.update({
         where: { id: delivery.id },
         data: {
           status: response.ok ? "delivered" : "failed",
           statusCode: response.status,
-          responseBody,
+          responseBody: response.body.slice(0, 4000),
           attemptCount: 1,
           deliveredAt: response.ok ? new Date() : null,
-          errorMessage: response.ok ? null : `HTTP ${response.status}`,
+          errorMessage: webhookDeliveryErrorMessage(response),
         },
       })
       if (response.ok) delivered += 1
