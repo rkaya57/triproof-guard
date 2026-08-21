@@ -17,6 +17,9 @@ export type CampaignAnalysisRunSummary = {
   rejectedCount: number
   averageRiskScore: number
   suspiciousClustersCount: number
+  modelVersion: string | null
+  policyVersion: string | null
+  inputHash: string | null
   createdAt: string
   completedAt: string | null
 }
@@ -61,6 +64,12 @@ type LegacyCampaignProject = {
     createdAt: Date
     completedAt: Date | null
   }>
+}
+
+type AnalysisRunMetadata = {
+  modelVersion: string
+  policyVersion: string | null
+  inputHash: string | null
 }
 
 const NETWORK_ALIASES: Record<string, string> = {
@@ -117,14 +126,21 @@ export function buildCampaignRecord(
     rewardPoolUsd?: number | null
     metadata?: unknown | null
     analysisRunCount?: number
+    analysisRunMetadata?: Readonly<Record<string, AnalysisRunMetadata>>
   } = {},
 ): CampaignRecord {
-  const analyses = project.analyses.map((analysis) => ({
-    ...analysis,
-    status: String(analysis.status),
-    createdAt: analysis.createdAt.toISOString(),
-    completedAt: analysis.completedAt?.toISOString() ?? null,
-  }))
+  const analyses = project.analyses.map((analysis) => {
+    const metadata = options.analysisRunMetadata?.[analysis.id]
+    return {
+      ...analysis,
+      status: String(analysis.status),
+      modelVersion: metadata?.modelVersion ?? null,
+      policyVersion: metadata?.policyVersion ?? null,
+      inputHash: metadata?.inputHash ?? null,
+      createdAt: analysis.createdAt.toISOString(),
+      completedAt: analysis.completedAt?.toISOString() ?? null,
+    }
+  })
 
   return {
     id: project.id,
