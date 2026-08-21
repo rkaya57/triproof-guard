@@ -1,0 +1,17 @@
+model ClusterAnalystProposal {
+  id               String   @id @default(cuid())
+  analysisId       String
+  clusterLabel     String
+  analystId        String
+  analystName      String
+  proposalType     String
+  payload          Json
+  evidenceSnapshot Json
+  notes            String?
+  source           String   @default("cluster_workspace")
+  createdAt        DateTime @default(now())
+
+  @@index([analysisId, clusterLabel, createdAt])
+  @@index([analystId, createdAt])
+  @@index([proposalType, createdAt])
+}
