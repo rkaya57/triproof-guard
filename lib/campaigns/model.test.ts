@@ -61,10 +61,13 @@ describe("campaign domain model", () => {
     assert.equal(campaign.latestAnalysisId, "analysis-2")
     assert.equal(campaign.createdAt, createdAt.toISOString())
     assert.equal(campaign.analyses[0]?.status, "completed")
+    assert.equal(campaign.analyses[0]?.modelVersion, null)
+    assert.equal(campaign.analyses[0]?.policyVersion, null)
+    assert.equal(campaign.analyses[0]?.inputHash, null)
     assert.equal(campaign.rewardPoolUsd, null)
   })
 
-  it("prefers persisted campaign-native state over legacy defaults", () => {
+  it("prefers persisted campaign-native state and run audit metadata over legacy defaults", () => {
     const createdAt = new Date("2026-08-20T12:00:00.000Z")
     const startsAt = new Date("2026-09-01T00:00:00.000Z")
     const endsAt = new Date("2026-09-30T23:59:59.000Z")
@@ -78,7 +81,20 @@ describe("campaign domain model", () => {
         notes: null,
         createdAt,
         updatedAt: createdAt,
-        analyses: [],
+        analyses: [
+          {
+            id: "analysis-42",
+            status: "completed",
+            totalWallets: 10000,
+            approvedCount: 8200,
+            manualReviewCount: 900,
+            rejectedCount: 900,
+            averageRiskScore: 27.4,
+            suspiciousClustersCount: 37,
+            createdAt,
+            completedAt: createdAt,
+          },
+        ],
       },
       {
         lifecycle: "paused",
@@ -88,6 +104,13 @@ describe("campaign domain model", () => {
         rewardPoolUsd: 250000,
         metadata: { source: "campaign-core" },
         analysisRunCount: 42,
+        analysisRunMetadata: {
+          "analysis-42": {
+            modelVersion: "tri-proof-risk-engine-v1.8",
+            policyVersion: "v3",
+            inputHash: "a".repeat(64),
+          },
+        },
       },
     )
 
@@ -98,5 +121,8 @@ describe("campaign domain model", () => {
     assert.equal(campaign.endsAt, endsAt.toISOString())
     assert.equal(campaign.rewardPoolUsd, 250000)
     assert.deepEqual(campaign.metadata, { source: "campaign-core" })
+    assert.equal(campaign.analyses[0]?.modelVersion, "tri-proof-risk-engine-v1.8")
+    assert.equal(campaign.analyses[0]?.policyVersion, "v3")
+    assert.equal(campaign.analyses[0]?.inputHash, "a".repeat(64))
   })
 })
