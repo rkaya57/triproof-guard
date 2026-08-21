@@ -98,7 +98,6 @@ async function resolveWebhookAddresses(
         timer = setTimeout(() => {
           reject(new WebhookEgressBlockedError("Webhook DNS resolution timed out."))
         }, timeoutMs)
-        timer.unref?.()
       }),
     ])
   } finally {
