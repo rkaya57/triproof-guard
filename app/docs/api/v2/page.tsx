@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowRight, ClipboardCheck, Code2, Layers3, PlayCircle, ShieldCheck } from "lucide-react"
+import { ArrowRight, ClipboardCheck, Code2, Layers3, PlayCircle, RefreshCw, ShieldCheck } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
@@ -53,15 +53,36 @@ curl "https://triproofprotocol.com/api/v2/campaigns/CAMPAIGN_ID/decisions?format
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -o decision-package.csv`
 
+const lifecycleExample = `curl -X PATCH https://triproofprotocol.com/api/v2/campaigns/CAMPAIGN_ID \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -d '{ "lifecycle": "paused" }'
+
+# Allowed transitions are forward-safe.
+# Example: completed -> active and archived -> active are rejected.`
+
+const policyExample = `curl -X POST https://triproofprotocol.com/api/v2/campaigns/CAMPAIGN_ID/policy \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -d '{
+    "preset": "strict",
+    "rationale": "Increase protection before the final reward distribution."
+  }'
+
+# A new CampaignPolicy version is created.
+# Stored decisions from earlier runs are not recomputed.`
+
 export const metadata = {
   title: "Tri-Proof Campaign API v2",
-  description: "Campaign-centric API v2 quick-start for durable campaigns, repeatable wallet analysis runs, and decision packages.",
+  description: "Campaign-centric API v2 quick-start for durable campaigns, repeatable wallet analysis runs, lifecycle operations, versioned policy changes, and decision packages.",
 }
 
 const endpoints = [
   ["POST", "/api/v2/campaigns", "Create one durable campaign resource and freeze its initial risk-policy context."],
   ["GET", "/api/v2/campaigns", "List campaigns, lifecycle state, current policy, and latest analysis run."],
   ["GET", "/api/v2/campaigns/{id}", "Read one campaign with policy history and recent analysis runs."],
+  ["PATCH", "/api/v2/campaigns/{id}", "Move the campaign through transition-safe lifecycle states."],
+  ["POST", "/api/v2/campaigns/{id}/policy", "Activate a new versioned policy for future analysis runs with a required rationale."],
   ["POST", "/api/v2/campaigns/{id}/analyses", "Start another JSON or CSV wallet analysis under the same campaign."],
   ["GET", "/api/v2/campaigns/{id}/analyses/{analysisId}", "Read status, decision totals, top wallet evidence, clusters, and graph context."],
   ["GET", "/api/v2/campaigns/{id}/decisions", "Retrieve the latest campaign Decision Package as JSON or CSV."],
@@ -100,12 +121,15 @@ export default function CampaignApiV2DocsPage() {
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <Card className="glass-panel premium-card">
             <CardHeader><Layers3 className="text-primary" /><CardTitle>Create campaign</CardTitle><CardDescription>Store campaign identity, chain, lifecycle, reward context, contracts and initial policy.</CardDescription></CardHeader>
           </Card>
           <Card className="glass-panel premium-card">
             <CardHeader><PlayCircle className="text-primary" /><CardTitle>Run cohorts</CardTitle><CardDescription>Submit another wallet list without creating another campaign. JSON and multipart CSV are supported.</CardDescription></CardHeader>
+          </Card>
+          <Card className="glass-panel premium-card">
+            <CardHeader><RefreshCw className="text-primary" /><CardTitle>Operate safely</CardTitle><CardDescription>Pause or complete the campaign and version its policy without rewriting prior run decisions.</CardDescription></CardHeader>
           </Card>
           <Card className="glass-panel premium-card">
             <CardHeader><ShieldCheck className="text-primary" /><CardTitle>Track evidence</CardTitle><CardDescription>Poll run status and read explainable decisions, cluster summaries, and Graph Intelligence context.</CardDescription></CardHeader>
@@ -153,8 +177,18 @@ export default function CampaignApiV2DocsPage() {
             <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{statusExample}</code></pre></CardContent>
           </Card>
 
+          <Card className="glass-panel premium-card">
+            <CardHeader><RefreshCw className="text-primary" /><CardTitle>5. Change lifecycle</CardTitle><CardDescription>Lifecycle transitions are constrained; completed and archived campaigns cannot be silently reopened.</CardDescription></CardHeader>
+            <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{lifecycleExample}</code></pre></CardContent>
+          </Card>
+
+          <Card className="glass-panel premium-card">
+            <CardHeader><ShieldCheck className="text-primary" /><CardTitle>6. Activate a policy version</CardTitle><CardDescription>A rationale is required and the new version applies only to future campaign runs.</CardDescription></CardHeader>
+            <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{policyExample}</code></pre></CardContent>
+          </Card>
+
           <Card className="glass-panel premium-card lg:col-span-2">
-            <CardHeader><ClipboardCheck className="text-primary" /><CardTitle>5. Retrieve Decision Package</CardTitle><CardDescription>The package reuses the same read-only customer decision semantics as the dashboard; API v2 does not recompute wallet decisions.</CardDescription></CardHeader>
+            <CardHeader><ClipboardCheck className="text-primary" /><CardTitle>7. Retrieve Decision Package</CardTitle><CardDescription>The package reuses the same read-only customer decision semantics as the dashboard; API v2 does not recompute wallet decisions.</CardDescription></CardHeader>
             <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{decisionsExample}</code></pre></CardContent>
           </Card>
         </div>
@@ -163,7 +197,7 @@ export default function CampaignApiV2DocsPage() {
           <CardHeader>
             <CardTitle>Decision and policy boundaries</CardTitle>
             <CardDescription>
-              A campaign run cannot silently change its stored policy preset. Paused, completed, and archived campaigns reject new runs. Provider failures remain unresolved evidence/Gray Zone context rather than becoming malicious risk. Decision Package export is read-only.
+              A campaign run cannot silently change its stored policy preset. Policy activation creates a new CampaignPolicy version and never recomputes prior run decisions. Paused, completed, and archived campaigns reject new runs. Completed campaigns can only be archived, while archived campaigns cannot be reopened by Campaign Operations v1. Provider failures remain unresolved evidence/Gray Zone context rather than becoming malicious risk. Decision Package export is read-only.
             </CardDescription>
           </CardHeader>
         </Card>
