@@ -68,19 +68,20 @@ function confidenceBand(score: number, qualifiesByStoredRule: boolean): ClusterS
   return "low"
 }
 
-function riskEvidenceFamiliesForWallet(analysis: AnalysisDetail | undefined, chain: string, walletAddress: string) {
-  if (!analysis) return new Set<DecisionEvidenceFamily>()
-  const key = chainAddressKey(walletAddress, chain)
-  const wallet = analysis.wallets.find(
-    (candidate) => chainAddressKey(candidate.walletAddress, candidate.chain) === key,
-  )
-  if (!wallet?.decisionEvidence) return new Set<DecisionEvidenceFamily>()
+function riskEvidenceFamilyMap(analysis: AnalysisDetail | undefined) {
+  const map = new Map<string, Set<DecisionEvidenceFamily>>()
+  if (!analysis) return map
 
-  return new Set(
-    wallet.decisionEvidence.evidence
-      .filter((item) => item.effect === "risk_signal" || item.effect === "corroborating_signal")
-      .map((item) => item.family),
-  )
+  for (const wallet of analysis.wallets) {
+    const families = new Set<DecisionEvidenceFamily>()
+    for (const item of wallet.decisionEvidence?.evidence ?? []) {
+      if (item.effect === "risk_signal" || item.effect === "corroborating_signal") {
+        families.add(item.family)
+      }
+    }
+    map.set(chainAddressKey(wallet.walletAddress, wallet.chain), families)
+  }
+  return map
 }
 
 export function assessClusterSupport(
@@ -88,12 +89,14 @@ export function assessClusterSupport(
   analysis?: AnalysisDetail,
 ): ClusterSupportIntelligence {
   const memberCount = report.members.length
+  const riskFamiliesByWallet = riskEvidenceFamilyMap(analysis)
   const familySupport = report.grouping.families.map((family) => {
     const decisionFamily = decisionFamilyByGroupingFamily[family.family]
     const supportedMembers = decisionFamily
-      ? report.members.filter((member) =>
-          riskEvidenceFamiliesForWallet(analysis, member.chain, member.walletAddress).has(decisionFamily),
-        ).length
+      ? report.members.reduce((count, member) => {
+          const families = riskFamiliesByWallet.get(chainAddressKey(member.walletAddress, member.chain))
+          return count + (families?.has(decisionFamily) ? 1 : 0)
+        }, 0)
       : 0
 
     return {
