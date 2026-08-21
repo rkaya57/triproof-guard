@@ -36,6 +36,7 @@ export async function loadCampaignDetail(projectId: string, userId: string) {
   if (!project) return null
 
   const latestId = project.analyses[0]?.id
+  const recentAnalysisIds = project.analyses.map((analysis) => analysis.id)
   const [latest, persistedCampaign] = await Promise.all([
     latestId
       ? db.analysis.findFirst({
@@ -60,9 +61,31 @@ export async function loadCampaignDetail(projectId: string, userId: string) {
         endsAt: true,
         rewardPoolUsd: true,
         metadata: true,
+        analysisRuns: {
+          where: { legacyAnalysisId: { in: recentAnalysisIds } },
+          select: {
+            legacyAnalysisId: true,
+            modelVersion: true,
+            policyVersion: true,
+            inputHash: true,
+          },
+        },
       },
     }),
   ])
+
+  const analysisRunMetadata = Object.fromEntries(
+    (persistedCampaign?.analysisRuns ?? [])
+      .filter((run) => run.legacyAnalysisId)
+      .map((run) => [
+        run.legacyAnalysisId as string,
+        {
+          modelVersion: run.modelVersion,
+          policyVersion: run.policyVersion,
+          inputHash: run.inputHash,
+        },
+      ]),
+  )
 
   return {
     campaign: buildCampaignRecord(project, {
@@ -75,6 +98,7 @@ export async function loadCampaignDetail(projectId: string, userId: string) {
         : null,
       metadata: persistedCampaign?.metadata ?? null,
       analysisRunCount: project._count.analyses,
+      analysisRunMetadata,
     }),
     latestAnalysis: latest ? serializeAnalysis(latest) : null,
   }
