@@ -50,6 +50,29 @@ export async function loadLatestClusterReview(
   }
 }
 
+export async function loadLatestClusterReviewsForAnalysis(
+  analysisId: string,
+  limit = 5_000,
+): Promise<ClusterReviewRecord[]> {
+  try {
+    const rows = await db.clusterInvestigationReview.findMany({
+      where: { analysisId },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: Math.min(Math.max(limit, 1), 10_000),
+    })
+    const latestByCluster = new Map<string, ClusterReviewRecord>()
+    for (const row of rows) {
+      if (!latestByCluster.has(row.clusterLabel)) {
+        latestByCluster.set(row.clusterLabel, serializeReview(row))
+      }
+    }
+    return Array.from(latestByCluster.values())
+  } catch (error) {
+    if (isMissingClusterReviewTable(error)) return []
+    throw error
+  }
+}
+
 export async function loadClusterReviewHistory(
   analysisId: string,
   clusterLabel: string,
