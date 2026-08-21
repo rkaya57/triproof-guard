@@ -9,14 +9,28 @@ import type { RiskPolicy } from "@/types"
 export const CAMPAIGN_CORE_SCHEMA_VERSION = "tri-proof-campaign-core-v1" as const
 export const CAMPAIGN_MODEL_VERSION = "tri-proof-risk-engine-v1" as const
 
+const DECISION_WRITE_BATCH_SIZE = 500
+
 const policyThresholds: Record<RiskPolicy, { allowMax: number; reviewMax: number; excludeMin: number }> = {
   conservative: { allowMax: 35, reviewMax: 74, excludeMin: 75 },
   balanced: { allowMax: 35, reviewMax: 59, excludeMin: 60 },
   strict: { allowMax: 25, reviewMax: 49, excludeMin: 50 },
 }
 
+function canonicalizeJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalizeJson)
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, nested]) => [key, canonicalizeJson(nested)])
+    )
+  }
+  return value
+}
+
 function stableJson(value: unknown) {
-  return JSON.stringify(value, Object.keys(value as object).sort())
+  return JSON.stringify(canonicalizeJson(value))
 }
 
 function sha256(value: string) {
@@ -225,27 +239,29 @@ export async function syncCompletedCampaignAnalysis(analysisId: string) {
       where: { analysisRunId: persisted.analysisRun.id },
     })
 
-    if (legacy.wallets.length > 0) {
+    const decisions: Prisma.CampaignDecisionCreateManyInput[] = legacy.wallets.map((wallet) => ({
+      id: decisionId(legacy.id, wallet.chain, wallet.walletAddress),
+      campaignId: persisted.campaign.id,
+      analysisRunId: persisted.analysisRun.id,
+      policyId: persisted.policy.id,
+      walletAddress: wallet.walletAddress,
+      chain: wallet.chain,
+      state: campaignDecisionState(String(wallet.status)),
+      riskScore: wallet.riskScore,
+      confidence: null,
+      clusterId: wallet.clusterId,
+      evidence: wallet.reasons as Prisma.InputJsonValue,
+      matchedRules: [] as Prisma.InputJsonValue,
+      explanation: wallet.statusExplanation,
+      modelVersion: CAMPAIGN_MODEL_VERSION,
+      policyVersion: `v${persisted.policy.version}`,
+      createdAt: wallet.createdAt,
+      updatedAt: legacy.completedAt ?? new Date(),
+    }))
+
+    for (let index = 0; index < decisions.length; index += DECISION_WRITE_BATCH_SIZE) {
       await tx.campaignDecision.createMany({
-        data: legacy.wallets.map((wallet) => ({
-          id: decisionId(legacy.id, wallet.chain, wallet.walletAddress),
-          campaignId: persisted.campaign.id,
-          analysisRunId: persisted.analysisRun.id,
-          policyId: persisted.policy.id,
-          walletAddress: wallet.walletAddress,
-          chain: wallet.chain,
-          state: campaignDecisionState(String(wallet.status)),
-          riskScore: wallet.riskScore,
-          confidence: null,
-          clusterId: wallet.clusterId,
-          evidence: wallet.reasons,
-          matchedRules: [],
-          explanation: wallet.statusExplanation,
-          modelVersion: CAMPAIGN_MODEL_VERSION,
-          policyVersion: `v${persisted.policy.version}`,
-          createdAt: wallet.createdAt,
-          updatedAt: legacy.completedAt ?? new Date(),
-        })),
+        data: decisions.slice(index, index + DECISION_WRITE_BATCH_SIZE),
       })
     }
 
@@ -253,7 +269,7 @@ export async function syncCompletedCampaignAnalysis(analysisId: string) {
       campaignId: persisted.campaign.id,
       analysisRunId: persisted.analysisRun.id,
       policyId: persisted.policy.id,
-      decisionsWritten: legacy.wallets.length,
+      decisionsWritten: decisions.length,
     }
   })
 }
