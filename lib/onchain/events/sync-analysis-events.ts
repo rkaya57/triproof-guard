@@ -3,7 +3,12 @@ import { Prisma } from "@prisma/client"
 import { db } from "@/lib/db/prisma"
 import type { EnrichedWalletData, WalletEnrichmentResult } from "@/lib/onchain/enrichment-types"
 import { normalizedFundingEventsFromEnrichments } from "@/lib/onchain/events/from-enrichment"
+import { extractFundingObservations } from "@/lib/onchain/events/normalize"
 import { persistNormalizedOnchainEvents } from "@/lib/onchain/events/persistence"
+import {
+  buildFundingRelationshipContext,
+  type FundingIntelEntry,
+} from "@/lib/onchain/funding/intel-context"
 import { replaceCampaignFundingRelationships } from "@/lib/onchain/funding/persistence"
 import { deriveFundingRelationships } from "@/lib/onchain/funding/relationships"
 
@@ -78,13 +83,37 @@ export async function syncNormalizedFundingEvents(analysisId: string) {
     const events = normalizedFundingEventsFromEnrichments(enrichedWallets)
     const persistedEvents = await persistNormalizedOnchainEvents(run.id, events, tx)
 
-    // Funding relationships are derived only from canonical funding events.
-    // Registry-known exchange/bridge/protocol/service infrastructure is
-    // suppressed by the shared graph-intelligence rule before an edge can be
-    // marked risk-bearing. Campaign-specific trusted-source context can be
-    // supplied here in a later policy slice without changing the relationship
-    // contract or stored evidence.
-    const relationships = deriveFundingRelationships(events)
+    const fundingObservations = extractFundingObservations(events)
+    const fundingIntel = fundingObservations.length > 0
+      ? await tx.scamGuardIntelEntry.findMany({
+          where: {
+            active: true,
+            kind: { in: ["WALLET", "EVM_ADDRESS", "SOLANA_ADDRESS"] },
+            verdict: { in: ["TRUSTED", "KNOWN_BAD"] },
+          },
+          select: {
+            normalized: true,
+            chain: true,
+            verdict: true,
+            label: true,
+          },
+        })
+      : []
+    const graphContext = buildFundingRelationshipContext(
+      fundingObservations,
+      fundingIntel.map((entry) => ({
+        normalized: entry.normalized,
+        chain: entry.chain,
+        verdict: String(entry.verdict),
+        label: entry.label,
+      })) as FundingIntelEntry[],
+    )
+
+    // Relationship risk semantics remain evidence-first: registry-known
+    // infrastructure is neutralized, TRUSTED campaign intelligence suppresses
+    // funding fan-out, and KNOWN_BAD intelligence can make otherwise ambiguous
+    // direct or lineage evidence risk-bearing.
+    const relationships = deriveFundingRelationships(events, graphContext)
     const persistedRelationships = await replaceCampaignFundingRelationships(
       run.campaignId,
       run.id,
