@@ -53,6 +53,12 @@ type LineageStep = {
 
 type RelationshipCandidate = FundingRelationship
 
+type BurstFundingEvidence = {
+  burstFunding: boolean
+  timestampCoverage: number
+  spreadHours: number | null
+}
+
 function stableKey(parts: readonly (string | number)[]) {
   return createHash("sha256").update(parts.join(":"), "utf8").digest("hex")
 }
@@ -81,6 +87,28 @@ function earlierFunding(left: FundingObservation, right: FundingObservation) {
   return left.observedAt < right.observedAt
 }
 
+function timestampMs(value: string | null) {
+  if (!value) return null
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function burstFundingEvidence(group: readonly DirectFunding[]): BurstFundingEvidence {
+  const timestamps = group
+    .map((edge) => timestampMs(edge.observedAt))
+    .filter((value): value is number => value !== null)
+  const timestampCoverage = group.length > 0 ? timestamps.length / group.length : 0
+  if (group.length < 4 || timestamps.length < Math.ceil(group.length * 0.7)) {
+    return { burstFunding: false, timestampCoverage, spreadHours: null }
+  }
+  const spreadHours = (Math.max(...timestamps) - Math.min(...timestamps)) / 3_600_000
+  return {
+    burstFunding: spreadHours <= 24,
+    timestampCoverage,
+    spreadHours: Number(spreadHours.toFixed(3)),
+  }
+}
+
 function earliestDirectFunding(events: readonly NormalizedOnchainEvent[]) {
   const byWallet = new Map<string, FundingObservation>()
   for (const observation of extractFundingObservations(events)) {
@@ -98,10 +126,12 @@ function contextFlags(
   const contextKey = fundingContextKey(observation.funderAddress, observation.chain)
   const trustedFundingSource = Boolean(context?.trustedFundingSources?.[contextKey])
   const knownBadFundingSource = Boolean(context?.knownBadFundingSources?.[contextKey])
+  // Pass no campaign context here so registry-known infrastructure and
+  // campaign-specific trusted sources remain separately auditable states.
   const neutralInfrastructure = isNeutralServiceAddress(
     observation.funderAddress,
     observation.chain,
-    context,
+    null,
   )
   return { neutralInfrastructure, trustedFundingSource, knownBadFundingSource }
 }
@@ -154,11 +184,13 @@ function buildLineage(
 
 function directRelationships(direct: Map<string, DirectFunding>): FundingRelationship[] {
   return Array.from(direct.values()).map((edge) => {
-    const suppressionReason = edge.neutralInfrastructure
-      ? "neutral_infrastructure_funder"
-      : edge.trustedFundingSource
-        ? "trusted_funding_source"
-        : null
+    const suppressionReason = edge.trustedFundingSource
+      ? "trusted_funding_source"
+      : edge.neutralInfrastructure
+        ? "neutral_infrastructure_funder"
+        : edge.knownBadFundingSource
+          ? null
+          : "direct_funding_requires_corroboration"
     return {
       schemaVersion: FUNDING_RELATIONSHIP_SCHEMA_VERSION,
       relationshipKey: relationshipKey({
@@ -176,8 +208,13 @@ function directRelationships(direct: Map<string, DirectFunding>): FundingRelatio
       hopCount: 1,
       cohortSize: 1,
       confidence: edge.confidence,
-      // A direct funding edge is evidence, not a Sybil conclusion by itself.
-      riskBearing: false,
+      // Direct funding becomes risk-bearing only when independent threat
+      // intelligence identifies the funder as known-bad. Unknown funding alone
+      // remains evidence that requires corroboration.
+      riskBearing:
+        edge.knownBadFundingSource &&
+        !edge.neutralInfrastructure &&
+        !edge.trustedFundingSource,
       suppressionReason,
       evidenceEventKeys: [edge.eventKey],
       observedAt: edge.observedAt,
@@ -185,6 +222,7 @@ function directRelationships(direct: Map<string, DirectFunding>): FundingRelatio
         knownBadFundingSource: edge.knownBadFundingSource,
         trustedFundingSource: edge.trustedFundingSource,
         neutralInfrastructure: edge.neutralInfrastructure,
+        corroborationRequired: !edge.knownBadFundingSource,
         assetSymbol: edge.assetSymbol,
         assetAddress: edge.assetAddress,
         amount: edge.amount,
@@ -217,14 +255,20 @@ function sameFunderRelationships(
     const neutral = distinct.some((edge) => edge.neutralInfrastructure)
     const trusted = distinct.some((edge) => edge.trustedFundingSource)
     const knownBad = distinct.some((edge) => edge.knownBadFundingSource)
-    const riskBearing = distinct.length >= 3 && !neutral && !trusted
-    const suppressionReason = neutral
-      ? "neutral_infrastructure_fanout"
-      : trusted
-        ? "trusted_funding_source_fanout"
+    const burst = burstFundingEvidence(distinct)
+    const riskBearing =
+      !neutral &&
+      !trusted &&
+      (knownBad || burst.burstFunding)
+    const suppressionReason = trusted
+      ? "trusted_funding_source_fanout"
+      : neutral
+        ? "neutral_infrastructure_fanout"
         : distinct.length < 3
           ? "insufficient_same_funder_cohort"
-          : null
+          : !riskBearing
+            ? "same_funder_requires_temporal_or_other_corroboration"
+            : null
 
     for (const member of distinct.slice(1)) {
       relationships.push({
@@ -253,6 +297,10 @@ function sameFunderRelationships(
           knownBadFundingSource: knownBad,
           neutralInfrastructure: neutral,
           trustedFundingSource: trusted,
+          burstFunding: burst.burstFunding,
+          fundingTimestampCoverage: Number(burst.timestampCoverage.toFixed(3)),
+          fundingSpreadHours: burst.spreadHours,
+          corroborationRequired: !riskBearing,
         },
       })
     }
@@ -298,17 +346,20 @@ function sameLineageRelationships(
 
     const anchor = members[0]
     if (!anchor) continue
-    const neutral = isNeutralServiceAddress(ancestor, chain, context)
-    const trusted = Boolean(context?.trustedFundingSources?.[fundingContextKey(ancestor, chain)])
-    const knownBad = Boolean(context?.knownBadFundingSources?.[fundingContextKey(ancestor, chain)])
-    const riskBearing = members.length >= 3 && !neutral && !trusted
-    const suppressionReason = neutral
-      ? "neutral_infrastructure_lineage"
-      : trusted
-        ? "trusted_funding_source_lineage"
+    const contextKey = fundingContextKey(ancestor, chain)
+    const neutral = isNeutralServiceAddress(ancestor, chain, null)
+    const trusted = Boolean(context?.trustedFundingSources?.[contextKey])
+    const knownBad = Boolean(context?.knownBadFundingSources?.[contextKey])
+    const riskBearing = knownBad && !neutral && !trusted
+    const suppressionReason = trusted
+      ? "trusted_funding_source_lineage"
+      : neutral
+        ? "neutral_infrastructure_lineage"
         : members.length < 3
           ? "insufficient_lineage_cohort"
-          : null
+          : !riskBearing
+            ? "funding_lineage_requires_independent_corroboration"
+            : null
 
     for (const member of members.slice(1)) {
       const hopCount = Math.max(member.step.depth, anchor.step.depth)
@@ -341,6 +392,7 @@ function sameLineageRelationships(
           knownBadFundingSource: knownBad,
           neutralInfrastructure: neutral,
           trustedFundingSource: trusted,
+          corroborationRequired: !riskBearing,
         },
       }
 
