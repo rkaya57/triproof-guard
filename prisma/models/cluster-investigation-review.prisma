@@ -1,0 +1,15 @@
+model ClusterInvestigationReview {
+  id               String   @id @default(cuid())
+  analysisId       String
+  clusterLabel     String
+  reviewerId       String
+  reviewerName     String
+  disposition      String
+  notes            String?
+  source           String   @default("cluster_workspace")
+  evidenceSnapshot Json
+  createdAt        DateTime @default(now())
+
+  @@index([analysisId, clusterLabel, createdAt])
+  @@index([reviewerId, createdAt])
+}
