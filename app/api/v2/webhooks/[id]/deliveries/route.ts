@@ -1,3 +1,5 @@
+import type { WebhookDeliveryStatus } from "@prisma/client"
+
 import { apiError } from "@/lib/api/auth"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
@@ -6,7 +8,7 @@ import { serializeWebhookDelivery } from "@/lib/webhooks/observability"
 
 export const runtime = "nodejs"
 
-const deliveryStatuses = new Set(["pending", "failed", "delivered"])
+const deliveryStatuses = new Set<WebhookDeliveryStatus>(["pending", "failed", "delivered"])
 
 function boundedLimit(value: string | null) {
   const parsed = Number.parseInt(value ?? "", 10)
@@ -24,11 +26,12 @@ export async function GET(
   const url = new URL(request.url)
   const limit = boundedLimit(url.searchParams.get("limit"))
   const cursor = url.searchParams.get("cursor")?.trim() || null
-  const statusParam = url.searchParams.get("status")?.trim() || null
+  const rawStatus = url.searchParams.get("status")?.trim() || null
 
-  if (statusParam && !deliveryStatuses.has(statusParam)) {
+  if (rawStatus && !deliveryStatuses.has(rawStatus as WebhookDeliveryStatus)) {
     return apiError("Unsupported webhook delivery status", 400, { code: "INVALID_WEBHOOK_DELIVERY_STATUS" })
   }
+  const statusParam = rawStatus as WebhookDeliveryStatus | null
 
   try {
     const endpoint = await db.webhookEndpoint.findFirst({
