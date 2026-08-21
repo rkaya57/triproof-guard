@@ -117,7 +117,11 @@ function unavailablePackage(input: {
     analysisId: input.analysis.id,
     project: input.analysis.project,
     policy: { status: input.policyStatus, preset: null, thresholds: null, coverage: null },
-    readiness: { status: input.policyStatus, blockers, warnings: [] },
+    readiness: {
+      status: input.policyStatus === "unavailable" ? "policy_unavailable" : "analysis_mismatch",
+      blockers,
+      warnings: [],
+    },
     summary: {
       totalWallets: input.analysis.totalWallets,
       allowCount: 0,
