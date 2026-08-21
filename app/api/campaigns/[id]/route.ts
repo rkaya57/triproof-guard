@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { Prisma } from "@prisma/client"
 
 import { getCurrentUser } from "@/lib/auth/session"
 import { loadCampaignDetail } from "@/lib/campaigns/load-campaign-detail"
@@ -12,6 +13,10 @@ import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
 
 export const runtime = "nodejs"
+
+function prismaMetadata(value: Record<string, unknown> | null) {
+  return value === null ? Prisma.DbNull : (value as Prisma.InputJsonValue)
+}
 
 export async function GET(
   _request: Request,
@@ -100,6 +105,11 @@ export async function PATCH(
       patch,
     )
 
+    const defaultMetadata: Prisma.InputJsonValue = {
+      schemaVersion: "tri-proof-campaign-core-v1",
+      source: "campaign-settings-api",
+    }
+
     await db.campaign.upsert({
       where: { legacyProjectId: project.id },
       create: {
@@ -115,10 +125,8 @@ export async function PATCH(
         startsAt: patch.startsAt ?? null,
         endsAt: patch.endsAt ?? null,
         rewardPoolUsd: patch.rewardPoolUsd ?? null,
-        metadata: patch.metadata ?? {
-          schemaVersion: "tri-proof-campaign-core-v1",
-          source: "campaign-settings-api",
-        },
+        metadata:
+          patch.metadata === undefined ? defaultMetadata : prismaMetadata(patch.metadata),
         createdAt: project.createdAt,
         updatedAt: project.updatedAt,
       },
@@ -128,7 +136,9 @@ export async function PATCH(
         ...(patch.startsAt !== undefined ? { startsAt: patch.startsAt } : {}),
         ...(patch.endsAt !== undefined ? { endsAt: patch.endsAt } : {}),
         ...(patch.rewardPoolUsd !== undefined ? { rewardPoolUsd: patch.rewardPoolUsd } : {}),
-        ...(patch.metadata !== undefined ? { metadata: patch.metadata } : {}),
+        ...(patch.metadata !== undefined
+          ? { metadata: prismaMetadata(patch.metadata) }
+          : {}),
       },
     })
 
