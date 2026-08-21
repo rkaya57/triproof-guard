@@ -45,6 +45,11 @@ function operationStatus(code: string) {
   return 400
 }
 
+function metadataObject(value: Prisma.JsonValue | null): Record<string, Prisma.JsonValue> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
+  return value as Record<string, Prisma.JsonValue>
+}
+
 async function ownedProject(tx: Prisma.TransactionClient, campaignId: string, userId: string) {
   return tx.project.findFirst({
     where: { id: campaignId, userId },
@@ -223,13 +228,17 @@ export async function changeCampaignLifecycle(
   }
 
   const previousLifecycle = campaign.lifecycle
+  const existingMetadata = metadataObject(campaign.metadata)
   const updated = await tx.campaign.update({
     where: { id: campaign.id },
     data: {
       lifecycle: normalized.value.lifecycle,
       metadata: {
-        schemaVersion: "tri-proof-campaign-core-v1",
-        source: "campaign-operations-v1",
+        ...existingMetadata,
+        schemaVersion:
+          typeof existingMetadata.schemaVersion === "string"
+            ? existingMetadata.schemaVersion
+            : "tri-proof-campaign-core-v1",
         lastLifecycleChange: {
           schemaVersion: CAMPAIGN_OPERATIONS_SCHEMA_VERSION,
           source: input.source,
