@@ -163,13 +163,13 @@ test("status and risk-level distributions are computed from stored member decisi
   assert.equal(right?.riskLevelCounts.low, 1)
 })
 
-test("invalid and duplicate cluster labels are ignored and comparison is bounded", () => {
+test("invalid and duplicate cluster labels are ignored before the valid comparison cap", () => {
   const report = buildCrossClusterComparison({
     analysis: analysis(),
     clusterLabels: ["CL-001", "CL-001", "missing", "CL-002", "CL-003", "CL-004", "CL-005"],
   })
-  assert.ok(report.selectedClusterLabels.length <= MAX_COMPARED_CLUSTERS)
-  assert.deepEqual(report.selectedClusterLabels, ["CL-001", "CL-002", "CL-003"])
+  assert.equal(report.selectedClusterLabels.length, MAX_COMPARED_CLUSTERS)
+  assert.deepEqual(report.selectedClusterLabels, ["CL-001", "CL-002", "CL-003", "CL-004"])
 })
 
 test("pairwise comparison reports metric deltas and no synthetic member overlap", () => {
