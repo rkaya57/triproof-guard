@@ -25,13 +25,15 @@ export type CampaignRecord = {
   id: string
   name: string
   campaignType: string
-  /**
-   * Legacy compatibility field. New campaign code should prefer `networks`.
-   */
+  /** Legacy compatibility field. New campaign code should prefer `networks`. */
   chain: string
   networks: string[]
   lifecycle: CampaignLifecycle
   notes: string | null
+  startsAt: string | null
+  endsAt: string | null
+  rewardPoolUsd: number | null
+  metadata: unknown | null
   analysisRunCount: number
   latestAnalysisId: string | null
   createdAt: string
@@ -85,10 +87,7 @@ function normalizeNetworkName(value: string) {
   return NETWORK_ALIASES[normalized] ?? normalized.replace(/\s+/g, "-")
 }
 
-/**
- * Converts legacy single-chain strings such as `Solana + EVM` into the
- * campaign-native network scope used by the new Guard data model.
- */
+/** Converts legacy single-chain strings such as `Solana + EVM` into campaign-native network scope. */
 export function normalizeCampaignNetworks(chain: string, explicitNetworks: readonly string[] = []) {
   const candidates = explicitNetworks.length > 0
     ? explicitNetworks
@@ -105,15 +104,19 @@ export function normalizeCampaignNetworks(chain: string, explicitNetworks: reado
 }
 
 /**
- * Transitional adapter: `Project` is the current persistence model but is
- * already used as a campaign throughout Guard. This creates one canonical
- * campaign contract without forcing a destructive database rename.
+ * Transitional adapter: `Project` remains the legacy persistence model while
+ * new campaign-native state is layered on top without a destructive rename.
  */
 export function buildCampaignRecord(
   project: LegacyCampaignProject,
   options: {
     lifecycle?: CampaignLifecycle
     networks?: readonly string[]
+    startsAt?: Date | null
+    endsAt?: Date | null
+    rewardPoolUsd?: number | null
+    metadata?: unknown | null
+    analysisRunCount?: number
   } = {},
 ): CampaignRecord {
   const analyses = project.analyses.map((analysis) => ({
@@ -131,7 +134,11 @@ export function buildCampaignRecord(
     networks: normalizeCampaignNetworks(project.chain, options.networks),
     lifecycle: options.lifecycle ?? "active",
     notes: project.notes,
-    analysisRunCount: analyses.length,
+    startsAt: options.startsAt?.toISOString() ?? null,
+    endsAt: options.endsAt?.toISOString() ?? null,
+    rewardPoolUsd: options.rewardPoolUsd ?? null,
+    metadata: options.metadata ?? null,
+    analysisRunCount: options.analysisRunCount ?? analyses.length,
     latestAnalysisId: analyses[0]?.id ?? null,
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString(),
