@@ -14,53 +14,55 @@ enum CampaignDecisionState {
 }
 
 model Campaign {
-  id                String               @id @default(cuid())
-  legacyProjectId   String?              @unique
+  id                String                        @id @default(cuid())
+  legacyProjectId   String?                       @unique
   ownerUserId       String
   name              String
   campaignType      String
   legacyChain       String?
-  networks          String[]             @default([])
-  lifecycle         CampaignLifecycle    @default(active)
+  networks          String[]                      @default([])
+  lifecycle         CampaignLifecycle             @default(active)
   notes             String?
   startsAt          DateTime?
   endsAt            DateTime?
-  rewardPoolUsd     Decimal?             @db.Decimal(18, 6)
+  rewardPoolUsd     Decimal?                      @db.Decimal(18, 6)
   metadata          Json?
   analysisRuns      CampaignAnalysisRun[]
   policies          CampaignPolicy[]
   decisions         CampaignDecision[]
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
+  fundingRelationships CampaignFundingRelationship[]
+  createdAt         DateTime                      @default(now())
+  updatedAt         DateTime                      @updatedAt
 
   @@index([ownerUserId, lifecycle, updatedAt])
   @@index([campaignType, updatedAt])
 }
 
 model CampaignAnalysisRun {
-  id                      String                    @id @default(cuid())
+  id                      String                        @id @default(cuid())
   campaignId              String
-  campaign                Campaign                  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  legacyAnalysisId        String?                   @unique
+  campaign                Campaign                      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  legacyAnalysisId        String?                       @unique
   policyId                String?
-  policy                  CampaignPolicy?           @relation(fields: [policyId], references: [id], onDelete: SetNull)
+  policy                  CampaignPolicy?               @relation(fields: [policyId], references: [id], onDelete: SetNull)
   status                  String
   modelVersion            String
   policyVersion           String?
   inputHash               String?
   campaignSnapshot        Json
-  totalWallets            Int                       @default(0)
-  approvedCount           Int                       @default(0)
-  manualReviewCount       Int                       @default(0)
-  rejectedCount           Int                       @default(0)
-  averageRiskScore        Float                     @default(0)
-  suspiciousClustersCount Int                       @default(0)
-  startedAt               DateTime                  @default(now())
+  totalWallets            Int                           @default(0)
+  approvedCount           Int                           @default(0)
+  manualReviewCount       Int                           @default(0)
+  rejectedCount           Int                           @default(0)
+  averageRiskScore        Float                         @default(0)
+  suspiciousClustersCount Int                           @default(0)
+  startedAt               DateTime                      @default(now())
   completedAt             DateTime?
   decisions               CampaignDecision[]
   onchainEvents           NormalizedOnchainEvent[]
-  createdAt               DateTime                  @default(now())
-  updatedAt               DateTime                  @updatedAt
+  fundingRelationships    CampaignFundingRelationship[]
+  createdAt               DateTime                      @default(now())
+  updatedAt               DateTime                      @updatedAt
 
   @@index([campaignId, createdAt])
   @@index([status, createdAt])
