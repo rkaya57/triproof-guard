@@ -9,6 +9,7 @@ import {
   Clock3,
   FilePlus2,
   FileText,
+  Layers3,
   Search,
   ShieldCheck,
   ShieldQuestion,
@@ -133,9 +134,7 @@ function SummaryCard({
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">
-              {label}
-            </p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
             <p className="mt-2 text-2xl font-semibold">{formatNumber(value)}</p>
             <p className="mt-2 text-xs text-muted-foreground">{description}</p>
           </div>
@@ -174,24 +173,22 @@ function CampaignCard({ project }: { project: CampaignWorkspaceProject }) {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {latest ? (
+          <Link
+            href={`/dashboard/campaigns/${project.id}`}
+            className={buttonVariants({ size: "sm" })}
+          >
+            <Layers3 data-icon="inline-start" />
+            Open campaign
+          </Link>
+          {latest && (
             <>
               <Link
                 href={`/dashboard/analysis/${latest.id}`}
-                className={buttonVariants({ size: "sm" })}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
               >
                 <FileText data-icon="inline-start" />
-                Open report
+                Latest report
               </Link>
-              {latest.status === "completed" && (
-                <Link
-                  href={`/dashboard/analysis/${latest.id}/evidence`}
-                  className={buttonVariants({ variant: "outline", size: "sm" })}
-                >
-                  <ShieldCheck data-icon="inline-start" />
-                  Evidence
-                </Link>
-              )}
               {latest.manualReviewCount > 0 && (
                 <Link
                   href={`/dashboard/analysis/${latest.id}/review`}
@@ -202,14 +199,6 @@ function CampaignCard({ project }: { project: CampaignWorkspaceProject }) {
                 </Link>
               )}
             </>
-          ) : (
-            <Link
-              href="/dashboard/new-analysis"
-              className={buttonVariants({ size: "sm" })}
-            >
-              <FilePlus2 data-icon="inline-start" />
-              Start analysis
-            </Link>
           )}
         </div>
       </CardHeader>
@@ -220,49 +209,34 @@ function CampaignCard({ project }: { project: CampaignWorkspaceProject }) {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-lg border border-border bg-background/45 p-3">
                 <p className="text-xs text-muted-foreground">Wallets</p>
-                <p className="mt-1 text-xl font-semibold">
-                  {formatNumber(latest.totalWallets)}
-                </p>
+                <p className="mt-1 text-xl font-semibold">{formatNumber(latest.totalWallets)}</p>
               </div>
               <div className="rounded-lg border border-border bg-background/45 p-3">
                 <p className="text-xs text-muted-foreground">Approved</p>
-                <p className="mt-1 text-xl font-semibold text-green-200">
-                  {formatNumber(latest.approvedCount)}
-                </p>
+                <p className="mt-1 text-xl font-semibold text-green-200">{formatNumber(latest.approvedCount)}</p>
               </div>
               <div className="rounded-lg border border-border bg-background/45 p-3">
                 <p className="text-xs text-muted-foreground">Gray Zone</p>
-                <p className="mt-1 text-xl font-semibold text-amber-200">
-                  {formatNumber(latest.manualReviewCount)}
-                </p>
+                <p className="mt-1 text-xl font-semibold text-amber-200">{formatNumber(latest.manualReviewCount)}</p>
               </div>
               <div className="rounded-lg border border-border bg-background/45 p-3">
                 <p className="text-xs text-muted-foreground">Not eligible</p>
-                <p className="mt-1 text-xl font-semibold text-red-200">
-                  {formatNumber(latest.rejectedCount)}
-                </p>
+                <p className="mt-1 text-xl font-semibold text-red-200">{formatNumber(latest.rejectedCount)}</p>
               </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-lg border border-border bg-background/45 p-3">
                 <p className="text-xs text-muted-foreground">Average risk</p>
-                <p className="mt-1 font-semibold">
-                  {latest.averageRiskScore.toFixed(1)}
-                </p>
+                <p className="mt-1 font-semibold">{latest.averageRiskScore.toFixed(1)}</p>
               </div>
               <div className="rounded-lg border border-border bg-background/45 p-3">
                 <p className="text-xs text-muted-foreground">Suspicious clusters</p>
-                <p className="mt-1 font-semibold">
-                  {formatNumber(latest.suspiciousClustersCount)}
-                </p>
+                <p className="mt-1 font-semibold">{formatNumber(latest.suspiciousClustersCount)}</p>
               </div>
               <div className="rounded-lg border border-border bg-background/45 p-3">
                 <p className="text-xs text-muted-foreground">Latest status</p>
-                <Badge
-                  variant="outline"
-                  className={cn("mt-1", analysisStatusClass(latest.status))}
-                >
+                <Badge variant="outline" className={cn("mt-1", analysisStatusClass(latest.status))}>
                   {titleCase(latest.status)}
                 </Badge>
               </div>
@@ -273,8 +247,7 @@ function CampaignCard({ project }: { project: CampaignWorkspaceProject }) {
             <ShieldQuestion className="mx-auto size-7 text-muted-foreground" />
             <p className="mt-3 font-medium">Campaign created, no analysis yet</p>
             <p className="mt-2 text-sm text-muted-foreground">
-              The project remains unchanged. Start a wallet analysis when the
-              participant list is ready.
+              Open the campaign and upload the first wallet cohort when the participant list is ready.
             </p>
           </div>
         )}
@@ -293,10 +266,7 @@ function CampaignCard({ project }: { project: CampaignWorkspaceProject }) {
                   >
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge
-                          variant="outline"
-                          className={analysisStatusClass(analysis.status)}
-                        >
+                        <Badge variant="outline" className={analysisStatusClass(analysis.status)}>
                           {titleCase(analysis.status)}
                         </Badge>
                         {index === 0 && <Badge variant="secondary">Latest</Badge>}
@@ -307,29 +277,18 @@ function CampaignCard({ project }: { project: CampaignWorkspaceProject }) {
                         {formatDateTimeUTC(analysis.createdAt)}
                       </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Link
-                        href={`/dashboard/analysis/${analysis.id}`}
-                        className={buttonVariants({ variant: "outline", size: "sm" })}
-                      >
-                        Report
-                      </Link>
-                      {analysis.status === "completed" && (
-                        <Link
-                          href={`/dashboard/analysis/${analysis.id}/evidence`}
-                          className={buttonVariants({ variant: "ghost", size: "sm" })}
-                        >
-                          Evidence
-                        </Link>
-                      )}
-                    </div>
+                    <Link
+                      href={`/dashboard/analysis/${analysis.id}`}
+                      className={buttonVariants({ variant: "outline", size: "sm" })}
+                    >
+                      Report
+                    </Link>
                   </div>
                 ))}
               </div>
               {project.analysisCount > project.analyses.length && (
                 <p className="mt-3 text-xs text-muted-foreground">
-                  Showing the latest {project.analyses.length} analyses. The full
-                  archive remains available under Reports.
+                  Showing the latest {project.analyses.length} analyses. The full archive remains available under Reports.
                 </p>
               )}
             </div>
@@ -340,14 +299,10 @@ function CampaignCard({ project }: { project: CampaignWorkspaceProject }) {
   )
 }
 
-export function CampaignsWorkspace({
-  projects,
-  loadError = false,
-}: CampaignsWorkspaceProps) {
+export function CampaignsWorkspace({ projects, loadError = false }: CampaignsWorkspaceProps) {
   const [query, setQuery] = useState("")
   const [chainFilter, setChainFilter] = useState("all")
-  const [lifecycleFilter, setLifecycleFilter] =
-    useState<LifecycleFilter>("all")
+  const [lifecycleFilter, setLifecycleFilter] = useState<LifecycleFilter>("all")
 
   const chains = useMemo(
     () => Array.from(new Set(projects.map((project) => project.chain))).sort(),
@@ -356,18 +311,14 @@ export function CampaignsWorkspace({
 
   const filteredProjects = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
-
     return projects.filter((project) => {
       const matchesQuery =
         !normalizedQuery ||
         project.name.toLowerCase().includes(normalizedQuery) ||
         project.campaignType.toLowerCase().includes(normalizedQuery) ||
         project.chain.toLowerCase().includes(normalizedQuery)
-      const matchesChain =
-        chainFilter === "all" || project.chain === chainFilter
-      const matchesLifecycle =
-        lifecycleFilter === "all" ||
-        projectLifecycle(project) === lifecycleFilter
+      const matchesChain = chainFilter === "all" || project.chain === chainFilter
+      const matchesLifecycle = lifecycleFilter === "all" || projectLifecycle(project) === lifecycleFilter
       return matchesQuery && matchesChain && matchesLifecycle
     })
   }, [chainFilter, lifecycleFilter, projects, query])
@@ -377,17 +328,9 @@ export function CampaignsWorkspace({
     .filter((analysis): analysis is CampaignWorkspaceAnalysis => Boolean(analysis))
 
   const campaignCount = projects.length
-  const activeCount = projects.filter(
-    (project) => projectLifecycle(project) === "in_progress"
-  ).length
-  const walletCount = latestAnalyses.reduce(
-    (total, analysis) => total + analysis.totalWallets,
-    0
-  )
-  const grayZoneCount = latestAnalyses.reduce(
-    (total, analysis) => total + analysis.manualReviewCount,
-    0
-  )
+  const activeCount = projects.filter((project) => projectLifecycle(project) === "in_progress").length
+  const walletCount = latestAnalyses.reduce((total, analysis) => total + analysis.totalWallets, 0)
+  const grayZoneCount = latestAnalyses.reduce((total, analysis) => total + analysis.manualReviewCount, 0)
 
   function clearFilters() {
     setQuery("")
@@ -403,27 +346,17 @@ export function CampaignsWorkspace({
             <ShieldCheck className="size-3.5" />
             Campaign Security Console
           </Badge>
-          <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">
-            Campaigns Workspace
-          </h2>
+          <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">Campaigns Workspace</h2>
           <p className="mt-3 max-w-3xl text-muted-foreground">
-            Manage every campaign, analysis, Gray Zone queue and explainable wallet
-            decision from one place. Existing reports and the New Analysis flow remain
-            unchanged.
+            Create each campaign once, then keep every wallet analysis, Gray Zone review, cluster investigation, policy version, and decision package under that campaign.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link
-            href="/dashboard/new-analysis"
-            className={`${buttonVariants()} glow-primary hover-lift`}
-          >
+          <Link href="/dashboard/campaigns/new" className={`${buttonVariants()} glow-primary hover-lift`}>
             <FilePlus2 data-icon="inline-start" />
-            New Analysis
+            New Campaign
           </Link>
-          <Link
-            href="/dashboard/reports"
-            className={buttonVariants({ variant: "outline" })}
-          >
+          <Link href="/dashboard/reports" className={buttonVariants({ variant: "outline" })}>
             <FileText data-icon="inline-start" />
             Reports
           </Link>
@@ -431,50 +364,22 @@ export function CampaignsWorkspace({
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard
-          label="Campaigns"
-          value={campaignCount}
-          description="All owned projects"
-          icon={<BarChart3 className="size-4" />}
-        />
-        <SummaryCard
-          label="Active"
-          value={activeCount}
-          description="Latest analysis processing"
-          icon={<Clock3 className="size-4" />}
-        />
-        <SummaryCard
-          label="Wallets"
-          value={walletCount}
-          description="Latest campaign snapshots"
-          icon={<CheckCircle2 className="size-4" />}
-        />
-        <SummaryCard
-          label="Gray Zone"
-          value={grayZoneCount}
-          description="Human review required"
-          icon={<ShieldQuestion className="size-4" />}
-        />
+        <SummaryCard label="Campaigns" value={campaignCount} description="Durable campaign workspaces" icon={<BarChart3 className="size-4" />} />
+        <SummaryCard label="Active" value={activeCount} description="Latest analysis processing" icon={<Clock3 className="size-4" />} />
+        <SummaryCard label="Wallets" value={walletCount} description="Latest campaign snapshots" icon={<CheckCircle2 className="size-4" />} />
+        <SummaryCard label="Gray Zone" value={grayZoneCount} description="Human review required" icon={<ShieldQuestion className="size-4" />} />
       </section>
 
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Find a campaign</CardTitle>
-          <CardDescription>
-            Search by project name, campaign type or chain and narrow the workspace by
-            operational state.
-          </CardDescription>
+          <CardDescription>Search by campaign name, type or chain and narrow the workspace by operational state.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_220px_auto]">
             <label className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search campaigns"
-                className="pl-9"
-              />
+              <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search campaigns" className="pl-9" />
             </label>
             <select
               value={chainFilter}
@@ -483,17 +388,11 @@ export function CampaignsWorkspace({
               aria-label="Filter campaigns by chain"
             >
               <option value="all">All chains</option>
-              {chains.map((chain) => (
-                <option key={chain} value={chain}>
-                  {chain}
-                </option>
-              ))}
+              {chains.map((chain) => <option key={chain} value={chain}>{chain}</option>)}
             </select>
             <select
               value={lifecycleFilter}
-              onChange={(event) =>
-                setLifecycleFilter(event.target.value as LifecycleFilter)
-              }
+              onChange={(event) => setLifecycleFilter(event.target.value as LifecycleFilter)}
               className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               aria-label="Filter campaigns by lifecycle"
             >
@@ -503,9 +402,7 @@ export function CampaignsWorkspace({
               <option value="completed">Completed</option>
               <option value="no_analysis">No analysis</option>
             </select>
-            <Button type="button" variant="outline" onClick={clearFilters}>
-              Clear
-            </Button>
+            <Button type="button" variant="outline" onClick={clearFilters}>Clear</Button>
           </div>
         </CardContent>
       </Card>
@@ -514,10 +411,7 @@ export function CampaignsWorkspace({
         <Card className="glass-panel border-yellow-400/30 bg-yellow-400/5">
           <CardHeader>
             <CardTitle>Campaigns are temporarily unavailable</CardTitle>
-            <CardDescription>
-              The workspace database could not be reached. Existing projects and
-              analyses were not modified.
-            </CardDescription>
+            <CardDescription>The workspace database could not be reached. Existing campaigns and analyses were not modified.</CardDescription>
           </CardHeader>
         </Card>
       )}
@@ -526,21 +420,14 @@ export function CampaignsWorkspace({
         <Card className="glass-panel premium-card">
           <CardHeader>
             <CardTitle>No campaigns yet</CardTitle>
-            <CardDescription>
-              Start the existing analysis flow to create the first campaign workspace.
-            </CardDescription>
+            <CardDescription>Create a campaign shell first, then upload its wallet cohort from the campaign workspace.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-3">
-            <Link href="/dashboard/new-analysis" className={buttonVariants()}>
+            <Link href="/dashboard/campaigns/new" className={buttonVariants()}>
               <FilePlus2 data-icon="inline-start" />
-              Start analysis
+              Create campaign
             </Link>
-            <Link
-              href="/dashboard/demo"
-              className={buttonVariants({ variant: "outline" })}
-            >
-              View demo
-            </Link>
+            <Link href="/dashboard/demo" className={buttonVariants({ variant: "outline" })}>View demo</Link>
           </CardContent>
         </Card>
       )}
@@ -549,23 +436,17 @@ export function CampaignsWorkspace({
         <Card className="glass-panel">
           <CardHeader>
             <CardTitle>No matching campaigns</CardTitle>
-            <CardDescription>
-              Change the search or filters. No campaign data was removed.
-            </CardDescription>
+            <CardDescription>Change the search or filters. No campaign data was removed.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button type="button" variant="outline" onClick={clearFilters}>
-              Clear filters
-            </Button>
+            <Button type="button" variant="outline" onClick={clearFilters}>Clear filters</Button>
           </CardContent>
         </Card>
       )}
 
       {!loadError && filteredProjects.length > 0 && (
         <section className="grid gap-5">
-          {filteredProjects.map((project) => (
-            <CampaignCard key={project.id} project={project} />
-          ))}
+          {filteredProjects.map((project) => <CampaignCard key={project.id} project={project} />)}
         </section>
       )}
     </div>
