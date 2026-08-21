@@ -1,5 +1,6 @@
 import { after, NextResponse } from "next/server"
 
+import { syncCompletedCampaignAnalysis } from "@/lib/campaigns/persistence"
 import { isWorkerAuthorized, workerUnauthorized } from "@/lib/worker/auth"
 import { deliverAnalysisCompletedWebhookNow } from "@/lib/webhooks/deliver"
 
@@ -15,6 +16,20 @@ export async function POST(request: Request) {
   }
 
   after(async () => {
+    try {
+      const syncResult = await syncCompletedCampaignAnalysis(analysisId)
+      console.info("Campaign core post-finalize sync completed", {
+        analysisId,
+        campaignId: syncResult?.campaignId ?? null,
+        decisionsWritten: syncResult?.decisionsWritten ?? 0,
+      })
+    } catch (error) {
+      console.error("Campaign core post-finalize sync failed", {
+        analysisId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+
     try {
       const result = await deliverAnalysisCompletedWebhookNow(analysisId)
       console.info("Analysis post-finalize worker completed", {
