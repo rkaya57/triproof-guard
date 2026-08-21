@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run test:entity-registry && npm run lint:entity-registry && npm run test:decision-safety && npm run benchmark:labeled && npm run benchmark:adversarial && npm run test:evm && npm run test:scamguard-safety && npm run lint:benchmark && npm run lint:evm && npm run lint:scamguard-safety && node scripts/vercel-provider-smoke.mjs && node scripts/vercel-migrate-deploy.mjs && prisma generate && next build",
+    "build": "npm run test:entity-registry && npm run lint:entity-registry && npm run test:decision-safety && npm run benchmark:labeled && npm run benchmark:adversarial && npm run test:onchain-events && npm run test:evm && npm run test:scamguard-safety && npm run lint:benchmark && npm run lint:evm && npm run lint:scamguard-safety && node scripts/vercel-provider-smoke.mjs && node scripts/vercel-migrate-deploy.mjs && prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "lint:entity-registry": "eslint lib/entity-registry/index.ts lib/entity-registry/index.test.ts",
@@ -20,6 +20,7 @@
     "benchmark:compile-reviewed": "node --import tsx scripts/compile-reviewed-benchmark.ts",
     "test:benchmark": "node --import tsx --test lib/benchmark/index.test.ts lib/benchmark/adversarial.test.ts",
     "test:entity-registry": "node --import tsx --test lib/entity-registry/index.test.ts",
+    "test:onchain-events": "node --import tsx --test lib/onchain/events/normalize.test.ts lib/onchain/events/persistence.test.ts lib/onchain/events/from-enrichment.test.ts lib/onchain/events/sync-analysis-events.test.ts",
     "test:evm": "node --import tsx --test lib/onchain/evm-evidence.test.ts lib/onchain/evm-contract-intelligence.test.ts lib/onchain/evm-safe-participant.test.ts lib/graph-intelligence/evm-contract-provenance.test.ts lib/risk-graph/evm-contract-provenance.test.ts",
     "test:scamguard-safety": "node scripts/run-scamguard-safety-tests.mjs",
     "test:policies": "node --import tsx --test lib/team-policy/engine.test.ts",
