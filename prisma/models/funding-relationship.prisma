@@ -1,0 +1,36 @@
+enum PersistedFundingRelationshipKind {
+  FUNDED_BY
+  SAME_FUNDER
+  SAME_FUNDING_LINEAGE
+}
+
+model CampaignFundingRelationship {
+  id                 String                            @id @default(cuid())
+  campaignId         String
+  campaign           Campaign                          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  analysisRunId      String
+  analysisRun        CampaignAnalysisRun               @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
+  relationshipKey    String
+  kind               PersistedFundingRelationshipKind
+  chain              String
+  sourceAddress      String
+  targetAddress      String
+  viaAddress         String?
+  hopCount           Int
+  cohortSize         Int
+  confidence         Int
+  riskBearing        Boolean                           @default(false)
+  suppressionReason  String?
+  evidenceEventKeys  String[]                          @default([])
+  observedAt         DateTime?
+  metadata           Json
+  createdAt          DateTime                          @default(now())
+  updatedAt          DateTime                          @updatedAt
+
+  @@unique([analysisRunId, relationshipKey])
+  @@index([campaignId, analysisRunId, kind])
+  @@index([analysisRunId, riskBearing, kind])
+  @@index([chain, sourceAddress])
+  @@index([chain, targetAddress])
+  @@index([chain, viaAddress])
+}
