@@ -25,7 +25,7 @@ export type ClusterAnalystProposalMemberRef = {
 export type ClusterAnalystProposalPayload =
   | { targetClusterLabel: string }
   | { members: ClusterAnalystProposalMemberRef[] }
-  | Record<string, never>
+  | Record<never, never>
 
 export type NormalizedClusterAnalystProposal = {
   proposalType: ClusterAnalystProposalType
@@ -162,7 +162,7 @@ export function normalizeClusterAnalystProposal(
 
   if (proposalType === "split_cluster") {
     const split = normalizeSplitMembers(report, rawPayload.members)
-    if (split.error) return { proposal: null, error: split.error }
+    if (!split.members) return { proposal: null, error: split.error }
     return { proposal: { proposalType, payload: { members: split.members }, notes }, error: null }
   }
 
