@@ -122,7 +122,7 @@ export function buildPolicyChangedWebhook(input: {
   previousVersion: number | null
   preset: string
   version: number
-  policyHash: string
+  policyHash: string | null
   rationale: string
   actorId: string
   actorName: string
