@@ -1,4 +1,6 @@
 import { serializeAnalysis } from "@/lib/analysis/serializers"
+import { attachFundingProvenanceDecisionEvidence } from "@/lib/campaign-security/funding-provenance-evidence"
+import { loadDecisionFundingRelationships } from "@/lib/campaign-security/funding-provenance-evidence-server"
 import { buildCampaignRecord } from "@/lib/campaigns/model"
 import { db } from "@/lib/db/prisma"
 
@@ -37,7 +39,7 @@ export async function loadCampaignDetail(projectId: string, userId: string) {
 
   const latestId = project.analyses[0]?.id
   const recentAnalysisIds = project.analyses.map((analysis) => analysis.id)
-  const [latest, persistedCampaign] = await Promise.all([
+  const [latest, persistedCampaign, fundingRelationships] = await Promise.all([
     latestId
       ? db.analysis.findFirst({
           where: { id: latestId, project: { userId } },
@@ -72,6 +74,7 @@ export async function loadCampaignDetail(projectId: string, userId: string) {
         },
       },
     }),
+    latestId ? loadDecisionFundingRelationships(latestId) : Promise.resolve([]),
   ])
 
   const analysisRunMetadata = Object.fromEntries(
@@ -100,6 +103,11 @@ export async function loadCampaignDetail(projectId: string, userId: string) {
       analysisRunCount: project._count.analyses,
       analysisRunMetadata,
     }),
-    latestAnalysis: latest ? serializeAnalysis(latest) : null,
+    latestAnalysis: latest
+      ? attachFundingProvenanceDecisionEvidence(
+          serializeAnalysis(latest),
+          fundingRelationships,
+        )
+      : null,
   }
 }
