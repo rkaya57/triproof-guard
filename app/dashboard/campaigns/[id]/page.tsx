@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 
 import { CampaignAnalysisRunForm } from "@/components/dashboard/campaign-analysis-run-form"
+import { CampaignOperationsPanel } from "@/components/dashboard/campaign-operations-panel"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -22,6 +23,7 @@ import { loadCampaignDetail } from "@/lib/campaigns/load-campaign-detail"
 import { riskPolicyFromNotes } from "@/lib/campaigns/persistence"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { formatDateTimeUTC, formatNumber } from "@/lib/format"
+import type { RiskPolicy } from "@/types"
 
 function percent(value: number, total: number) {
   return total > 0 ? Math.round((value / total) * 100) : 0
@@ -35,6 +37,11 @@ function statusClass(status: string) {
 
 function label(status: string) {
   return status.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function activeRiskPolicy(value: string | null | undefined, fallback: RiskPolicy): RiskPolicy {
+  if (value === "conservative" || value === "balanced" || value === "strict") return value
+  return fallback
 }
 
 function Metric({ title, value, note }: { title: string; value: string; note: string }) {
@@ -77,8 +84,10 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
 
   if (!detail) notFound()
 
-  const { campaign, latestAnalysis } = detail
-  const riskPolicy = riskPolicyFromNotes(campaign.notes)
+  const { campaign, activePolicy, latestAnalysis } = detail
+  const notesPolicy = riskPolicyFromNotes(campaign.notes)
+  const riskPolicy = activeRiskPolicy(activePolicy?.preset, notesPolicy)
+  const activePolicyVersion = activePolicy ? `v${activePolicy.version}` : null
 
   if (!latestAnalysis) {
     return (
@@ -94,7 +103,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
           </div>
           <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">{campaign.name}</h2>
           <p className="mt-3 text-muted-foreground">
-            {campaign.campaignType} on {campaign.chain} · {riskPolicy} policy
+            {campaign.campaignType} on {campaign.chain} · {riskPolicy} policy{activePolicyVersion ? ` · ${activePolicyVersion}` : ""}
           </p>
         </section>
 
@@ -106,6 +115,13 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
             </CardDescription>
           </CardHeader>
         </Card>
+
+        <CampaignOperationsPanel
+          campaignId={campaign.id}
+          lifecycle={campaign.lifecycle}
+          riskPolicy={riskPolicy}
+          policyVersion={activePolicyVersion}
+        />
 
         <CampaignAnalysisRunForm
           campaignId={campaign.id}
@@ -152,7 +168,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
               {label(latestAnalysis.status)}
             </Badge>
             <Badge variant="outline" className="border-cyan-400/25 bg-cyan-400/[0.05] text-cyan-200 capitalize">
-              {riskPolicy} policy
+              active: {riskPolicy} {activePolicyVersion ?? "policy"}
             </Badge>
           </div>
           <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">{campaign.name}</h2>
@@ -269,6 +285,13 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
         </Card>
       )}
 
+      <CampaignOperationsPanel
+        campaignId={campaign.id}
+        lifecycle={campaign.lifecycle}
+        riskPolicy={riskPolicy}
+        policyVersion={activePolicyVersion}
+      />
+
       <CampaignAnalysisRunForm
         campaignId={campaign.id}
         chain={campaign.chain}
@@ -288,7 +311,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
                 <div className="flex flex-wrap gap-2">
                   <Badge variant="outline" className={statusClass(analysis.status)}>{label(analysis.status)}</Badge>
                   {index === 0 && <Badge variant="secondary">Latest</Badge>}
-                  {analysis.policyVersion && <Badge variant="outline">Policy {analysis.policyVersion}</Badge>}
+                  {analysis.policyVersion && <Badge variant="outline">Run policy {analysis.policyVersion}</Badge>}
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
                   {formatDateTimeUTC(analysis.createdAt)} · {formatNumber(analysis.totalWallets)} wallets · {analysis.averageRiskScore.toFixed(1)} average risk
