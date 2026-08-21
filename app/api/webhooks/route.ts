@@ -3,12 +3,14 @@ import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth/session"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
+import {
+  isSupportedWebhookEvent,
+  SUPPORTED_WEBHOOK_EVENTS,
+} from "@/lib/webhooks/campaign-events"
 import { createWebhookSecret } from "@/lib/webhooks/sign"
 import { assertWebhookAccess, SubscriptionLimitError } from "@/lib/billing/subscription"
 
 export const runtime = "nodejs"
-
-const supportedEvents = ["analysis.completed", "policy.blocked", "policy.review"]
 
 function safeWebhookUrl(value: unknown) {
   if (typeof value !== "string") return null
@@ -23,7 +25,7 @@ function safeWebhookUrl(value: unknown) {
 
 function normalizeEvents(value: unknown) {
   const events = Array.isArray(value) ? value.map(String) : ["analysis.completed"]
-  const normalized = events.filter((event) => supportedEvents.includes(event))
+  const normalized = [...new Set(events.filter(isSupportedWebhookEvent))]
   return normalized.length ? normalized : ["analysis.completed"]
 }
 
@@ -44,6 +46,7 @@ export async function GET() {
     })
 
     return NextResponse.json({
+      supportedEvents: SUPPORTED_WEBHOOK_EVENTS,
       endpoints: endpoints.map((endpoint) => ({
         id: endpoint.id,
         url: endpoint.url,
