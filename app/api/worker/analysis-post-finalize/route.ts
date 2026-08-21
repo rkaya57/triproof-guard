@@ -1,6 +1,7 @@
 import { after, NextResponse } from "next/server"
 
 import { syncCompletedCampaignAnalysis } from "@/lib/campaigns/persistence"
+import { syncNormalizedFundingEvents } from "@/lib/onchain/events/sync-analysis-events"
 import { isWorkerAuthorized, workerUnauthorized } from "@/lib/worker/auth"
 import { deliverAnalysisCompletedWebhookNow } from "@/lib/webhooks/deliver"
 
@@ -25,6 +26,21 @@ export async function POST(request: Request) {
       })
     } catch (error) {
       console.error("Campaign core post-finalize sync failed", {
+        analysisId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+
+    try {
+      const eventResult = await syncNormalizedFundingEvents(analysisId)
+      console.info("Normalized funding event sync completed", {
+        analysisId,
+        attempted: eventResult.attempted,
+        written: eventResult.written,
+        skipped: eventResult.skipped,
+      })
+    } catch (error) {
+      console.error("Normalized funding event sync failed", {
         analysisId,
         error: error instanceof Error ? error.message : String(error),
       })
