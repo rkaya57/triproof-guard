@@ -20,8 +20,11 @@ test("failed delivery on an active endpoint remains manually retryable", () => {
   assert.doesNotThrow(() => assertWebhookRetryAllowed({ status: "failed", isActive: true, attemptCount: 3 }))
 })
 
-test("pending delivery on an active endpoint remains manually retryable", () => {
-  assert.doesNotThrow(() => assertWebhookRetryAllowed({ status: "pending", isActive: true, attemptCount: 0 }))
+test("pending delivery is treated as in-flight instead of manually replayable", () => {
+  assert.equal(
+    conflictCode(() => assertWebhookRetryAllowed({ status: "pending", isActive: true, attemptCount: 0 })),
+    "WEBHOOK_RETRY_IN_PROGRESS",
+  )
 })
 
 test("delivered webhook cannot be manually replayed", () => {
