@@ -27,7 +27,11 @@ type DeliveryWithEndpoint = {
 export class WebhookRetryConflictError extends Error {
   constructor(
     message: string,
-    readonly code: "WEBHOOK_ALREADY_DELIVERED" | "WEBHOOK_ENDPOINT_PAUSED" | "WEBHOOK_MAX_ATTEMPTS_REACHED",
+    readonly code:
+      | "WEBHOOK_ALREADY_DELIVERED"
+      | "WEBHOOK_ENDPOINT_PAUSED"
+      | "WEBHOOK_MAX_ATTEMPTS_REACHED"
+      | "WEBHOOK_RETRY_IN_PROGRESS",
   ) {
     super(message)
     this.name = "WebhookRetryConflictError"
@@ -60,7 +64,22 @@ function safeMaxAttempts(value = DEFAULT_WEBHOOK_MAX_ATTEMPTS) {
   return Math.min(ABSOLUTE_WEBHOOK_MAX_ATTEMPTS, Math.max(1, value))
 }
 
-async function executeWebhookDeliveryAttempt(delivery: DeliveryWithEndpoint) {
+async function claimWebhookDeliveryAttempt(delivery: DeliveryWithEndpoint) {
+  const claimed = await db.webhookDelivery.updateMany({
+    where: {
+      id: delivery.id,
+      attemptCount: delivery.attemptCount,
+      status: { in: ["pending", "failed"] },
+    },
+    data: {
+      attemptCount: { increment: 1 },
+      status: "pending",
+    },
+  })
+  return claimed.count === 1
+}
+
+async function executeClaimedWebhookDeliveryAttempt(delivery: DeliveryWithEndpoint) {
   const payloadString = JSON.stringify(delivery.requestPayload)
   const attemptCount = delivery.attemptCount + 1
 
@@ -76,7 +95,6 @@ async function executeWebhookDeliveryAttempt(delivery: DeliveryWithEndpoint) {
         status: response.ok ? "delivered" : "failed",
         statusCode: response.status,
         responseBody: response.body.slice(0, 4000),
-        attemptCount,
         deliveredAt: response.ok ? new Date() : null,
         errorMessage: webhookDeliveryErrorMessage(response),
       },
@@ -95,7 +113,6 @@ async function executeWebhookDeliveryAttempt(delivery: DeliveryWithEndpoint) {
       where: { id: delivery.id },
       data: {
         status: "failed",
-        attemptCount,
         errorMessage,
       },
     })
@@ -108,6 +125,12 @@ async function executeWebhookDeliveryAttempt(delivery: DeliveryWithEndpoint) {
       attemptCount,
     }
   }
+}
+
+async function claimAndExecuteWebhookDeliveryAttempt(delivery: DeliveryWithEndpoint) {
+  const claimed = await claimWebhookDeliveryAttempt(delivery)
+  if (!claimed) return null
+  return executeClaimedWebhookDeliveryAttempt(delivery)
 }
 
 export async function retrySingleWebhookDelivery(input: {
@@ -131,7 +154,14 @@ export async function retrySingleWebhookDelivery(input: {
     attemptCount: delivery.attemptCount,
   })
 
-  return executeWebhookDeliveryAttempt(delivery)
+  const result = await claimAndExecuteWebhookDeliveryAttempt(delivery)
+  if (!result) {
+    throw new WebhookRetryConflictError(
+      "Webhook delivery is already being retried or changed state.",
+      "WEBHOOK_RETRY_IN_PROGRESS",
+    )
+  }
+  return result
 }
 
 export async function retryWebhookDeliveries({
@@ -156,7 +186,8 @@ export async function retryWebhookDeliveries({
 
   const results = []
   for (const delivery of deliveries) {
-    results.push(await executeWebhookDeliveryAttempt(delivery))
+    const result = await claimAndExecuteWebhookDeliveryAttempt(delivery)
+    if (result) results.push(result)
   }
 
   return {
