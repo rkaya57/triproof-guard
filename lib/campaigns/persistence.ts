@@ -7,14 +7,55 @@ import { normalizeCampaignNetworks } from "@/lib/campaigns/model"
 import type { RiskPolicy } from "@/types"
 
 export const CAMPAIGN_CORE_SCHEMA_VERSION = "tri-proof-campaign-core-v1" as const
-export const CAMPAIGN_MODEL_VERSION = "tri-proof-risk-engine-v1" as const
+export const RISK_ENGINE_VERSION = "1.8" as const
+export const CAMPAIGN_MODEL_VERSION = `tri-proof-risk-engine-v${RISK_ENGINE_VERSION}` as const
 
 const DECISION_WRITE_BATCH_SIZE = 500
 
-const policyThresholds: Record<RiskPolicy, { allowMax: number; reviewMax: number; excludeMin: number }> = {
-  conservative: { allowMax: 35, reviewMax: 74, excludeMin: 75 },
-  balanced: { allowMax: 35, reviewMax: 59, excludeMin: 60 },
-  strict: { allowMax: 25, reviewMax: 49, excludeMin: 50 },
+const policyConfigSnapshots: Record<RiskPolicy, {
+  approveMax: number
+  manualMax: number
+  rejectMin: number
+  hardRejectMin: number
+  noDataAction: "manual_review" | "reject"
+  clusterRejectSize: number
+  clusterReviewSize: number
+  scoreMultiplier: number
+  label: string
+}> = {
+  conservative: {
+    approveMax: 35,
+    manualMax: 74,
+    rejectMin: 90,
+    hardRejectMin: 85,
+    noDataAction: "manual_review",
+    clusterRejectSize: 14,
+    clusterReviewSize: 5,
+    scoreMultiplier: 0.9,
+    label: "Conservative",
+  },
+  balanced: {
+    approveMax: 35,
+    manualMax: 59,
+    rejectMin: 80,
+    hardRejectMin: 70,
+    noDataAction: "reject",
+    clusterRejectSize: 10,
+    clusterReviewSize: 4,
+    scoreMultiplier: 1,
+    label: "Balanced",
+  },
+  strict: {
+    approveMax: 25,
+    manualMax: 49,
+    rejectMin: 70,
+    hardRejectMin: 55,
+    noDataAction: "reject",
+    clusterRejectSize: 6,
+    clusterReviewSize: 3,
+    scoreMultiplier: 1.15,
+    label: "Strict",
+  },
 }
 
 function canonicalizeJson(value: unknown): unknown {
@@ -37,11 +78,21 @@ function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex")
 }
 
+export function buildCampaignInputHash(
+  wallets: ReadonlyArray<{ walletAddress: string; chain: string }>,
+) {
+  const normalized = wallets
+    .map((wallet) => `${wallet.chain.trim().toLowerCase()}:${wallet.walletAddress.trim()}`)
+    .sort()
+  return sha256(normalized.join("\n"))
+}
+
 export function buildPersistedCampaignPolicyDefinition(preset: RiskPolicy) {
   return {
     schemaVersion: "tri-proof-campaign-policy-persistence-v1",
+    riskEngineVersion: RISK_ENGINE_VERSION,
     preset,
-    thresholds: policyThresholds[preset],
+    engineConfig: policyConfigSnapshots[preset],
     decisionStates: ["allow", "review", "exclude", "insufficient_data"],
     safeguards: {
       humanDecisionPrecedence: true,
@@ -96,6 +147,7 @@ type CampaignAnalysisInput = {
   suspiciousClustersCount?: number
   createdAt?: Date
   completedAt?: Date | null
+  inputHash?: string | null
 }
 
 function campaignSnapshot(project: CampaignProjectInput, networks: string[]) {
@@ -217,6 +269,7 @@ export async function persistNewCampaignAnalysis(
       status: String(analysis.status),
       modelVersion: CAMPAIGN_MODEL_VERSION,
       policyVersion: `v${policy.version}`,
+      inputHash: analysis.inputHash ?? null,
       campaignSnapshot: campaignSnapshot(project, networks),
       totalWallets: analysis.totalWallets,
       approvedCount: analysis.approvedCount ?? 0,
@@ -234,6 +287,7 @@ export async function persistNewCampaignAnalysis(
       status: String(analysis.status),
       modelVersion: CAMPAIGN_MODEL_VERSION,
       policyVersion: `v${policy.version}`,
+      ...(analysis.inputHash !== undefined ? { inputHash: analysis.inputHash } : {}),
       campaignSnapshot: campaignSnapshot(project, networks),
       totalWallets: analysis.totalWallets,
       approvedCount: analysis.approvedCount ?? 0,
