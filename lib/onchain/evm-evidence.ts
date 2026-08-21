@@ -21,6 +21,7 @@ export type EvmEvidenceSummary = {
   campaignOnlyRatio: number | null
   uniqueCounterparties: number
   fundingSource: string | null
+  firstFundingTxHash: string | null
   firstFundingAt: string | null
   firstFundingAmount: number | null
   behaviorFingerprint: string[] | null
@@ -182,6 +183,10 @@ export function summarizeEvmActivity({
     fundingSource:
       fundingProvenanceReliable && firstIncomingNative
         ? normalize(firstIncomingNative.activity.from)
+        : null,
+    firstFundingTxHash:
+      fundingProvenanceReliable && firstIncomingNative?.activity.hash
+        ? firstIncomingNative.activity.hash.trim().toLowerCase()
         : null,
     firstFundingAt:
       fundingProvenanceReliable &&
