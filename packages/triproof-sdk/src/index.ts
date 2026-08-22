@@ -128,6 +128,58 @@ export type CampaignDecisionPackage = {
   [key: string]: unknown
 }
 
+export type CampaignRunDecisionPackage = {
+  object: "campaign_run_decision_package"
+  apiVersion: "v2"
+  schemaVersion: string
+  campaignId: string
+  campaignName: string
+  analysisId: string
+  run: {
+    status: string
+    modelVersion: string
+    policyVersion: string | null
+    inputHash: string | null
+    totalWallets: number
+    createdAt: string | null
+    completedAt: string | null
+  }
+  policySnapshot: {
+    id: string
+    preset: string | null
+    version: number
+    policyHash: string | null
+  } | null
+  summary: {
+    allow: number
+    review: number
+    exclude: number
+    insufficient_data: number
+  }
+  decisions: Array<{
+    walletAddress: string
+    chain: string
+    executionState: string
+    riskScore: number
+    confidence: number | null
+    clusterId: string | null
+    evidence: unknown
+    matchedRules: unknown
+    explanation: string | null
+    modelVersion: string
+    policyVersion: string | null
+    persistedAt: string | null
+  }>
+  pagination: {
+    limit: number
+    returned: number
+    hasMore: boolean
+    nextCursor: string | null
+  }
+  boundaries: string[]
+  links: Record<string, string>
+}
+
 export type CampaignClusterList = {
   object: "cluster_list"
   apiVersion: "v2"
@@ -521,6 +573,20 @@ export class TriProofClient {
   getCampaignAnalysis(campaignId: string, analysisId: string) {
     return this.request<Record<string, unknown>>(
       `/api/v2/campaigns/${encodeURIComponent(campaignId)}/analyses/${encodeURIComponent(analysisId)}`,
+    )
+  }
+
+  listCampaignRunDecisions(
+    campaignId: string,
+    analysisId: string,
+    options: { limit?: number; cursor?: string } = {},
+  ) {
+    const query = new URLSearchParams()
+    if (options.limit !== undefined) query.set("limit", String(options.limit))
+    if (options.cursor) query.set("cursor", options.cursor)
+    const suffix = query.size > 0 ? `?${query.toString()}` : ""
+    return this.request<CampaignRunDecisionPackage>(
+      `/api/v2/campaigns/${encodeURIComponent(campaignId)}/analyses/${encodeURIComponent(analysisId)}/decisions${suffix}`,
     )
   }
 
