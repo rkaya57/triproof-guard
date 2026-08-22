@@ -86,15 +86,22 @@ do {
       memberCursor = page.pagination.nextCursor ?? undefined
     } while (memberCursor)
 
-    console.log(intelligence.support.confidence)
+    const caseBrief = await triProof.exportCampaignClusterCase(
+      campaignId,
+      analysisId,
+      cluster.clusterLabel,
+      "markdown",
+    )
+
+    console.log(intelligence.support.confidence, caseBrief.length)
   }
 
   clusterCursor = catalog.pagination.nextCursor ?? undefined
 } while (clusterCursor)`
 
 export const metadata = {
-  title: "Tri-Proof API v2 — Cluster Catalog, Intelligence, Evidence & Members",
-  description: "Page stored clusters, inspect persisted forensic evidence, and enumerate complete membership without recomputing risk or decisions.",
+  title: "Tri-Proof API v2 — Cluster Catalog, Intelligence, Evidence, Members & Export",
+  description: "Page stored clusters, inspect persisted forensic evidence, enumerate complete membership, and export read-only investigation cases without recomputing risk or decisions.",
 }
 
 export default function ClusterApiDocsPage() {
@@ -107,10 +114,11 @@ export default function ClusterApiDocsPage() {
           <Badge variant="secondary" className="mb-5 border-cyan-400/30 text-cyan-200">Campaign API v2 · Clusters</Badge>
           <h1 className="text-gradient max-w-5xl text-4xl font-semibold sm:text-6xl">Catalog every cluster. Pull full evidence only when you need it.</h1>
           <p className="mt-5 max-w-3xl leading-7 text-muted-foreground">
-            Cluster Catalog pages lightweight persisted summaries. Cluster Intelligence adds bounded forensic interpretation. Cluster Evidence pages stored funding or graph evidence without re-scoring it. Cluster Members provides complete stored membership through a separate opaque cursor.
+            Cluster Catalog pages lightweight persisted summaries. Cluster Intelligence adds bounded forensic interpretation. Cluster Evidence pages stored funding or graph evidence without re-scoring it. Cluster Members provides complete stored membership through a separate opaque cursor. Cluster Case Export packages the same stored investigation as JSON, CSV, or a read-only Markdown brief.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="/docs/api/v2" className={buttonVariants()}>Campaign API v2</Link>
+            <Link href="/docs/api/v2/clusters/export" className={buttonVariants({ variant: "outline" })}>Case Export</Link>
             <Link href="/docs/api/v2/sdk" className={buttonVariants({ variant: "outline" })}>TypeScript SDK</Link>
           </div>
         </div>
@@ -133,7 +141,7 @@ export default function ClusterApiDocsPage() {
           <CardHeader><Braces className="text-primary" /><CardTitle>Opaque cursors</CardTitle><CardDescription>Catalog, member, funding-evidence and graph-evidence cursors are scope-specific position tokens.</CardDescription></CardHeader>
         </Card>
         <Card className="glass-panel premium-card">
-          <CardHeader><ShieldCheck className="text-primary" /><CardTitle>Authorization</CardTitle><CardDescription>Campaign, analysis, cluster and owner scope are verified independently of every cursor.</CardDescription></CardHeader>
+          <CardHeader><ShieldCheck className="text-primary" /><CardTitle>Authorization</CardTitle><CardDescription>Campaign, analysis, cluster and owner scope are verified independently of every cursor and export request.</CardDescription></CardHeader>
         </Card>
       </section>
 
@@ -159,7 +167,7 @@ export default function ClusterApiDocsPage() {
         </Card>
 
         <Card className="glass-panel premium-card lg:col-span-2">
-          <CardHeader><CardTitle>SDK end-to-end cluster workflow</CardTitle><CardDescription>`listCampaignClusterEvidence()` keeps evidence lanes explicit and cursors opaque while stored decision state remains untouched.</CardDescription></CardHeader>
+          <CardHeader><CardTitle>SDK end-to-end cluster workflow</CardTitle><CardDescription>Inspect bounded or paginated resources first, then call `exportCampaignClusterCase()` for the final read-only handoff package.</CardDescription></CardHeader>
           <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{sdkExample}</code></pre></CardContent>
         </Card>
       </section>
@@ -169,7 +177,7 @@ export default function ClusterApiDocsPage() {
           <CardHeader>
             <CardTitle>Cluster resource boundaries</CardTitle>
             <CardDescription>
-              Catalog lists persisted `Cluster` rows. Intelligence remains read-only forensic interpretation. Evidence pages stored canonical funding relationships or stored graph edges and preserves their existing `riskBearing` state. Members reads the stored `WalletAnalysis.clusterId` assignment only. None of these resources recompute membership, wallet risk, campaign policy, reviewer state, or a common-control conclusion. Evidence scans are bounded per request and lane-specific cursors control scan position only.
+              Catalog lists persisted `Cluster` rows. Intelligence remains read-only forensic interpretation. Evidence pages stored canonical funding relationships or stored graph edges and preserves their existing `riskBearing` state. Members reads the stored `WalletAnalysis.clusterId` assignment only. Case Export packages these already-stored investigation surfaces and carries a `read-only-no-recompute` boundary. None of these resources recompute membership, wallet risk, campaign policy, reviewer state, or a common-control conclusion. Evidence scans are bounded per request and lane-specific cursors control scan position only.
             </CardDescription>
           </CardHeader>
         </Card>
