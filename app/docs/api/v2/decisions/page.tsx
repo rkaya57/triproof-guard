@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Archive, ArrowLeft, Braces, History, ShieldCheck } from "lucide-react"
+import { Archive, ArrowLeft, Braces, GitCompareArrows, History, ShieldCheck } from "lucide-react"
 
 import { PublicTopNav } from "@/components/layout/public-top-nav"
 import { Badge } from "@/components/ui/badge"
@@ -50,6 +50,9 @@ export default function RunDecisionsDocsPage() {
           <div className="flex flex-wrap items-center gap-3">
             <Link href="/docs/api/v2" className={buttonVariants({ variant: "outline", size: "sm" })}>
               <ArrowLeft data-icon="inline-start" /> Campaign API v2
+            </Link>
+            <Link href="/docs/api/v2/decisions/diff" className={buttonVariants({ variant: "outline", size: "sm" })}>
+              <GitCompareArrows data-icon="inline-start" /> Compare runs
             </Link>
             <Badge variant="secondary">Persisted audit resource</Badge>
           </div>
