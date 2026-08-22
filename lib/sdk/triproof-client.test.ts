@@ -125,6 +125,26 @@ test("SDK pages cluster evidence with explicit lane and opaque cursor", async ()
   assert.equal(calls[0]?.method, "GET")
 })
 
+test("SDK exports cluster case packages as text with encoded scope and explicit format", async () => {
+  const { client, calls } = mockClient((call) => {
+    if (call.url.includes("/export?format=markdown")) {
+      return new Response("# Investigation Case Brief — CL / 001\n", {
+        status: 200,
+        headers: { "content-type": "text/markdown" },
+      })
+    }
+    return Response.json({ ok: true })
+  })
+
+  const markdown = await client.exportCampaignClusterCase("campaign/id", "analysis id", "CL / 001", "markdown")
+  assert.match(markdown, /^# Investigation Case Brief/)
+  assert.equal(
+    calls[0]?.url,
+    "https://api.example.test/api/v2/campaigns/campaign%2Fid/analyses/analysis%20id/clusters/CL%20%2F%20001/export?format=markdown",
+  )
+  assert.equal(calls[0]?.method, "GET")
+})
+
 test("Decision Package CSV is returned as text instead of being JSON parsed", async () => {
   const { client, calls } = mockClient((call) => {
     if (call.url.includes("format=csv")) {
