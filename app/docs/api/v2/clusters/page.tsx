@@ -54,6 +54,22 @@ do {
       cluster.clusterLabel,
     )
 
+    let evidenceCursor: string | undefined
+    do {
+      const evidencePage = await triProof.listCampaignClusterEvidence(
+        campaignId,
+        analysisId,
+        cluster.clusterLabel,
+        { lane: "funding", limit: 100, cursor: evidenceCursor },
+      )
+
+      for (const item of evidencePage.evidence) {
+        console.log(item.kind, item.riskBearing)
+      }
+
+      evidenceCursor = evidencePage.pagination.nextCursor ?? undefined
+    } while (evidenceCursor)
+
     let memberCursor: string | undefined
     do {
       const page = await triProof.listCampaignClusterMembers(
@@ -70,7 +86,7 @@ do {
       memberCursor = page.pagination.nextCursor ?? undefined
     } while (memberCursor)
 
-    console.log(intelligence.support.confidence, intelligence.links.evidence)
+    console.log(intelligence.support.confidence)
   }
 
   clusterCursor = catalog.pagination.nextCursor ?? undefined
@@ -143,7 +159,7 @@ export default function ClusterApiDocsPage() {
         </Card>
 
         <Card className="glass-panel premium-card lg:col-span-2">
-          <CardHeader><CardTitle>SDK catalog, intelligence and membership</CardTitle><CardDescription>The SDK already exposes the core cluster workflow; the Intelligence resource also returns the canonical evidence URL.</CardDescription></CardHeader>
+          <CardHeader><CardTitle>SDK end-to-end cluster workflow</CardTitle><CardDescription>`listCampaignClusterEvidence()` keeps evidence lanes explicit and cursors opaque while stored decision state remains untouched.</CardDescription></CardHeader>
           <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{sdkExample}</code></pre></CardContent>
         </Card>
       </section>
