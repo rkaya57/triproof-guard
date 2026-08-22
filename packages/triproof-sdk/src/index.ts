@@ -300,6 +300,8 @@ export type CampaignClusterEvidenceList = {
   links: Record<string, string>
 }
 
+export type CampaignClusterCaseExportFormat = "json" | "csv" | "markdown"
+
 export type CampaignPolicyActivationInput = {
   preset: TriProofRiskPolicy
   rationale: string
@@ -571,6 +573,18 @@ export class TriProofClient {
     return this.request<CampaignClusterEvidenceList>(
       `/api/v2/campaigns/${encodeURIComponent(campaignId)}/analyses/${encodeURIComponent(analysisId)}/clusters/${encodeURIComponent(clusterLabel)}/evidence${suffix}`,
     )
+  }
+
+  async exportCampaignClusterCase(
+    campaignId: string,
+    analysisId: string,
+    clusterLabel: string,
+    format: CampaignClusterCaseExportFormat = "json",
+  ) {
+    const response = await this.rawRequest(
+      `/api/v2/campaigns/${encodeURIComponent(campaignId)}/analyses/${encodeURIComponent(analysisId)}/clusters/${encodeURIComponent(clusterLabel)}/export?format=${encodeURIComponent(format)}`,
+    )
+    return response.text()
   }
 
   getCampaignDecisionPackage(campaignId: string) {
