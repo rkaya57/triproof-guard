@@ -70,6 +70,20 @@ test("campaign API v2 methods use durable campaign resources and encoded IDs", a
   assert.equal(JSON.parse(calls[3]?.body ?? "{}").rationale, "Higher-value reward round")
 })
 
+test("SDK pages exact-run persisted decisions with encoded IDs and opaque cursor", async () => {
+  const { client, calls } = mockClient()
+  await client.listCampaignRunDecisions("campaign/id", "analysis id", {
+    limit: 250,
+    cursor: "decision cursor/value",
+  })
+
+  assert.equal(
+    calls[0]?.url,
+    "https://api.example.test/api/v2/campaigns/campaign%2Fid/analyses/analysis%20id/decisions?limit=250&cursor=decision+cursor%2Fvalue",
+  )
+  assert.equal(calls[0]?.method, "GET")
+})
+
 test("SDK pages the full stored cluster catalog with encoded analysis scope", async () => {
   const { client, calls } = mockClient()
   await client.listCampaignClusters("campaign/id", "analysis id", { limit: 200, cursor: "catalog cursor/value" })
