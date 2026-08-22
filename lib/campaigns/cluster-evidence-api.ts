@@ -60,20 +60,21 @@ function iso(value: Date | string | null) {
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null
 }
 
-function boundedMetadata(value: unknown) {
+function boundedMetadata(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {}
-  const entries = Object.entries(value as Record<string, unknown>).slice(0, MAX_METADATA_KEYS)
-  return Object.fromEntries(entries.flatMap(([key, item]) => {
+  const result: Record<string, unknown> = {}
+  for (const [key, item] of Object.entries(value as Record<string, unknown>).slice(0, MAX_METADATA_KEYS)) {
     if (item === null || typeof item === "string" || typeof item === "number" || typeof item === "boolean") {
-      return [[key, item]]
+      result[key] = item
+      continue
     }
     if (Array.isArray(item)) {
-      return [[key, item.filter((entry) =>
+      result[key] = item.filter((entry) =>
         entry === null || typeof entry === "string" || typeof entry === "number" || typeof entry === "boolean"
-      ).slice(0, 20)]]
+      ).slice(0, 20)
     }
-    return []
-  }))
+  }
+  return result
 }
 
 function boundedStringArray(value: unknown, limit: number) {
