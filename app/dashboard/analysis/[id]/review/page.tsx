@@ -5,6 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { buttonVariants } from "@/components/ui/button"
 import { getCurrentUser } from "@/lib/auth/session"
 import { serializeAnalysis } from "@/lib/analysis/serializers"
+import { attachFundingProvenanceDecisionEvidence } from "@/lib/campaign-security/funding-provenance-evidence"
+import { loadDecisionFundingRelationships } from "@/lib/campaign-security/funding-provenance-evidence-server"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
 
@@ -85,9 +87,15 @@ export default async function ReviewPage({
     )
   }
 
+  const relationships = await loadDecisionFundingRelationships(id)
+  const reviewAnalysis = attachFundingProvenanceDecisionEvidence(
+    serializeAnalysis(analysis),
+    relationships,
+  )
+
   return (
     <main className="premium-page min-h-screen bg-background text-foreground">
-      <TeamReviewDashboard initialAnalysis={serializeAnalysis(analysis)} />
+      <TeamReviewDashboard initialAnalysis={reviewAnalysis} />
     </main>
   )
 }
