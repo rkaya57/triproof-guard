@@ -8,6 +8,7 @@ import {
   BarChart3,
   ChevronDown,
   Code2,
+  Coins,
   FilePlus2,
   FileText,
   Gift,
@@ -71,6 +72,7 @@ const navGroups = [
 
 const adminNavItems = [
   { href: "/dashboard/admin", label: "Admin Center", icon: ShieldCheck },
+  { href: "/dashboard/admin/staking", label: "Staking Pilot", icon: Coins },
   { href: "/dashboard/admin/scamguard", label: "Threat Review", icon: ShieldAlert },
   { href: "/dashboard/admin/airdrop", label: "Airdrop Review", icon: Gift },
   { href: "/dashboard/admin/diagnostics", label: "Diagnostics", icon: HeartPulse },
@@ -80,6 +82,7 @@ const adminNavItems = [
 ] as const
 
 const routeTitles = [
+  { href: "/dashboard/admin/staking", title: "Staking Pilot", eyebrow: "TRI Devnet controlled staking" },
   { href: "/dashboard/admin/airdrop", title: "Airdrop Review", eyebrow: "Season 0 task moderation" },
   { href: "/dashboard/admin/scamguard", title: "Threat Review", eyebrow: "ScamGuard community moderation" },
   { href: "/dashboard/admin/diagnostics", title: "Diagnostics", eyebrow: "Production hardening checks" },

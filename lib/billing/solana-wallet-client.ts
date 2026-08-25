@@ -4,11 +4,16 @@ const TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 const ASSOCIATED_TOKEN_PROGRAM_ID = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
 const MEMO_PROGRAM_ID = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+const TRI_TOKEN_DECIMALS = 9
+const TRANSACTION_CONFIRMATION_TIMEOUT_MS = 25_000
+const SIGNATURE_STATUS_TIMEOUT_MS = 6_000
+const SIGNATURE_STATUS_POLL_INTERVAL_MS = 1_000
 
 type WalletProvider = {
   publicKey?: { toString(): string }
   connect(): Promise<{ publicKey?: { toString(): string } } | void>
   signAndSendTransaction(transaction: TransactionInstance): Promise<{ signature?: string } | string>
+  signTransaction?(transaction: TransactionInstance): Promise<TransactionInstance>
   isPhantom?: boolean
   isSolflare?: boolean
 }
@@ -34,6 +39,7 @@ type TransactionInstructionInput = {
 
 type TransactionInstance = {
   add(...instructions: TransactionInstructionInstance[]): TransactionInstance
+  serialize(): Uint8Array
   feePayer?: PublicKeyInstance
   recentBlockhash?: string
 }
@@ -41,10 +47,6 @@ type TransactionInstance = {
 type ConnectionInstance = {
   getAccountInfo(publicKey: PublicKeyInstance, commitment: "confirmed"): Promise<unknown | null>
   getLatestBlockhash(commitment: "confirmed"): Promise<{ blockhash: string; lastValidBlockHeight: number }>
-  confirmTransaction(
-    strategy: { signature: string; blockhash: string; lastValidBlockHeight: number },
-    commitment: "confirmed"
-  ): Promise<{ value?: { err?: unknown } }>
   getSignatureStatuses(
     signatures: string[],
     config: { searchTransactionHistory: boolean }
@@ -54,6 +56,10 @@ type ConnectionInstance = {
       confirmationStatus?: "processed" | "confirmed" | "finalized" | null
     } | null>
   }>
+  getTokenAccountBalance(publicKey: PublicKeyInstance, commitment: "confirmed"): Promise<{
+    value?: { amount?: string }
+  }>
+  sendRawTransaction(serializedTransaction: Uint8Array): Promise<string>
 }
 
 type SolanaWeb3 = {
@@ -128,36 +134,77 @@ function isBlockHeightExpiredError(error: unknown) {
 
 async function confirmSubmittedTransaction(
   connection: ConnectionInstance,
-  signature: string,
-  latest: { blockhash: string; lastValidBlockHeight: number }
+  signature: string
 ) {
-  try {
-    const confirmation = await connection.confirmTransaction(
-      { signature, blockhash: latest.blockhash, lastValidBlockHeight: latest.lastValidBlockHeight },
-      "confirmed"
-    )
-    if (confirmation.value?.err) {
-      throw new Error(`Solana rejected the transaction: ${JSON.stringify(confirmation.value.err)}`)
-    }
-  } catch (error) {
-    const status = await connection
-      .getSignatureStatuses([signature], { searchTransactionHistory: true })
-      .then((response) => response.value?.[0] ?? null)
-      .catch(() => null)
+  const deadline = Date.now() + TRANSACTION_CONFIRMATION_TIMEOUT_MS
+  let lastError: unknown = null
 
-    if (
-      status &&
-      !status.err &&
-      (status.confirmationStatus === "confirmed" || status.confirmationStatus === "finalized")
-    ) {
-      return
+  while (Date.now() < deadline) {
+    try {
+      const status = await Promise.race([
+        connection
+          .getSignatureStatuses([signature], { searchTransactionHistory: true })
+          .then((response) => response.value?.[0] ?? null),
+        new Promise<null>((_, reject) => {
+          setTimeout(
+            () => reject(new Error("Devnet did not respond while checking the transaction.")),
+            SIGNATURE_STATUS_TIMEOUT_MS
+          )
+        }),
+      ])
+
+      if (status?.err) {
+        throw new Error(`Solana rejected the transaction: ${JSON.stringify(status.err)}`)
+      }
+      if (status?.confirmationStatus === "confirmed" || status?.confirmationStatus === "finalized") {
+        return
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("Solana rejected the transaction:")) {
+        throw error
+      }
+      if (isBlockHeightExpiredError(error)) {
+        throw new Error(
+          "The wallet approval expired before the payment reached Solana. No payment was recorded. Click Pay again and approve the new request promptly."
+        )
+      }
+      lastError = error
     }
-    if (status?.err) {
-      throw new Error(`Solana rejected the transaction: ${JSON.stringify(status.err)}`)
+
+    await new Promise((resolve) => setTimeout(resolve, SIGNATURE_STATUS_POLL_INTERVAL_MS))
+  }
+
+  const reason = lastError instanceof Error ? ` ${lastError.message}` : ""
+  throw new Error(
+    `The transaction was submitted but Devnet did not confirm it within ${TRANSACTION_CONFIRMATION_TIMEOUT_MS / 1_000} seconds. Check your wallet activity before trying again.${reason}`
+  )
+}
+
+async function submitWalletTransaction({
+  wallet,
+  transaction,
+  connection,
+}: {
+  wallet: WalletProvider
+  transaction: TransactionInstance
+  connection: ConnectionInstance
+}) {
+  try {
+    // Signing locally and broadcasting through this connection guarantees that
+    // a Devnet transaction does not get sent through a wallet's Mainnet RPC.
+    if (wallet.signTransaction) {
+      const signed = await wallet.signTransaction(transaction)
+      return await connection.sendRawTransaction(signed.serialize())
     }
+
+    const result = await wallet.signAndSendTransaction(transaction)
+    const signature = typeof result === "string" ? result : result.signature
+    if (!signature) throw new Error("Wallet did not return a transaction signature.")
+    return signature
+  } catch (error) {
     if (isBlockHeightExpiredError(error)) {
       throw new Error(
-        "The wallet approval expired before the payment reached Solana. No payment was recorded. Click Pay again and approve the new request promptly."
+        "The wallet approval expired before submission. Reload the checkout and approve the new payment request promptly."
       )
     }
     throw error
@@ -199,12 +246,12 @@ function amountToUsdcUnits(amount: string) {
   return BigInt(Math.round(value * 1_000_000))
 }
 
-function transferCheckedData(amount: bigint) {
+function transferCheckedData(amount: bigint, decimals = 6) {
   const data = new Uint8Array(10)
   data[0] = 12
   const view = new DataView(data.buffer)
   view.setBigUint64(1, amount, true)
-  data[9] = 6
+  data[9] = decimals
   return data
 }
 
@@ -260,7 +307,8 @@ function createTransferCheckedInstruction(
   owner: PublicKeyInstance,
   amount: bigint,
   tokenProgramId: PublicKeyInstance,
-  reference: PublicKeyInstance
+  reference?: PublicKeyInstance,
+  decimals = 6
 ) {
   return new web3.TransactionInstruction({
     programId: tokenProgramId,
@@ -269,9 +317,9 @@ function createTransferCheckedInstruction(
       { pubkey: mint, isSigner: false, isWritable: false },
       { pubkey: destination, isSigner: false, isWritable: true },
       { pubkey: owner, isSigner: true, isWritable: false },
-      solanaPayReferenceAccountMeta(reference),
+      ...(reference ? [solanaPayReferenceAccountMeta(reference)] : []),
     ],
-    data: transferCheckedData(amount),
+    data: transferCheckedData(amount, decimals),
   })
 }
 
@@ -297,11 +345,13 @@ async function sendSolanaPayment({
   treasuryAddress,
   reference,
   memo,
+  rpcUrl,
   buildPaymentInstruction,
 }: {
   treasuryAddress: string
   reference: string
   memo: string
+  rpcUrl?: string
   buildPaymentInstruction: (input: {
     web3: SolanaWeb3
     owner: PublicKeyInstance
@@ -319,7 +369,7 @@ async function sendSolanaPayment({
   }
 
   const web3 = await loadSolanaWeb3()
-  const connection = new web3.Connection(process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? DEFAULT_RPC_URL, "confirmed")
+  const connection = new web3.Connection(rpcUrl ?? process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? DEFAULT_RPC_URL, "confirmed")
   const connected = await wallet.connect()
   const publicKey = connected?.publicKey ?? wallet.publicKey
 
@@ -344,21 +394,9 @@ async function sendSolanaPayment({
   transaction.feePayer = owner
   transaction.recentBlockhash = latest.blockhash
 
-  let result: { signature?: string } | string
-  try {
-    result = await wallet.signAndSendTransaction(transaction)
-  } catch (error) {
-    if (isBlockHeightExpiredError(error)) {
-      throw new Error(
-        "The wallet approval expired before submission. Reload the checkout and approve the new payment request promptly."
-      )
-    }
-    throw error
-  }
-  const signature = typeof result === "string" ? result : result.signature
-  if (!signature) throw new Error("Wallet did not return a transaction signature.")
+  const signature = await submitWalletTransaction({ wallet, transaction, connection })
 
-  await confirmSubmittedTransaction(connection, signature, latest)
+  await confirmSubmittedTransaction(connection, signature)
 
   return { signature }
 }
@@ -426,5 +464,112 @@ export async function paySolanaSolWithWallet({
     buildPaymentInstruction: async ({ web3, owner, treasury, referenceKey }) => [
       createNativeTransferInstruction(web3, owner, treasury, amountLamports, referenceKey),
     ],
+  })
+}
+
+export async function connectSolanaWallet() {
+  const wallet = await waitForWalletProvider()
+  if (!wallet) {
+    throw new Error("Phantom or Solflare was not detected. Unlock the extension and reload this page.")
+  }
+  const connected = await wallet.connect()
+  const publicKey = connected?.publicKey ?? wallet.publicKey
+  if (!publicKey) throw new Error("Wallet connection failed.")
+  return publicKey.toString()
+}
+
+export async function getSplTokenAccountForWallet({
+  mintAddress,
+}: {
+  mintAddress: string
+}) {
+  const web3 = await loadSolanaWeb3()
+  const walletAddress = await connectSolanaWallet()
+  const owner = new web3.PublicKey(walletAddress)
+  const mint = new web3.PublicKey(mintAddress)
+  const tokenProgramId = new web3.PublicKey(TOKEN_PROGRAM_ID)
+  const associatedProgramId = new web3.PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID)
+  const tokenAccount = associatedTokenAddress(web3, mint, owner, tokenProgramId, associatedProgramId)
+
+  return { walletAddress: owner.toString(), tokenAccount: tokenAccount.toString() }
+}
+
+export async function ensureSplTokenAccountWithWallet({
+  mintAddress,
+  rpcUrl,
+}: {
+  mintAddress: string
+  rpcUrl: string
+}) {
+  const wallet = await waitForWalletProvider()
+  if (!wallet) throw new Error("Phantom or Solflare was not detected.")
+  const web3 = await loadSolanaWeb3()
+  const connected = await wallet.connect()
+  const publicKey = connected?.publicKey ?? wallet.publicKey
+  if (!publicKey) throw new Error("Wallet connection failed.")
+
+  const owner = new web3.PublicKey(publicKey.toString())
+  const mint = new web3.PublicKey(mintAddress)
+  const tokenProgramId = new web3.PublicKey(TOKEN_PROGRAM_ID)
+  const associatedProgramId = new web3.PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID)
+  const ata = associatedTokenAddress(web3, mint, owner, tokenProgramId, associatedProgramId)
+  const connection = new web3.Connection(rpcUrl, "confirmed")
+
+  if (!(await connection.getAccountInfo(ata, "confirmed"))) {
+    const transaction = new web3.Transaction().add(
+      createAssociatedTokenAccountInstruction(web3, owner, ata, owner, mint, tokenProgramId, associatedProgramId)
+    )
+    const latest = await connection.getLatestBlockhash("confirmed")
+    transaction.feePayer = owner
+    transaction.recentBlockhash = latest.blockhash
+    const signature = await submitWalletTransaction({ wallet, transaction, connection })
+    await confirmSubmittedTransaction(connection, signature)
+  }
+
+  return { walletAddress: owner.toString(), tokenAccount: ata.toString() }
+}
+
+export async function transferSplTokenWithWallet({
+  mintAddress,
+  destinationTokenAccount,
+  amountUnits,
+  rpcUrl,
+  memo = "Tri-Proof Devnet staking",
+}: {
+  mintAddress: string
+  destinationTokenAccount: string
+  amountUnits: string
+  rpcUrl: string
+  memo?: string
+}) {
+  if (!/^\d+$/.test(amountUnits) || BigInt(amountUnits) <= 0n) {
+    throw new Error("Invalid token amount.")
+  }
+
+  const reference = await connectSolanaWallet()
+  return sendSolanaPayment({
+    treasuryAddress: destinationTokenAccount,
+    reference,
+    memo,
+    rpcUrl,
+    buildPaymentInstruction: async ({ web3, owner, treasury }) => {
+      const mint = new web3.PublicKey(mintAddress)
+      const tokenProgramId = new web3.PublicKey(TOKEN_PROGRAM_ID)
+      const associatedProgramId = new web3.PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID)
+      const sourceAta = associatedTokenAddress(web3, mint, owner, tokenProgramId, associatedProgramId)
+      return [
+        createTransferCheckedInstruction(
+          web3,
+          sourceAta,
+          mint,
+          treasury,
+          owner,
+          BigInt(amountUnits),
+          tokenProgramId,
+          undefined,
+          TRI_TOKEN_DECIMALS
+        ),
+      ]
+    },
   })
 }

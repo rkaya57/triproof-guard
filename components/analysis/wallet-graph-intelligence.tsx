@@ -1,10 +1,10 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertTriangle,
   ArrowRight,
-  Building2,
   CircleDot,
   Copy,
   GitBranch,
@@ -24,6 +24,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { decisionLabel } from "@/lib/decision-labels"
 import {
   deterministicRelationshipInterpretation,
   graphComponentLabel,
@@ -38,6 +39,9 @@ import type {
   WalletGraphNode,
   WalletGraphSeverity,
   WalletGraphSummary,
+  VisualDecisionProofCluster,
+  VisualDecisionProofClusterIndex,
+  VisualDecisionProofFocus,
 } from "@/types"
 
 type AiRelationshipInsight = {
@@ -65,6 +69,9 @@ type GraphPayload = {
     truncated: boolean
   } | null
   aiInsight?: AiRelationshipInsight | null
+  clusterIndex?: VisualDecisionProofClusterIndex[]
+  cluster?: VisualDecisionProofCluster | null
+  focus?: VisualDecisionProofFocus | null
   message?: string
 }
 
@@ -467,7 +474,7 @@ function componentById(summary: WalletGraphSummary, componentId: string | null) 
 }
 
 function componentTabLabel(component: WalletGraphComponent) {
-  return graphComponentLabel(component).replace(" cluster", "")
+  return graphComponentLabel(component).replace(" cluster", "").replace(/^Funding\b/, "Funding-linked")
 }
 
 export function WalletGraphIntelligencePanel({
@@ -480,7 +487,11 @@ export function WalletGraphIntelligencePanel({
   const [componentId, setComponentId] = useState(summary?.components[0]?.componentId ?? null)
   const [payload, setPayload] = useState<GraphPayload["graph"]>(null)
   const [aiInsight, setAiInsight] = useState<AiRelationshipInsight | null>(null)
+  const [clusterIndex, setClusterIndex] = useState<VisualDecisionProofClusterIndex[]>([])
+  const [selectedCluster, setSelectedCluster] = useState<VisualDecisionProofCluster | null>(null)
+  const [clusterLabel, setClusterLabel] = useState<string | null>(null)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
+  const [focus, setFocus] = useState<VisualDecisionProofFocus | null>(null)
   const [loading, setLoading] = useState(Boolean(summary))
   const [error, setError] = useState("")
   const [retryNonce, setRetryNonce] = useState(0)
@@ -491,6 +502,7 @@ export function WalletGraphIntelligencePanel({
     const controller = new AbortController()
     const params = new URLSearchParams({ limit: "180" })
     if (componentId) params.set("component", componentId)
+    if (clusterLabel) params.set("cluster", clusterLabel)
 
     fetch(`/api/analysis/${analysisId}/graph?${params.toString()}`, {
       cache: "no-store",
@@ -504,13 +516,19 @@ export function WalletGraphIntelligencePanel({
       .then((body) => {
         setPayload(body.graph)
         setAiInsight(body.aiInsight ?? null)
+        setClusterIndex(body.clusterIndex ?? [])
+        setSelectedCluster(body.cluster ?? null)
         const highestDegreeNode = body.graph?.nodes
           .map((node) => ({
             node,
             degree: body.graph?.edges.filter((edge) => edge.sourceKey === node.nodeKey || edge.targetKey === node.nodeKey).length ?? 0,
           }))
           .sort((left, right) => right.degree - left.degree)[0]?.node
-        setSelectedNode(highestDegreeNode?.nodeKey ?? body.graph?.nodes[0]?.nodeKey ?? null)
+        setSelectedNode((current) =>
+          body.graph?.nodes.some((node) => node.nodeKey === current)
+            ? current
+            : highestDegreeNode?.nodeKey ?? body.graph?.nodes[0]?.nodeKey ?? null
+        )
       })
       .catch((caught: Error) => {
         if (caught.name !== "AbortError") setError(caught.message)
@@ -518,7 +536,30 @@ export function WalletGraphIntelligencePanel({
       .finally(() => setLoading(false))
 
     return () => controller.abort()
-  }, [analysisId, componentId, retryNonce, summary])
+  }, [analysisId, clusterLabel, componentId, retryNonce, summary])
+
+  useEffect(() => {
+    if (!selectedNode) return
+
+    const controller = new AbortController()
+    const params = new URLSearchParams({ view: "focus", node: selectedNode })
+
+    fetch(`/api/analysis/${analysisId}/graph?${params.toString()}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const body = (await response.json().catch(() => ({}))) as GraphPayload & { error?: string }
+        if (!response.ok) throw new Error(body.error ?? "Decision evidence could not be loaded")
+        return body.focus ?? null
+      })
+      .then((value) => setFocus(value))
+      .catch((caught: Error) => {
+        if (caught.name !== "AbortError") setFocus(null)
+      })
+
+    return () => controller.abort()
+  }, [analysisId, selectedNode])
 
   const currentComponent = useMemo(
     () => (summary ? componentById(summary, payload?.componentId ?? componentId) : null),
@@ -528,6 +569,7 @@ export function WalletGraphIntelligencePanel({
     () => payload?.nodes.find((node) => node.nodeKey === selectedNode) ?? null,
     [payload, selectedNode]
   )
+  const visibleFocus = selectedNode ? focus : null
   const activeEdges = useMemo(
     () =>
       payload?.edges.filter(
@@ -613,7 +655,7 @@ export function WalletGraphIntelligencePanel({
                 [CircleDot, "Evidence links", summary.totalEdges],
                 [Users, "Connected wallets", summary.connectedWallets],
                 [Share2, "Referral links", summary.referralLinks],
-                [AlertTriangle, "Review-priority components", summary.highRiskComponents],
+                [AlertTriangle, "High-severity relationship components", summary.highRiskComponents],
                 [ShieldCheck, "Neutral services", summary.neutralServiceFunders],
               ].map(([Icon, label, value]) => {
                 const MetricIcon = Icon as typeof CircleDot
@@ -635,7 +677,7 @@ export function WalletGraphIntelligencePanel({
                     <Badge variant="outline" className={severityStyles[currentComponent.severity]}>
                       {currentComponent.severity} context
                     </Badge>
-                    <span className="font-mono text-[11px] text-muted-foreground">{currentComponent.componentId}</span>
+                    <span className="font-mono text-[11px] text-muted-foreground">Relationship component ID: {currentComponent.componentId}</span>
                   </div>
                   <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">{deterministicInsight}</p>
                   <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -683,10 +725,82 @@ export function WalletGraphIntelligencePanel({
                     <GitBranch className="size-4 shrink-0" />
                     <span className="min-w-0 text-left">
                       <span className="block truncate text-xs font-medium">{componentTabLabel(component)}</span>
-                      <span className="block font-mono text-[10px] opacity-65">{component.componentId}</span>
+                      <span className="block font-mono text-[10px] opacity-65">Relationship component ID: {component.componentId}</span>
                     </span>
                   </Button>
                 ))}
+              </div>
+            )}
+
+            {clusterIndex.length > 0 && (
+              <div className="grid gap-3 rounded-xl border border-border bg-background/45 p-4 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-center">
+                <div>
+                  <p className="text-sm font-semibold">Stored decision clusters</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    The selector returns up to 24 persisted clusters and up to 180 stored members. A relationship or cluster alone is not treated as Sybil proof.
+                  </p>
+                </div>
+                <select
+                  value={clusterLabel ?? ""}
+                  onChange={(event) => {
+                    const nextCluster = event.target.value || null
+                    setLoading(true)
+                    setError("")
+                    setClusterLabel(nextCluster)
+                  }}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  aria-label="Select stored decision cluster"
+                >
+                  <option value="">All relationship components</option>
+                  {clusterIndex.map((cluster) => (
+                    <option key={cluster.label} value={cluster.label}>
+                      {cluster.label} · {cluster.walletCount} wallets · {Math.round(cluster.averageRiskScore)} risk
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {clusterLabel && selectedCluster && (
+              <div className="rounded-xl border border-primary/25 bg-primary/[0.035] p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold">{selectedCluster.label}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {selectedCluster.walletCount} stored members{selectedCluster.truncated ? " · member list is bounded" : ""}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="border-border bg-background/60">
+                    Stored cluster context
+                  </Badge>
+                </div>
+                {selectedCluster.reasons.length > 0 && (
+                  <p className="mt-3 text-sm leading-6 text-muted-foreground">{selectedCluster.reasons.join(" ")}</p>
+                )}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {selectedCluster.members.map((member) => (
+                    <Button
+                      key={member.walletAddress}
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const graphNode = payload?.nodes.find((node) => node.walletAddress === member.walletAddress)
+                        if (graphNode) {
+                          setSelectedNode(graphNode.nodeKey)
+                          return
+                        }
+                        if (member.graphComponentId && member.graphComponentId !== componentId) {
+                          setClusterLabel(null)
+                          setComponentId(member.graphComponentId)
+                          setLoading(true)
+                        }
+                      }}
+                    >
+                      {shortValue(member.walletAddress, "Wallet")} · {member.riskScore}
+                    </Button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -784,6 +898,52 @@ export function WalletGraphIntelligencePanel({
                       </>
                     ) : (
                       <p className="mt-3 text-sm text-muted-foreground">Select a node to inspect its evidence.</p>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-primary/20 bg-primary/[0.035] p-4">
+                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Decision evidence drawer</p>
+                    {visibleFocus ? (
+                      <>
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <div className="rounded-lg border border-border/70 bg-background/55 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Risk assessment</p>
+                            <p className="mt-1 text-base font-semibold">{visibleFocus.risk.score} · {visibleFocus.risk.level}</p>
+                          </div>
+                          <div className="rounded-lg border border-border/70 bg-background/55 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Policy decision</p>
+                            <p className="mt-1 text-sm font-semibold">{decisionLabel(visibleFocus.decision.status)}</p>
+                          </div>
+                        </div>
+                        <p className="mt-3 text-sm leading-6 text-muted-foreground">{visibleFocus.decision.explanation}</p>
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                          <Badge variant="outline">Confidence · {visibleFocus.evidence.evidenceConfidence}</Badge>
+                          <Badge variant="outline">Risk families · {visibleFocus.evidence.independentRiskFamilyCount}</Badge>
+                          <Badge variant="outline">Coverage · {visibleFocus.evidence.limitations.length ? "limited" : "recorded"}</Badge>
+                          {visibleFocus.provider && <Badge variant="outline">{visibleFocus.provider.name} · {visibleFocus.provider.status ?? "status not recorded"}</Badge>}
+                        </div>
+                        <div className="mt-3 space-y-2">
+                          {visibleFocus.evidence.evidence.slice(0, 4).map((item) => (
+                            <div key={`${item.code}-${item.family}`} className="rounded-lg border border-border/70 bg-background/50 p-3">
+                              <p className="text-xs font-medium">{item.title}</p>
+                              <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.description}</p>
+                            </div>
+                          ))}
+                        </div>
+                        {visibleFocus.evidence.limitations.length > 0 && (
+                          <p className="mt-3 text-xs leading-5 text-amber-200">Limitations: {visibleFocus.evidence.limitations.join(" ")}</p>
+                        )}
+                        <Link
+                          href={`/dashboard/analysis/${analysisId}/evidence?wallet=${encodeURIComponent(visibleFocus.walletAddress)}${selectedCluster ? `&cluster=${encodeURIComponent(selectedCluster.label)}` : ""}`}
+                          className="mt-4 inline-flex text-sm font-medium text-primary hover:underline"
+                        >
+                          Open full decision evidence
+                        </Link>
+                      </>
+                    ) : (
+                      <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                        This graph node has no stored wallet decision attached. Relationship context remains supporting evidence, not a standalone proof.
+                      </p>
                     )}
                   </div>
 
