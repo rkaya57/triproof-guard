@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   CircleDollarSign,
+  ClipboardCheck,
   FilePlus2,
   FileText,
   Network,
@@ -142,7 +143,10 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href={`/dashboard/analysis/${latestAnalysis.id}`} className={buttonVariants()}>
+          <Link href={`/dashboard/campaigns/${campaign.id}/decisions`} className={buttonVariants()}>
+            <ClipboardCheck data-icon="inline-start" /> Decision package
+          </Link>
+          <Link href={`/dashboard/analysis/${latestAnalysis.id}`} className={buttonVariants({ variant: "outline" })}>
             <FileText data-icon="inline-start" /> Open report
           </Link>
           <Link
