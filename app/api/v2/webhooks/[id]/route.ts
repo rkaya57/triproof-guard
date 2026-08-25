@@ -1,37 +1,21 @@
-import { apiError, getApiUser } from "@/lib/api/auth"
-import { assertWebhookAccess, SubscriptionLimitError } from "@/lib/billing/subscription"
+import { apiError } from "@/lib/api/auth"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
+import { requireWebhookApiAccess } from "@/lib/webhooks/api-access"
 import {
   normalizeWebhookDescription,
   normalizeWebhookEvents,
   normalizeWebhookUrl,
 } from "@/lib/webhooks/management"
+import { serializeWebhookDelivery, summarizeWebhookHealth } from "@/lib/webhooks/observability"
 
 export const runtime = "nodejs"
-
-async function requireWebhookAccess(request: Request) {
-  const auth = await getApiUser(request)
-  if (auth.error) return { auth: null, error: auth.error } as const
-  try {
-    await assertWebhookAccess(auth.user)
-    return { auth, error: null } as const
-  } catch (error) {
-    if (error instanceof SubscriptionLimitError) {
-      return {
-        auth: null,
-        error: apiError(error.message, 403, { code: error.code }),
-      } as const
-    }
-    throw error
-  }
-}
 
 export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const access = await requireWebhookAccess(request)
+  const access = await requireWebhookApiAccess(request)
   if (access.error) return access.error
   const { id } = await context.params
 
@@ -41,7 +25,7 @@ export async function GET(
       include: {
         deliveries: {
           orderBy: { createdAt: "desc" },
-          take: 25,
+          take: 20,
         },
       },
     })
@@ -57,16 +41,13 @@ export async function GET(
       description: endpoint.description,
       createdAt: endpoint.createdAt.toISOString(),
       updatedAt: endpoint.updatedAt.toISOString(),
-      deliveries: endpoint.deliveries.map((delivery) => ({
-        id: delivery.id,
-        eventType: delivery.eventType,
-        status: delivery.status,
-        statusCode: delivery.statusCode,
-        errorMessage: delivery.errorMessage,
-        attemptCount: delivery.attemptCount,
-        createdAt: delivery.createdAt.toISOString(),
-        deliveredAt: delivery.deliveredAt?.toISOString() ?? null,
-      })),
+      health: summarizeWebhookHealth(endpoint.deliveries, endpoint.isActive),
+      deliveries: endpoint.deliveries.slice(0, 10).map(serializeWebhookDelivery),
+      links: {
+        self: `/api/v2/webhooks/${endpoint.id}`,
+        deliveries: `/api/v2/webhooks/${endpoint.id}/deliveries`,
+        collection: "/api/v2/webhooks",
+      },
     }, {
       headers: { "Cache-Control": "private, no-store" },
     })
@@ -80,7 +61,7 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const access = await requireWebhookAccess(request)
+  const access = await requireWebhookApiAccess(request)
   if (access.error) return access.error
   const { id } = await context.params
 
@@ -144,6 +125,7 @@ export async function PATCH(
       updatedAt: endpoint.updatedAt.toISOString(),
       links: {
         self: `/api/v2/webhooks/${endpoint.id}`,
+        deliveries: `/api/v2/webhooks/${endpoint.id}/deliveries`,
         collection: "/api/v2/webhooks",
       },
     }, {
@@ -159,7 +141,7 @@ export async function DELETE(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const access = await requireWebhookAccess(request)
+  const access = await requireWebhookApiAccess(request)
   if (access.error) return access.error
   const { id } = await context.params
 

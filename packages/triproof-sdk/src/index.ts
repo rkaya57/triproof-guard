@@ -146,6 +146,32 @@ export type WebhookEndpointUpdate = {
   isActive?: boolean
 }
 
+export type WebhookHealthSummary = {
+  state: "healthy" | "degraded" | "failing" | "idle" | "paused"
+  recentAttempts: number
+  recentSuccesses: number
+  recentFailures: number
+  recentPending: number
+  recentSuccessRate: number | null
+  consecutiveFailures: number
+  lastAttemptAt: string | null
+  lastSuccessAt: string | null
+  lastFailureAt: string | null
+}
+
+export type WebhookDelivery = {
+  id: string
+  eventType: string | null
+  status: string
+  statusCode: number | null
+  errorMessage: string | null
+  responseBody?: string | null
+  attemptCount: number
+  analysisId?: string | null
+  createdAt: string
+  deliveredAt: string | null
+}
+
 export type WebhookEndpoint = {
   id: string
   object?: "webhook_endpoint"
@@ -155,13 +181,38 @@ export type WebhookEndpoint = {
   description: string | null
   createdAt?: string
   updatedAt?: string
-  latestDeliveries?: Array<Record<string, unknown>>
-  deliveries?: Array<Record<string, unknown>>
+  health?: WebhookHealthSummary
+  latestDeliveries?: WebhookDelivery[]
+  deliveries?: WebhookDelivery[]
 }
 
 export type CreateWebhookResponse = WebhookEndpoint & {
   secret: string
   note?: string
+}
+
+export type WebhookDeliveryList = {
+  object: "webhook_delivery_list"
+  apiVersion: "v2"
+  endpointId: string
+  deliveries: WebhookDelivery[]
+  nextCursor: string | null
+  hasMore: boolean
+  filters: { status: string | null }
+}
+
+export type WebhookDeliveryRetryResponse = {
+  object: "webhook_delivery_retry"
+  apiVersion: "v2"
+  endpointId: string
+  delivery: {
+    id: string
+    endpointId: string
+    status: string
+    statusCode: number | null
+    errorMessage: string | null
+    attemptCount: number
+  }
 }
 
 export type ScamGuardScanType = "url" | "wallet" | "token" | "transaction"
@@ -352,6 +403,27 @@ export class TriProofClient {
     return this.request<{ id: string; object: "webhook_endpoint_deleted"; deleted: true; apiVersion: "v2" }>(
       `/api/v2/webhooks/${encodeURIComponent(endpointId)}`,
       { method: "DELETE" },
+    )
+  }
+
+  listWebhookDeliveries(
+    endpointId: string,
+    options: { limit?: number; cursor?: string; status?: "pending" | "failed" | "delivered" } = {},
+  ) {
+    const query = new URLSearchParams()
+    if (options.limit !== undefined) query.set("limit", String(options.limit))
+    if (options.cursor) query.set("cursor", options.cursor)
+    if (options.status) query.set("status", options.status)
+    const suffix = query.size > 0 ? `?${query.toString()}` : ""
+    return this.request<WebhookDeliveryList>(
+      `/api/v2/webhooks/${encodeURIComponent(endpointId)}/deliveries${suffix}`,
+    )
+  }
+
+  retryWebhookDelivery(endpointId: string, deliveryId: string) {
+    return this.request<WebhookDeliveryRetryResponse>(
+      `/api/v2/webhooks/${encodeURIComponent(endpointId)}/deliveries/${encodeURIComponent(deliveryId)}/retry`,
+      { method: "POST" },
     )
   }
 

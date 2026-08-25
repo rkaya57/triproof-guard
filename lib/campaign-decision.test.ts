@@ -14,6 +14,8 @@ import "@/lib/sdk/triproof-client.test"
 import "@/lib/webhooks/campaign-events.test"
 import "@/lib/webhooks/egress.test"
 import "@/lib/webhooks/management.test"
+import "@/lib/webhooks/observability.test"
+import "@/lib/webhooks/retry.test"
 import { normalizeReasonCode } from "@/lib/campaign-decision"
 
 test("reason codes distinguish account state from non-user account evidence", () => {

@@ -103,6 +103,23 @@ test("SDK exposes API-key webhook CRUD on the API v2 surface", async () => {
   assert.equal(calls[3]?.method, "DELETE")
 })
 
+test("SDK exposes paginated delivery history and controlled manual retry", async () => {
+  const { client, calls } = mockClient()
+  await client.listWebhookDeliveries("hook/id", { limit: 25, cursor: "delivery cursor", status: "failed" })
+  await client.retryWebhookDelivery("hook/id", "delivery/id")
+
+  assert.equal(
+    calls[0]?.url,
+    "https://api.example.test/api/v2/webhooks/hook%2Fid/deliveries?limit=25&cursor=delivery+cursor&status=failed",
+  )
+  assert.equal(calls[0]?.method, "GET")
+  assert.equal(
+    calls[1]?.url,
+    "https://api.example.test/api/v2/webhooks/hook%2Fid/deliveries/delivery%2Fid/retry",
+  )
+  assert.equal(calls[1]?.method, "POST")
+})
+
 test("SDK preserves API status and machine-readable error code", async () => {
   const { client } = mockClient(() => Response.json(
     { error: "Webhooks require an API Growth plan.", code: "WEBHOOK_PLAN_REQUIRED" },
