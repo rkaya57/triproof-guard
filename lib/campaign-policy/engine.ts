@@ -16,6 +16,7 @@ import {
   type CampaignPolicyMemoryContext,
   type CampaignPolicyRecommendation,
   type CampaignPolicyReport,
+  type CampaignPolicyThresholds,
 } from "@/lib/campaign-policy/types"
 
 const actionRank: Record<SuggestedAction, number> = {
@@ -43,13 +44,32 @@ const infrastructureRoles = new Set([
   "url",
 ])
 
-const presetConfig: Record<
-  RiskPolicy,
-  { corroboratedRejectScore: number; corroboratedFamilyCount: number }
-> = {
+const presetConfig: Record<RiskPolicy, CampaignPolicyThresholds> = {
   conservative: { corroboratedRejectScore: 75, corroboratedFamilyCount: 3 },
   balanced: { corroboratedRejectScore: 60, corroboratedFamilyCount: 2 },
   strict: { corroboratedRejectScore: 50, corroboratedFamilyCount: 2 },
+}
+
+export function campaignPolicyThresholdsForPreset(preset: RiskPolicy): CampaignPolicyThresholds {
+  return { ...presetConfig[preset] }
+}
+
+export function normalizeCampaignPolicyThresholds(
+  preset: RiskPolicy,
+  thresholds?: Partial<CampaignPolicyThresholds> | null,
+): CampaignPolicyThresholds {
+  const defaults = presetConfig[preset]
+  const score = Number(thresholds?.corroboratedRejectScore)
+  const familyCount = Number(thresholds?.corroboratedFamilyCount)
+
+  return {
+    corroboratedRejectScore: Number.isFinite(score)
+      ? Math.min(100, Math.max(0, Math.round(score)))
+      : defaults.corroboratedRejectScore,
+    corroboratedFamilyCount: Number.isFinite(familyCount)
+      ? Math.min(8, Math.max(1, Math.round(familyCount)))
+      : defaults.corroboratedFamilyCount,
+  }
 }
 
 function statusAction(status: WalletStatus): SuggestedAction {
@@ -131,6 +151,7 @@ export function evaluateCampaignPolicy(input: {
   wallet: WalletRiskResult
   preset: RiskPolicy
   memoryMatch?: RiskMemoryMatch | null
+  thresholds?: Partial<CampaignPolicyThresholds> | null
 }): CampaignPolicyRecommendation {
   const decision = input.wallet.decisionEvidence ?? buildExplainableDecision(input.wallet)
   const memory = input.memoryMatch ?? null
@@ -266,7 +287,7 @@ export function evaluateCampaignPolicy(input: {
     )
   }
 
-  const config = presetConfig[input.preset]
+  const config = normalizeCampaignPolicyThresholds(input.preset, input.thresholds)
   const corroborated = Boolean(
     memory &&
       input.wallet.riskScore >= config.corroboratedRejectScore &&
@@ -356,8 +377,10 @@ export function buildCampaignPolicyReport(input: {
   analysis: AnalysisDetail
   memory: CrossCampaignRiskMemory | null
   preset?: RiskPolicy
+  thresholds?: Partial<CampaignPolicyThresholds> | null
 }): CampaignPolicyReport {
   const preset = input.preset ?? input.analysis.riskPolicy ?? "balanced"
+  const thresholds = normalizeCampaignPolicyThresholds(preset, input.thresholds)
   const memoryByIdentity = new Map(
     (input.memory?.matches ?? []).map((match) => [match.key, match])
   )
@@ -371,6 +394,7 @@ export function buildCampaignPolicyReport(input: {
       wallet,
       preset,
       memoryMatch: memoryByIdentity.get(key) ?? null,
+      thresholds,
     })
   })
 
@@ -387,6 +411,7 @@ export function buildCampaignPolicyReport(input: {
     campaignName: input.analysis.project.name,
     analysisId: input.analysis.id,
     preset,
+    thresholds,
     generatedAt: new Date().toISOString(),
     summary: {
       approveRecommendations: recommendations.filter((item) => item.recommendedAction === "approve").length,

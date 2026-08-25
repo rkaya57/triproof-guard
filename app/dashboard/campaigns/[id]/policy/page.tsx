@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation"
 
 import { CampaignPolicyExplorer } from "@/components/dashboard/campaign-policy-explorer"
+import { CampaignPolicySimulator } from "@/components/dashboard/campaign-policy-simulator"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { requirePageUser } from "@/lib/auth/page"
+import { campaignPolicyThresholdsForPreset } from "@/lib/campaign-policy/engine"
 import { loadCampaignPolicyReport } from "@/lib/campaign-policy/server"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import type { RiskPolicy } from "@/types"
@@ -62,5 +64,17 @@ export default async function CampaignPolicyPage({
     )
   }
 
-  return <CampaignPolicyExplorer report={result.report} />
+  const baselinePreset = result.baselinePreset ?? result.report.preset
+  const simulatorReport = {
+    ...result.report,
+    preset: baselinePreset,
+    thresholds: campaignPolicyThresholdsForPreset(baselinePreset),
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <CampaignPolicySimulator report={simulatorReport} />
+      <CampaignPolicyExplorer report={result.report} />
+    </div>
+  )
 }
