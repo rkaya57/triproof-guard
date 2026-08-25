@@ -3,15 +3,12 @@ import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth/session"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
-import { isSupportedWebhookEvent } from "@/lib/webhooks/campaign-events"
+import {
+  normalizeWebhookDescription,
+  normalizeWebhookEvents,
+} from "@/lib/webhooks/management"
 
 export const runtime = "nodejs"
-
-function normalizeEvents(value: unknown) {
-  if (!Array.isArray(value)) return null
-  const events = [...new Set(value.map(String).filter(isSupportedWebhookEvent))]
-  return events.length ? events : null
-}
 
 export async function PATCH(
   request: Request,
@@ -24,20 +21,25 @@ export async function PATCH(
   const body = (await request.json().catch(() => null)) as {
     isActive?: boolean
     eventTypes?: string[]
-    description?: string
+    description?: string | null
   } | null
 
   try {
     const endpoint = await db.webhookEndpoint.findFirst({ where: { id, userId: user.id } })
     if (!endpoint) return NextResponse.json({ error: "Webhook endpoint not found" }, { status: 404 })
 
-    const eventTypes = normalizeEvents(body?.eventTypes)
+    const eventTypes = body && "eventTypes" in body
+      ? normalizeWebhookEvents(body.eventTypes, { allowEmpty: false })
+      : undefined
+    const description = body && "description" in body
+      ? normalizeWebhookDescription(body.description)
+      : undefined
     const updated = await db.webhookEndpoint.update({
       where: { id },
       data: {
         isActive: typeof body?.isActive === "boolean" ? body.isActive : undefined,
         eventTypes: eventTypes ?? undefined,
-        description: typeof body?.description === "string" ? body.description.trim().slice(0, 200) : undefined,
+        description,
       },
     })
 

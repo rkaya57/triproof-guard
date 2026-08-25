@@ -3,31 +3,16 @@ import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth/session"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
+import { SUPPORTED_WEBHOOK_EVENTS } from "@/lib/webhooks/campaign-events"
 import {
-  isSupportedWebhookEvent,
-  SUPPORTED_WEBHOOK_EVENTS,
-} from "@/lib/webhooks/campaign-events"
+  normalizeWebhookDescription,
+  normalizeWebhookEvents,
+  normalizeWebhookUrl,
+} from "@/lib/webhooks/management"
 import { createWebhookSecret } from "@/lib/webhooks/sign"
 import { assertWebhookAccess, SubscriptionLimitError } from "@/lib/billing/subscription"
 
 export const runtime = "nodejs"
-
-function safeWebhookUrl(value: unknown) {
-  if (typeof value !== "string") return null
-  try {
-    const url = new URL(value)
-    if (url.protocol !== "https:" && process.env.NODE_ENV === "production") return null
-    return url.toString()
-  } catch {
-    return null
-  }
-}
-
-function normalizeEvents(value: unknown) {
-  const events = Array.isArray(value) ? value.map(String) : ["analysis.completed"]
-  const normalized = [...new Set(events.filter(isSupportedWebhookEvent))]
-  return normalized.length ? normalized : ["analysis.completed"]
-}
 
 export async function GET() {
   const user = await getCurrentUser()
@@ -89,13 +74,13 @@ export async function POST(request: Request) {
     description?: string
   } | null
 
-  const url = safeWebhookUrl(body?.url)
+  const url = normalizeWebhookUrl(body?.url)
   if (!url) {
     return NextResponse.json({ error: "A valid HTTPS webhook url is required" }, { status: 400 })
   }
 
-  const eventTypes = normalizeEvents(body?.eventTypes)
-  const description = typeof body?.description === "string" ? body.description.trim().slice(0, 200) : null
+  const eventTypes = normalizeWebhookEvents(body?.eventTypes, { fallback: ["analysis.completed"] })
+  const description = normalizeWebhookDescription(body?.description) ?? null
   const secret = createWebhookSecret()
 
   try {
@@ -104,7 +89,7 @@ export async function POST(request: Request) {
         userId: user.id,
         url,
         secret,
-        eventTypes,
+        eventTypes: eventTypes ?? ["analysis.completed"],
         description,
       },
     })

@@ -6,9 +6,9 @@ import { buttonVariants } from "@/components/ui/button"
 import { PublicTopNav } from "@/components/layout/public-top-nav"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
-const createWebhook = `curl -X POST https://triproofprotocol.com/api/webhooks \\
+const createWebhook = `curl -X POST https://triproofprotocol.com/api/v2/webhooks \\
   -H "Content-Type: application/json" \\
-  -b "dashboard_session_cookie" \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
   -d '{
     "url": "https://yourapp.com/api/triproof-webhook",
     "eventTypes": [
@@ -60,6 +60,7 @@ export default function WebhookDocsPage() {
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link href="/docs/api/v2" className={`${buttonVariants()} glow-primary`}>Campaign API v2 <ArrowRight data-icon="inline-end" /></Link>
+            <Link href="/docs/api/v2/sdk" className={buttonVariants({ variant: "outline" })}>TypeScript SDK</Link>
             <Link href="/dashboard/developer" className={buttonVariants({ variant: "outline" })}>Developer settings</Link>
           </div>
         </div>
@@ -93,7 +94,7 @@ export default function WebhookDocsPage() {
 
       <section className="mx-auto grid max-w-7xl gap-5 px-5 py-14 sm:px-8 lg:grid-cols-2">
         <Card className="glass-panel premium-card">
-          <CardHeader><CardTitle>Create webhook endpoint</CardTitle><CardDescription>Webhook endpoint management currently uses an authenticated dashboard session. The endpoint secret is shown once.</CardDescription></CardHeader>
+          <CardHeader><CardTitle>Create webhook endpoint</CardTitle><CardDescription>API Growth keys can manage endpoints through API v2. The same operations are also available in Dashboard → Developer. The signing secret is shown only when the endpoint is created.</CardDescription></CardHeader>
           <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{createWebhook}</code></pre></CardContent>
         </Card>
         <Card className="glass-panel premium-card">
