@@ -180,6 +180,93 @@ export type CampaignRunDecisionPackage = {
   links: Record<string, string>
 }
 
+export type CampaignRunDecisionDiff = {
+  object: "campaign_run_decision_diff"
+  apiVersion: "v2"
+  schemaVersion: string
+  campaignId: string
+  campaignName: string
+  fromAnalysisId: string
+  toAnalysisId: string
+  runs: {
+    from: {
+      status: string
+      modelVersion: string
+      policyVersion: string | null
+      inputHash: string | null
+      totalWallets: number
+      createdAt: string | null
+      completedAt: string | null
+      policySnapshot: {
+        id: string
+        preset: string | null
+        version: number
+        policyHash: string | null
+      } | null
+    }
+    to: {
+      status: string
+      modelVersion: string
+      policyVersion: string | null
+      inputHash: string | null
+      totalWallets: number
+      createdAt: string | null
+      completedAt: string | null
+      policySnapshot: {
+        id: string
+        preset: string | null
+        version: number
+        policyHash: string | null
+      } | null
+    }
+  }
+  summary: {
+    comparedIdentityCount: number
+    changedIdentityCount: number
+    unchangedIdentityCount: number
+    addedIdentityCount: number
+    removedIdentityCount: number
+    stateChangedIdentityCount: number
+    contextChangedIdentityCount: number
+    fromStateCounts: Record<string, number>
+    toStateCounts: Record<string, number>
+    stateTransitions: Record<string, number>
+  }
+  changes: Array<{
+    walletAddress: string
+    chain: string
+    changeType: "added" | "removed" | "state_changed" | "context_changed"
+    fieldsChanged: string[]
+    from: null | {
+      state: string
+      riskScore: number
+      confidence: number | null
+      clusterId: string | null
+      modelVersion: string
+      policyVersion: string | null
+    }
+    to: null | {
+      state: string
+      riskScore: number
+      confidence: number | null
+      clusterId: string | null
+      modelVersion: string
+      policyVersion: string | null
+    }
+    riskScoreDelta: number | null
+  }>
+  pagination: {
+    limit: number
+    offset: number
+    returned: number
+    totalChanged: number
+    hasMore: boolean
+    nextCursor: string | null
+  }
+  boundaries: string[]
+  links: Record<string, string>
+}
+
 export type CampaignClusterList = {
   object: "cluster_list"
   apiVersion: "v2"
@@ -587,6 +674,21 @@ export class TriProofClient {
     const suffix = query.size > 0 ? `?${query.toString()}` : ""
     return this.request<CampaignRunDecisionPackage>(
       `/api/v2/campaigns/${encodeURIComponent(campaignId)}/analyses/${encodeURIComponent(analysisId)}/decisions${suffix}`,
+    )
+  }
+
+  compareCampaignRunDecisions(
+    campaignId: string,
+    fromAnalysisId: string,
+    toAnalysisId: string,
+    options: { limit?: number; cursor?: string } = {},
+  ) {
+    const query = new URLSearchParams()
+    query.set("compareTo", toAnalysisId)
+    if (options.limit !== undefined) query.set("limit", String(options.limit))
+    if (options.cursor) query.set("cursor", options.cursor)
+    return this.request<CampaignRunDecisionDiff>(
+      `/api/v2/campaigns/${encodeURIComponent(campaignId)}/analyses/${encodeURIComponent(fromAnalysisId)}/decisions/diff?${query.toString()}`,
     )
   }
 

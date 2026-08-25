@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { campaignApiV2OpenApiWithRunDecisions as campaignApiV2OpenApi } from "@/lib/api-v2/openapi-run-decision-package"
+import { campaignApiV2OpenApiWithRunDecisionDiff as campaignApiV2OpenApi } from "@/lib/api-v2/openapi-run-decision-diff"
 
 const expectedOperations = [
   ["/api/v2/campaigns", "get"],
@@ -11,6 +11,7 @@ const expectedOperations = [
   ["/api/v2/campaigns/{id}/analyses", "post"],
   ["/api/v2/campaigns/{id}/analyses/{analysisId}", "get"],
   ["/api/v2/campaigns/{id}/analyses/{analysisId}/decisions", "get"],
+  ["/api/v2/campaigns/{id}/analyses/{analysisId}/decisions/diff", "get"],
   ["/api/v2/campaigns/{id}/analyses/{analysisId}/clusters", "get"],
   ["/api/v2/campaigns/{id}/analyses/{analysisId}/clusters/{clusterLabel}", "get"],
   ["/api/v2/campaigns/{id}/analyses/{analysisId}/clusters/{clusterLabel}/evidence", "get"],
@@ -29,7 +30,7 @@ const expectedOperations = [
 
 test("OpenAPI contract is versioned, production-scoped, and Bearer authenticated", () => {
   assert.equal(campaignApiV2OpenApi.openapi, "3.1.0")
-  assert.equal(campaignApiV2OpenApi.info.version, "2.2.0")
+  assert.equal(campaignApiV2OpenApi.info.version, "2.3.0")
   assert.deepEqual(campaignApiV2OpenApi.servers, [{ url: "https://triproofprotocol.com" }])
   assert.deepEqual(campaignApiV2OpenApi.security, [{ bearerAuth: [] }])
   assert.equal(campaignApiV2OpenApi.components.securitySchemes.bearerAuth.scheme, "bearer")
@@ -109,6 +110,23 @@ test("run decision OpenAPI contract is exact-run, paginated, and does not rerun 
   assert.equal(operation["x-triproof-historical-run-scope"], true)
   assert.equal(operation["x-triproof-max-page-size"], 500)
   const parameters = operation.parameters as Array<{ name: string; description?: string; schema?: Record<string, unknown> }>
+  assert.equal(parameters.find((item) => item.name === "limit")?.schema?.maximum, 500)
+  assert.match(String(parameters.find((item) => item.name === "cursor")?.description), /opaque/i)
+})
+
+test("run decision diff OpenAPI contract compares persisted runs without recomputation", () => {
+  const operation = campaignApiV2OpenApi.paths["/api/v2/campaigns/{id}/analyses/{analysisId}/decisions/diff"].get
+  assert.equal(operation["x-triproof-read-only"], true)
+  assert.equal(operation["x-triproof-reruns-policy-engine"], false)
+  assert.equal(operation["x-triproof-recomputes-risk"], false)
+  assert.equal(operation["x-triproof-recomputes-clusters"], false)
+  assert.equal(operation["x-triproof-rescores-evidence"], false)
+  assert.equal(operation["x-triproof-historical-run-comparison"], true)
+  assert.equal(operation["x-triproof-max-page-size"], 500)
+  assert.equal(operation["x-triproof-max-decisions-per-run"], 50000)
+
+  const parameters = operation.parameters as Array<{ name: string; required?: boolean; description?: string; schema?: Record<string, unknown> }>
+  assert.equal(parameters.find((item) => item.name === "compareTo")?.required, true)
   assert.equal(parameters.find((item) => item.name === "limit")?.schema?.maximum, 500)
   assert.match(String(parameters.find((item) => item.name === "cursor")?.description), /opaque/i)
 })
