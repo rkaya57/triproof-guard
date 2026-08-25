@@ -11,6 +11,7 @@ Campaign API v2:
 - listCampaigns
 - getCampaign
 - runCampaignAnalysis
+- listCampaignAnalysisRuns
 - getCampaignAnalysis
 - listCampaignRunDecisions
 - compareCampaignRunDecisions
@@ -28,7 +29,7 @@ Webhook management:
 
 Existing v1 integrations remain supported through createAnalysis and getAnalysis. ScamGuard methods also remain available.
 
-Exact-run decision retrieval and comparison read persisted campaign decisions only. They do not rerun policy, risk scoring, clustering, reviewer logic, or evidence generation.
+Analysis-run listing, exact-run decision retrieval, and run comparison read persisted campaign state only. They do not rerun analysis, policy, risk scoring, clustering, reviewer logic, or evidence generation.
 
 Policy changes created through the SDK apply to future campaign runs and do not recompute historical stored decisions.
 

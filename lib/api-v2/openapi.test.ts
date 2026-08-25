@@ -1,13 +1,14 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { campaignApiV2OpenApiWithRunDecisionDiff as campaignApiV2OpenApi } from "@/lib/api-v2/openapi-run-decision-diff"
+import { campaignApiV2OpenApiWithAnalysisRunCatalog as campaignApiV2OpenApi } from "@/lib/api-v2/openapi-analysis-run-catalog"
 
 const expectedOperations = [
   ["/api/v2/campaigns", "get"],
   ["/api/v2/campaigns", "post"],
   ["/api/v2/campaigns/{id}", "get"],
   ["/api/v2/campaigns/{id}", "patch"],
+  ["/api/v2/campaigns/{id}/analyses", "get"],
   ["/api/v2/campaigns/{id}/analyses", "post"],
   ["/api/v2/campaigns/{id}/analyses/{analysisId}", "get"],
   ["/api/v2/campaigns/{id}/analyses/{analysisId}/decisions", "get"],
@@ -30,7 +31,7 @@ const expectedOperations = [
 
 test("OpenAPI contract is versioned, production-scoped, and Bearer authenticated", () => {
   assert.equal(campaignApiV2OpenApi.openapi, "3.1.0")
-  assert.equal(campaignApiV2OpenApi.info.version, "2.3.0")
+  assert.equal(campaignApiV2OpenApi.info.version, "2.4.0")
   assert.deepEqual(campaignApiV2OpenApi.servers, [{ url: "https://triproofprotocol.com" }])
   assert.deepEqual(campaignApiV2OpenApi.security, [{ bearerAuth: [] }])
   assert.equal(campaignApiV2OpenApi.components.securitySchemes.bearerAuth.scheme, "bearer")
@@ -54,6 +55,24 @@ test("all OpenAPI operationIds are unique and stable enough for client generatio
   }
   assert.equal(ids.length, expectedOperations.length)
   assert.equal(new Set(ids).size, ids.length)
+})
+
+test("analysis run catalog OpenAPI contract is read-only, bounded, and non-recomputing", () => {
+  const operation = campaignApiV2OpenApi.paths["/api/v2/campaigns/{id}/analyses"].get
+  assert.equal(operation.operationId, "listCampaignAnalysisRuns")
+  assert.equal(operation["x-triproof-read-only"], true)
+  assert.equal(operation["x-triproof-reruns-analysis"], false)
+  assert.equal(operation["x-triproof-reruns-policy-engine"], false)
+  assert.equal(operation["x-triproof-recomputes-risk"], false)
+  assert.equal(operation["x-triproof-recomputes-clusters"], false)
+  assert.equal(operation["x-triproof-rescores-evidence"], false)
+  assert.equal(operation["x-triproof-stored-run-metadata"], true)
+  assert.equal(operation["x-triproof-max-page-size"], 500)
+
+  const parameters = operation.parameters as Array<{ name: string; description?: string; schema?: Record<string, unknown> }>
+  assert.equal(parameters.find((item) => item.name === "limit")?.schema?.maximum, 500)
+  assert.match(String(parameters.find((item) => item.name === "cursor")?.description), /opaque/i)
+  assert.ok(campaignApiV2OpenApi.paths["/api/v2/campaigns/{id}/analyses"].post)
 })
 
 test("cluster API contract exposes GET-only forensic resources with explicit non-recomputation boundaries", () => {
