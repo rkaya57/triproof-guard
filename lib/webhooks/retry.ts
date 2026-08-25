@@ -1,4 +1,8 @@
 import { db } from "@/lib/db/prisma"
+import {
+  sendWebhookRequest,
+  webhookDeliveryErrorMessage,
+} from "@/lib/webhooks/egress"
 import { webhookHeaders } from "@/lib/webhooks/sign"
 
 const DEFAULT_WEBHOOK_RETRY_LIMIT = Number.parseInt(process.env.WEBHOOK_RETRY_LIMIT ?? "10", 10)
@@ -39,22 +43,21 @@ export async function retryWebhookDeliveries({
   for (const delivery of deliveries) {
     const payloadString = JSON.stringify(delivery.requestPayload)
     try {
-      const response = await fetch(delivery.endpoint.url, {
-        method: "POST",
+      const response = await sendWebhookRequest({
+        url: delivery.endpoint.url,
         headers: webhookHeaders(payloadString, delivery.endpoint.secret),
         body: payloadString,
       })
-      const responseBody = (await response.text().catch(() => "")).slice(0, 4000)
       const attemptCount = delivery.attemptCount + 1
       await db.webhookDelivery.update({
         where: { id: delivery.id },
         data: {
           status: response.ok ? "delivered" : "failed",
           statusCode: response.status,
-          responseBody,
+          responseBody: response.body.slice(0, 4000),
           attemptCount,
           deliveredAt: response.ok ? new Date() : null,
-          errorMessage: response.ok ? null : `HTTP ${response.status}`,
+          errorMessage: webhookDeliveryErrorMessage(response),
         },
       })
       results.push({

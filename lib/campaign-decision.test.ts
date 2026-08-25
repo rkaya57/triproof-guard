@@ -12,6 +12,7 @@ import "@/lib/cluster-investigation/proposals.test"
 import "@/lib/sdk/package.test"
 import "@/lib/sdk/triproof-client.test"
 import "@/lib/webhooks/campaign-events.test"
+import "@/lib/webhooks/egress.test"
 import "@/lib/webhooks/management.test"
 import { normalizeReasonCode } from "@/lib/campaign-decision"
 
