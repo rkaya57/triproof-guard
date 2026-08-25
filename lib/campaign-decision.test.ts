@@ -1,9 +1,10 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-// Keep the customer-facing campaign execution package inside the existing decision-safety gate.
+// Keep customer-facing execution and forensic-interpretation surfaces inside the decision-safety gate.
 import "@/lib/campaign-decision-package/index.test"
 import "@/lib/campaign-decision-package/export.test"
+import "@/lib/cluster-investigation/archetypes.test"
 import { normalizeReasonCode } from "@/lib/campaign-decision"
 
 test("reason codes distinguish account state from non-user account evidence", () => {
