@@ -73,6 +73,7 @@ describe("EVM evidence summarizer", () => {
 
     assert.equal(result.txCount, 3)
     assert.equal(result.fundingSource, funder)
+    assert.equal(result.firstFundingTxHash, "0x01")
     assert.equal(result.firstFundingAt, "2026-01-01T00:00:00.000Z")
     assert.equal(result.firstFundingAmount, 0.25)
     assert.equal(result.firstSeen, "2026-01-01T00:00:00.000Z")
@@ -109,6 +110,7 @@ describe("EVM evidence summarizer", () => {
     assert.equal(result.walletAgeDays, null)
     assert.equal(result.firstSeen, "2026-08-01T00:00:00.000Z")
     assert.equal(result.fundingSource, null)
+    assert.equal(result.firstFundingTxHash, null)
     assert.equal(result.firstFundingAt, null)
     assert.equal(result.firstFundingAmount, null)
   })
@@ -140,6 +142,7 @@ describe("EVM evidence summarizer", () => {
 
     assert.equal(result.totalVolume, 0)
     assert.equal(result.fundingSource, null)
+    assert.equal(result.firstFundingTxHash, null)
     assert.equal(result.firstFundingAmount, null)
     assert.equal(result.tokenCount, 1)
     assert.equal(result.contractsCount, null)
