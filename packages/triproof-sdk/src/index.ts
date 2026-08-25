@@ -128,6 +128,37 @@ export type CampaignDecisionPackage = {
   [key: string]: unknown
 }
 
+export type CampaignClusterList = {
+  object: "cluster_list"
+  apiVersion: "v2"
+  campaignId: string
+  analysisId: string
+  storedClusterCount: number
+  clusters: Array<{
+    clusterLabel: string
+    walletCount: number
+    averageRiskScore: number
+    sharedFundingSource: string | null
+    behaviorSimilarityScore: number
+    storedSuggestedAction: string
+    storedReasons: string[]
+    createdAt: string | null
+    links: {
+      intelligence: string
+      members: string
+      dashboard: string
+    }
+  }>
+  pagination: {
+    limit: number
+    returned: number
+    hasMore: boolean
+    nextCursor: string | null
+  }
+  boundaries: string[]
+  links: Record<string, string>
+}
+
 export type CampaignClusterIntelligence = {
   id: string
   object: "cluster_intelligence"
@@ -461,6 +492,20 @@ export class TriProofClient {
   getCampaignAnalysis(campaignId: string, analysisId: string) {
     return this.request<Record<string, unknown>>(
       `/api/v2/campaigns/${encodeURIComponent(campaignId)}/analyses/${encodeURIComponent(analysisId)}`,
+    )
+  }
+
+  listCampaignClusters(
+    campaignId: string,
+    analysisId: string,
+    options: { limit?: number; cursor?: string } = {},
+  ) {
+    const query = new URLSearchParams()
+    if (options.limit !== undefined) query.set("limit", String(options.limit))
+    if (options.cursor) query.set("cursor", options.cursor)
+    const suffix = query.size > 0 ? `?${query.toString()}` : ""
+    return this.request<CampaignClusterList>(
+      `/api/v2/campaigns/${encodeURIComponent(campaignId)}/analyses/${encodeURIComponent(analysisId)}/clusters${suffix}`,
     )
   }
 
