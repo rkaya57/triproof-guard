@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useEffect, useState } from "react"
-import { AlertTriangle, ArrowLeft, GitBranch, Network, RotateCcw, Users } from "lucide-react"
+import { AlertTriangle, ArrowLeft, GitBranch, GitCompareArrows, Network, RotateCcw, Users } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -77,9 +77,16 @@ export function ClusterInvestigationIndex({ analysisId }: { analysisId: string }
               Open a stored cluster to inspect the original grouping basis, member decisions, canonical funding provenance, graph relationships, and timeline.
             </p>
           </div>
-          <Link href={`/dashboard/analysis/${analysis.id}`} className={buttonVariants({ variant: "outline" })}>
-            <ArrowLeft data-icon="inline-start" /> Back to analysis
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            {analysis.clusters.length >= 2 && (
+              <Link href={`/dashboard/analysis/${analysis.id}/clusters/compare`} className={buttonVariants({ variant: "default" })}>
+                <GitCompareArrows data-icon="inline-start" /> Compare clusters
+              </Link>
+            )}
+            <Link href={`/dashboard/analysis/${analysis.id}`} className={buttonVariants({ variant: "outline" })}>
+              <ArrowLeft data-icon="inline-start" /> Back to analysis
+            </Link>
+          </div>
         </div>
       </section>
 
