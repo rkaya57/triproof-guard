@@ -194,6 +194,54 @@ export type CampaignClusterIntelligence = {
   links: Record<string, string>
 }
 
+export type CampaignClusterMemberList = {
+  object: "cluster_member_list"
+  apiVersion: "v2"
+  campaignId: string
+  analysisId: string
+  clusterLabel: string
+  storedTotalMembers: number
+  members: Array<{
+    walletAddress: string
+    chain: string
+    entity: { label: string | null; type: string; riskReason: string | null }
+    riskScore: number
+    riskLevel: string
+    storedStatus: string
+    storedRecommendedAction: string
+    statusExplanation: string | null
+    fundingSource: string | null
+    graphComponentId: string | null
+    graphRiskScore: number | null
+    activity: {
+      txCount: number | null
+      walletAgeDays: number | null
+      totalVolume: number | null
+      contractsCount: number | null
+      campaignActionsCount: number | null
+      firstSeen: string | null
+      lastSeen: string | null
+    }
+    reasons: string[]
+    teamReview: {
+      finalStatus: string
+      feedbackLabel: string | null
+      notes: string | null
+      source: string
+      reviewerName: string | null
+      updatedAt: string | null
+    } | null
+  }>
+  pagination: {
+    limit: number
+    returned: number
+    hasMore: boolean
+    nextCursor: string | null
+  }
+  boundaries: string[]
+  links: Record<string, string>
+}
+
 export type CampaignPolicyActivationInput = {
   preset: TriProofRiskPolicy
   rationale: string
@@ -419,6 +467,21 @@ export class TriProofClient {
   getCampaignClusterIntelligence(campaignId: string, analysisId: string, clusterLabel: string) {
     return this.request<CampaignClusterIntelligence>(
       `/api/v2/campaigns/${encodeURIComponent(campaignId)}/analyses/${encodeURIComponent(analysisId)}/clusters/${encodeURIComponent(clusterLabel)}`,
+    )
+  }
+
+  listCampaignClusterMembers(
+    campaignId: string,
+    analysisId: string,
+    clusterLabel: string,
+    options: { limit?: number; cursor?: string } = {},
+  ) {
+    const query = new URLSearchParams()
+    if (options.limit !== undefined) query.set("limit", String(options.limit))
+    if (options.cursor) query.set("cursor", options.cursor)
+    const suffix = query.size > 0 ? `?${query.toString()}` : ""
+    return this.request<CampaignClusterMemberList>(
+      `/api/v2/campaigns/${encodeURIComponent(campaignId)}/analyses/${encodeURIComponent(analysisId)}/clusters/${encodeURIComponent(clusterLabel)}/members${suffix}`,
     )
   }
 

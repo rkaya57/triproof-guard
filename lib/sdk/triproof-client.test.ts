@@ -82,6 +82,22 @@ test("SDK exposes the ownership-scoped campaign cluster intelligence resource", 
   assert.equal(calls[0]?.headers.get("authorization"), "Bearer tp_live_test_key")
 })
 
+test("SDK pages full cluster membership with encoded IDs and an opaque cursor", async () => {
+  const { client, calls } = mockClient()
+  await client.listCampaignClusterMembers(
+    "campaign/id",
+    "analysis id",
+    "CL / 001",
+    { limit: 250, cursor: "opaque cursor/value" },
+  )
+
+  assert.equal(
+    calls[0]?.url,
+    "https://api.example.test/api/v2/campaigns/campaign%2Fid/analyses/analysis%20id/clusters/CL%20%2F%20001/members?limit=250&cursor=opaque+cursor%2Fvalue",
+  )
+  assert.equal(calls[0]?.method, "GET")
+})
+
 test("Decision Package CSV is returned as text instead of being JSON parsed", async () => {
   const { client, calls } = mockClient((call) => {
     if (call.url.includes("format=csv")) {
