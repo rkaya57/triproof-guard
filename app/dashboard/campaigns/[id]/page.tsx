@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   CircleDollarSign,
   ClipboardCheck,
-  FilePlus2,
   FileText,
   Network,
   ShieldCheck,
@@ -14,11 +13,13 @@ import {
   XCircle,
 } from "lucide-react"
 
+import { CampaignAnalysisRunForm } from "@/components/dashboard/campaign-analysis-run-form"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { requirePageUser } from "@/lib/auth/page"
 import { loadCampaignDetail } from "@/lib/campaigns/load-campaign-detail"
+import { riskPolicyFromNotes } from "@/lib/campaigns/persistence"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { formatDateTimeUTC, formatNumber } from "@/lib/format"
 
@@ -77,33 +78,47 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   if (!detail) notFound()
 
   const { campaign, latestAnalysis } = detail
+  const riskPolicy = riskPolicyFromNotes(campaign.notes)
 
   if (!latestAnalysis) {
     return (
       <div className="flex flex-col gap-6">
         <section className="dashboard-hero rounded-2xl p-6 sm:p-8">
-          <Badge variant="secondary" className="mb-4 border-primary/30 text-primary">
-            Campaign Security Console
-          </Badge>
+          <div className="mb-4 flex flex-wrap gap-2">
+            <Badge variant="secondary" className="border-primary/30 text-primary">
+              Campaign Security Console
+            </Badge>
+            <Badge variant="outline" className="border-cyan-400/25 bg-cyan-400/[0.05] text-cyan-200">
+              {campaign.lifecycle}
+            </Badge>
+          </div>
           <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">{campaign.name}</h2>
-          <p className="mt-3 text-muted-foreground">{campaign.campaignType} on {campaign.chain}</p>
+          <p className="mt-3 text-muted-foreground">
+            {campaign.campaignType} on {campaign.chain} · {riskPolicy} policy
+          </p>
         </section>
+
         <Card className="glass-panel premium-card border-dashed">
           <CardHeader>
-            <CardTitle>No analysis yet</CardTitle>
+            <CardTitle>Campaign is ready for its first wallet cohort</CardTitle>
             <CardDescription>
-              This campaign remains unchanged. Start an analysis when the participant wallet list is ready.
+              Campaign identity and policy already exist. Uploading wallets here creates the first analysis run without creating another campaign.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-3">
-            <Link href="/dashboard/new-analysis" className={buttonVariants()}>
-              <FilePlus2 data-icon="inline-start" /> Start analysis
-            </Link>
-            <Link href="/dashboard/campaigns" className={buttonVariants({ variant: "outline" })}>
-              Back to campaigns
-            </Link>
-          </CardContent>
         </Card>
+
+        <CampaignAnalysisRunForm
+          campaignId={campaign.id}
+          chain={campaign.chain}
+          riskPolicy={riskPolicy}
+          lifecycle={campaign.lifecycle}
+        />
+
+        <div>
+          <Link href="/dashboard/campaigns" className={buttonVariants({ variant: "outline" })}>
+            Back to campaigns
+          </Link>
+        </div>
       </div>
     )
   }
@@ -135,6 +150,9 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
             </Badge>
             <Badge variant="outline" className={statusClass(latestAnalysis.status)}>
               {label(latestAnalysis.status)}
+            </Badge>
+            <Badge variant="outline" className="border-cyan-400/25 bg-cyan-400/[0.05] text-cyan-200 capitalize">
+              {riskPolicy} policy
             </Badge>
           </div>
           <h2 className="text-gradient text-3xl font-semibold sm:text-4xl">{campaign.name}</h2>
@@ -189,8 +207,8 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
         />
         <Metric
           title="Reward exposure"
-          value="Not configured"
-          note="No monetary estimate is invented without a stored reward amount."
+          value={campaign.rewardPoolUsd !== null ? `$${formatNumber(campaign.rewardPoolUsd)}` : "Not configured"}
+          note={campaign.rewardPoolUsd !== null ? "Stored campaign reward pool" : "No monetary estimate is invented without a stored reward amount."}
         />
       </section>
 
@@ -251,10 +269,17 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
         </Card>
       )}
 
+      <CampaignAnalysisRunForm
+        campaignId={campaign.id}
+        chain={campaign.chain}
+        riskPolicy={riskPolicy}
+        lifecycle={campaign.lifecycle}
+      />
+
       <Card className="glass-panel premium-card">
         <CardHeader>
           <CardTitle>Analysis history</CardTitle>
-          <CardDescription>Previous reports remain available and unchanged.</CardDescription>
+          <CardDescription>Every run remains attached to this campaign and previous reports remain unchanged.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3">
           {campaign.analyses.map((analysis, index) => (
@@ -263,6 +288,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
                 <div className="flex flex-wrap gap-2">
                   <Badge variant="outline" className={statusClass(analysis.status)}>{label(analysis.status)}</Badge>
                   {index === 0 && <Badge variant="secondary">Latest</Badge>}
+                  {analysis.policyVersion && <Badge variant="outline">Policy {analysis.policyVersion}</Badge>}
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
                   {formatDateTimeUTC(analysis.createdAt)} · {formatNumber(analysis.totalWallets)} wallets · {analysis.averageRiskScore.toFixed(1)} average risk
@@ -280,7 +306,11 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
         <CardContent className="flex flex-col gap-3 p-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-3">
             <CircleDollarSign className="size-5 shrink-0 text-primary" />
-            <p>Reward exposure stays unavailable until reward amount and allocation policy are explicitly stored.</p>
+            <p>
+              {campaign.rewardPoolUsd !== null
+                ? "Reward pool is stored as campaign context; exposure estimates still require an explicit allocation assumption."
+                : "Reward exposure stays unavailable until reward amount and allocation policy are explicitly stored."}
+            </p>
           </div>
           <Link href="/dashboard/campaigns" className={buttonVariants({ variant: "outline", size: "sm" })}>
             Back to campaigns
