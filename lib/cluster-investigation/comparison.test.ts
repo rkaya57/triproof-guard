@@ -1,6 +1,9 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
+// Keep the full investigation audit surface inside the existing decision-safety gate.
+import "@/lib/cluster-investigation/export.test"
+import "@/lib/cluster-investigation/review.test"
 import { buildExplainableDecision } from "@/lib/campaign-security/decision-evidence"
 import type { FundingDecisionRelationshipInput } from "@/lib/campaign-security/funding-provenance-evidence"
 import { buildCrossClusterComparison, MAX_COMPARED_CLUSTERS } from "@/lib/cluster-investigation/comparison"

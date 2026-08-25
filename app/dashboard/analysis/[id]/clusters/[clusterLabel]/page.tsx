@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 
 import { ClusterInvestigationWorkspace } from "@/components/analysis/cluster-investigation-workspace"
+import { ClusterReviewExportPanel } from "@/components/analysis/cluster-review-export-panel"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { requirePageUser } from "@/lib/auth/page"
 import { loadClusterInvestigation } from "@/lib/cluster-investigation/server"
@@ -18,7 +19,12 @@ export default async function ClusterInvestigationPage({
   try {
     const result = await loadClusterInvestigation(id, user.id, normalizedClusterLabel)
     if (!result || !result.report) notFound()
-    return <ClusterInvestigationWorkspace report={result.report} />
+    return (
+      <>
+        <ClusterInvestigationWorkspace report={result.report} />
+        <ClusterReviewExportPanel report={result.report} />
+      </>
+    )
   } catch (error) {
     if (!isDatabaseConnectionError(error)) throw error
     return (
