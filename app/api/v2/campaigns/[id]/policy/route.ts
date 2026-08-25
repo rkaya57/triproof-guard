@@ -5,6 +5,8 @@ import {
 } from "@/lib/campaigns/operations-server"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
+import { deliverCampaignWebhookEvent } from "@/lib/webhooks/campaign-delivery"
+import { buildPolicyChangedWebhook } from "@/lib/webhooks/campaign-events"
 
 export const runtime = "nodejs"
 
@@ -24,14 +26,40 @@ export async function POST(
   }
 
   try {
+    const source = request.headers.get("authorization") ? "api-v2" : "dashboard-v2"
     const result = await db.$transaction((tx) => activateCampaignPolicyVersion(tx, {
       campaignId: id,
       userId: auth.user.id,
       actor: { id: auth.user.id, name: auth.user.name },
       preset: body.preset,
       rationale: body.rationale,
-      source: request.headers.get("authorization") ? "api-v2" : "dashboard-v2",
+      source,
     }))
+
+    try {
+      await deliverCampaignWebhookEvent({
+        userId: auth.user.id,
+        payload: buildPolicyChangedWebhook({
+          campaignId: result.campaignId,
+          previousPreset: result.previousPolicy?.preset ?? null,
+          previousVersion: result.previousPolicy?.version ?? null,
+          preset: result.policy.preset,
+          version: result.policy.version,
+          policyHash: result.policy.policyHash,
+          rationale: result.policy.rationale,
+          actorId: auth.user.id,
+          actorName: auth.user.name,
+          source,
+        }),
+        dedupeAnalysisEvent: false,
+      })
+    } catch (error) {
+      console.error("Campaign policy webhook delivery failed", {
+        campaignId: result.campaignId,
+        policyVersion: result.policy.version,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
 
     return Response.json({
       id: result.policy.id,

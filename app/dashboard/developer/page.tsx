@@ -1,6 +1,7 @@
 import { Braces, Code2, KeyRound, ShieldCheck } from "lucide-react"
 
 import { DeveloperAccess } from "@/components/dashboard/developer-access"
+import { WebhookManager } from "@/components/dashboard/webhook-manager"
 import { Badge } from "@/components/ui/badge"
 
 export default function Page() {
@@ -11,7 +12,7 @@ export default function Page() {
           <div>
             <Badge variant="outline" className="mb-3 border-blue-400/25 bg-blue-400/[0.05] text-blue-200"><Code2 className="mr-1 size-3" /> Developer surface</Badge>
             <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Integrate Tri-Proof security signals</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Manage API access, integration credentials and product surfaces without exposing secrets. Keep development access separated from operational security controls.</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Manage API access, signed campaign webhooks and product surfaces without exposing secrets. Keep development access separated from operational security controls.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {[[KeyRound, "API access"], [Braces, "Integration"], [ShieldCheck, "Controlled"]].map(([Icon, label]) => (
@@ -21,6 +22,7 @@ export default function Page() {
         </div>
       </section>
       <DeveloperAccess />
+      <WebhookManager />
     </div>
   )
 }

@@ -3,14 +3,13 @@ import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth/session"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
+import { isSupportedWebhookEvent } from "@/lib/webhooks/campaign-events"
 
 export const runtime = "nodejs"
 
-const supportedEvents = ["analysis.completed", "policy.blocked", "policy.review"]
-
 function normalizeEvents(value: unknown) {
   if (!Array.isArray(value)) return null
-  const events = value.map(String).filter((event) => supportedEvents.includes(event))
+  const events = [...new Set(value.map(String).filter(isSupportedWebhookEvent))]
   return events.length ? events : null
 }
 

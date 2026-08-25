@@ -6,6 +6,8 @@ import {
 import { riskPolicyFromNotes } from "@/lib/campaigns/persistence"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
+import { deliverCampaignWebhookEvent } from "@/lib/webhooks/campaign-delivery"
+import { buildLifecycleChangedWebhook } from "@/lib/webhooks/campaign-events"
 
 export const runtime = "nodejs"
 
@@ -156,13 +158,34 @@ export async function PATCH(
   }
 
   try {
+    const source = request.headers.get("authorization") ? "api-v2" : "dashboard-v2"
     const result = await db.$transaction((tx) => changeCampaignLifecycle(tx, {
       campaignId: id,
       userId: auth.user.id,
       actor: { id: auth.user.id, name: auth.user.name },
       lifecycle: body.lifecycle,
-      source: request.headers.get("authorization") ? "api-v2" : "dashboard-v2",
+      source,
     }))
+
+    try {
+      await deliverCampaignWebhookEvent({
+        userId: auth.user.id,
+        payload: buildLifecycleChangedWebhook({
+          campaignId: result.campaignId,
+          from: result.previousLifecycle,
+          to: result.lifecycle,
+          actorId: auth.user.id,
+          actorName: auth.user.name,
+          source,
+        }),
+        dedupeAnalysisEvent: false,
+      })
+    } catch (error) {
+      console.error("Campaign lifecycle webhook delivery failed", {
+        campaignId: result.campaignId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
 
     return Response.json({
       id: result.campaignId,
