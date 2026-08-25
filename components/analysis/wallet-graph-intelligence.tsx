@@ -2,12 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
+  Activity,
   AlertTriangle,
   ArrowRight,
-  Building2,
   CircleDot,
+  Clock3,
   Copy,
+  Eye,
   GitBranch,
+  History,
   Loader2,
   Maximize2,
   Network,
@@ -17,6 +20,7 @@ import {
   ShieldCheck,
   Sparkles,
   Users,
+  Waypoints,
   ZoomIn,
   ZoomOut,
 } from "lucide-react"
@@ -24,6 +28,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   deterministicRelationshipInterpretation,
   graphComponentLabel,
@@ -142,6 +147,34 @@ function riskContextSeverity(score: number): WalletGraphSeverity {
   if (score >= 55) return "high"
   if (score >= 25) return "caution"
   return "info"
+}
+
+function formatTimestamp(value: string | null) {
+  if (!value) return "Not recorded"
+  const timestamp = Date.parse(value)
+  if (!Number.isFinite(timestamp)) return "Not recorded"
+  return new Intl.DateTimeFormat("en", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC",
+    timeZoneName: "short",
+  }).format(new Date(timestamp))
+}
+
+function formatObservedSpan(edges: WalletGraphEdge[]) {
+  const timestamps = edges
+    .map((edge) => (edge.observedAt ? Date.parse(edge.observedAt) : Number.NaN))
+    .filter((value) => Number.isFinite(value))
+    .sort((left, right) => left - right)
+  if (timestamps.length < 2) return "Not enough timestamps"
+  const minutes = Math.round((timestamps[timestamps.length - 1] - timestamps[0]) / 60_000)
+  if (minutes < 60) return `${Math.max(minutes, 1)} min`
+  const hours = Math.round((minutes / 60) * 10) / 10
+  if (hours < 48) return `${hours} hr`
+  return `${Math.round((hours / 24) * 10) / 10} days`
 }
 
 function nodeDegree(nodes: WalletGraphNode[], edges: WalletGraphEdge[]) {
@@ -283,6 +316,7 @@ function GraphCanvas({
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [zoom, setZoom] = useState(1)
+  const [showLabels, setShowLabels] = useState(false)
   const visibleNodes = nodes.slice(0, 40)
   const positions = useMemo(() => buildPositions(visibleNodes, edges), [visibleNodes, edges])
   const degree = useMemo(() => nodeDegree(visibleNodes, edges), [visibleNodes, edges])
@@ -309,10 +343,13 @@ function GraphCanvas({
   return (
     <div
       ref={wrapperRef}
-      className="relative min-h-[380px] overflow-hidden rounded-xl border border-primary/20 bg-background/70 sm:min-h-[440px]"
+      className="relative min-h-[400px] overflow-hidden rounded-2xl border border-primary/20 bg-background/75 shadow-[inset_0_1px_0_color-mix(in_srgb,var(--primary)_10%,transparent)] sm:min-h-[470px]"
     >
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,color-mix(in_srgb,var(--primary)_8%,transparent)_1px,transparent_1px),linear-gradient(to_bottom,color-mix(in_srgb,var(--primary)_8%,transparent)_1px,transparent_1px)] bg-[size:34px_34px]" />
-      <div className="absolute right-3 top-3 z-20 flex gap-1 rounded-lg border border-border/80 bg-background/90 p-1 shadow-lg backdrop-blur">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,color-mix(in_srgb,var(--primary)_9%,transparent),transparent_42%),linear-gradient(to_right,color-mix(in_srgb,var(--primary)_5%,transparent)_1px,transparent_1px),linear-gradient(to_bottom,color-mix(in_srgb,var(--primary)_5%,transparent)_1px,transparent_1px)] bg-[size:auto,38px_38px,38px_38px]" />
+      <div className="absolute right-3 top-3 z-20 flex gap-1 rounded-xl border border-border/80 bg-background/90 p-1 shadow-lg backdrop-blur">
+        <Button type="button" size="icon" variant="ghost" aria-label="Toggle relationship labels" aria-pressed={showLabels} onClick={() => setShowLabels((value) => !value)}>
+          <Eye className="size-4" />
+        </Button>
         <Button type="button" size="icon" variant="ghost" aria-label="Zoom out" onClick={() => setZoom((value) => Math.max(0.8, value - 0.15))}>
           <ZoomOut className="size-4" />
         </Button>
@@ -336,9 +373,9 @@ function GraphCanvas({
       >
         <defs>
           <marker id="arrow-context" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L6,3 L0,6 Z" fill="var(--primary)" opacity="0.8" />
+            <path d="M0,0 L6,3 L0,6 Z" fill="var(--primary)" opacity="0.75" />
           </marker>
-          <marker id="arrow-risk" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
+          <marker id="arrow-investigation" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
             <path d="M0,0 L6,3 L0,6 Z" fill="var(--guard-orange)" opacity="0.9" />
           </marker>
           <marker id="arrow-referral" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
@@ -360,30 +397,30 @@ function GraphCanvas({
               : provenance
                 ? "#22d3ee"
                 : "var(--primary)"
-          const showLabel = active && (edge.isRiskBearing || visibleNodes.length <= 12)
+          const shouldLabel = showLabels && active && (edge.isRiskBearing || visibleNodes.length <= 14)
           const midX = (source.x + target.x) / 2
           const midY = (source.y + target.y) / 2
           return (
-            <g key={edge.edgeKey} opacity={active ? 1 : 0.14}>
+            <g key={edge.edgeKey} opacity={active ? 1 : 0.12}>
               <line
                 x1={source.x}
                 y1={source.y}
                 x2={target.x}
                 y2={target.y}
                 stroke={stroke}
-                strokeWidth={edge.isRiskBearing ? 0.72 : 0.42}
-                strokeOpacity={edge.isRiskBearing ? 0.9 : 0.58}
+                strokeWidth={edge.isRiskBearing ? 0.72 : 0.38}
+                strokeOpacity={edge.isRiskBearing ? 0.92 : 0.52}
                 strokeDasharray={referral || provenance ? "2 1.5" : undefined}
-                markerEnd={`url(#${edge.isRiskBearing ? "arrow-risk" : referral ? "arrow-referral" : "arrow-context"})`}
+                markerEnd={`url(#${edge.isRiskBearing ? "arrow-investigation" : referral ? "arrow-referral" : "arrow-context"})`}
               >
-                <title>{`${edgeLabels[edge.kind]} · ${edge.confidence}% evidence confidence${edge.isRiskBearing ? " · risk-relevant" : ""}`}</title>
+                <title>{`${edgeLabels[edge.kind]} · ${edge.confidence}% evidence confidence${edge.isRiskBearing ? " · investigation-relevant" : ""}`}</title>
               </line>
-              {showLabel && (
+              {shouldLabel && (
                 <text
                   x={midX}
                   y={midY - 1.2}
                   textAnchor="middle"
-                  fontSize="2.1"
+                  fontSize="2.05"
                   fill={stroke}
                   stroke="var(--background)"
                   strokeWidth="0.7"
@@ -403,7 +440,7 @@ function GraphCanvas({
           const selected = selectedNode === node.nodeKey
           const connected = !selectedNode || selectedNeighbors.has(node.nodeKey)
           const label = shortValue(node.label ?? node.address, nodeKindLabel(node.kind))
-          const showLabel = selected || (degree.get(node.nodeKey) ?? 0) >= 3 || visibleNodes.length <= 14
+          const showNodeLabel = selected || (degree.get(node.nodeKey) ?? 0) >= 3 || visibleNodes.length <= 14
           return (
             <g
               key={node.nodeKey}
@@ -416,15 +453,26 @@ function GraphCanvas({
                 if (event.key === "Enter" || event.key === " ") onSelectNode(node.nodeKey)
               }}
             >
-              <NodeShape node={node} x={position.x} y={position.y} selected={selected} opacity={connected ? 1 : 0.28} />
-              {showLabel && (
+              {selected && (
+                <circle
+                  cx={position.x}
+                  cy={position.y}
+                  r={6.3}
+                  fill="none"
+                  stroke={nodeColors[node.kind]}
+                  strokeWidth="0.55"
+                  strokeOpacity="0.5"
+                />
+              )}
+              <NodeShape node={node} x={position.x} y={position.y} selected={selected} opacity={connected ? 1 : 0.24} />
+              {showNodeLabel && (
                 <text
                   x={position.x}
                   y={position.y + 6.8}
                   textAnchor="middle"
-                  fontSize="2.45"
+                  fontSize="2.4"
                   fill="currentColor"
-                  opacity={connected ? 1 : 0.28}
+                  opacity={connected ? 1 : 0.24}
                   stroke="var(--background)"
                   strokeWidth="0.75"
                   paintOrder="stroke"
@@ -444,8 +492,8 @@ function GraphCanvas({
           No relationship edges were recorded for this component.
         </div>
       )}
-      <div className="absolute bottom-3 left-3 rounded-md border border-border/70 bg-background/85 px-2.5 py-1.5 text-[11px] text-muted-foreground backdrop-blur">
-        {Math.round(zoom * 100)}% · select a node to isolate its direct relationships
+      <div className="absolute bottom-3 left-3 rounded-lg border border-border/70 bg-background/88 px-3 py-2 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
+        {Math.round(zoom * 100)}% · select a node to isolate direct relationships · eye toggles edge labels
       </div>
     </div>
   )
@@ -453,11 +501,20 @@ function GraphCanvas({
 
 function StrengthRow({ label, value }: { label: string; value: EvidenceStrength }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-2">
+    <div className="flex items-center justify-between gap-3 py-2.5">
       <span className="text-sm text-muted-foreground">{label}</span>
       <Badge variant="outline" className={cn("capitalize", strengthStyles[value])}>
         {value}
       </Badge>
+    </div>
+  )
+}
+
+function MiniStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-xl border border-border/75 bg-background/55 p-3">
+      <p className="text-[10px] uppercase tracking-[0.13em] text-muted-foreground">{label}</p>
+      <p className="mt-1.5 text-sm font-semibold">{value}</p>
     </div>
   )
 }
@@ -468,6 +525,13 @@ function componentById(summary: WalletGraphSummary, componentId: string | null) 
 
 function componentTabLabel(component: WalletGraphComponent) {
   return graphComponentLabel(component).replace(" cluster", "")
+}
+
+function investigationAction(component: WalletGraphComponent | null, riskRelevantCount: number) {
+  if (!component) return "Observe"
+  if (component.severity === "critical" || component.severity === "high" || riskRelevantCount > 0) return "Prioritize review"
+  if (component.severity === "caution") return "Review context"
+  return "Observe"
 }
 
 export function WalletGraphIntelligencePanel({
@@ -529,10 +593,7 @@ export function WalletGraphIntelligencePanel({
     [payload, selectedNode]
   )
   const activeEdges = useMemo(
-    () =>
-      payload?.edges.filter(
-        (edge) => edge.sourceKey === selectedNode || edge.targetKey === selectedNode
-      ) ?? [],
+    () => payload?.edges.filter((edge) => edge.sourceKey === selectedNode || edge.targetKey === selectedNode) ?? [],
     [payload, selectedNode]
   )
   const nodeByKey = useMemo(
@@ -552,14 +613,79 @@ export function WalletGraphIntelligencePanel({
     [currentComponent, payload]
   )
   const activeEdgeStats = useMemo(() => {
-    if (!activeEdges.length) return { incoming: 0, outgoing: 0, riskRelevant: 0, averageConfidence: null as number | null }
+    if (!activeEdges.length) return { incoming: 0, outgoing: 0, investigationRelevant: 0, averageConfidence: null as number | null }
     return {
       incoming: activeEdges.filter((edge) => edge.targetKey === selectedNode).length,
       outgoing: activeEdges.filter((edge) => edge.sourceKey === selectedNode).length,
-      riskRelevant: activeEdges.filter((edge) => edge.isRiskBearing).length,
+      investigationRelevant: activeEdges.filter((edge) => edge.isRiskBearing).length,
       averageConfidence: Math.round(activeEdges.reduce((sum, edge) => sum + edge.confidence, 0) / activeEdges.length),
     }
   }, [activeEdges, selectedNode])
+  const componentMetrics = useMemo(() => {
+    const nodes = payload?.nodes ?? []
+    const edges = payload?.edges ?? []
+    const walletKeys = new Set(nodes.filter((node) => node.kind === "wallet").map((node) => node.nodeKey))
+    const fundingEdges = edges.filter((edge) => edge.kind === "funded")
+    const fundingOriginCoverage = new Map<string, Set<string>>()
+    fundingEdges.forEach((edge) => {
+      const source = nodeByKey.get(edge.sourceKey)
+      const target = nodeByKey.get(edge.targetKey)
+      if (!source || !target) return
+      const originKey = source.kind === "wallet" && target.kind !== "wallet" ? target.nodeKey : source.nodeKey
+      const walletKey = walletKeys.has(edge.targetKey) ? edge.targetKey : walletKeys.has(edge.sourceKey) ? edge.sourceKey : null
+      if (!walletKey) return
+      const wallets = fundingOriginCoverage.get(originKey) ?? new Set<string>()
+      wallets.add(walletKey)
+      fundingOriginCoverage.set(originKey, wallets)
+    })
+    const dominantCoverage = [...fundingOriginCoverage.values()].reduce((max, wallets) => Math.max(max, wallets.size), 0)
+    const walletCount = currentComponent?.walletAddresses.length ?? walletKeys.size
+    const concentration = walletCount > 0 && dominantCoverage > 0 ? Math.round((dominantCoverage / walletCount) * 100) : null
+    const observedEdges = edges.filter((edge) => Boolean(edge.observedAt))
+    const transactionReferences = edges.filter((edge) => Boolean(edge.transactionId)).length
+    const amountObservations = edges.filter((edge) => edge.amount !== null).length
+    return {
+      concentration,
+      uniqueFundingOrigins: fundingOriginCoverage.size,
+      observedSpan: formatObservedSpan(observedEdges),
+      firstObserved: observedEdges
+        .map((edge) => edge.observedAt)
+        .filter((value): value is string => Boolean(value))
+        .sort((left, right) => Date.parse(left) - Date.parse(right))[0] ?? null,
+      lastObserved: observedEdges
+        .map((edge) => edge.observedAt)
+        .filter((value): value is string => Boolean(value))
+        .sort((left, right) => Date.parse(right) - Date.parse(left))[0] ?? null,
+      transactionReferences,
+      amountObservations,
+    }
+  }, [currentComponent?.walletAddresses.length, nodeByKey, payload])
+
+  const timelineEdges = useMemo(
+    () => [...activeEdges]
+      .filter((edge) => Boolean(edge.observedAt))
+      .sort((left, right) => Date.parse(left.observedAt ?? "") - Date.parse(right.observedAt ?? "")),
+    [activeEdges]
+  )
+
+  const strengthenSignals = useMemo(() => {
+    const values: string[] = []
+    if (strengths.funding === "high" || strengths.funding === "medium") values.push("Independent timing or behavioral evidence that corroborates the shared funding pattern.")
+    if (strengths.referral === "high" || strengths.referral === "medium") values.push("Repeated referral relationships that align with the same wallet cohort.")
+    if (strengths.riskRelevant !== "none") values.push("Persistent investigation-relevant relationships across additional analysis runs.")
+    if (!values.length) values.push("A second independent evidence family, such as timing, behavior, referral, or campaign coordination.")
+    return values.slice(0, 3)
+  }, [strengths])
+
+  const weakenSignals = useMemo(() => {
+    const values = [
+      "Resolution of the shared origin to a known exchange, bridge, protocol, service, or trusted distributor.",
+      "Evidence that the origin broadly funds unrelated users outside this campaign cohort.",
+      "Sparse, truncated, or low-confidence provenance that cannot support the observed relationship consistently.",
+    ]
+    if (strengths.serviceResolution === "high") values.unshift("Existing neutral-service resolution already provides a plausible non-malicious explanation.")
+    return values.slice(0, 3)
+  }, [strengths.serviceResolution])
 
   async function copyNodeValue() {
     const value = activeNode?.address ?? activeNode?.walletAddress ?? activeNode?.label ?? activeNode?.nodeKey
@@ -571,25 +697,41 @@ export function WalletGraphIntelligencePanel({
 
   return (
     <Card className="glass-panel premium-card overflow-hidden">
-      <CardHeader className="border-b border-border/70 bg-primary/[0.035]">
-        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+      <CardHeader className="border-b border-border/70 bg-[radial-gradient(circle_at_top_left,color-mix(in_srgb,var(--primary)_9%,transparent),transparent_45%)]">
+        <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-start">
           <div>
             <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-primary">
               <Network className="size-4" /> Relationship intelligence
             </div>
             <CardTitle>Wallet Relationship Investigation</CardTitle>
             <CardDescription className="mt-2 max-w-3xl leading-6">
-              Investigates directional funding, referral, service, and contract-provenance relationships. Graph links prioritize review context; they do not by themselves establish common ownership, Sybil behavior, automation, or malicious intent.
+              A forensic review surface for persisted funding, referral, service, and contract-provenance relationships. It prioritizes investigation context without turning graph proximity into an ownership, automation, Sybil, or malicious-intent claim.
             </CardDescription>
           </div>
-          {summary && (
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="outline" className={cn("w-fit capitalize", strengthStyles[evidenceConfidence])}>
-                Evidence confidence · {evidenceConfidence}
-              </Badge>
-              <Badge variant="outline" className={cn("w-fit", severityStyles[riskContextSeverity(summary.maxComponentRisk)])}>
-                Peak graph context · {summary.maxComponentRisk}
-              </Badge>
+          {summary && currentComponent && (
+            <div className="grid min-w-full gap-2 sm:grid-cols-2 xl:min-w-[460px]">
+              <div className="rounded-xl border border-border/75 bg-background/55 px-3.5 py-3">
+                <p className="text-[10px] uppercase tracking-[0.13em] text-muted-foreground">Review priority</p>
+                <div className="mt-1.5 flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold">{investigationAction(currentComponent, strengths.riskRelevantCount)}</span>
+                  <Badge variant="outline" className={severityStyles[currentComponent.severity]}>{currentComponent.severity}</Badge>
+                </div>
+              </div>
+              <div className="rounded-xl border border-border/75 bg-background/55 px-3.5 py-3">
+                <p className="text-[10px] uppercase tracking-[0.13em] text-muted-foreground">Evidence confidence</p>
+                <div className="mt-1.5 flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold capitalize">{evidenceConfidence}</span>
+                  <Badge variant="outline" className={strengthStyles[evidenceConfidence]}>persisted</Badge>
+                </div>
+              </div>
+              <div className="rounded-xl border border-border/75 bg-background/55 px-3.5 py-3">
+                <p className="text-[10px] uppercase tracking-[0.13em] text-muted-foreground">Ownership claim</p>
+                <p className="mt-1.5 text-sm font-semibold">Not established</p>
+              </div>
+              <div className="rounded-xl border border-border/75 bg-background/55 px-3.5 py-3">
+                <p className="text-[10px] uppercase tracking-[0.13em] text-muted-foreground">Service resolution</p>
+                <p className="mt-1.5 text-sm font-semibold capitalize">{strengths.serviceResolution}</p>
+              </div>
             </div>
           )}
         </div>
@@ -597,7 +739,7 @@ export function WalletGraphIntelligencePanel({
 
       <CardContent className="space-y-5 p-4 sm:p-5">
         {!summary ? (
-          <div className="flex items-start gap-3 rounded-lg border border-dashed border-border p-6">
+          <div className="flex items-start gap-3 rounded-xl border border-dashed border-border p-6">
             <GitBranch className="mt-0.5 text-muted-foreground" />
             <div>
               <p className="font-medium">Relationship evidence is not available for this report</p>
@@ -618,80 +760,133 @@ export function WalletGraphIntelligencePanel({
               ].map(([Icon, label, value]) => {
                 const MetricIcon = Icon as typeof CircleDot
                 return (
-                  <div key={String(label)} className="rounded-lg border border-border bg-background/45 p-3.5 sm:p-4">
-                    <MetricIcon className="size-4 text-primary" />
-                    <p className="mt-3 text-2xl font-semibold">{String(value)}</p>
-                    <p className="mt-1 text-[11px] leading-4 text-muted-foreground sm:text-xs">{String(label)}</p>
+                  <div key={String(label)} className="rounded-xl border border-border/75 bg-background/45 p-3.5 sm:p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <MetricIcon className="size-4 text-primary" />
+                      <span className="text-2xl font-semibold tabular-nums">{String(value)}</span>
+                    </div>
+                    <p className="mt-2 text-[11px] leading-4 text-muted-foreground sm:text-xs">{String(label)}</p>
                   </div>
                 )
               })}
             </div>
 
             {currentComponent && (
-              <div className="grid gap-4 rounded-xl border border-primary/20 bg-primary/[0.035] p-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(250px,0.6fr)]">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold">Investigation summary</p>
-                    <Badge variant="outline" className={severityStyles[currentComponent.severity]}>
-                      {currentComponent.severity} context
-                    </Badge>
-                    <span className="font-mono text-[11px] text-muted-foreground">{currentComponent.componentId}</span>
+              <div className="rounded-2xl border border-primary/20 bg-primary/[0.03] p-4 sm:p-5">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="max-w-4xl">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold">Cluster investigation — {currentComponent.componentId}</p>
+                      <Badge variant="outline" className={severityStyles[currentComponent.severity]}>
+                        {currentComponent.severity} review priority
+                      </Badge>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{deterministicInsight}</p>
                   </div>
-                  <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">{deterministicInsight}</p>
-                  <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline" className="border-border bg-background/60 text-muted-foreground">Persisted graph state</Badge>
+                    <Badge variant="outline" className="border-border bg-background/60 text-muted-foreground">No ownership inference</Badge>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 lg:grid-cols-4">
+                  <div className="rounded-xl border border-border/75 bg-background/55 p-4">
+                    <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-primary">What we observed</p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      {componentMetrics.concentration !== null
+                        ? `${componentMetrics.concentration}% of the component wallets are connected to the dominant observed funding origin in this bounded graph view.`
+                        : `${currentComponent.walletAddresses.length} wallets are connected through persisted relationship evidence in this component.`}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border/75 bg-background/55 p-4">
+                    <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-primary">Why it matters</p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      {strengths.serviceResolution === "none"
+                        ? "The dominant relationship is not resolved here to a known neutral service, so it remains useful investigation context."
+                        : "Known-service context is present and must be considered before treating shared infrastructure as meaningful coordination evidence."}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border/75 bg-background/55 p-4">
+                    <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-primary">Decision boundary</p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      The graph supports prioritization only. It does not establish shared ownership, one operator, automation, or malicious intent.
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border/75 bg-background/55 p-4">
+                    <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-primary">Recommended next step</p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      Compare funding with timing, behavior, referral, and downstream activity before an operational wallet decision is made.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
+                  <MiniStat label="Wallets" value={currentComponent.walletAddresses.length} />
+                  <MiniStat label="Investigation links" value={strengths.riskRelevantCount} />
+                  <MiniStat label="Known services" value={strengths.serviceNodeCount} />
+                  <MiniStat label="Evidence confidence" value={titleCase(evidenceConfidence)} />
+                  <MiniStat label="Funding concentration" value={componentMetrics.concentration === null ? "n/a" : `${componentMetrics.concentration}%`} />
+                  <MiniStat label="Funding origins" value={componentMetrics.uniqueFundingOrigins || "n/a"} />
+                  <MiniStat label="Observed span" value={componentMetrics.observedSpan} />
+                  <MiniStat label="Tx references" value={componentMetrics.transactionReferences} />
+                </div>
+
+                <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.42fr)]">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     {[
-                      ["Wallets", currentComponent.walletAddresses.length],
-                      ["Risk-relevant links", strengths.riskRelevantCount],
-                      ["Known services", strengths.serviceNodeCount],
-                      ["Evidence confidence", titleCase(evidenceConfidence)],
+                      ["Shared funding", strengths.funding],
+                      ["Referral overlap", strengths.referral],
+                      ["Service resolution", strengths.serviceResolution],
+                      ["Investigation evidence", strengths.riskRelevant],
                     ].map(([label, value]) => (
-                      <div key={String(label)} className="rounded-lg border border-border/80 bg-background/55 p-3">
-                        <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">{String(label)}</p>
-                        <p className="mt-1 text-lg font-semibold">{String(value)}</p>
+                      <div key={String(label)} className="rounded-xl border border-border/70 bg-background/50 p-3.5">
+                        <p className="text-xs text-muted-foreground">{String(label)}</p>
+                        <Badge variant="outline" className={cn("mt-2 capitalize", strengthStyles[value as EvidenceStrength])}>{String(value)}</Badge>
                       </div>
                     ))}
                   </div>
-                </div>
-                <div className="divide-y divide-border/70 rounded-lg border border-border/80 bg-background/55 px-4 py-2">
-                  <StrengthRow label="Shared funding" value={strengths.funding} />
-                  <StrengthRow label="Referral overlap" value={strengths.referral} />
-                  <StrengthRow label="Service resolution" value={strengths.serviceResolution} />
-                  <StrengthRow label="Risk-relevant evidence" value={strengths.riskRelevant} />
-                  <div className="flex items-center justify-between gap-3 py-2">
-                    <span className="text-sm text-muted-foreground">Ownership inference</span>
-                    <Badge variant="outline" className="border-border bg-background/60 text-muted-foreground">Not inferred</Badge>
+                  <div className="divide-y divide-border/70 rounded-xl border border-border/75 bg-background/55 px-4 py-1">
+                    <StrengthRow label="Shared funding" value={strengths.funding} />
+                    <StrengthRow label="Referral overlap" value={strengths.referral} />
+                    <StrengthRow label="Service resolution" value={strengths.serviceResolution} />
                   </div>
                 </div>
               </div>
             )}
 
             {summary.components.length > 0 && (
-              <div className="flex flex-wrap gap-2" aria-label="Relationship components">
-                {summary.components.slice(0, 12).map((component) => (
-                  <Button
-                    key={component.componentId}
-                    type="button"
-                    size="sm"
-                    variant={componentId === component.componentId ? "default" : "outline"}
-                    onClick={() => {
-                      setLoading(true)
-                      setError("")
-                      setComponentId(component.componentId)
-                    }}
-                    className="h-auto min-w-0 flex-1 basis-[145px] justify-start px-3 py-2 sm:flex-none"
-                  >
-                    <GitBranch className="size-4 shrink-0" />
-                    <span className="min-w-0 text-left">
-                      <span className="block truncate text-xs font-medium">{componentTabLabel(component)}</span>
-                      <span className="block font-mono text-[10px] opacity-65">{component.componentId}</span>
-                    </span>
-                  </Button>
-                ))}
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Relationship components</p>
+                  <p className="text-xs text-muted-foreground">Select a component to inspect its persisted relationships</p>
+                </div>
+                <div className="flex flex-wrap gap-2" aria-label="Relationship components">
+                  {summary.components.slice(0, 12).map((component) => (
+                    <Button
+                      key={component.componentId}
+                      type="button"
+                      size="sm"
+                      variant={componentId === component.componentId ? "default" : "outline"}
+                      onClick={() => {
+                        setLoading(true)
+                        setError("")
+                        setComponentId(component.componentId)
+                      }}
+                      className="h-auto min-w-0 flex-1 basis-[160px] justify-start rounded-xl px-3 py-2.5 sm:flex-none"
+                    >
+                      <GitBranch className="size-4 shrink-0" />
+                      <span className="min-w-0 text-left">
+                        <span className="block truncate text-xs font-medium">{componentTabLabel(component)} · {component.walletAddresses.length}</span>
+                        <span className="block font-mono text-[10px] opacity-65">{component.componentId}</span>
+                      </span>
+                    </Button>
+                  ))}
+                </div>
               </div>
             )}
 
             {error ? (
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-red-400/30 bg-red-400/10 p-4 text-sm text-red-200">
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-red-400/30 bg-red-400/10 p-4 text-sm text-red-200">
                 <span>{error}</span>
                 <Button
                   type="button"
@@ -707,13 +902,13 @@ export function WalletGraphIntelligencePanel({
                 </Button>
               </div>
             ) : loading ? (
-              <div className="grid min-h-[380px] place-items-center rounded-xl border border-border bg-background/45">
+              <div className="grid min-h-[420px] place-items-center rounded-2xl border border-border bg-background/45">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="size-4 animate-spin text-primary" /> Loading relationship evidence
                 </div>
               </div>
             ) : (
-              <div className="grid gap-5 2xl:grid-cols-[minmax(0,1.45fr)_minmax(330px,0.55fr)]">
+              <div className="grid gap-5 2xl:grid-cols-[minmax(0,1.55fr)_minmax(360px,0.45fr)]">
                 <div>
                   <GraphCanvas
                     nodes={payload?.nodes ?? []}
@@ -721,7 +916,7 @@ export function WalletGraphIntelligencePanel({
                     selectedNode={selectedNode}
                     onSelectNode={setSelectedNode}
                   />
-                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-muted-foreground sm:text-xs">
+                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 rounded-xl border border-border/65 bg-background/35 px-3 py-2.5 text-[11px] text-muted-foreground sm:text-xs">
                     {[
                       ["Wallet", nodeColors.wallet, "circle"],
                       ["Funding origin", nodeColors.funder, "diamond"],
@@ -738,7 +933,7 @@ export function WalletGraphIntelligencePanel({
                       </span>
                     ))}
                     <span className="flex items-center gap-2">
-                      <span className="h-0.5 w-5 bg-orange-400" /> Risk-relevant evidence link
+                      <span className="h-0.5 w-5 bg-orange-400" /> Investigation-relevant relationship
                     </span>
                   </div>
                   {payload?.truncated && (
@@ -746,18 +941,26 @@ export function WalletGraphIntelligencePanel({
                   )}
                 </div>
 
-                <div className="space-y-3">
-                  <div className="rounded-xl border border-border bg-background/45 p-4">
-                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Selected node intelligence</p>
+                <div className="2xl:sticky 2xl:top-4 2xl:self-start">
+                  <div className="rounded-2xl border border-border bg-background/45 p-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Selected node</p>
+                        <p className="mt-1 text-sm font-semibold">Investigation intelligence</p>
+                      </div>
+                      {activeNode && (
+                        <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">{nodeKindLabel(activeNode.kind)}</Badge>
+                      )}
+                    </div>
+
                     {activeNode ? (
                       <>
-                        <div className="mt-3 flex items-start justify-between gap-3">
+                        <div className="mt-3 flex items-start justify-between gap-3 rounded-xl border border-border/70 bg-background/50 p-3">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">{nodeKindLabel(activeNode.kind)}</Badge>
                               {activeNode.kind === "service" && <Badge variant="outline" className="border-green-400/30 bg-green-400/10 text-green-200">Neutral service context</Badge>}
                             </div>
-                            <p className="mt-3 break-all font-mono text-xs leading-5 sm:text-sm">
+                            <p className="mt-2 break-all font-mono text-xs leading-5 sm:text-sm">
                               {activeNode.label ?? activeNode.address ?? activeNode.nodeKey}
                             </p>
                           </div>
@@ -766,60 +969,122 @@ export function WalletGraphIntelligencePanel({
                           </Button>
                         </div>
                         {copied && <p className="mt-2 text-xs text-green-300">Copied</p>}
-                        <div className="mt-4 grid grid-cols-2 gap-2">
-                          {[
-                            ["Chain", activeNode.chain ?? "n/a"],
-                            ["Direct links", activeEdges.length],
-                            ["Incoming", activeEdgeStats.incoming],
-                            ["Outgoing", activeEdgeStats.outgoing],
-                            ["Risk-relevant", activeEdgeStats.riskRelevant],
-                            ["Avg edge confidence", activeEdgeStats.averageConfidence === null ? "n/a" : `${activeEdgeStats.averageConfidence}%`],
-                          ].map(([label, value]) => (
-                            <div key={String(label)} className="rounded-lg border border-border/70 bg-background/55 p-3">
-                              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{String(label)}</p>
-                              <p className="mt-1 text-sm font-medium">{String(value)}</p>
+
+                        <Tabs defaultValue="overview" className="mt-4">
+                          <TabsList variant="line" className="grid w-full grid-cols-4">
+                            <TabsTrigger value="overview">Overview</TabsTrigger>
+                            <TabsTrigger value="evidence">Evidence</TabsTrigger>
+                            <TabsTrigger value="timeline">Timeline</TabsTrigger>
+                            <TabsTrigger value="analyst">Analyst</TabsTrigger>
+                          </TabsList>
+
+                          <TabsContent value="overview" className="mt-3">
+                            <div className="grid grid-cols-2 gap-2">
+                              <MiniStat label="Chain" value={activeNode.chain ?? "n/a"} />
+                              <MiniStat label="Direct links" value={activeEdges.length} />
+                              <MiniStat label="Incoming" value={activeEdgeStats.incoming} />
+                              <MiniStat label="Outgoing" value={activeEdgeStats.outgoing} />
+                              <MiniStat label="Investigation links" value={activeEdgeStats.investigationRelevant} />
+                              <MiniStat label="Avg confidence" value={activeEdgeStats.averageConfidence === null ? "n/a" : `${activeEdgeStats.averageConfidence}%`} />
+                              <MiniStat label="First observed" value={formatTimestamp(timelineEdges[0]?.observedAt ?? null)} />
+                              <MiniStat label="Last observed" value={formatTimestamp(timelineEdges[timelineEdges.length - 1]?.observedAt ?? null)} />
                             </div>
-                          ))}
-                        </div>
+                            <div className="mt-3 rounded-xl border border-border/70 bg-background/45 p-3 text-xs leading-5 text-muted-foreground">
+                              Node intelligence reflects persisted relationship evidence only. The selected node is not independently classified by this panel.
+                            </div>
+                          </TabsContent>
+
+                          <TabsContent value="evidence" className="mt-3 space-y-2.5">
+                            {activeEdges.slice(0, 7).map((edge) => {
+                              const source = nodeByKey.get(edge.sourceKey)
+                              const target = nodeByKey.get(edge.targetKey)
+                              return (
+                                <div key={edge.edgeKey} className={cn("rounded-xl border p-3 text-sm", edge.isRiskBearing ? "border-orange-400/25 bg-orange-400/[0.055]" : "border-border/75 bg-background/50")}>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="font-medium capitalize">{edgeLabels[edge.kind]}</span>
+                                    <div className="flex items-center gap-2">
+                                      {edge.isRiskBearing && <Badge variant="outline" className="border-orange-400/30 bg-orange-400/10 text-[10px] text-orange-200">investigation-relevant</Badge>}
+                                      <span className="text-xs text-muted-foreground">{edge.confidence}%</span>
+                                    </div>
+                                  </div>
+                                  <div className="mt-2 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                                    <span className="truncate">{shortValue(source?.label ?? source?.address ?? null, nodeKindLabel(source?.kind ?? "wallet"))}</span>
+                                    <ArrowRight className="size-3 shrink-0" />
+                                    <span className="truncate">{shortValue(target?.label ?? target?.address ?? null, nodeKindLabel(target?.kind ?? "wallet"))}</span>
+                                  </div>
+                                  <p className="mt-2 leading-5 text-muted-foreground">{edge.evidence[0] ?? "Relationship observation"}</p>
+                                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                                    {edge.observedAt && <span>{formatTimestamp(edge.observedAt)}</span>}
+                                    {edge.transactionId && <span>Tx · {shortValue(edge.transactionId, "reference")}</span>}
+                                    {edge.amount !== null && <span>Amount recorded</span>}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                            {!activeEdges.length && <p className="text-sm text-muted-foreground">No direct relationship is selected.</p>}
+                          </TabsContent>
+
+                          <TabsContent value="timeline" className="mt-3">
+                            {timelineEdges.length ? (
+                              <div className="space-y-2">
+                                {timelineEdges.slice(0, 8).map((edge, index) => (
+                                  <div key={edge.edgeKey} className="flex gap-3 rounded-xl border border-border/70 bg-background/45 p-3">
+                                    <div className="flex flex-col items-center">
+                                      <div className="grid size-7 place-items-center rounded-full border border-primary/25 bg-primary/10 text-[10px] font-semibold text-primary">{index + 1}</div>
+                                      {index < Math.min(timelineEdges.length, 8) - 1 && <div className="mt-1 h-full w-px bg-border" />}
+                                    </div>
+                                    <div className="min-w-0 pb-1">
+                                      <p className="text-sm font-medium capitalize">{edgeLabels[edge.kind]}</p>
+                                      <p className="mt-1 text-xs text-muted-foreground">{formatTimestamp(edge.observedAt)}</p>
+                                      <p className="mt-1 text-xs leading-5 text-muted-foreground">{edge.evidence[0] ?? "Persisted relationship observation"}</p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">No reliable observed timestamps are stored for the selected node.</div>
+                            )}
+                          </TabsContent>
+
+                          <TabsContent value="analyst" className="mt-3 space-y-3">
+                            <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/[0.045] p-3">
+                              <div className="flex items-center gap-2 text-sm font-medium"><Activity className="size-4 text-cyan-300" /> What would strengthen this case</div>
+                              <ul className="mt-2 space-y-1.5 text-xs leading-5 text-muted-foreground">
+                                {strengthenSignals.map((item) => <li key={item}>• {item}</li>)}
+                              </ul>
+                            </div>
+                            <div className="rounded-xl border border-green-400/20 bg-green-400/[0.04] p-3">
+                              <div className="flex items-center gap-2 text-sm font-medium"><ShieldCheck className="size-4 text-green-300" /> What would weaken this case</div>
+                              <ul className="mt-2 space-y-1.5 text-xs leading-5 text-muted-foreground">
+                                {weakenSignals.map((item) => <li key={item}>• {item}</li>)}
+                              </ul>
+                            </div>
+                            <div className="rounded-xl border border-border/70 bg-background/45 p-3 text-xs leading-5 text-muted-foreground">
+                              <strong className="text-foreground">Analyst boundary:</strong> use this relationship view to prioritize evidence collection and comparison. Wallet execution state remains governed by the stored decision and review workflow.
+                            </div>
+                          </TabsContent>
+                        </Tabs>
                       </>
                     ) : (
                       <p className="mt-3 text-sm text-muted-foreground">Select a node to inspect its evidence.</p>
                     )}
                   </div>
 
-                  <div className="rounded-xl border border-border bg-background/45 p-4">
-                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Connection evidence</p>
-                    <div className="mt-3 space-y-3">
-                      {activeEdges.slice(0, 6).map((edge) => {
-                        const source = nodeByKey.get(edge.sourceKey)
-                        const target = nodeByKey.get(edge.targetKey)
-                        return (
-                          <div key={edge.edgeKey} className={cn("rounded-lg border p-3 text-sm", edge.isRiskBearing ? "border-orange-400/25 bg-orange-400/[0.06]" : "border-border/75 bg-background/50")}>
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-medium capitalize">{edgeLabels[edge.kind]}</span>
-                              <div className="flex items-center gap-2">
-                                {edge.isRiskBearing && <Badge variant="outline" className="border-orange-400/30 bg-orange-400/10 text-[10px] text-orange-200">risk-relevant</Badge>}
-                                <span className="text-xs text-muted-foreground">{edge.confidence}%</span>
-                              </div>
-                            </div>
-                            <div className="mt-2 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                              <span className="truncate">{shortValue(source?.label ?? source?.address ?? null, nodeKindLabel(source?.kind ?? "wallet"))}</span>
-                              <ArrowRight className="size-3 shrink-0" />
-                              <span className="truncate">{shortValue(target?.label ?? target?.address ?? null, nodeKindLabel(target?.kind ?? "wallet"))}</span>
-                            </div>
-                            <p className="mt-2 leading-5 text-muted-foreground">{edge.evidence[0] ?? "Relationship observation"}</p>
-                          </div>
-                        )
-                      })}
-                      {!activeEdges.length && <p className="text-sm text-muted-foreground">No direct relationship is selected.</p>}
-                    </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <MiniStat label="Run ID" value={shortValue(analysisId, analysisId)} />
+                    <MiniStat label="Component" value={currentComponent?.componentId ?? "n/a"} />
+                    <MiniStat label="First observed" value={formatTimestamp(componentMetrics.firstObserved)} />
+                    <MiniStat label="Last observed" value={formatTimestamp(componentMetrics.lastObserved)} />
+                  </div>
+                  <div className="mt-2 rounded-xl border border-border/70 bg-background/35 p-3 text-[11px] leading-5 text-muted-foreground">
+                    Audit context: persisted graph evidence · {componentMetrics.transactionReferences} transaction reference(s) · {componentMetrics.amountObservations} relationship amount observation(s). Amounts are not aggregated here because chain/native-unit semantics may differ.
                   </div>
                 </div>
               </div>
             )}
 
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
-              <div className="rounded-xl border border-primary/20 bg-primary/[0.035] p-4 sm:p-5">
+              <div className="rounded-2xl border border-primary/20 bg-primary/[0.03] p-4 sm:p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <Sparkles className="size-4 text-primary" />
@@ -842,7 +1107,7 @@ export function WalletGraphIntelligencePanel({
                         ["Coordination evidence", pct(aiInsight.coordinationEvidenceStrength)],
                         ["Neutral explanation", pct(aiInsight.neutralExplanationStrength)],
                       ].map(([label, value]) => (
-                        <div key={String(label)} className="rounded-lg border border-border/75 bg-background/55 p-3">
+                        <div key={String(label)} className="rounded-xl border border-border/75 bg-background/55 p-3">
                           <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{String(label)}</p>
                           <p className="mt-1 text-base font-semibold">{String(value)}</p>
                         </div>
@@ -854,13 +1119,13 @@ export function WalletGraphIntelligencePanel({
                     </div>
                     {(aiInsight.counterEvidence.length > 0 || aiInsight.unresolvedQuestions.length > 0) && (
                       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-lg border border-border/70 bg-background/45 p-3">
+                        <div className="rounded-xl border border-border/70 bg-background/45 p-3">
                           <p className="text-xs font-medium">Counter-evidence</p>
                           <ul className="mt-2 space-y-1.5 text-xs leading-5 text-muted-foreground">
                             {(aiInsight.counterEvidence.length ? aiInsight.counterEvidence : ["No material counter-evidence was recorded."]).slice(0, 2).map((item) => <li key={item}>• {item}</li>)}
                           </ul>
                         </div>
-                        <div className="rounded-lg border border-border/70 bg-background/45 p-3">
+                        <div className="rounded-xl border border-border/70 bg-background/45 p-3">
                           <p className="text-xs font-medium">Open questions</p>
                           <ul className="mt-2 space-y-1.5 text-xs leading-5 text-muted-foreground">
                             {(aiInsight.unresolvedQuestions.length ? aiInsight.unresolvedQuestions : ["No unresolved AI question was recorded."]).slice(0, 2).map((item) => <li key={item}>• {item}</li>)}
@@ -868,6 +1133,7 @@ export function WalletGraphIntelligencePanel({
                         </div>
                       </div>
                     )}
+                    <p className="mt-4 text-[11px] text-muted-foreground">AI context generated: {formatTimestamp(aiInsight.generatedAt)}</p>
                   </>
                 ) : (
                   <>
@@ -877,12 +1143,16 @@ export function WalletGraphIntelligencePanel({
                 )}
               </div>
 
-              <div className="rounded-xl border border-border bg-background/45 p-4 sm:p-5">
-                <p className="font-semibold">Investigation boundary</p>
+              <div className="rounded-2xl border border-border bg-background/45 p-4 sm:p-5">
+                <div className="flex items-center gap-2">
+                  <Waypoints className="size-4 text-primary" />
+                  <p className="font-semibold">Investigation boundary</p>
+                </div>
                 <div className="mt-3 space-y-3 text-sm leading-6 text-muted-foreground">
-                  <p>• Shared funding can indicate coordinated onboarding, an exchange withdrawal, a service wallet, or common ownership; additional evidence is required to distinguish them.</p>
+                  <p>• Shared funding may reflect coordinated onboarding, an exchange withdrawal, a service wallet, or common ownership; additional evidence is required to distinguish them.</p>
                   <p>• Directional edges show observed provenance, not legal or beneficial ownership.</p>
                   <p>• Graph context may prioritize human review but cannot independently create a malicious label.</p>
+                  <p>• Neutral infrastructure context remains neutral and cannot be promoted by this presentation layer.</p>
                 </div>
               </div>
             </div>
@@ -891,13 +1161,13 @@ export function WalletGraphIntelligencePanel({
               <div>
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
-                    <p className="font-semibold">Evidence findings</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Deterministic graph observations ranked for investigation.</p>
+                    <div className="flex items-center gap-2"><History className="size-4 text-primary" /><p className="font-semibold">Evidence findings</p></div>
+                    <p className="mt-1 text-xs text-muted-foreground">Deterministic graph observations ranked for investigation; not standalone wallet classifications.</p>
                   </div>
                 </div>
                 <div className="grid gap-3 lg:grid-cols-2">
                   {summary.findings.slice(0, 6).map((finding) => (
-                    <div key={`${finding.code}:${finding.nodeKey}`} className="rounded-lg border border-border bg-background/45 p-4">
+                    <div key={`${finding.code}:${finding.nodeKey}`} className="rounded-xl border border-border bg-background/45 p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="font-medium">{finding.title}</p>
