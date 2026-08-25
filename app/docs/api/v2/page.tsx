@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowRight, ClipboardCheck, Code2, Layers3, PlayCircle, RefreshCw, ShieldCheck } from "lucide-react"
+import { ArrowRight, ClipboardCheck, Code2, Layers3, Network, PlayCircle, RefreshCw, ShieldCheck } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
@@ -45,6 +45,16 @@ const runCsvExample = `curl -X POST https://triproofprotocol.com/api/v2/campaign
 const statusExample = `curl https://triproofprotocol.com/api/v2/campaigns/CAMPAIGN_ID/analyses/ANALYSIS_ID \\
   -H "Authorization: Bearer YOUR_API_KEY"`
 
+const clusterExample = `curl https://triproofprotocol.com/api/v2/campaigns/CAMPAIGN_ID/analyses/ANALYSIS_ID/clusters/CLUSTER_LABEL \\
+  -H "Authorization: Bearer YOUR_API_KEY"
+
+# The response includes:
+# - stored grouping basis
+# - Cluster Support Confidence
+# - inferred forensic archetype
+# - bounded member / funding / graph / timeline previews
+# It does not recompute membership, wallet risk, decisions or policy.`
+
 const decisionsExample = `curl "https://triproofprotocol.com/api/v2/campaigns/CAMPAIGN_ID/decisions?format=json" \\
   -H "Authorization: Bearer YOUR_API_KEY"
 
@@ -74,7 +84,7 @@ const policyExample = `curl -X POST https://triproofprotocol.com/api/v2/campaign
 
 export const metadata = {
   title: "Tri-Proof Campaign API v2",
-  description: "Campaign-centric API v2 quick-start for durable campaigns, repeatable wallet analysis runs, lifecycle operations, versioned policy changes, and decision packages.",
+  description: "Campaign-centric API v2 quick-start for durable campaigns, repeatable wallet analysis runs, cluster intelligence, lifecycle operations, versioned policy changes, and decision packages.",
 }
 
 const endpoints = [
@@ -85,6 +95,7 @@ const endpoints = [
   ["POST", "/api/v2/campaigns/{id}/policy", "Activate a new versioned policy for future analysis runs with a required rationale."],
   ["POST", "/api/v2/campaigns/{id}/analyses", "Start another JSON or CSV wallet analysis under the same campaign."],
   ["GET", "/api/v2/campaigns/{id}/analyses/{analysisId}", "Read status, decision totals, top wallet evidence, clusters, and graph context."],
+  ["GET", "/api/v2/campaigns/{id}/analyses/{analysisId}/clusters/{clusterLabel}", "Read ownership-scoped stored grouping, support confidence, inferred archetype and bounded forensic previews."],
   ["GET", "/api/v2/campaigns/{id}/decisions", "Retrieve the latest campaign Decision Package as JSON or CSV."],
 ] as const
 
@@ -106,6 +117,7 @@ export default function CampaignApiV2DocsPage() {
             <Link href="/dashboard/campaigns/new" className={`${buttonVariants()} glow-primary`}>
               Create campaign in dashboard <ArrowRight data-icon="inline-end" />
             </Link>
+            <Link href="/docs/api/v2/sdk" className={buttonVariants({ variant: "outline" })}>TypeScript SDK</Link>
             <Link href="/docs/api" className={buttonVariants({ variant: "outline" })}>API v1 + ScamGuard docs</Link>
             <Link href="/pricing" className={buttonVariants({ variant: "outline" })}>API plans</Link>
           </div>
@@ -115,7 +127,7 @@ export default function CampaignApiV2DocsPage() {
       <section className="mx-auto max-w-7xl px-5 py-14 sm:px-8">
         <div className="mb-8 max-w-3xl">
           <Badge variant="outline" className="border-primary/25 text-primary">Core workflow</Badge>
-          <h2 className="mt-4 text-3xl font-semibold">Campaign → analysis run → status → decision package</h2>
+          <h2 className="mt-4 text-3xl font-semibold">Campaign → analysis run → cluster intelligence → decision package</h2>
           <p className="mt-3 leading-7 text-muted-foreground">
             Bearer API-key requests use the existing API subscription meter. Dashboard session calls use the same v2 routes without consuming API request quota; wallet-analysis credits are still enforced by the analysis billing gate.
           </p>
@@ -129,10 +141,10 @@ export default function CampaignApiV2DocsPage() {
             <CardHeader><PlayCircle className="text-primary" /><CardTitle>Run cohorts</CardTitle><CardDescription>Submit another wallet list without creating another campaign. JSON and multipart CSV are supported.</CardDescription></CardHeader>
           </Card>
           <Card className="glass-panel premium-card">
-            <CardHeader><RefreshCw className="text-primary" /><CardTitle>Operate safely</CardTitle><CardDescription>Pause or complete the campaign and version its policy without rewriting prior run decisions.</CardDescription></CardHeader>
+            <CardHeader><Network className="text-primary" /><CardTitle>Inspect clusters</CardTitle><CardDescription>Read support confidence and forensic context without turning interpretation into a new risk decision.</CardDescription></CardHeader>
           </Card>
           <Card className="glass-panel premium-card">
-            <CardHeader><ShieldCheck className="text-primary" /><CardTitle>Track evidence</CardTitle><CardDescription>Poll run status and read explainable decisions, cluster summaries, and Graph Intelligence context.</CardDescription></CardHeader>
+            <CardHeader><RefreshCw className="text-primary" /><CardTitle>Operate safely</CardTitle><CardDescription>Pause or complete the campaign and version its policy without rewriting prior run decisions.</CardDescription></CardHeader>
           </Card>
           <Card className="glass-panel premium-card">
             <CardHeader><ClipboardCheck className="text-primary" /><CardTitle>Export decisions</CardTitle><CardDescription>Retrieve the latest campaign Decision Package as deterministic JSON or CSV.</CardDescription></CardHeader>
@@ -173,31 +185,36 @@ export default function CampaignApiV2DocsPage() {
           </Card>
 
           <Card className="glass-panel premium-card">
-            <CardHeader><Code2 className="text-primary" /><CardTitle>4. Poll run status</CardTitle><CardDescription>Returns Allow / Review / Exclude totals, evidence-aware wallet summaries and cluster context.</CardDescription></CardHeader>
+            <CardHeader><Code2 className="text-primary" /><CardTitle>4. Poll run status</CardTitle><CardDescription>Returns Allow / Review / Exclude totals, evidence-aware wallet summaries and cluster links.</CardDescription></CardHeader>
             <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{statusExample}</code></pre></CardContent>
           </Card>
 
+          <Card className="glass-panel premium-card lg:col-span-2">
+            <CardHeader><Network className="text-primary" /><CardTitle>5. Read Cluster Intelligence</CardTitle><CardDescription>Cluster Support Confidence is an explainable evidence-strength indicator for an already-stored grouping, not a Sybil probability or automatic action.</CardDescription></CardHeader>
+            <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{clusterExample}</code></pre></CardContent>
+          </Card>
+
           <Card className="glass-panel premium-card">
-            <CardHeader><RefreshCw className="text-primary" /><CardTitle>5. Change lifecycle</CardTitle><CardDescription>Lifecycle transitions are constrained; completed and archived campaigns cannot be silently reopened.</CardDescription></CardHeader>
+            <CardHeader><RefreshCw className="text-primary" /><CardTitle>6. Change lifecycle</CardTitle><CardDescription>Lifecycle transitions are constrained; completed and archived campaigns cannot be silently reopened.</CardDescription></CardHeader>
             <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{lifecycleExample}</code></pre></CardContent>
           </Card>
 
           <Card className="glass-panel premium-card">
-            <CardHeader><ShieldCheck className="text-primary" /><CardTitle>6. Activate a policy version</CardTitle><CardDescription>A rationale is required and the new version applies only to future campaign runs.</CardDescription></CardHeader>
+            <CardHeader><ShieldCheck className="text-primary" /><CardTitle>7. Activate a policy version</CardTitle><CardDescription>A rationale is required and the new version applies only to future campaign runs.</CardDescription></CardHeader>
             <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{policyExample}</code></pre></CardContent>
           </Card>
 
           <Card className="glass-panel premium-card lg:col-span-2">
-            <CardHeader><ClipboardCheck className="text-primary" /><CardTitle>7. Retrieve Decision Package</CardTitle><CardDescription>The package reuses the same read-only customer decision semantics as the dashboard; API v2 does not recompute wallet decisions.</CardDescription></CardHeader>
+            <CardHeader><ClipboardCheck className="text-primary" /><CardTitle>8. Retrieve Decision Package</CardTitle><CardDescription>The package reuses the same read-only customer decision semantics as the dashboard; API v2 does not recompute wallet decisions.</CardDescription></CardHeader>
             <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{decisionsExample}</code></pre></CardContent>
           </Card>
         </div>
 
         <Card className="mt-6 glass-panel border-amber-400/20 bg-amber-400/[0.04]">
           <CardHeader>
-            <CardTitle>Decision and policy boundaries</CardTitle>
+            <CardTitle>Decision, cluster and policy boundaries</CardTitle>
             <CardDescription>
-              A campaign run cannot silently change its stored policy preset. Policy activation creates a new CampaignPolicy version and never recomputes prior run decisions. Paused, completed, and archived campaigns reject new runs. Completed campaigns can only be archived, while archived campaigns cannot be reopened by Campaign Operations v1. Provider failures remain unresolved evidence/Gray Zone context rather than becoming malicious risk. Decision Package export is read-only.
+              Cluster Support Confidence and inferred archetypes are read-only forensic interpretation and cannot change stored cluster membership, wallet risk, wallet decisions, reviewer state or campaign policy. A campaign run cannot silently change its stored policy preset. Policy activation creates a new CampaignPolicy version and never recomputes prior run decisions. Paused, completed, and archived campaigns reject new runs. Completed campaigns can only be archived, while archived campaigns cannot be reopened by Campaign Operations v1. Provider failures remain unresolved evidence/Gray Zone context rather than becoming malicious risk. Decision Package export is read-only.
             </CardDescription>
           </CardHeader>
         </Card>

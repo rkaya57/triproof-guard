@@ -70,6 +70,18 @@ test("campaign API v2 methods use durable campaign resources and encoded IDs", a
   assert.equal(JSON.parse(calls[3]?.body ?? "{}").rationale, "Higher-value reward round")
 })
 
+test("SDK exposes the ownership-scoped campaign cluster intelligence resource", async () => {
+  const { client, calls } = mockClient()
+  await client.getCampaignClusterIntelligence("campaign/id", "analysis id", "CL / 001")
+
+  assert.equal(
+    calls[0]?.url,
+    "https://api.example.test/api/v2/campaigns/campaign%2Fid/analyses/analysis%20id/clusters/CL%20%2F%20001",
+  )
+  assert.equal(calls[0]?.method, "GET")
+  assert.equal(calls[0]?.headers.get("authorization"), "Bearer tp_live_test_key")
+})
+
 test("Decision Package CSV is returned as text instead of being JSON parsed", async () => {
   const { client, calls } = mockClient((call) => {
     if (call.url.includes("format=csv")) {

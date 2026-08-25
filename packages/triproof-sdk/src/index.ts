@@ -128,6 +128,72 @@ export type CampaignDecisionPackage = {
   [key: string]: unknown
 }
 
+export type CampaignClusterIntelligence = {
+  id: string
+  object: "cluster_intelligence"
+  apiVersion: "v2"
+  campaignId: string
+  analysisId: string
+  clusterLabel: string
+  cluster: {
+    walletCount: number
+    averageRiskScore: number
+    behaviorSimilarityScore: number
+    storedSuggestedAction: string
+    sharedFundingSource: string | null
+    storedReasons: string[]
+  }
+  grouping: {
+    minimumWallets: number
+    minimumIndependentFamilies: number
+    observedWallets: number
+    observedIndependentFamilies: number
+    qualifiesByStoredRule: boolean
+    headline: string
+    explanation: string
+    families: Array<{ family: string; label: string; storedReason: string }>
+    caveats: string[]
+  }
+  support: {
+    schemaVersion: string
+    clusterLabel: string
+    score: number
+    confidence: "low" | "medium" | "high"
+    qualifiesByStoredRule: boolean
+    observedIndependentFamilies: number
+    familySupport: Array<Record<string, unknown>>
+    factors: Array<Record<string, unknown>>
+    context: Record<string, unknown>
+    limitations: string[]
+    boundaries: string[]
+  }
+  archetype: {
+    schemaVersion: string
+    clusterLabel: string
+    primary: {
+      id: string
+      label: string
+      confidence: "low" | "medium" | "high"
+      score: number
+      reasons: string[]
+      caveats: string[]
+    }
+    candidates: Array<Record<string, unknown>>
+    boundaries: string[]
+  }
+  memberPreview: Array<Record<string, unknown>>
+  memberPreviewMeta: {
+    returned: number
+    total: number
+    truncated: boolean
+    limit: number
+  }
+  provenance: Record<string, unknown>
+  timeline: Record<string, unknown>
+  boundaries: string[]
+  links: Record<string, string>
+}
+
 export type CampaignPolicyActivationInput = {
   preset: TriProofRiskPolicy
   rationale: string
@@ -347,6 +413,12 @@ export class TriProofClient {
   getCampaignAnalysis(campaignId: string, analysisId: string) {
     return this.request<Record<string, unknown>>(
       `/api/v2/campaigns/${encodeURIComponent(campaignId)}/analyses/${encodeURIComponent(analysisId)}`,
+    )
+  }
+
+  getCampaignClusterIntelligence(campaignId: string, analysisId: string, clusterLabel: string) {
+    return this.request<CampaignClusterIntelligence>(
+      `/api/v2/campaigns/${encodeURIComponent(campaignId)}/analyses/${encodeURIComponent(analysisId)}/clusters/${encodeURIComponent(clusterLabel)}`,
     )
   }
 

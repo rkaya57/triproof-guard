@@ -78,7 +78,10 @@ export async function GET(
         reasons: wallet.reasons.slice(0, 6),
         explainableDecision: wallet.decisionEvidence ?? buildExplainableDecision(wallet),
       })),
-      clusters: serialized.clusters.slice(0, 20),
+      clusters: serialized.clusters.slice(0, 20).map((cluster) => ({
+        ...cluster,
+        intelligenceUrl: `/api/v2/campaigns/${encodeURIComponent(id)}/analyses/${encodeURIComponent(analysisId)}/clusters/${encodeURIComponent(cluster.clusterLabel)}`,
+      })),
       links: {
         campaign: `/api/v2/campaigns/${id}`,
         decisions: `/api/v2/campaigns/${id}/decisions`,
