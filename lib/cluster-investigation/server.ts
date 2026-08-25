@@ -2,6 +2,10 @@ import { serializeAnalysis } from "@/lib/analysis/serializers"
 import { attachFundingProvenanceDecisionEvidence } from "@/lib/campaign-security/funding-provenance-evidence"
 import { loadDecisionFundingRelationships } from "@/lib/campaign-security/funding-provenance-evidence-server"
 import { buildClusterInvestigation, type ClusterInvestigationReport } from "@/lib/cluster-investigation/builder"
+import {
+  assessClusterSupport,
+  type ClusterSupportIntelligence,
+} from "@/lib/cluster-investigation/intelligence"
 import { db } from "@/lib/db/prisma"
 import type { WalletGraphEdge, WalletGraphNode } from "@/types"
 
@@ -13,6 +17,7 @@ export type ClusterInvestigationLoadResult = {
   analysisId: string
   clusterLabel: string
   report: ClusterInvestigationReport | null
+  intelligence: ClusterSupportIntelligence | null
 }
 
 async function loadAnalysis(analysisId: string, userId: string) {
@@ -181,7 +186,7 @@ export async function loadClusterInvestigation(
   )
   const cluster = serialized.clusters.find((item) => item.clusterLabel === clusterLabel)
   if (!cluster) {
-    return { analysisId, clusterLabel, report: null }
+    return { analysisId, clusterLabel, report: null, intelligence: null }
   }
 
   const walletAddresses = serialized.wallets
@@ -193,16 +198,19 @@ export async function loadClusterInvestigation(
     safeTimelineEvents(analysisId, walletAddresses),
   ])
 
+  const report = buildClusterInvestigation({
+    analysis: serialized,
+    clusterLabel,
+    fundingRelationships,
+    graphNodes,
+    graphEdges,
+    events,
+  })
+
   return {
     analysisId,
     clusterLabel,
-    report: buildClusterInvestigation({
-      analysis: serialized,
-      clusterLabel,
-      fundingRelationships,
-      graphNodes,
-      graphEdges,
-      events,
-    }),
+    report,
+    intelligence: report ? assessClusterSupport(report, serialized) : null,
   }
 }

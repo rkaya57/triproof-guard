@@ -7,6 +7,7 @@ import { ClusterArchetypePanel } from "@/components/analysis/cluster-archetype-p
 import { ClusterForensicGraphPanel } from "@/components/analysis/cluster-forensic-graph-panel"
 import { ClusterInvestigationWorkspace } from "@/components/analysis/cluster-investigation-workspace"
 import { ClusterReviewExportPanel } from "@/components/analysis/cluster-review-export-panel"
+import { ClusterSupportIntelligencePanel } from "@/components/analysis/cluster-support-intelligence-panel"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { requirePageUser } from "@/lib/auth/page"
@@ -29,6 +30,7 @@ export default async function ClusterInvestigationPage({
     return (
       <>
         <ClusterInvestigationWorkspace report={result.report} />
+        {result.intelligence && <ClusterSupportIntelligencePanel intelligence={result.intelligence} />}
         <ClusterArchetypePanel report={result.report} />
         <ClusterForensicGraphPanel report={result.report} />
         <ClusterAnalystProposalPanel report={result.report} />
