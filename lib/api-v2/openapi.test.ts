@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { campaignApiV2OpenApi } from "@/lib/api-v2/openapi"
+import { campaignApiV2OpenApiWithCaseExport as campaignApiV2OpenApi } from "@/lib/api-v2/openapi-cluster-case-export"
 
 const expectedOperations = [
   ["/api/v2/campaigns", "get"],
@@ -13,6 +13,7 @@ const expectedOperations = [
   ["/api/v2/campaigns/{id}/analyses/{analysisId}/clusters", "get"],
   ["/api/v2/campaigns/{id}/analyses/{analysisId}/clusters/{clusterLabel}", "get"],
   ["/api/v2/campaigns/{id}/analyses/{analysisId}/clusters/{clusterLabel}/evidence", "get"],
+  ["/api/v2/campaigns/{id}/analyses/{analysisId}/clusters/{clusterLabel}/export", "get"],
   ["/api/v2/campaigns/{id}/analyses/{analysisId}/clusters/{clusterLabel}/members", "get"],
   ["/api/v2/campaigns/{id}/decisions", "get"],
   ["/api/v2/campaigns/{id}/policy", "post"],
@@ -27,7 +28,7 @@ const expectedOperations = [
 
 test("OpenAPI contract is versioned, production-scoped, and Bearer authenticated", () => {
   assert.equal(campaignApiV2OpenApi.openapi, "3.1.0")
-  assert.equal(campaignApiV2OpenApi.info.version, "2.0.0")
+  assert.equal(campaignApiV2OpenApi.info.version, "2.1.0")
   assert.deepEqual(campaignApiV2OpenApi.servers, [{ url: "https://triproofprotocol.com" }])
   assert.deepEqual(campaignApiV2OpenApi.security, [{ bearerAuth: [] }])
   assert.equal(campaignApiV2OpenApi.components.securitySchemes.bearerAuth.scheme, "bearer")
@@ -56,7 +57,7 @@ test("all OpenAPI operationIds are unique and stable enough for client generatio
 test("cluster API contract exposes GET-only forensic resources with explicit non-recomputation boundaries", () => {
   const paths = campaignApiV2OpenApi.paths as Record<string, Record<string, unknown>>
   const clusterPaths = Object.entries(paths).filter(([path]) => path.includes("/clusters"))
-  assert.ok(clusterPaths.length >= 4)
+  assert.ok(clusterPaths.length >= 5)
   for (const [path, item] of clusterPaths) {
     assert.ok(item.get, `${path} must expose GET`)
     assert.equal(item.post, undefined, `${path} must not expose POST`)
@@ -83,6 +84,20 @@ test("evidence OpenAPI contract freezes lane, scan, cursor, and no-rescore seman
   assert.deepEqual(lane?.schema?.enum, ["funding", "graph"])
   assert.equal(limit?.schema?.maximum, 200)
   assert.match(String(cursor?.description), /opaque/i)
+})
+
+test("cluster case export OpenAPI contract freezes formats and no-recompute semantics", () => {
+  const operation = campaignApiV2OpenApi.paths["/api/v2/campaigns/{id}/analyses/{analysisId}/clusters/{clusterLabel}/export"].get
+  assert.equal(operation["x-triproof-read-only"], true)
+  assert.equal(operation["x-triproof-recomputes-membership"], false)
+  assert.equal(operation["x-triproof-recomputes-decisions"], false)
+  assert.equal(operation["x-triproof-rescores-evidence"], false)
+  assert.equal(operation["x-triproof-export-boundary"], "read-only-no-recompute")
+
+  const parameters = operation.parameters as Array<{ name: string; schema?: Record<string, unknown> }>
+  const format = parameters.find((parameter) => parameter.name === "format")
+  assert.deepEqual(format?.schema?.enum, ["json", "csv", "markdown"])
+  assert.ok(operation.responses["200"].content["text/markdown"])
 })
 
 test("machine-readable Tri-Proof decision boundaries reject misleading integration assumptions", () => {
