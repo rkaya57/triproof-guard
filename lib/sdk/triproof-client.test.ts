@@ -84,6 +84,22 @@ test("SDK pages exact-run persisted decisions with encoded IDs and opaque cursor
   assert.equal(calls[0]?.method, "GET")
 })
 
+test("SDK compares exact-run persisted decisions with encoded IDs and opaque cursor", async () => {
+  const { client, calls } = mockClient()
+  await client.compareCampaignRunDecisions(
+    "campaign/id",
+    "analysis from/id",
+    "analysis to/id",
+    { limit: 175, cursor: "diff cursor/value" },
+  )
+
+  assert.equal(
+    calls[0]?.url,
+    "https://api.example.test/api/v2/campaigns/campaign%2Fid/analyses/analysis%20from%2Fid/decisions/diff?compareTo=analysis+to%2Fid&limit=175&cursor=diff+cursor%2Fvalue",
+  )
+  assert.equal(calls[0]?.method, "GET")
+})
+
 test("SDK pages the full stored cluster catalog with encoded analysis scope", async () => {
   const { client, calls } = mockClient()
   await client.listCampaignClusters("campaign/id", "analysis id", { limit: 200, cursor: "catalog cursor/value" })
