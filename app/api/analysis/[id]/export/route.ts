@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 
 import { getCurrentUser } from "@/lib/auth/session"
 import { serializeAnalysis } from "@/lib/analysis/serializers"
+import { attachFundingProvenanceDecisionEvidence } from "@/lib/campaign-security/funding-provenance-evidence"
+import { loadDecisionFundingRelationships } from "@/lib/campaign-security/funding-provenance-evidence-server"
 import { getDevAnalysisForUser } from "@/lib/dev-store/store"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import { db } from "@/lib/db/prisma"
@@ -57,7 +59,13 @@ export async function GET(
     return NextResponse.json({ error: "Analysis not found" }, { status: 404 })
   }
 
-  return exportAnalysis(serializeAnalysis(analysisRecord), type)
+  const fundingRelationships = await loadDecisionFundingRelationships(id)
+  const analysis = attachFundingProvenanceDecisionEvidence(
+    serializeAnalysis(analysisRecord),
+    fundingRelationships,
+  )
+
+  return exportAnalysis(analysis, type)
 }
 
 async function exportAnalysis(

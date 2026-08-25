@@ -1,5 +1,9 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib"
 
+import {
+  summarizeCanonicalFundingEvidence,
+  type CanonicalFundingEvidenceReportSummary,
+} from "@/lib/exports/funding-evidence"
 import { buildPdfReport } from "@/lib/exports/pdf"
 import type { AnalysisDetail, AiAnalysisBrief } from "@/types"
 
@@ -54,7 +58,7 @@ function addPage(ctx: Ctx) {
     thickness: 0.5,
     color: C.border,
   })
-  ctx.page.drawText("Tri-Proof Guard  •  AI Evidence Report Appendix", {
+  ctx.page.drawText("Tri-Proof Guard  •  Evidence Report Appendix", {
     x: MARGIN,
     y: FOOTER_Y,
     size: 8,
@@ -122,6 +126,72 @@ function driverColor(severity: "info" | "caution" | "high") {
   if (severity === "high") return C.red
   if (severity === "caution") return C.yellow
   return C.cyan
+}
+
+function fundingCodeLabel(code: string) {
+  return code
+    .replace(/^CANONICAL_/, "")
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .replace(/^./, (value) => value.toUpperCase())
+}
+
+function appendCanonicalFundingEvidence(
+  ctx: Ctx,
+  summary: CanonicalFundingEvidenceReportSummary,
+) {
+  if (summary.evidenceItems === 0) return
+  addPage(ctx)
+
+  ctx.page.drawRectangle({
+    x: 0,
+    y: PAGE.h - 92,
+    width: PAGE.w,
+    height: 92,
+    color: C.panel,
+  })
+  ctx.page.drawRectangle({
+    x: 0,
+    y: PAGE.h - 92,
+    width: PAGE.w,
+    height: 2,
+    color: C.cyan,
+  })
+  ctx.page.drawText("CANONICAL FUNDING PROVENANCE", {
+    x: MARGIN,
+    y: PAGE.h - 42,
+    size: 17,
+    font: ctx.bold,
+    color: C.text,
+  })
+  ctx.page.drawText("Provider-backed supplemental Decision Evidence", {
+    x: MARGIN,
+    y: PAGE.h - 62,
+    size: 9,
+    font: ctx.font,
+    color: C.muted,
+  })
+  ctx.y = PAGE.h - 116
+
+  heading(ctx, "Evidence Coverage")
+  bullet(ctx, `${summary.walletsWithEvidence.toLocaleString()} wallets include canonical funding provenance.`, C.cyan)
+  bullet(ctx, `${summary.riskSignals.toLocaleString()} supplemental known-bad provenance risk signals.`, C.red)
+  bullet(ctx, `${summary.corroboratingSignals.toLocaleString()} supplemental funding corroboration signals.`, C.yellow)
+  bullet(ctx, `${summary.neutralizingContexts.toLocaleString()} trusted/infrastructure funding contexts explicitly neutralized.`, C.green)
+
+  if (summary.byCode.length > 0) {
+    heading(ctx, "Canonical Evidence Types")
+    summary.byCode.slice(0, 10).forEach((item) => {
+      bullet(ctx, `${fundingCodeLabel(item.code)} - ${item.count.toLocaleString()} evidence item${item.count === 1 ? "" : "s"}.`)
+    })
+  }
+
+  heading(ctx, "Decision Boundary")
+  paragraph(
+    ctx,
+    "Canonical funding provenance in this appendix is supplemental audit context. It was attached after the deterministic campaign decision was produced. The stored decision state, risk score, policy result, matched policy rules, evidence-confidence classification, and independent risk-family count were not recomputed from this appendix.",
+    { size: 9.5, color: C.muted },
+  )
 }
 
 function appendAiBrief(ctx: Ctx, brief: AiAnalysisBrief) {
@@ -198,13 +268,16 @@ function appendAiBrief(ctx: Ctx, brief: AiAnalysisBrief) {
 
 export async function buildPdfReportWithAi(analysis: AnalysisDetail) {
   const base = await buildPdfReport(analysis)
-  if (!analysis.aiBrief) return base
+  const fundingSummary = summarizeCanonicalFundingEvidence(analysis)
+  if (!analysis.aiBrief && fundingSummary.evidenceItems === 0) return base
 
   const pdf = await PDFDocument.load(base)
   const font = await pdf.embedFont(StandardFonts.Helvetica)
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold)
   const initial = pdf.getPages()[pdf.getPageCount() - 1] ?? pdf.addPage([PAGE.w, PAGE.h])
   const ctx: Ctx = { pdf, page: initial, font, bold, y: PAGE.h - MARGIN }
-  appendAiBrief(ctx, analysis.aiBrief)
+
+  appendCanonicalFundingEvidence(ctx, fundingSummary)
+  if (analysis.aiBrief) appendAiBrief(ctx, analysis.aiBrief)
   return pdf.save()
 }
