@@ -14,6 +14,11 @@ import {
   isBillingCreditError,
   prepareAnalysisBillingGate,
 } from "@/lib/billing/credits"
+import {
+  buildAnalysisRunCatalogResource,
+  decodeAnalysisRunCatalogCursor,
+  parseAnalysisRunCatalogPageSize,
+} from "@/lib/campaigns/analysis-run-catalog"
 import { normalizeCampaignRunInput } from "@/lib/campaigns/intake"
 import { buildCampaignInputHash, persistNewCampaignAnalysis } from "@/lib/campaigns/persistence"
 import { loadCampaignRunContext } from "@/lib/campaigns/self-service"
@@ -111,6 +116,85 @@ async function parseCampaignRunRequest(request: Request, chain: Chain): Promise<
     }
   } catch {
     return null
+  }
+}
+
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  const auth = await getApiUser(request)
+  if (auth.error) return auth.error
+  const { id } = await context.params
+  const url = new URL(request.url)
+  const pageSize = parseAnalysisRunCatalogPageSize(url.searchParams.get("limit"))
+  if (pageSize === null) {
+    return apiError("Invalid analysis run catalog limit", 400, { code: "INVALID_RUN_CATALOG_LIMIT" })
+  }
+
+  const decodedCursor = decodeAnalysisRunCatalogCursor(url.searchParams.get("cursor"))
+  if (!decodedCursor.ok) {
+    return apiError(decodedCursor.error, 400, { code: "INVALID_RUN_CATALOG_CURSOR" })
+  }
+
+  try {
+    const project = await db.project.findFirst({
+      where: { id, userId: auth.user.id },
+      select: { id: true },
+    })
+    if (!project) return apiError("Campaign not found", 404)
+
+    const position = decodedCursor.cursor
+    const where: Prisma.AnalysisWhereInput = {
+      projectId: project.id,
+      ...(position ? {
+        OR: [
+          { createdAt: { lt: new Date(position.createdAt) } },
+          {
+            AND: [
+              { createdAt: new Date(position.createdAt) },
+              { id: { lt: position.id } },
+            ],
+          },
+        ],
+      } : {}),
+    }
+
+    const [rows, storedRunCount] = await Promise.all([
+      db.analysis.findMany({
+        where,
+        select: {
+          id: true,
+          status: true,
+          totalWallets: true,
+          approvedCount: true,
+          manualReviewCount: true,
+          rejectedCount: true,
+          averageRiskScore: true,
+          suspiciousClustersCount: true,
+          createdAt: true,
+          completedAt: true,
+        },
+        orderBy: [
+          { createdAt: "desc" },
+          { id: "desc" },
+        ],
+        take: pageSize + 1,
+      }),
+      db.analysis.count({ where: { projectId: project.id } }),
+    ])
+
+    return Response.json(buildAnalysisRunCatalogResource({
+      campaignId: project.id,
+      storedRunCount,
+      rows: rows.map((row) => ({ ...row, status: String(row.status) })),
+      pageSize,
+    }), {
+      headers: { "Cache-Control": "private, no-store" },
+    })
+  } catch (error) {
+    if (isDatabaseConnectionError(error)) return apiError("Database is required for API usage", 503)
+    throw error
   }
 }
 
