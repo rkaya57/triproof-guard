@@ -118,6 +118,44 @@ export type CampaignAnalysisRunResponse = {
   [key: string]: unknown
 }
 
+export type CampaignAnalysisRunList = {
+  object: "analysis_run_list"
+  apiVersion: "v2"
+  schemaVersion: string
+  campaignId: string
+  storedRunCount: number
+  runs: Array<{
+    id: string
+    object: "analysis_run"
+    status: string
+    totalWallets: number
+    decisions: {
+      allow: number
+      review: number
+      exclude: number
+    }
+    averageRiskScore: number
+    suspiciousClusters: number
+    createdAt: string | null
+    completedAt: string | null
+    links: {
+      self: string
+      decisions: string
+      clusters: string
+      diff: string
+      dashboard: string
+    }
+  }>
+  pagination: {
+    limit: number
+    returned: number
+    hasMore: boolean
+    nextCursor: string | null
+  }
+  boundaries: string[]
+  links: Record<string, string>
+}
+
 export type CampaignDecisionPackage = {
   object?: string
   apiVersion?: string
@@ -655,6 +693,19 @@ export class TriProofClient {
       method: "POST",
       body: JSON.stringify(input),
     })
+  }
+
+  listCampaignAnalysisRuns(
+    campaignId: string,
+    options: { limit?: number; cursor?: string } = {},
+  ) {
+    const query = new URLSearchParams()
+    if (options.limit !== undefined) query.set("limit", String(options.limit))
+    if (options.cursor) query.set("cursor", options.cursor)
+    const suffix = query.size > 0 ? `?${query.toString()}` : ""
+    return this.request<CampaignAnalysisRunList>(
+      `/api/v2/campaigns/${encodeURIComponent(campaignId)}/analyses${suffix}`,
+    )
   }
 
   getCampaignAnalysis(campaignId: string, analysisId: string) {
