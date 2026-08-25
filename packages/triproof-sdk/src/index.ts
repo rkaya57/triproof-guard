@@ -273,6 +273,33 @@ export type CampaignClusterMemberList = {
   links: Record<string, string>
 }
 
+export type CampaignClusterEvidenceLane = "funding" | "graph"
+
+export type CampaignClusterEvidenceList = {
+  object: "cluster_evidence_list"
+  apiVersion: "v2"
+  campaignId: string
+  analysisId: string
+  clusterLabel: string
+  lane: CampaignClusterEvidenceLane
+  evidence: Array<Record<string, unknown> & {
+    kind: string
+    confidence: number
+    riskBearing: boolean
+  }>
+  pagination: {
+    limit: number
+    returned: number
+    hasMore: boolean
+    nextCursor: string | null
+    scannedRows: number
+    scanLimitReached: boolean
+    maxScanRowsPerRequest: number
+  }
+  boundaries: string[]
+  links: Record<string, string>
+}
+
 export type CampaignPolicyActivationInput = {
   preset: TriProofRiskPolicy
   rationale: string
@@ -527,6 +554,22 @@ export class TriProofClient {
     const suffix = query.size > 0 ? `?${query.toString()}` : ""
     return this.request<CampaignClusterMemberList>(
       `/api/v2/campaigns/${encodeURIComponent(campaignId)}/analyses/${encodeURIComponent(analysisId)}/clusters/${encodeURIComponent(clusterLabel)}/members${suffix}`,
+    )
+  }
+
+  listCampaignClusterEvidence(
+    campaignId: string,
+    analysisId: string,
+    clusterLabel: string,
+    options: { lane?: CampaignClusterEvidenceLane; limit?: number; cursor?: string } = {},
+  ) {
+    const query = new URLSearchParams()
+    if (options.lane) query.set("lane", options.lane)
+    if (options.limit !== undefined) query.set("limit", String(options.limit))
+    if (options.cursor) query.set("cursor", options.cursor)
+    const suffix = query.size > 0 ? `?${query.toString()}` : ""
+    return this.request<CampaignClusterEvidenceList>(
+      `/api/v2/campaigns/${encodeURIComponent(campaignId)}/analyses/${encodeURIComponent(analysisId)}/clusters/${encodeURIComponent(clusterLabel)}/evidence${suffix}`,
     )
   }
 

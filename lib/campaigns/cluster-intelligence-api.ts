@@ -117,6 +117,7 @@ export function buildCampaignClusterIntelligenceResource(input: {
       campaign: `/api/v2/campaigns/${encode(campaignId)}`,
       analysis: `/api/v2/campaigns/${encode(campaignId)}/analyses/${encode(analysisId)}`,
       members: `/api/v2/campaigns/${encode(campaignId)}/analyses/${encode(analysisId)}/clusters/${encode(clusterLabel)}/members`,
+      evidence: `/api/v2/campaigns/${encode(campaignId)}/analyses/${encode(analysisId)}/clusters/${encode(clusterLabel)}/evidence`,
       decisions: `/api/v2/campaigns/${encode(campaignId)}/decisions`,
       dashboard: `/dashboard/analysis/${encode(analysisId)}/clusters/${encode(clusterLabel)}`,
     },

@@ -109,6 +109,22 @@ test("SDK pages full cluster membership with encoded IDs and an opaque cursor", 
   assert.equal(calls[0]?.method, "GET")
 })
 
+test("SDK pages cluster evidence with explicit lane and opaque cursor", async () => {
+  const { client, calls } = mockClient()
+  await client.listCampaignClusterEvidence(
+    "campaign/id",
+    "analysis id",
+    "CL / 001",
+    { lane: "graph", limit: 125, cursor: "graph cursor/value" },
+  )
+
+  assert.equal(
+    calls[0]?.url,
+    "https://api.example.test/api/v2/campaigns/campaign%2Fid/analyses/analysis%20id/clusters/CL%20%2F%20001/evidence?lane=graph&limit=125&cursor=graph+cursor%2Fvalue",
+  )
+  assert.equal(calls[0]?.method, "GET")
+})
+
 test("Decision Package CSV is returned as text instead of being JSON parsed", async () => {
   const { client, calls } = mockClient((call) => {
     if (call.url.includes("format=csv")) {
