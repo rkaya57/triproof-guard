@@ -1,5 +1,6 @@
 import { after, NextResponse } from "next/server"
 
+import { syncCampaignDecisionFundingEvidence } from "@/lib/campaign-security/funding-decision-persistence"
 import { syncCompletedCampaignAnalysis } from "@/lib/campaigns/persistence"
 import { syncNormalizedFundingEvents } from "@/lib/onchain/events/sync-analysis-events"
 import { isWorkerAuthorized, workerUnauthorized } from "@/lib/worker/auth"
@@ -43,6 +44,22 @@ export async function POST(request: Request) {
       })
     } catch (error) {
       console.error("Normalized funding provenance sync failed", {
+        analysisId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+
+    try {
+      const evidenceResult = await syncCampaignDecisionFundingEvidence(analysisId)
+      console.info("Campaign decision funding evidence sync completed", {
+        analysisId,
+        relationshipsRead: evidenceResult.relationshipsRead,
+        decisionRowsPrepared: evidenceResult.decisionRowsPrepared,
+        decisionsUpdated: evidenceResult.decisionsUpdated,
+        skipped: evidenceResult.skipped,
+      })
+    } catch (error) {
+      console.error("Campaign decision funding evidence sync failed", {
         analysisId,
         error: error instanceof Error ? error.message : String(error),
       })
