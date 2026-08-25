@@ -63,6 +63,18 @@ export async function loadCampaignDetail(projectId: string, userId: string) {
         endsAt: true,
         rewardPoolUsd: true,
         metadata: true,
+        policies: {
+          where: { isActive: true },
+          orderBy: { version: "desc" },
+          take: 1,
+          select: {
+            id: true,
+            preset: true,
+            version: true,
+            policyHash: true,
+            createdAt: true,
+          },
+        },
         analysisRuns: {
           where: { legacyAnalysisId: { in: recentAnalysisIds } },
           select: {
@@ -89,6 +101,7 @@ export async function loadCampaignDetail(projectId: string, userId: string) {
         },
       ]),
   )
+  const activePolicy = persistedCampaign?.policies[0] ?? null
 
   return {
     campaign: buildCampaignRecord(project, {
@@ -103,6 +116,15 @@ export async function loadCampaignDetail(projectId: string, userId: string) {
       analysisRunCount: project._count.analyses,
       analysisRunMetadata,
     }),
+    activePolicy: activePolicy
+      ? {
+          id: activePolicy.id,
+          preset: activePolicy.preset,
+          version: activePolicy.version,
+          policyHash: activePolicy.policyHash,
+          createdAt: activePolicy.createdAt.toISOString(),
+        }
+      : null,
     latestAnalysis: latest
       ? attachFundingProvenanceDecisionEvidence(
           serializeAnalysis(latest),
