@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 import { FileText } from "lucide-react"
 
 import { ClusterArchetypePanel } from "@/components/analysis/cluster-archetype-panel"
+import { ClusterForensicGraphPanel } from "@/components/analysis/cluster-forensic-graph-panel"
 import { ClusterInvestigationWorkspace } from "@/components/analysis/cluster-investigation-workspace"
 import { ClusterReviewExportPanel } from "@/components/analysis/cluster-review-export-panel"
 import { buttonVariants } from "@/components/ui/button"
@@ -28,6 +29,7 @@ export default async function ClusterInvestigationPage({
       <>
         <ClusterInvestigationWorkspace report={result.report} />
         <ClusterArchetypePanel report={result.report} />
+        <ClusterForensicGraphPanel report={result.report} />
         <div className="mx-auto max-w-7xl px-5 pb-5 sm:px-8">
           <Card className="glass-panel premium-card border-primary/25 bg-primary/5">
             <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">

@@ -5,6 +5,7 @@ import test from "node:test"
 import "@/lib/campaign-decision-package/index.test"
 import "@/lib/campaign-decision-package/export.test"
 import "@/lib/cluster-investigation/archetypes.test"
+import "@/lib/cluster-investigation/forensic-graph.test"
 import { normalizeReasonCode } from "@/lib/campaign-decision"
 
 test("reason codes distinguish account state from non-user account evidence", () => {
