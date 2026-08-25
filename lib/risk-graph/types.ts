@@ -3,6 +3,7 @@ export const SHARED_RISK_GRAPH_SCHEMA_VERSION = "tri-proof-risk-graph-v1" as con
 export type SharedRiskGraphSource =
   | "campaign"
   | "wallet_graph"
+  | "funding_provenance"
   | "sybil_engine"
   | "scamguard"
   | "scam_dna"
@@ -37,6 +38,8 @@ export type SharedRiskGraphEdgeKind =
   | "PARTICIPATED_IN"
   | "ANALYZED_IN"
   | "FUNDED_BY"
+  | "SAME_FUNDER"
+  | "SAME_FUNDING_LINEAGE"
   | "REFERRED_BY"
   | "USES_REFERRAL_CODE"
   | "DEPLOYED_BY"
@@ -95,6 +98,7 @@ export type SharedRiskGraphEdge = {
 export type SharedRiskGraphCoverage = {
   campaign: boolean
   walletGraph: boolean
+  fundingProvenance: boolean
   scamGuard: boolean
   scamDna: boolean
   telegramGuardian: boolean

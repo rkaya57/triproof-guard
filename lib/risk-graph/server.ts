@@ -12,6 +12,7 @@ import {
   addWalletGraphSource,
 } from "@/lib/risk-graph/adapters"
 import { SharedRiskGraphBuilder } from "@/lib/risk-graph/builder"
+import { addFundingProvenanceSource } from "@/lib/risk-graph/funding-provenance"
 import { addTelegramOnchainSource } from "@/lib/risk-graph/telegram-onchain"
 import {
   loadCampaignTelegramObservations,
@@ -22,6 +23,9 @@ import type {
   SharedRiskGraph,
   SharedRiskGraphScamDnaObservation,
 } from "@/lib/risk-graph/types"
+
+const FUNDING_GRAPH_PROJECTION_LIMIT = 2_500
+const FUNDING_INTEL_CANDIDATE_LIMIT = 1_000
 
 const walletGraphNodeKinds = new Set<WalletGraphNodeKind>([
   "wallet",
@@ -200,12 +204,55 @@ export async function loadCampaignRiskGraph(
   const currentGraph = analysis ? walletGraphData(analysis) : null
   addWalletGraphSource(builder, currentGraph)
 
+  // The database keeps the complete canonical relationship set. The shared
+  // interactive graph intentionally projects a bounded, highest-signal slice so
+  // 50k-wallet campaigns do not create unbounded payloads or browser layouts.
+  const fundingRelationships = analysis
+    ? await db.campaignFundingRelationship.findMany({
+        where: { analysisRunId: analysis.id },
+        orderBy: [
+          { riskBearing: "desc" },
+          { cohortSize: "desc" },
+          { confidence: "desc" },
+          { createdAt: "asc" },
+        ],
+        take: FUNDING_GRAPH_PROJECTION_LIMIT,
+        select: {
+          relationshipKey: true,
+          kind: true,
+          chain: true,
+          sourceAddress: true,
+          targetAddress: true,
+          viaAddress: true,
+          hopCount: true,
+          cohortSize: true,
+          confidence: true,
+          riskBearing: true,
+          suppressionReason: true,
+          evidenceEventKeys: true,
+          observedAt: true,
+          metadata: true,
+        },
+      })
+    : []
+  addFundingProvenanceSource(builder, fundingRelationships)
+
+  const fundingAddressCandidates = fundingRelationships
+    .flatMap((relationship) => [
+      relationship.sourceAddress,
+      relationship.targetAddress,
+      relationship.viaAddress,
+    ])
+    .filter((value): value is string => Boolean(value?.trim()))
+    .slice(0, FUNDING_INTEL_CANDIDATE_LIMIT)
+
   const addressCandidates = Array.from(
-    new Set(
-      currentGraph?.nodes
+    new Set([
+      ...(currentGraph?.nodes
         .flatMap((node) => [node.address, node.walletAddress])
-        .filter((value): value is string => Boolean(value?.trim())) ?? []
-    )
+        .filter((value): value is string => Boolean(value?.trim())) ?? []),
+      ...fundingAddressCandidates,
+    ])
   )
 
   if (addressCandidates.length > 0) {

@@ -83,6 +83,7 @@ export class SharedRiskGraphBuilder {
   private readonly coverage = {
     campaign: false,
     walletGraph: false,
+    fundingProvenance: false,
     scamGuard: false,
     scamDna: false,
     telegramGuardian: false,
@@ -137,6 +138,7 @@ export class SharedRiskGraphBuilder {
   markCoverage(
     source:
       | "walletGraph"
+      | "fundingProvenance"
       | "scamGuard"
       | "scamDna"
       | "telegramGuardian"
