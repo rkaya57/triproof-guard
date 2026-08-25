@@ -18,6 +18,17 @@ const restExample = `curl \
 # Continue only when pagination.nextCursor is non-null.
 # Return the cursor unchanged.`
 
+const sdkExample = `const diff = await client.compareCampaignRunDecisions(
+  campaignId,
+  fromAnalysisId,
+  toAnalysisId,
+  { limit: 100, cursor },
+)
+
+for (const change of diff.changes) {
+  console.log(change.walletAddress, change.changeType, change.fieldsChanged)
+}`
+
 export default function RunDecisionDiffDocsPage() {
   return (
     <main className="premium-page min-h-screen bg-background text-foreground">
@@ -50,9 +61,14 @@ export default function RunDecisionDiffDocsPage() {
       </section>
 
       <section className="mx-auto grid max-w-6xl gap-5 px-5 pb-14 sm:px-8 lg:grid-cols-2">
-        <Card className="glass-panel premium-card lg:col-span-2">
+        <Card className="glass-panel premium-card">
           <CardHeader><Braces className="text-primary" /><CardTitle>REST</CardTitle><CardDescription>`compareTo` must reference a different analysis run in the same owned campaign. Changed rows are paginated at 100 by default and 500 maximum.</CardDescription></CardHeader>
           <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{restExample}</code></pre></CardContent>
+        </Card>
+
+        <Card className="glass-panel premium-card">
+          <CardHeader><Braces className="text-primary" /><CardTitle>TypeScript SDK</CardTitle><CardDescription>`@triproof/sdk` exposes the same exact-run comparison and keeps `compareTo` plus pagination cursors encoded and opaque.</CardDescription></CardHeader>
+          <CardContent><pre className="overflow-x-auto rounded-xl border border-border bg-black/30 p-4 text-xs text-muted-foreground"><code>{sdkExample}</code></pre></CardContent>
         </Card>
 
         <Card className="glass-panel premium-card lg:col-span-2">
