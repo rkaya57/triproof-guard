@@ -70,6 +70,20 @@ test("campaign API v2 methods use durable campaign resources and encoded IDs", a
   assert.equal(JSON.parse(calls[3]?.body ?? "{}").rationale, "Higher-value reward round")
 })
 
+test("SDK pages campaign analysis run history with encoded ID and opaque cursor", async () => {
+  const { client, calls } = mockClient()
+  await client.listCampaignAnalysisRuns("campaign/id", {
+    limit: 200,
+    cursor: "run cursor/value",
+  })
+
+  assert.equal(
+    calls[0]?.url,
+    "https://api.example.test/api/v2/campaigns/campaign%2Fid/analyses?limit=200&cursor=run+cursor%2Fvalue",
+  )
+  assert.equal(calls[0]?.method, "GET")
+})
+
 test("SDK pages exact-run persisted decisions with encoded IDs and opaque cursor", async () => {
   const { client, calls } = mockClient()
   await client.listCampaignRunDecisions("campaign/id", "analysis id", {
