@@ -1,0 +1,41 @@
+name: Risk Engine V2 freeze candidate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "lib/scamguard/v2/**"
+      - ".github/workflows/risk-engine-v2-freeze-candidate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-freeze-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Expanded pre-Holdout readiness
+        run: node --import tsx --test lib/scamguard/v2/pre-holdout-benchmark.test.ts lib/scamguard/v2/pre-holdout-readiness.test.ts
+      - name: Freeze-candidate manifest contract
+        run: node --import tsx --test lib/scamguard/v2/freeze-candidate-manifest.test.ts
+      - name: Multi-surface Holdout dataset contract
+        run: node --import tsx --test lib/scamguard/v2/holdout-dataset-contract.test.ts
+      - name: Holdout collection plan
+        run: node --import tsx --test lib/scamguard/v2/holdout-collection-plan.test.ts
+      - name: Holdout leakage guard
+        run: node --import tsx --test lib/scamguard/v2/holdout-leakage-guard.test.ts
+      - name: Focused lint
+        run: npx eslint lib/scamguard/v2/freeze-candidate-manifest.ts lib/scamguard/v2/freeze-candidate-manifest.test.ts lib/scamguard/v2/holdout-dataset-contract.ts lib/scamguard/v2/holdout-dataset-contract.test.ts lib/scamguard/v2/holdout-collection-plan.ts lib/scamguard/v2/holdout-collection-plan.test.ts lib/scamguard/v2/pre-holdout-readiness.ts lib/scamguard/v2/pre-holdout-readiness.test.ts lib/scamguard/v2/pre-holdout-edge-cases.ts

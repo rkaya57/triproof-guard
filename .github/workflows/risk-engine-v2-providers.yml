@@ -1,0 +1,55 @@
+name: Risk Engine V2 provider safety
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "lib/scamguard/providers/**"
+      - "lib/scamguard/v2/**"
+      - ".env.example"
+      - ".github/workflows/risk-engine-v2-providers.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Provider and evidence-fusion tests
+        run: >-
+          node --import tsx --test
+          lib/scamguard/providers/tokens-xyz.test.ts
+          lib/scamguard/providers/phishing-database.test.ts
+          lib/scamguard/v2/evidence-fusion.test.ts
+          lib/scamguard/v2/token-2022-extensions.test.ts
+
+      - name: Focused lint
+        run: >-
+          npx eslint
+          lib/scamguard/providers/tokens-xyz.ts
+          lib/scamguard/providers/tokens-xyz.test.ts
+          lib/scamguard/providers/phishing-database.ts
+          lib/scamguard/providers/phishing-database.test.ts
+          lib/scamguard/v2/evidence-fusion.ts
+          lib/scamguard/v2/evidence-fusion.test.ts
+          lib/scamguard/v2/token-2022-extensions.ts
+          lib/scamguard/v2/token-2022-extensions.test.ts

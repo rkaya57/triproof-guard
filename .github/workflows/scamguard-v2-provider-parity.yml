@@ -1,0 +1,34 @@
+name: ScamGuard V2 provider parity
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "scripts/scamguard-v2-provider-parity.mjs"
+      - ".github/workflows/scamguard-v2-provider-parity.yml"
+      - "lib/scamguard/providers/**"
+      - "lib/scamguard/v2/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  provider-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Evaluation-only independent phishing feed. This does not modify the frozen engine code.
+      PHISHING_DATABASE_FEED_URL: "https://openphish.com/feed.txt"
+      SOLANA_RPC_URL: ${{ secrets.SOLANA_RPC_URL }}
+      TOKENS_XYZ_API_KEY: ${{ secrets.TOKENS_XYZ_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Provider parity probe
+        run: node scripts/scamguard-v2-provider-parity.mjs

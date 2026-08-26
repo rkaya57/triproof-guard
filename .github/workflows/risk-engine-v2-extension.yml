@@ -1,0 +1,32 @@
+name: Risk Engine V2 extension privacy
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "chrome-extension/src/presign-observation.js"
+      - "scripts/presign-observation.test.mjs"
+      - ".github/workflows/risk-engine-v2-extension.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Syntax check
+        run: node --check chrome-extension/src/presign-observation.js
+      - name: Privacy tests
+        run: node --test scripts/presign-observation.test.mjs

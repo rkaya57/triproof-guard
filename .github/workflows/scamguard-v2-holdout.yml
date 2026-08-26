@@ -1,0 +1,61 @@
+name: ScamGuard V2 frozen Holdout
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "scripts/run-scamguard-v2-holdout.ts"
+      - "lib/scamguard/v2/fixtures/holdout-150.csv"
+      - ".github/workflows/scamguard-v2-holdout.yml"
+      - "lib/scamguard/v2/holdout-evaluation.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frozen-holdout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TOKENS_XYZ_API_KEY: ${{ secrets.TOKENS_XYZ_API_KEY }}
+      PHISHING_DATABASE_FEED_URL: "https://openphish.com/feed.txt"
+      SOLANA_RPC_URL: ${{ secrets.SOLANA_RPC_URL }}
+      EVM_RPC_URL: ${{ secrets.EVM_RPC_URL }}
+      EVM_HOLDOUT_RPC_URL: "https://ethereum-rpc.publicnode.com"
+      SCAMGUARD_SANDBOX_ENABLED: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check runner
+        run: npx tsc --noEmit
+      - name: Run frozen Holdout harness
+        id: holdout
+        continue-on-error: true
+        run: node --import tsx scripts/run-scamguard-v2-holdout.ts
+      - name: Upload Holdout report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scamguard-v2-frozen-holdout-report
+          path: artifacts/scamguard-v2-holdout/report.json
+          if-no-files-found: warn
+      - name: Enforce provider parity
+        if: always()
+        run: |
+          if [ -z "$TOKENS_XYZ_API_KEY" ]; then
+            echo "TOKENS_XYZ_API_KEY is missing; Holdout report is diagnostic only."
+            exit 1
+          fi
+          if [ "${{ steps.holdout.outcome }}" != "success" ]; then
+            echo "Holdout harness did not complete cleanly."
+            exit 1
+          fi

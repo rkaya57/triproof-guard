@@ -1,0 +1,133 @@
+name: Risk Engine V2 Token-2022 evidence
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "lib/scamguard/providers/internal-adjudication.ts"
+      - "lib/scamguard/providers/internal-adjudication.test.ts"
+      - "lib/scamguard/providers/internal-graph-context.ts"
+      - "lib/scamguard/providers/internal-graph-context.test.ts"
+      - "lib/scamguard/providers/internal-entity-attribution.ts"
+      - "lib/scamguard/providers/internal-entity-attribution.test.ts"
+      - "lib/scamguard/providers/reviewed-community-threat-context.ts"
+      - "lib/scamguard/providers/reviewed-community-threat-context.test.ts"
+      - "lib/scamguard/providers/token-2022-rpc.ts"
+      - "lib/scamguard/providers/token-2022-rpc.test.ts"
+      - "lib/scamguard/providers/solana-distribution-rpc.ts"
+      - "lib/scamguard/providers/solana-distribution-rpc.test.ts"
+      - "lib/scamguard/providers/tokens-xyz.ts"
+      - "lib/scamguard/providers/tokens-xyz.test.ts"
+      - "lib/scamguard/v2/**"
+      - "app/api/scamguard/v2/observe/route.ts"
+      - ".github/workflows/risk-engine-v2-token2022.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: V2 provider quality tests
+        run: node --import tsx --test lib/scamguard/v2/provider-quality.test.ts
+      - name: V2 internal intelligence tests
+        run: node --import tsx --test lib/scamguard/providers/internal-adjudication.test.ts lib/scamguard/providers/internal-graph-context.test.ts lib/scamguard/providers/internal-entity-attribution.test.ts lib/scamguard/providers/reviewed-community-threat-context.test.ts lib/scamguard/v2/internal-adjudication-corroboration.test.ts lib/scamguard/v2/entity-context-hint.test.ts lib/scamguard/v2/context-telemetry.test.ts
+      - name: V2 transaction impact tests
+        run: node --import tsx --test lib/scamguard/v2/transaction-impact.test.ts lib/scamguard/v2/transaction-impact-signals.test.ts
+      - name: V2 EVM transaction fusion adversarial tests
+        run: node --import tsx --test lib/scamguard/v2/evidence-fusion-transaction.test.ts
+      - name: V2 Solana transaction fusion adversarial tests
+        run: node --import tsx --test lib/scamguard/v2/evidence-fusion-solana-transaction.test.ts
+      - name: V2 cross-surface consistency tests
+        run: node --import tsx --test lib/scamguard/v2/cross-surface-consistency.test.ts
+      - name: V2 pre-Holdout adversarial benchmark
+        run: node --import tsx --test lib/scamguard/v2/pre-holdout-benchmark.test.ts lib/scamguard/v2/pre-holdout-readiness.test.ts
+      - name: V2 shadow telemetry tests
+        run: node --import tsx --test lib/scamguard/v2/shadow-decision.test.ts lib/scamguard/v2/shadow-telemetry.test.ts
+      - name: V2 activation policy tests
+        run: node --import tsx --test lib/scamguard/v2/activation-policy.test.ts lib/scamguard/v2/activation-readiness.test.ts
+      - name: V2 holdout evaluator and leakage tests
+        run: node --import tsx --test lib/scamguard/v2/holdout-evaluation.test.ts lib/scamguard/v2/holdout-leakage-guard.test.ts
+      - name: V2 provider tests
+        run: node --import tsx --test lib/scamguard/providers/tokens-xyz.test.ts lib/scamguard/providers/token-2022-rpc.test.ts lib/scamguard/providers/solana-distribution-rpc.test.ts
+      - name: V2 Token-2022 extension tests
+        run: node --import tsx --test lib/scamguard/v2/token-2022-extensions.test.ts
+      - name: V2 identity and brand tests
+        run: node --import tsx --test lib/scamguard/v2/canonical-identity.test.ts lib/scamguard/v2/brand-impersonation.test.ts
+      - name: V2 corroboration tests
+        run: node --import tsx --test lib/scamguard/v2/corroboration.test.ts
+      - name: V2 fusion tests
+        run: node --import tsx --test lib/scamguard/v2/evidence-fusion.test.ts lib/scamguard/v2/evidence-fusion-brand.test.ts
+      - name: Focused lint
+        run: >-
+          npx eslint
+          lib/scamguard/providers/internal-adjudication.ts
+          lib/scamguard/providers/internal-adjudication.test.ts
+          lib/scamguard/providers/internal-graph-context.ts
+          lib/scamguard/providers/internal-graph-context.test.ts
+          lib/scamguard/providers/internal-entity-attribution.ts
+          lib/scamguard/providers/internal-entity-attribution.test.ts
+          lib/scamguard/providers/reviewed-community-threat-context.ts
+          lib/scamguard/providers/reviewed-community-threat-context.test.ts
+          lib/scamguard/providers/tokens-xyz.ts
+          lib/scamguard/providers/tokens-xyz.test.ts
+          lib/scamguard/providers/token-2022-rpc.ts
+          lib/scamguard/providers/token-2022-rpc.test.ts
+          lib/scamguard/providers/solana-distribution-rpc.ts
+          lib/scamguard/providers/solana-distribution-rpc.test.ts
+          lib/scamguard/v2/provider-quality.ts
+          lib/scamguard/v2/provider-quality.test.ts
+          lib/scamguard/v2/token-2022-extensions.ts
+          lib/scamguard/v2/token-2022-extensions.test.ts
+          lib/scamguard/v2/canonical-identity.ts
+          lib/scamguard/v2/canonical-identity.test.ts
+          lib/scamguard/v2/brand-impersonation.ts
+          lib/scamguard/v2/brand-impersonation.test.ts
+          lib/scamguard/v2/corroboration.ts
+          lib/scamguard/v2/corroboration.test.ts
+          lib/scamguard/v2/internal-adjudication-corroboration.test.ts
+          lib/scamguard/v2/entity-context-hint.ts
+          lib/scamguard/v2/entity-context-hint.test.ts
+          lib/scamguard/v2/context-telemetry.ts
+          lib/scamguard/v2/context-telemetry.test.ts
+          lib/scamguard/v2/pre-holdout-benchmark.ts
+          lib/scamguard/v2/pre-holdout-benchmark.test.ts
+          lib/scamguard/v2/pre-holdout-edge-cases.ts
+          lib/scamguard/v2/pre-holdout-readiness.ts
+          lib/scamguard/v2/pre-holdout-readiness.test.ts
+          lib/scamguard/v2/shadow-decision.ts
+          lib/scamguard/v2/shadow-decision.test.ts
+          lib/scamguard/v2/shadow-telemetry.ts
+          lib/scamguard/v2/shadow-telemetry.test.ts
+          lib/scamguard/v2/activation-policy.ts
+          lib/scamguard/v2/activation-policy.test.ts
+          lib/scamguard/v2/activation-readiness.ts
+          lib/scamguard/v2/activation-readiness.test.ts
+          lib/scamguard/v2/holdout-evaluation.ts
+          lib/scamguard/v2/holdout-evaluation.test.ts
+          lib/scamguard/v2/holdout-leakage-guard.test.ts
+          lib/scamguard/v2/transaction-impact.ts
+          lib/scamguard/v2/transaction-impact.test.ts
+          lib/scamguard/v2/transaction-impact-signals.ts
+          lib/scamguard/v2/transaction-impact-signals.test.ts
+          lib/scamguard/v2/evidence-fusion.ts
+          lib/scamguard/v2/evidence-fusion.test.ts
+          lib/scamguard/v2/evidence-fusion-brand.test.ts
+          lib/scamguard/v2/evidence-fusion-transaction.test.ts
+          lib/scamguard/v2/evidence-fusion-solana-transaction.test.ts
+          lib/scamguard/v2/cross-surface-consistency.test.ts
+          app/api/scamguard/v2/observe/route.ts
