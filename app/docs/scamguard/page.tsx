@@ -3,10 +3,10 @@ import {
   ArrowRight,
   Bot,
   Braces,
-  Chrome,
   CircleAlert,
   FileCode2,
   Globe2,
+  Monitor,
   ScanSearch,
   ShieldCheck,
   WalletCards,
@@ -41,7 +41,13 @@ const scanTypes = [
   [WalletCards, "Wallet / address", "Use when you need counterparty or address context before interacting."],
   [ScanSearch, "Token / contract", "Use for token mint or contract context, including relevant reputation and contract intelligence when available."],
   [Braces, "Transaction / wallet request", "Use before signing to understand approvals, transfers, authority changes, contract calls, or structured wallet requests."],
-]
+] as const
+
+const channels = [
+  [Monitor, "Browser extension", "Review page and wallet-request context during normal Web3 browsing.", "/extension"],
+  [Bot, "Telegram", "Scan suspicious items in chat and protect communities with Group Guardian workflows.", "/telegram"],
+  [Braces, "Partner API", "Embed consistent ScamGuard decisions into wallets, launchpads, campaign platforms, or dApps.", "/docs/api"],
+] as const
 
 export default function ScamGuardDocsPage() {
   return (
@@ -85,13 +91,13 @@ export default function ScamGuardDocsPage() {
         </p>
         <div className="mt-5 divide-y divide-border/70 overflow-hidden rounded-xl border border-border/75">
           {scanTypes.map(([Icon, title, text]) => (
-            <div key={String(title)} className="flex gap-4 p-4 sm:p-5">
+            <div key={title} className="flex gap-4 p-4 sm:p-5">
               <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/8 text-primary">
                 <Icon className="size-4.5" />
               </span>
               <div>
-                <h3 className="text-sm font-semibold">{String(title)}</h3>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">{String(text)}</p>
+                <h3 className="text-sm font-semibold">{title}</h3>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{text}</p>
               </div>
             </div>
           ))}
@@ -165,15 +171,11 @@ export default function ScamGuardDocsPage() {
           The public scanner is useful for one-off checks. The browser extension brings warnings closer to Web3 browsing and signing. Telegram protection supports chat-native scans and managed community workflows. Product teams can use authenticated API endpoints for their own interfaces.
         </p>
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          {[
-            [Chrome, "Browser extension", "Review page and wallet-request context during normal Web3 browsing.", "/extension"],
-            [Bot, "Telegram", "Scan suspicious items in chat and protect communities with Group Guardian workflows.", "/telegram"],
-            [Braces, "Partner API", "Embed consistent ScamGuard decisions into wallets, launchpads, campaign platforms, or dApps.", "/docs/api"],
-          ].map(([Icon, title, text, href]) => (
-            <Link key={String(href)} href={String(href)} className="group rounded-xl border border-border/75 bg-card/25 p-4 transition-colors hover:border-primary/30">
+          {channels.map(([Icon, title, text, href]) => (
+            <Link key={href} href={href} className="group rounded-xl border border-border/75 bg-card/25 p-4 transition-colors hover:border-primary/30">
               <Icon className="size-4 text-primary" />
-              <h3 className="mt-3 text-sm font-semibold group-hover:text-primary">{String(title)}</h3>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">{String(text)}</p>
+              <h3 className="mt-3 text-sm font-semibold group-hover:text-primary">{title}</h3>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{text}</p>
               <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">Open guide <ArrowRight className="size-3.5" /></span>
             </Link>
           ))}
