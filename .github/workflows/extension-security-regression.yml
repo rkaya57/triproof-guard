@@ -5,15 +5,18 @@ on:
     paths:
       - "chrome-extension/**"
       - "scripts/extension-wallet-compat.test.mjs"
+      - "scripts/extension-privacy-performance.test.mjs"
       - "scripts/validate-chrome-extension.mjs"
       - "package.json"
       - "package-lock.json"
   push:
     branches:
       - "feat/extension-security-hardening-v1"
+      - "feat/extension-privacy-performance-v1"
     paths:
       - "chrome-extension/**"
       - "scripts/extension-wallet-compat.test.mjs"
+      - "scripts/extension-privacy-performance.test.mjs"
       - "scripts/validate-chrome-extension.mjs"
       - "package.json"
       - "package-lock.json"
@@ -43,3 +46,6 @@ jobs:
 
       - name: Run wallet compatibility and bridge tests
         run: npm run extension:test
+
+      - name: Run privacy and SPA performance tests
+        run: node --test scripts/extension-privacy-performance.test.mjs
