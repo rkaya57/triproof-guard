@@ -76,9 +76,7 @@ for (const file of textFiles) {
   if (/â€|â€”|â€¢/.test(content)) problems.push(`${file} contains mojibake characters`)
 }
 
-for (const file of [
-  "src/background-entry.js",
-  "src/background-hardening.js",
+const classicScripts = [
   "src/background.js",
   "src/bridge-isolated.js",
   "src/guard-utils.js",
@@ -89,12 +87,24 @@ for (const file of [
   "src/popup.js",
   "src/popup-hardening.js",
   "src/sidepanel.js",
-]) {
+]
+for (const file of classicScripts) {
   const result = spawnSync(process.execPath, ["--check", join(extensionDir, file)], {
     encoding: "utf8",
   })
   if (result.status !== 0) {
     problems.push(`${file} failed syntax check:\n${result.stderr || result.stdout}`)
+  }
+}
+
+for (const file of ["src/background-entry.js", "src/background-hardening.js"]) {
+  const source = readFileSync(join(extensionDir, file), "utf8")
+  const result = spawnSync(process.execPath, ["--input-type=module", "--check"], {
+    input: source,
+    encoding: "utf8",
+  })
+  if (result.status !== 0) {
+    problems.push(`${file} failed module syntax check:\n${result.stderr || result.stdout}`)
   }
 }
 
