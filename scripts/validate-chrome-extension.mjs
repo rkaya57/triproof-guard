@@ -9,16 +9,21 @@ const manifest = JSON.parse(readFileSync(manifestPath, "utf8"))
 
 const requiredFiles = [
   "manifest.json",
+  "src/background-entry.js",
+  "src/background-hardening.js",
   "src/background.js",
+  "src/bridge-isolated.js",
   "src/guard-utils.js",
   "src/content.js",
   "src/content.css",
   "src/ui-fix.js",
   "src/ui-fix.css",
+  "src/security-hardening.js",
   "src/injected.js",
   "src/popup.html",
   "src/popup.css",
   "src/popup.js",
+  "src/popup-hardening.js",
   "src/sidepanel.html",
   "src/sidepanel.css",
   "src/sidepanel.js",
@@ -30,13 +35,28 @@ const requiredFiles = [
 const problems = []
 
 if (manifest.manifest_version !== 3) problems.push("manifest_version must be 3")
-if (!manifest.background?.service_worker) problems.push("background.service_worker is required")
+if (manifest.background?.service_worker !== "src/background-entry.js") problems.push("background must start through src/background-entry.js")
 if (!manifest.action?.default_popup) problems.push("action.default_popup is required")
 if (!manifest.side_panel?.default_path) problems.push("side_panel.default_path is required")
 if (!manifest.permissions?.includes("sidePanel")) problems.push("sidePanel permission is required")
 if (manifest.permissions?.includes("scripting")) problems.push("scripting permission is not allowed unless a feature uses chrome.scripting")
 if (manifest.minimum_chrome_version !== "114") problems.push("minimum_chrome_version must reflect the side panel requirement")
 if (JSON.stringify(manifest).includes("â")) problems.push("manifest contains mojibake characters")
+
+const mainWorld = manifest.content_scripts?.find((entry) => entry?.world === "MAIN")
+const isolatedWorld = manifest.content_scripts?.find((entry) => entry?.world === "ISOLATED")
+if (!mainWorld || !Array.isArray(mainWorld.js) || mainWorld.js[0] !== "src/injected.js" || mainWorld.run_at !== "document_start") {
+  problems.push("MAIN-world wallet hook must load src/injected.js at document_start")
+}
+if (!isolatedWorld || !Array.isArray(isolatedWorld.js) || isolatedWorld.js[0] !== "src/bridge-isolated.js" || isolatedWorld.run_at !== "document_start") {
+  problems.push("isolated-world private bridge must load before content.js at document_start")
+}
+if ((isolatedWorld?.js ?? []).indexOf("src/bridge-isolated.js") > (isolatedWorld?.js ?? []).indexOf("src/content.js")) {
+  problems.push("src/bridge-isolated.js must execute before src/content.js")
+}
+if (!(manifest.web_accessible_resources ?? []).some((entry) => (entry.resources ?? []).includes("assets/icon48.png"))) {
+  problems.push("assets/icon48.png must remain web-accessible for the page launcher")
+}
 
 for (const file of requiredFiles) {
   try {
@@ -56,7 +76,20 @@ for (const file of textFiles) {
   if (/â€|â€”|â€¢/.test(content)) problems.push(`${file} contains mojibake characters`)
 }
 
-for (const file of ["src/background.js", "src/guard-utils.js", "src/content.js", "src/ui-fix.js", "src/injected.js", "src/popup.js", "src/sidepanel.js"]) {
+for (const file of [
+  "src/background-entry.js",
+  "src/background-hardening.js",
+  "src/background.js",
+  "src/bridge-isolated.js",
+  "src/guard-utils.js",
+  "src/content.js",
+  "src/ui-fix.js",
+  "src/security-hardening.js",
+  "src/injected.js",
+  "src/popup.js",
+  "src/popup-hardening.js",
+  "src/sidepanel.js",
+]) {
   const result = spawnSync(process.execPath, ["--check", join(extensionDir, file)], {
     encoding: "utf8",
   })
@@ -76,13 +109,17 @@ if (!backgroundSource.includes("SECURITY_CENTER_TARGET_KEY") || !backgroundSourc
   problems.push("Security Center fallback tab wiring is incomplete")
 }
 
-const contentScript = manifest.content_scripts?.[0]
-if (!contentScript?.js?.includes("src/ui-fix.js")) problems.push("ScamGuard UI fix content script is not registered")
-if (!contentScript?.css?.includes("src/ui-fix.css")) problems.push("ScamGuard UI fix stylesheet is not registered")
+const injectedSource = readFileSync(join(extensionDir, "src/injected.js"), "utf8")
+if (!injectedSource.includes("SCAMGUARD_BRIDGE_INIT_V1") || !injectedSource.includes("bridgePort")) {
+  problems.push("private MAIN-world wallet bridge wiring is incomplete")
+}
+if (injectedSource.includes("TokenzQdBNbLqP5VEhdkAS6EPF1SMH1dbKqKp6Xk6mN")) {
+  problems.push("non-canonical Token-2022 program id is present")
+}
 
-const accessibleResources = (manifest.web_accessible_resources ?? []).flatMap((entry) => entry.resources ?? [])
-if (!accessibleResources.includes("assets/icon48.png")) {
-  problems.push("Launcher icon must be web-accessible when rendered inside the page DOM")
+const hardeningSource = readFileSync(join(extensionDir, "src/background-hardening.js"), "utf8")
+if (!hardeningSource.includes("scamguardTrustedDomainHints") || !hardeningSource.includes("trustedDomains")) {
+  problems.push("trusted-domain bypass migration is incomplete")
 }
 
 if (problems.length) {
