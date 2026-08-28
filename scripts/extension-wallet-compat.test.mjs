@@ -7,11 +7,24 @@ import vm from "node:vm"
 
 const injectedSource = readFileSync(join(process.cwd(), "chrome-extension", "src", "injected.js"), "utf8")
 const contentSource = readFileSync(join(process.cwd(), "chrome-extension", "src", "content.js"), "utf8")
+const bridgeSource = readFileSync(join(process.cwd(), "chrome-extension", "src", "bridge-isolated.js"), "utf8")
+const securityHardeningSource = readFileSync(join(process.cwd(), "chrome-extension", "src", "security-hardening.js"), "utf8")
+const backgroundHardeningSource = readFileSync(join(process.cwd(), "chrome-extension", "src", "background-hardening.js"), "utf8")
+const manifest = JSON.parse(readFileSync(join(process.cwd(), "chrome-extension", "manifest.json"), "utf8"))
 
-function walletLab({ decision = { allow: true }, solana, ethereum, extraWindow = {} } = {}) {
+function portPair() {
+  const left = { onmessage: null, start() {}, postMessage: null }
+  const right = { onmessage: null, start() {}, postMessage: null }
+  left.postMessage = (data) => queueMicrotask(() => right.onmessage?.({ data }))
+  right.postMessage = (data) => queueMicrotask(() => left.onmessage?.({ data }))
+  return [left, right]
+}
+
+function walletLab({ decision = { allow: true }, autoRespond = true, solana, ethereum, extraWindow = {} } = {}) {
   const listeners = []
   const pageMessages = []
   const intervalCallbacks = []
+  const [pagePort, extensionPort] = portPair()
   const pageWindow = {
     solana,
     ethereum,
@@ -19,23 +32,12 @@ function walletLab({ decision = { allow: true }, solana, ethereum, extraWindow =
     addEventListener(type, listener) {
       if (type === "message") listeners.push(listener)
     },
-    postMessage(message) {
-      pageMessages.push(message)
-      if (message?.source !== "SCAMGUARD_PAGE" || message?.type !== "SCAMGUARD_SIGN_REQUEST") return
-      queueMicrotask(() => {
-        for (const listener of listeners) {
-          listener({
-            source: pageWindow,
-            data: {
-              source: "SCAMGUARD_EXTENSION",
-              type: "SCAMGUARD_SIGN_RESPONSE",
-              requestId: message.requestId,
-              ...decision,
-            },
-          })
-        }
-      })
+    removeEventListener(type, listener) {
+      if (type !== "message") return
+      const index = listeners.indexOf(listener)
+      if (index >= 0) listeners.splice(index, 1)
     },
+    postMessage() {},
     setInterval(callback) {
       intervalCallbacks.push(callback)
       return intervalCallbacks.length
@@ -60,13 +62,42 @@ function walletLab({ decision = { allow: true }, solana, ethereum, extraWindow =
     queueMicrotask,
     btoa: (value) => Buffer.from(String(value), "binary").toString("base64"),
   })
-  vm.runInContext(injectedSource, context, { filename: "injected.js" })
 
-  function dispatch(data) {
-    for (const listener of listeners) listener({ source: pageWindow, data })
+  extensionPort.onmessage = (event) => {
+    const message = event.data
+    pageMessages.push(message)
+    if (!autoRespond || message?.type !== "SCAMGUARD_SIGN_REQUEST") return
+    queueMicrotask(() => {
+      extensionPort.postMessage({
+        source: "SCAMGUARD_EXTENSION",
+        type: "SCAMGUARD_SIGN_RESPONSE",
+        requestId: message.requestId,
+        ...decision,
+      })
+    })
   }
 
-  return { pageMessages, pageWindow, intervalCallbacks, dispatch, runAgain: () => vm.runInContext(injectedSource, context, { filename: "injected.js" }) }
+  vm.runInContext(injectedSource, context, { filename: "injected.js" })
+
+  function dispatchWindow(data, ports = []) {
+    for (const listener of [...listeners]) listener({ source: pageWindow, data, ports })
+  }
+
+  dispatchWindow({ source: "SCAMGUARD_EXTENSION", type: "SCAMGUARD_BRIDGE_INIT_V1", version: 1 }, [pagePort])
+
+  function dispatch(data) {
+    extensionPort.postMessage(data)
+  }
+
+  return {
+    pageMessages,
+    pageWindow,
+    intervalCallbacks,
+    dispatch,
+    dispatchWindow,
+    respond: dispatch,
+    runAgain: () => vm.runInContext(injectedSource, context, { filename: "injected.js" }),
+  }
 }
 
 function solanaProvider(methods = {}) {
@@ -121,6 +152,35 @@ test("a rejected ScamGuard decision prevents the Solana wallet request", async (
   assert.equal(lab.pageMessages.length, 1)
 })
 
+test("host-page postMessage spoofing cannot forge an allow decision", async () => {
+  const { provider, calls } = solanaProvider()
+  const lab = walletLab({ solana: provider, autoRespond: false })
+
+  const pending = provider.signTransaction({ instruction: "transfer" })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  const request = lab.pageMessages.find((message) => message?.type === "SCAMGUARD_SIGN_REQUEST")
+  assert.ok(request?.requestId)
+
+  lab.dispatchWindow({
+    source: "SCAMGUARD_EXTENSION",
+    type: "SCAMGUARD_SIGN_RESPONSE",
+    requestId: request.requestId,
+    allow: true,
+  })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  assert.equal(calls.length, 0)
+
+  lab.respond({
+    source: "SCAMGUARD_EXTENSION",
+    type: "SCAMGUARD_SIGN_RESPONSE",
+    requestId: request.requestId,
+    allow: false,
+    error: "Authenticated private-bridge rejection",
+  })
+  await assert.rejects(pending, /Authenticated private-bridge rejection/)
+  assert.equal(calls.length, 0)
+})
+
 test("Solana transaction summaries retain an actionable instruction label instead of raw payload text", async () => {
   const { provider } = solanaProvider()
   const lab = walletLab({ solana: provider })
@@ -162,6 +222,13 @@ test("Solana compiled instructions decode Base58 program data when wallet adapte
 
   assert.equal(summary.instructions[0].programLabel, "System Program")
   assert.equal(summary.instructions[0].type, "transfer")
+})
+
+test("Token-2022 uses one canonical program id for decoding and delegate inventory", () => {
+  const canonical = "TokenzQdBNbLqP5VEhdkAS6EPF1SMH1dbKqP6Xk6mN"
+  assert.match(injectedSource, new RegExp(canonical))
+  assert.doesNotMatch(injectedSource, /TokenzQdBNbLqP5VEhdkAS6EPF1SMH1dbKqKp6Xk6mN/)
+  assert.match(injectedSource, /const programs = \[SPL_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID\]/)
 })
 
 test("discovers MetaMask and Rabby style providers without touching safe EVM reads", async () => {
@@ -245,6 +312,31 @@ test("rechecks observed EVM approvals with read-only wallet RPC calls", async ()
   assert.equal(response?.ok, true)
   assert.equal(response?.inventory?.inventories?.[0]?.permissions?.[0]?.status, "active_onchain")
   assert.deepEqual(calls, ["eth_accounts", "eth_chainId", "eth_call"])
+})
+
+test("private bridge is installed before isolated content logic and MAIN hook is explicit", () => {
+  const main = manifest.content_scripts.find((entry) => entry.world === "MAIN")
+  const isolated = manifest.content_scripts.find((entry) => entry.world === "ISOLATED")
+  assert.deepEqual(main?.js, ["src/injected.js"])
+  assert.equal(main?.run_at, "document_start")
+  assert.equal(isolated?.js?.[0], "src/bridge-isolated.js")
+  assert.ok(isolated?.js?.indexOf("src/bridge-isolated.js") < isolated?.js?.indexOf("src/content.js"))
+  assert.match(bridgeSource, /new MessageChannel\(\)/)
+  assert.match(bridgeSource, /PRIVATE_TYPES/)
+  assert.match(injectedSource, /SCAMGUARD_BRIDGE_INIT_V1/)
+})
+
+test("live settings changes invalidate the content-script cache", () => {
+  assert.match(securityHardeningSource, /chrome\.storage\.onChanged\.addListener/)
+  assert.match(securityHardeningSource, /settingsCache = null/)
+  assert.match(securityHardeningSource, /scannedLinkResults\?\.clear/)
+})
+
+test("legacy trusted domains are migrated to hints instead of bypassing threat scans", () => {
+  assert.equal(manifest.background.service_worker, "src/background-entry.js")
+  assert.match(backgroundHardeningSource, /scamguardTrustedDomainHints/)
+  assert.match(backgroundHardeningSource, /trustedDomains/)
+  assert.match(backgroundHardeningSource, /\[LEGACY_TRUSTED_DOMAINS_KEY\]: \[\]/)
 })
 
 test("navigation shield prevents a same-tab external link before awaiting its risk scan", () => {
