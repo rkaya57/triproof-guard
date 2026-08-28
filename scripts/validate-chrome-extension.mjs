@@ -13,6 +13,8 @@ const requiredFiles = [
   "src/guard-utils.js",
   "src/content.js",
   "src/content.css",
+  "src/ui-fix.js",
+  "src/ui-fix.css",
   "src/injected.js",
   "src/popup.html",
   "src/popup.css",
@@ -54,7 +56,7 @@ for (const file of textFiles) {
   if (/â€|â€”|â€¢/.test(content)) problems.push(`${file} contains mojibake characters`)
 }
 
-for (const file of ["src/background.js", "src/guard-utils.js", "src/content.js", "src/injected.js", "src/popup.js", "src/sidepanel.js"]) {
+for (const file of ["src/background.js", "src/guard-utils.js", "src/content.js", "src/ui-fix.js", "src/injected.js", "src/popup.js", "src/sidepanel.js"]) {
   const result = spawnSync(process.execPath, ["--check", join(extensionDir, file)], {
     encoding: "utf8",
   })
@@ -72,6 +74,15 @@ if (!backgroundSource.includes("chrome.storage.local.set({ [TEAM_POLICY_KEY]: te
 }
 if (!backgroundSource.includes("SECURITY_CENTER_TARGET_KEY") || !backgroundSource.includes("chrome.runtime.getURL(\"src/sidepanel.html\")")) {
   problems.push("Security Center fallback tab wiring is incomplete")
+}
+
+const contentScript = manifest.content_scripts?.[0]
+if (!contentScript?.js?.includes("src/ui-fix.js")) problems.push("ScamGuard UI fix content script is not registered")
+if (!contentScript?.css?.includes("src/ui-fix.css")) problems.push("ScamGuard UI fix stylesheet is not registered")
+
+const accessibleResources = (manifest.web_accessible_resources ?? []).flatMap((entry) => entry.resources ?? [])
+if (!accessibleResources.includes("assets/icon48.png")) {
+  problems.push("Launcher icon must be web-accessible when rendered inside the page DOM")
 }
 
 if (problems.length) {
