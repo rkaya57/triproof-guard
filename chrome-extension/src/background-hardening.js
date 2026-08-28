@@ -1,5 +1,6 @@
 const LEGACY_TRUSTED_DOMAINS_KEY = "trustedDomains"
 const TRUSTED_DOMAIN_HINTS_KEY = "scamguardTrustedDomainHints"
+const DEFAULT_FETCH_TIMEOUT_MS = 18_000
 
 function normalizeDomains(values) {
   return [...new Set((Array.isArray(values) ? values : [])
@@ -21,6 +22,27 @@ export async function neutralizeLegacyTrustedDomainBypass() {
       [LEGACY_TRUSTED_DOMAINS_KEY]: [],
       [TRUSTED_DOMAIN_HINTS_KEY]: mergedHints,
     })
+  }
+}
+
+export function installBoundedFetchTimeout(timeoutMs = DEFAULT_FETCH_TIMEOUT_MS) {
+  if (globalThis.__scamguardBoundedFetchInstalled || typeof globalThis.fetch !== "function") return
+  const nativeFetch = globalThis.fetch.bind(globalThis)
+  Object.defineProperty(globalThis, "__scamguardBoundedFetchInstalled", {
+    value: true,
+    enumerable: false,
+    configurable: false,
+  })
+
+  globalThis.fetch = async function scamGuardBoundedFetch(input, init = {}) {
+    if (init?.signal) return nativeFetch(input, init)
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort("ScamGuard request timed out"), timeoutMs)
+    try {
+      return await nativeFetch(input, { ...init, signal: controller.signal })
+    } finally {
+      clearTimeout(timer)
+    }
   }
 }
 
