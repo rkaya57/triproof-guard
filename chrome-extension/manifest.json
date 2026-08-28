@@ -39,8 +39,7 @@
         "https://*/*"
       ],
       "js": [
-        "src/injected.js",
-        "src/navigation-main.js"
+        "src/injected.js"
       ],
       "run_at": "document_start",
       "world": "MAIN"
@@ -74,6 +73,7 @@
     {
       "resources": [
         "src/injected.js",
+        "src/navigation-main.js",
         "assets/icon48.png"
       ],
       "matches": [
