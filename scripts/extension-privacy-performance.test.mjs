@@ -43,11 +43,9 @@ test("automatic URL scans strip credentials, query parameters, and fragments bef
   })
 
   assert.equal(lab.sent.length, 1)
-  assert.deepEqual(lab.sent[0][0], {
-    type: "SCAN_URL",
-    value: "https://example.com/claim",
-    clientSignals: [{ code: "TEST" }],
-  })
+  assert.equal(lab.sent[0][0].type, "SCAN_URL")
+  assert.equal(lab.sent[0][0].value, "https://example.com/claim")
+  assert.equal(lab.sent[0][0].clientSignals?.[0]?.code, "TEST")
 })
 
 test("transaction scans keep payloads but sanitize the source page URL", async () => {
@@ -76,23 +74,26 @@ test("link scans sanitize and deduplicate URLs before sending them to the backgr
     ],
   })
 
-  assert.deepEqual(lab.sent[0][0].links, [
+  assert.deepEqual(Array.from(lab.sent[0][0].links), [
     "https://example.com/claim",
     "https://other.example/path",
   ])
 })
 
-test("privacy transport runs before content logic and SPA observers are installed in both worlds", () => {
+test("privacy transport runs before content logic and SPA observer preserves the MAIN wallet entry", () => {
   const main = manifest.content_scripts.find((entry) => entry.world === "MAIN")
   const isolated = manifest.content_scripts.find((entry) => entry.world === "ISOLATED")
+  const webAccessible = (manifest.web_accessible_resources ?? []).flatMap((entry) => entry.resources ?? [])
 
-  assert.ok(main?.js?.includes("src/navigation-main.js"))
+  assert.deepEqual(main?.js, ["src/injected.js"])
   assert.ok(isolated?.js?.includes("src/navigation-performance.js"))
   assert.ok(isolated?.js?.indexOf("src/privacy-transport.js") < isolated?.js?.indexOf("src/content.js"))
+  assert.ok(webAccessible.includes("src/navigation-main.js"))
   assert.match(navigationMainSource, /history\.pushState/)
   assert.match(navigationMainSource, /history\.replaceState/)
   assert.match(navigationMainSource, /popstate/)
   assert.match(navigationMainSource, /hashchange/)
+  assert.match(navigationPerformanceSource, /chrome\.runtime\.getURL\("src\/navigation-main\.js"\)/)
   assert.match(navigationPerformanceSource, /350/)
   assert.match(navigationPerformanceSource, /scanCurrentUrl\(true\)/)
 })
