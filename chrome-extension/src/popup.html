@@ -188,7 +188,7 @@
       <details class="settings">
         <summary>
           <span>Advanced controls</span>
-          <small>API, warnings, trusted domains</small>
+          <small>API, warnings, trusted-domain hints</small>
         </summary>
         <div class="settings-grid">
           <label>
@@ -242,8 +242,9 @@
             <span>Always review unverified signing domains</span>
           </label>
           <label>
-            Trusted domains
+            Trusted domain hints
             <textarea id="trustedDomains" rows="3" placeholder="example.com, app.example.com"></textarea>
+            <small>Context only. A trusted-domain hint never bypasses ScamGuard threat intelligence or transaction checks.</small>
           </label>
           <button id="saveSettingsButton" type="button" class="button primary">Save controls</button>
           <p id="settingsMessage" class="message"></p>
@@ -252,5 +253,6 @@
     </main>
     <script src="guard-utils.js"></script>
     <script src="popup.js"></script>
+    <script src="popup-hardening.js"></script>
   </body>
 </html>
