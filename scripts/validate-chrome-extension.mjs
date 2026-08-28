@@ -48,11 +48,8 @@ if (JSON.stringify(manifest).includes("â")) problems.push("manifest contains mo
 
 const mainWorld = manifest.content_scripts?.find((entry) => entry?.world === "MAIN")
 const isolatedWorld = manifest.content_scripts?.find((entry) => entry?.world === "ISOLATED")
-if (!mainWorld || !Array.isArray(mainWorld.js) || mainWorld.js[0] !== "src/injected.js" || mainWorld.run_at !== "document_start") {
-  problems.push("MAIN-world wallet hook must load src/injected.js at document_start")
-}
-if (!(mainWorld?.js ?? []).includes("src/navigation-main.js")) {
-  problems.push("MAIN-world SPA navigation monitor is missing")
+if (!mainWorld || !Array.isArray(mainWorld.js) || mainWorld.js.length !== 1 || mainWorld.js[0] !== "src/injected.js" || mainWorld.run_at !== "document_start") {
+  problems.push("MAIN-world wallet hook must remain the single src/injected.js document_start entry")
 }
 if (!isolatedWorld || !Array.isArray(isolatedWorld.js) || isolatedWorld.js[0] !== "src/bridge-isolated.js" || isolatedWorld.run_at !== "document_start") {
   problems.push("isolated-world private bridge must load before content.js at document_start")
@@ -66,8 +63,12 @@ if ((isolatedWorld?.js ?? []).indexOf("src/privacy-transport.js") > (isolatedWor
 if (!(isolatedWorld?.js ?? []).includes("src/navigation-performance.js")) {
   problems.push("isolated-world SPA rescan handler is missing")
 }
-if (!(manifest.web_accessible_resources ?? []).some((entry) => (entry.resources ?? []).includes("assets/icon48.png"))) {
+const webAccessibleResources = (manifest.web_accessible_resources ?? []).flatMap((entry) => entry.resources ?? [])
+if (!webAccessibleResources.includes("assets/icon48.png")) {
   problems.push("assets/icon48.png must remain web-accessible for the page launcher")
+}
+if (!webAccessibleResources.includes("src/navigation-main.js")) {
+  problems.push("src/navigation-main.js must be web-accessible for the isolated SPA observer injector")
 }
 
 for (const file of requiredFiles) {
@@ -156,6 +157,11 @@ if (!privacySource.includes("url.search = \"\"") || !privacySource.includes("url
 }
 if (!privacySource.includes("SCAN_TRANSACTION") || !privacySource.includes("SCAN_LINKS")) {
   problems.push("privacy transport must cover transaction source URLs and link batches")
+}
+
+const navigationPerformanceSource = readFileSync(join(extensionDir, "src/navigation-performance.js"), "utf8")
+if (!navigationPerformanceSource.includes('chrome.runtime.getURL("src/navigation-main.js")') || !navigationPerformanceSource.includes("scanCurrentUrl(true)")) {
+  problems.push("SPA navigation injection/rescan wiring is incomplete")
 }
 
 if (problems.length) {
