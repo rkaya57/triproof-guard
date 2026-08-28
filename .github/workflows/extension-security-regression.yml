@@ -1,0 +1,45 @@
+name: Extension Security Regression
+
+on:
+  pull_request:
+    paths:
+      - "chrome-extension/**"
+      - "scripts/extension-wallet-compat.test.mjs"
+      - "scripts/validate-chrome-extension.mjs"
+      - "package.json"
+      - "package-lock.json"
+  push:
+    branches:
+      - "feat/extension-security-hardening-v1"
+    paths:
+      - "chrome-extension/**"
+      - "scripts/extension-wallet-compat.test.mjs"
+      - "scripts/validate-chrome-extension.mjs"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+jobs:
+  extension-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate extension package
+        run: npm run extension:validate
+
+      - name: Run wallet compatibility and bridge tests
+        run: npm run extension:test
