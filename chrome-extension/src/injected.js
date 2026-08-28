@@ -1,8 +1,26 @@
 (() => {
+  const INSTALL_MARKER = "__scamguardMainWorldHookInstalledV1"
+  if (window[INSTALL_MARKER]) return
+  Object.defineProperty(window, INSTALL_MARKER, {
+    value: true,
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  })
+
   const PAGE_SOURCE = "SCAMGUARD_PAGE"
   const EXTENSION_SOURCE = "SCAMGUARD_EXTENSION"
+  const BRIDGE_INIT_TYPE = "SCAMGUARD_BRIDGE_INIT_V1"
+  const SPL_TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+  const TOKEN_2022_PROGRAM_ID = "TokenzQdBNbLqP5VEhdkAS6EPF1SMH1dbKqP6Xk6mN"
   const pending = new Map()
   let installAttempts = 0
+  let bridgePort = null
+  let resolveBridgeReady
+  const bridgeReady = new Promise((resolve) => {
+    resolveBridgeReady = resolve
+  })
+
   const EVM_GUARDED_METHODS = new Set([
     "eth_sendTransaction",
     "eth_signTransaction",
@@ -15,10 +33,11 @@
     "wallet_addEthereumChain",
     "wallet_sendCalls",
   ])
+
   const SOLANA_PROGRAM_LABELS = {
     "11111111111111111111111111111111": "System Program",
-    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA": "SPL Token Program",
-    "TokenzQdBNbLqP5VEhdkAS6EPF1SMH1dbKqP6Xk6mN": "Token-2022 Program",
+    [SPL_TOKEN_PROGRAM_ID]: "SPL Token Program",
+    [TOKEN_2022_PROGRAM_ID]: "Token-2022 Program",
     "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL": "Associated Token Program",
     "ComputeBudget111111111111111111111111111111": "Compute Budget Program",
     "JUP6LkbZbjS1jKKwapd7YHKyQfCwzyxSAYQmRjsBnxN": "Jupiter Aggregator",
@@ -118,7 +137,7 @@
       const systemInstruction = data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24)
       if (systemInstruction === 2) return "transfer"
     }
-    if (programId === "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" || programId === "TokenzQdBNbLqP5VEhdkAS6EPF1SMH1dbKqP6Xk6mN") {
+    if (programId === SPL_TOKEN_PROGRAM_ID || programId === TOKEN_2022_PROGRAM_ID) {
       return ({
         3: "transfer",
         4: "approve",
@@ -269,7 +288,7 @@
     const wallet = publicKey(provider, "solana")
     if (!provider || !wallet) throw new Error("Connect your Solana wallet to this dApp before checking token delegates.")
     const endpoint = provider?.connection?.rpcEndpoint || "https://api.mainnet-beta.solana.com"
-    const programs = ["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPF1SMH1dbKqKp6Xk6mN"]
+    const programs = [SPL_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID]
     const accounts = []
     for (const programId of programs) {
       const result = await solanaRpc(endpoint, "getTokenAccountsByOwner", [wallet, { programId }, { encoding: "jsonParsed" }])
@@ -310,10 +329,54 @@
     return { inventories }
   }
 
-  function askScamGuard({ method, transaction, provider, chain }) {
+  function handleBridgeMessage(event) {
+    const data = event?.data
+    if (!data || data.source !== EXTENSION_SOURCE) return
+    if (data.type === "SCAMGUARD_PERMISSION_INVENTORY_REQUEST") {
+      void inspectWalletPermissions(data.candidates)
+        .then((inventory) => bridgePort?.postMessage({ source: PAGE_SOURCE, type: "SCAMGUARD_PERMISSION_INVENTORY_RESPONSE", requestId: data.requestId, ok: true, inventory }))
+        .catch((error) => bridgePort?.postMessage({ source: PAGE_SOURCE, type: "SCAMGUARD_PERMISSION_INVENTORY_RESPONSE", requestId: data.requestId, ok: false, error: error instanceof Error ? error.message : "Permission check failed." }))
+      return
+    }
+    if (data.type !== "SCAMGUARD_SIGN_RESPONSE") return
+    const entry = pending.get(data.requestId)
+    if (!entry) return
+    window.clearTimeout(entry.timeout)
+    pending.delete(data.requestId)
+    entry.resolve(data)
+  }
+
+  function acceptPrivateBridge(event) {
+    if (bridgePort || event.source !== window) return
+    const data = event.data
+    const port = event.ports?.[0]
+    if (!data || data.source !== EXTENSION_SOURCE || data.type !== BRIDGE_INIT_TYPE || data.version !== 1 || !port) return
+    bridgePort = port
+    bridgePort.onmessage = handleBridgeMessage
+    bridgePort.start?.()
+    window.removeEventListener("message", acceptPrivateBridge, true)
+    resolveBridgeReady?.(bridgePort)
+  }
+
+  window.addEventListener("message", acceptPrivateBridge, true)
+
+  async function waitForBridge() {
+    if (bridgePort) return bridgePort
+    return Promise.race([
+      bridgeReady,
+      new Promise((resolve) => window.setTimeout(() => resolve(null), 3000)),
+    ])
+  }
+
+  async function askScamGuard({ method, transaction, provider, chain }) {
+    const port = await waitForBridge()
+    if (!port) {
+      return { allow: false, error: "ScamGuard private security bridge is unavailable. Reload this page before signing." }
+    }
+
     const requestId = crypto.randomUUID()
     const value = serializedScanValue(method, transaction, chain)
-    window.postMessage({
+    port.postMessage({
       source: PAGE_SOURCE,
       type: "SCAMGUARD_SIGN_REQUEST",
       requestId,
@@ -321,7 +384,7 @@
       chain,
       value,
       walletAddress: publicKey(provider, chain),
-    }, "*")
+    })
 
     return new Promise((resolve) => {
       const timeout = window.setTimeout(() => {
@@ -331,24 +394,6 @@
       pending.set(requestId, { resolve, timeout })
     })
   }
-
-  window.addEventListener("message", (event) => {
-    if (event.source !== window) return
-    const data = event.data
-    if (!data || data.source !== EXTENSION_SOURCE) return
-    if (data.type === "SCAMGUARD_PERMISSION_INVENTORY_REQUEST") {
-      void inspectWalletPermissions(data.candidates)
-        .then((inventory) => window.postMessage({ source: PAGE_SOURCE, type: "SCAMGUARD_PERMISSION_INVENTORY_RESPONSE", requestId: data.requestId, ok: true, inventory }, "*"))
-        .catch((error) => window.postMessage({ source: PAGE_SOURCE, type: "SCAMGUARD_PERMISSION_INVENTORY_RESPONSE", requestId: data.requestId, ok: false, error: error instanceof Error ? error.message : "Permission check failed." }, "*"))
-      return
-    }
-    if (data.type !== "SCAMGUARD_SIGN_RESPONSE") return
-    const entry = pending.get(data.requestId)
-    if (!entry) return
-    window.clearTimeout(entry.timeout)
-    pending.delete(data.requestId)
-    entry.resolve(data)
-  })
 
   function wrapProvider(provider) {
     if (!provider || provider.__scamguardWrapped) return
