@@ -1,0 +1,29 @@
+#scamguard-extension-banner[hidden],
+#scamguard-extension-launcher[hidden] {
+  display: none !important;
+}
+
+html[data-sgx-ui-closed="true"] #scamguard-extension-banner,
+html[data-sgx-ui-closed="true"] #scamguard-extension-launcher {
+  display: none !important;
+}
+
+#scamguard-extension-banner .sgx-banner-minimize {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  place-items: center;
+  padding: 0;
+  border-radius: 9px;
+  color: #b8eaff;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+#scamguard-extension-banner[data-compact="true"] .sgx-banner-minimize {
+  display: grid;
+}
