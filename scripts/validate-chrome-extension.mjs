@@ -13,13 +13,16 @@ const requiredFiles = [
   "src/background-hardening.js",
   "src/background.js",
   "src/bridge-isolated.js",
+  "src/privacy-transport.js",
   "src/guard-utils.js",
   "src/content.js",
   "src/content.css",
   "src/ui-fix.js",
   "src/ui-fix.css",
   "src/security-hardening.js",
+  "src/navigation-performance.js",
   "src/injected.js",
+  "src/navigation-main.js",
   "src/popup.html",
   "src/popup.css",
   "src/popup.js",
@@ -48,11 +51,20 @@ const isolatedWorld = manifest.content_scripts?.find((entry) => entry?.world ===
 if (!mainWorld || !Array.isArray(mainWorld.js) || mainWorld.js[0] !== "src/injected.js" || mainWorld.run_at !== "document_start") {
   problems.push("MAIN-world wallet hook must load src/injected.js at document_start")
 }
+if (!(mainWorld?.js ?? []).includes("src/navigation-main.js")) {
+  problems.push("MAIN-world SPA navigation monitor is missing")
+}
 if (!isolatedWorld || !Array.isArray(isolatedWorld.js) || isolatedWorld.js[0] !== "src/bridge-isolated.js" || isolatedWorld.run_at !== "document_start") {
   problems.push("isolated-world private bridge must load before content.js at document_start")
 }
 if ((isolatedWorld?.js ?? []).indexOf("src/bridge-isolated.js") > (isolatedWorld?.js ?? []).indexOf("src/content.js")) {
   problems.push("src/bridge-isolated.js must execute before src/content.js")
+}
+if ((isolatedWorld?.js ?? []).indexOf("src/privacy-transport.js") > (isolatedWorld?.js ?? []).indexOf("src/content.js")) {
+  problems.push("src/privacy-transport.js must execute before src/content.js")
+}
+if (!(isolatedWorld?.js ?? []).includes("src/navigation-performance.js")) {
+  problems.push("isolated-world SPA rescan handler is missing")
 }
 if (!(manifest.web_accessible_resources ?? []).some((entry) => (entry.resources ?? []).includes("assets/icon48.png"))) {
   problems.push("assets/icon48.png must remain web-accessible for the page launcher")
@@ -79,11 +91,14 @@ for (const file of textFiles) {
 const classicScripts = [
   "src/background.js",
   "src/bridge-isolated.js",
+  "src/privacy-transport.js",
   "src/guard-utils.js",
   "src/content.js",
   "src/ui-fix.js",
   "src/security-hardening.js",
+  "src/navigation-performance.js",
   "src/injected.js",
+  "src/navigation-main.js",
   "src/popup.js",
   "src/popup-hardening.js",
   "src/sidepanel.js",
@@ -130,6 +145,17 @@ if (injectedSource.includes("TokenzQdBNbLqP5VEhdkAS6EPF1SMH1dbKqKp6Xk6mN")) {
 const hardeningSource = readFileSync(join(extensionDir, "src/background-hardening.js"), "utf8")
 if (!hardeningSource.includes("scamguardTrustedDomainHints") || !hardeningSource.includes("trustedDomains")) {
   problems.push("trusted-domain bypass migration is incomplete")
+}
+if (!hardeningSource.includes("AbortController") || !hardeningSource.includes("DEFAULT_FETCH_TIMEOUT_MS")) {
+  problems.push("bounded extension network timeout is incomplete")
+}
+
+const privacySource = readFileSync(join(extensionDir, "src/privacy-transport.js"), "utf8")
+if (!privacySource.includes("url.search = \"\"") || !privacySource.includes("url.hash = \"\"")) {
+  problems.push("URL query/hash sanitization is incomplete")
+}
+if (!privacySource.includes("SCAN_TRANSACTION") || !privacySource.includes("SCAN_LINKS")) {
+  problems.push("privacy transport must cover transaction source URLs and link batches")
 }
 
 if (problems.length) {
