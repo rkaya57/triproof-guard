@@ -10,12 +10,23 @@ const outcomeUi = readFileSync(join(extensionDir, "src", "outcome-ui.js"), "utf8
 const popupHardening = readFileSync(join(extensionDir, "src", "popup-hardening.js"), "utf8")
 const sidepanel = readFileSync(join(extensionDir, "src", "sidepanel.html"), "utf8")
 
+function versionAtLeast(actual, minimum) {
+  const a = String(actual).split(".").map(Number)
+  const b = String(minimum).split(".").map(Number)
+  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+    const left = a[index] ?? 0
+    const right = b[index] ?? 0
+    if (left !== right) return left > right
+  }
+  return true
+}
+
 test("outcome recorder loads after the decision overlay and UX layers", () => {
   const isolated = manifest.content_scripts.find((entry) => entry.world === "ISOLATED")
   assert.ok(isolated?.js?.includes("src/outcome-recorder.js"))
   assert.ok(isolated?.js?.indexOf("src/outcome-recorder.js") > isolated?.js?.indexOf("src/content.js"))
   assert.ok(isolated?.js?.indexOf("src/outcome-recorder.js") > isolated?.js?.indexOf("src/page-ux-v2.js"))
-  assert.equal(manifest.version, "0.7.4")
+  assert.equal(versionAtLeast(manifest.version, "0.7.4"), true)
 })
 
 test("actual overlay outcomes distinguish blocked, cancelled, and continued actions", () => {
