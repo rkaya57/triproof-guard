@@ -1,16 +1,23 @@
 const SGX_UI_CLOSED_ATTR = "data-sgx-ui-closed"
+const scamGuardShadowUi = globalThis.ScamGuardShadowUI
+const scamGuardUiEventRoot = scamGuardShadowUi?.root ?? document
+const scamGuardUiObserverRoot = scamGuardShadowUi?.root ?? document.documentElement
+
+function scamGuardUiById(id) {
+  return scamGuardShadowUi?.getById?.(id) ?? document.getElementById(id)
+}
 
 function closeScamGuardPageUi() {
   document.documentElement.setAttribute(SGX_UI_CLOSED_ATTR, "true")
 
-  const banner = document.getElementById("scamguard-extension-banner")
-  const launcher = document.getElementById("scamguard-extension-launcher")
+  const banner = scamGuardUiById("scamguard-extension-banner")
+  const launcher = scamGuardUiById("scamguard-extension-launcher")
   if (banner) banner.hidden = true
   if (launcher) launcher.hidden = true
 }
 
 function ensureScamGuardBannerControls() {
-  const banner = document.getElementById("scamguard-extension-banner")
+  const banner = scamGuardUiById("scamguard-extension-banner")
   if (!banner) return
 
   const dismiss = banner.querySelector(".sgx-banner-dismiss")
@@ -31,7 +38,7 @@ function ensureScamGuardBannerControls() {
   }
 }
 
-document.addEventListener(
+scamGuardUiEventRoot.addEventListener(
   "click",
   (event) => {
     const target = event.target
@@ -51,7 +58,7 @@ const observer = new MutationObserver(() => {
   ensureScamGuardBannerControls()
 })
 
-observer.observe(document.documentElement, {
+observer.observe(scamGuardUiObserverRoot, {
   childList: true,
   subtree: true,
 })
