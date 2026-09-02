@@ -13,8 +13,14 @@
   const BRIDGE_INIT_TYPE = "SCAMGUARD_BRIDGE_INIT_V1"
   const SPL_TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
   const TOKEN_2022_PROGRAM_ID = "TokenzQdBNbLqP5VEhdkAS6EPF1SMH1dbKqP6Xk6mN"
+  const EIP6963_ANNOUNCE_EVENT = "eip6963:announceProvider"
+  const EIP6963_REQUEST_EVENT = "eip6963:requestProvider"
+  const WALLET_STANDARD_REGISTER_EVENT = "wallet-standard:register-wallet"
+  const WALLET_STANDARD_APP_READY_EVENT = "wallet-standard:app-ready"
   const pending = new Map()
-  let installAttempts = 0
+  const announcedEvmProviders = new Set()
+  const standardSolanaWallets = new Set()
+  const methodRecords = new WeakMap()
   let bridgePort = null
   let resolveBridgeReady
   const bridgeReady = new Promise((resolve) => {
@@ -215,6 +221,29 @@
     })
   }
 
+  function standardBytes(value) {
+    if (value instanceof Uint8Array) return bytesToBase64(value)
+    if (ArrayBuffer.isView(value)) return bytesToBase64(new Uint8Array(value.buffer, value.byteOffset, value.byteLength))
+    return null
+  }
+
+  function walletStandardScanValue(method, args) {
+    const inputs = args.slice(0, 12).map((input, index) => ({
+      index,
+      account: String(input?.account?.address ?? ""),
+      chain: String(input?.chain ?? input?.account?.chains?.[0] ?? ""),
+      transaction: standardBytes(input?.transaction),
+      message: standardBytes(input?.message),
+    }))
+    return JSON.stringify({
+      kind: "solana_wallet_standard_request",
+      method,
+      count: args.length,
+      inputs,
+      truncated: args.length > 12,
+    })
+  }
+
   function padEvmAddress(value) {
     const normalized = String(value ?? "").toLowerCase().replace(/^0x/, "")
     return /^[0-9a-f]{40}$/.test(normalized) ? normalized.padStart(64, "0") : ""
@@ -228,13 +257,65 @@
     }
   }
 
+  function uniqueProviders(candidates) {
+    return [...new Set(candidates.filter(Boolean))]
+  }
+
+  function safeWindowValue(getter) {
+    try {
+      return getter()
+    } catch {
+      return null
+    }
+  }
+
+  function solanaProviders() {
+    return uniqueProviders([
+      safeWindowValue(() => window.solana),
+      safeWindowValue(() => window.backpack?.solana),
+      safeWindowValue(() => window.phantom?.solana),
+      safeWindowValue(() => window.solflare),
+      safeWindowValue(() => window.glow),
+    ])
+  }
+
+  function evmProviders() {
+    const root = safeWindowValue(() => window.ethereum)
+    const rootProviders = safeWindowValue(() => root?.providers)
+    return uniqueProviders([
+      ...announcedEvmProviders,
+      root,
+      ...(Array.isArray(rootProviders) ? rootProviders : []),
+      safeWindowValue(() => window.rabby),
+      safeWindowValue(() => window.rabby?.ethereum),
+      safeWindowValue(() => window.trustwallet?.ethereum),
+      safeWindowValue(() => window.okxwallet),
+      safeWindowValue(() => window.okxwallet?.ethereum),
+      safeWindowValue(() => window.coinbaseWalletExtension),
+      safeWindowValue(() => window.coinbaseWalletExtension?.ethereum),
+    ])
+  }
+
+  async function connectedEvmContext() {
+    for (const provider of evmProviders()) {
+      if (!provider || typeof provider.request !== "function") continue
+      try {
+        const accounts = await provider.request({ method: "eth_accounts" })
+        const owner = Array.isArray(accounts) ? accounts.find((item) => /^0x[0-9a-f]{40}$/i.test(String(item))) : null
+        if (!owner) continue
+        const chainId = await provider.request({ method: "eth_chainId" }).catch(() => "unknown")
+        return { provider, owner, chainId }
+      } catch {
+        // Try another discovered wallet provider.
+      }
+    }
+    return null
+  }
+
   async function inspectEvmPermissions(candidates) {
-    const provider = evmProviders()[0]
-    if (!provider) throw new Error("No EVM wallet provider was detected on this page.")
-    const accounts = await provider.request({ method: "eth_accounts" })
-    const owner = Array.isArray(accounts) ? accounts.find((item) => /^0x[0-9a-f]{40}$/i.test(String(item))) : null
-    if (!owner) throw new Error("Connect your EVM wallet to this dApp before checking permissions.")
-    const chainId = await provider.request({ method: "eth_chainId" }).catch(() => "unknown")
+    const context = await connectedEvmContext()
+    if (!context) throw new Error("Connect an EVM wallet to this dApp before checking permissions.")
+    const { provider, owner, chainId } = context
     const rows = Array.isArray(candidates) ? candidates : []
     const checks = rows
       .filter((row) => /^0x[0-9a-f]{40}$/i.test(String(row?.token)) && /^0x[0-9a-f]{40}$/i.test(String(row?.spender)))
@@ -283,11 +364,53 @@
     return body.result
   }
 
-  async function inspectSolanaPermissions() {
+  function standardSolanaAccountContext() {
+    for (const wallet of standardSolanaWallets) {
+      const accounts = Array.isArray(wallet?.accounts) ? wallet.accounts : []
+      for (const account of accounts) {
+        const address = String(account?.address ?? "")
+        const chains = Array.isArray(account?.chains) ? account.chains.map(String) : []
+        if (!address || !chains.some((chain) => chain.startsWith("solana:"))) continue
+        const chain = chains.find((item) => item === "solana:devnet")
+          ?? chains.find((item) => item === "solana:testnet")
+          ?? chains.find((item) => item === "solana:mainnet")
+          ?? chains.find((item) => item.startsWith("solana:"))
+        return { wallet, account, address, chain }
+      }
+    }
+    return null
+  }
+
+  function solanaRpcContext() {
     const provider = solanaProviders().find((item) => publicKey(item, "solana"))
     const wallet = publicKey(provider, "solana")
-    if (!provider || !wallet) throw new Error("Connect your Solana wallet to this dApp before checking token delegates.")
-    const endpoint = provider?.connection?.rpcEndpoint || "https://api.mainnet-beta.solana.com"
+    if (provider && wallet) {
+      const endpoint = provider?.connection?.rpcEndpoint || "https://api.mainnet-beta.solana.com"
+      return {
+        wallet,
+        endpoint,
+        network: endpoint.includes("devnet") ? "devnet" : endpoint.includes("testnet") ? "testnet" : "mainnet-beta",
+      }
+    }
+
+    const standard = standardSolanaAccountContext()
+    if (!standard) return null
+    const endpoint = standard.chain === "solana:devnet"
+      ? "https://api.devnet.solana.com"
+      : standard.chain === "solana:testnet"
+        ? "https://api.testnet.solana.com"
+        : "https://api.mainnet-beta.solana.com"
+    return {
+      wallet: standard.address,
+      endpoint,
+      network: standard.chain?.replace("solana:", "") || "mainnet",
+    }
+  }
+
+  async function inspectSolanaPermissions() {
+    const context = solanaRpcContext()
+    if (!context) throw new Error("Connect your Solana wallet to this dApp before checking token delegates.")
+    const { wallet, endpoint, network } = context
     const programs = [SPL_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID]
     const accounts = []
     for (const programId of programs) {
@@ -309,7 +432,7 @@
     return {
       chain: "solana",
       wallet,
-      network: endpoint.includes("devnet") ? "devnet" : endpoint.includes("testnet") ? "testnet" : "mainnet-beta",
+      network,
       checked: accounts.length,
       permissions,
       note: "ScamGuard read active SPL Token and Token-2022 delegates from token accounts owned by this connected wallet. Amounts are raw token units.",
@@ -368,14 +491,14 @@
     ])
   }
 
-  async function askScamGuard({ method, transaction, provider, chain }) {
+  async function askScamGuard({ method, transaction, provider, chain, walletAddress, serializedValue }) {
     const port = await waitForBridge()
     if (!port) {
       return { allow: false, error: "ScamGuard private security bridge is unavailable. Reload this page before signing." }
     }
 
     const requestId = crypto.randomUUID()
-    const value = serializedScanValue(method, transaction, chain)
+    const value = serializedValue ?? serializedScanValue(method, transaction, chain)
     port.postMessage({
       source: PAGE_SOURCE,
       type: "SCAMGUARD_SIGN_REQUEST",
@@ -383,7 +506,7 @@
       method,
       chain,
       value,
-      walletAddress: publicKey(provider, chain),
+      walletAddress: walletAddress ?? publicKey(provider, chain),
     })
 
     return new Promise((resolve) => {
@@ -395,53 +518,79 @@
     })
   }
 
-  function wrapProvider(provider) {
-    if (!provider || provider.__scamguardWrapped) return
+  function methodRecord(target) {
+    let records = methodRecords.get(target)
+    if (!records) {
+      records = new Map()
+      methodRecords.set(target, records)
+    }
+    return records
+  }
 
+  function patchMethod(target, method, createWrapped) {
+    if (!target) return false
+    let current
+    try {
+      current = target[method]
+    } catch {
+      return false
+    }
+    if (typeof current !== "function") return false
+
+    const records = methodRecord(target)
+    const existing = records.get(method)
+    if (existing?.wrapped === current) return true
+    if (existing?.failedOn === current) return false
+
+    const wrapped = createWrapped(current)
+    try {
+      target[method] = wrapped
+      if (target[method] !== wrapped) throw new Error("Provider method remained unchanged")
+      records.set(method, { wrapped, original: current })
+      return true
+    } catch {
+      records.set(method, { failedOn: current })
+      return false
+    }
+  }
+
+  function wrapProvider(provider) {
+    if (!provider) return false
+    let wrappedAny = false
     const methods = ["signTransaction", "signAndSendTransaction", "signAllTransactions", "signMessage"]
     for (const method of methods) {
-      const original = provider[method]
-      if (typeof original !== "function") continue
-      provider[method] = async function wrappedScamGuardSign(...args) {
-        const transaction = method === "signAllTransactions" && Array.isArray(args[0]) ? args[0] : args[0]
+      wrappedAny = patchMethod(provider, method, (original) => async function wrappedScamGuardSign(...args) {
+        const transaction = args[0]
         const decision = await askScamGuard({ method, transaction, provider, chain: "solana" })
         if (!decision.allow) {
           throw new Error(decision.error || "ScamGuard blocked or cancelled this signing request.")
         }
         return original.apply(this, args)
-      }
+      }) || wrappedAny
     }
 
-    if (typeof provider.request === "function") {
-      const originalRequest = provider.request
-      provider.request = async function wrappedScamGuardRequest(args) {
-        const method = args?.method
-        if (typeof method === "string" && /sign/i.test(method)) {
-          const decision = await askScamGuard({
-            method,
-            transaction: args?.params ?? args,
-            provider,
-            chain: "solana",
-          })
-          if (!decision.allow) {
-            throw new Error(decision.error || "ScamGuard blocked or cancelled this signing request.")
-          }
+    wrappedAny = patchMethod(provider, "request", (originalRequest) => async function wrappedScamGuardRequest(args) {
+      const method = args?.method
+      if (typeof method === "string" && /sign/i.test(method)) {
+        const decision = await askScamGuard({
+          method,
+          transaction: args?.params ?? args,
+          provider,
+          chain: "solana",
+        })
+        if (!decision.allow) {
+          throw new Error(decision.error || "ScamGuard blocked or cancelled this signing request.")
         }
-        return originalRequest.apply(this, arguments)
       }
-    }
+      return originalRequest.apply(this, arguments)
+    }) || wrappedAny
 
-    Object.defineProperty(provider, "__scamguardWrapped", {
-      value: true,
-      enumerable: false,
-      configurable: false,
-    })
+    return wrappedAny
   }
 
   function wrapEvmProvider(provider) {
-    if (!provider || provider.__scamguardEvmWrapped || typeof provider.request !== "function") return
-    const originalRequest = provider.request
-    provider.request = async function wrappedScamGuardEvmRequest(args) {
+    if (!provider || typeof safeWindowValue(() => provider.request) !== "function") return false
+    return patchMethod(provider, "request", (originalRequest) => async function wrappedScamGuardEvmRequest(args) {
       const method = args?.method
       const shouldScan = typeof method === "string" && EVM_GUARDED_METHODS.has(method)
       if (shouldScan) {
@@ -456,52 +605,126 @@
         }
       }
       return originalRequest.apply(this, arguments)
-    }
-    Object.defineProperty(provider, "__scamguardEvmWrapped", {
-      value: true,
-      enumerable: false,
-      configurable: false,
     })
   }
 
-  function uniqueProviders(candidates) {
-    return [...new Set(candidates.filter(Boolean))]
+  function walletStandardAddress(wallet, args) {
+    for (const input of args) {
+      const address = String(input?.account?.address ?? "")
+      if (address) return address
+    }
+    const accounts = Array.isArray(wallet?.accounts) ? wallet.accounts : []
+    return String(accounts[0]?.address ?? "") || null
   }
 
-  function solanaProviders() {
-    return uniqueProviders([
-      window.solana,
-      window.backpack?.solana,
-      window.phantom?.solana,
-      window.solflare,
-      window.glow,
-    ])
+  function wrapWalletStandard(wallet) {
+    const features = wallet?.features
+    if (!features || typeof features !== "object") return false
+    const mappings = [
+      ["solana:signTransaction", "signTransaction"],
+      ["solana:signAndSendTransaction", "signAndSendTransaction"],
+      ["solana:signMessage", "signMessage"],
+    ]
+    let wrappedAny = false
+    for (const [featureName, method] of mappings) {
+      const feature = features[featureName]
+      if (!feature || typeof feature !== "object") continue
+      wrappedAny = patchMethod(feature, method, (original) => async function wrappedWalletStandardMethod(...args) {
+        const decision = await askScamGuard({
+          method,
+          transaction: args,
+          provider: null,
+          chain: "solana",
+          walletAddress: walletStandardAddress(wallet, args),
+          serializedValue: walletStandardScanValue(method, args),
+        })
+        if (!decision.allow) {
+          throw new Error(decision.error || "ScamGuard blocked or cancelled this Wallet Standard request.")
+        }
+        return original.apply(this, args)
+      }) || wrappedAny
+    }
+    return wrappedAny
   }
 
-  function evmProviders() {
-    const root = window.ethereum
-    return uniqueProviders([
-      root,
-      ...(Array.isArray(root?.providers) ? root.providers : []),
-      window.rabby,
-      window.rabby?.ethereum,
-      window.trustwallet?.ethereum,
-      window.okxwallet,
-      window.okxwallet?.ethereum,
-      window.coinbaseWalletExtension,
-      window.coinbaseWalletExtension?.ethereum,
-    ])
+  function registerStandardWallets(...wallets) {
+    const accepted = wallets.filter((wallet) => wallet && typeof wallet === "object")
+    for (const wallet of accepted) {
+      standardSolanaWallets.add(wallet)
+      wrapWalletStandard(wallet)
+    }
+    return () => {
+      for (const wallet of accepted) standardSolanaWallets.delete(wallet)
+    }
+  }
+
+  const walletStandardApi = Object.freeze({ register: registerStandardWallets })
+
+  function onWalletStandardRegister(event) {
+    const callback = event?.detail
+    if (typeof callback !== "function") return
+    try {
+      callback(walletStandardApi)
+    } catch {
+      // A malformed wallet registration must not break other providers.
+    }
+  }
+
+  function announceWalletStandardAppReady() {
+    if (typeof window.dispatchEvent !== "function") return
+    try {
+      if (typeof CustomEvent === "function") {
+        window.dispatchEvent(new CustomEvent(WALLET_STANDARD_APP_READY_EVENT, { detail: walletStandardApi }))
+        return
+      }
+      if (typeof Event === "function") {
+        const event = new Event(WALLET_STANDARD_APP_READY_EVENT)
+        Object.defineProperty(event, "detail", { value: walletStandardApi })
+        window.dispatchEvent(event)
+      }
+    } catch {
+      // Legacy environments can continue through direct injected providers.
+    }
+  }
+
+  function onEip6963Provider(event) {
+    const provider = event?.detail?.provider
+    if (!provider || typeof safeWindowValue(() => provider.request) !== "function") return
+    announcedEvmProviders.add(provider)
+    wrapEvmProvider(provider)
+  }
+
+  function requestEip6963Providers() {
+    if (typeof window.dispatchEvent !== "function" || typeof Event !== "function") return
+    try {
+      window.dispatchEvent(new Event(EIP6963_REQUEST_EVENT))
+    } catch {
+      // Legacy provider discovery continues below.
+    }
   }
 
   function install() {
     for (const provider of solanaProviders()) wrapProvider(provider)
     for (const provider of evmProviders()) wrapEvmProvider(provider)
+    for (const wallet of standardSolanaWallets) wrapWalletStandard(wallet)
   }
 
+  window.addEventListener(EIP6963_ANNOUNCE_EVENT, onEip6963Provider)
+  window.addEventListener("ethereum#initialized", install)
+  window.addEventListener(WALLET_STANDARD_REGISTER_EVENT, onWalletStandardRegister)
+  requestEip6963Providers()
+  announceWalletStandardAppReady()
   install()
-  const timer = window.setInterval(() => {
-    installAttempts += 1
+
+  let fastAttempts = 0
+  const fastTimer = window.setInterval(() => {
+    fastAttempts += 1
     install()
-    if (installAttempts > 80) window.clearInterval(timer)
+    if (fastAttempts >= 40) window.clearInterval(fastTimer)
   }, 300)
+
+  window.setInterval(() => {
+    install()
+    requestEip6963Providers()
+  }, 2000)
 })()
