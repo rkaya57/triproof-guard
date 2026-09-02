@@ -21,10 +21,12 @@ const requiredFiles = [
   "src/ui-fix.css",
   "src/security-hardening.js",
   "src/navigation-performance.js",
+  "src/page-ux-v2.js",
   "src/injected.js",
   "src/navigation-main.js",
   "src/popup.html",
   "src/popup.css",
+  "src/popup-ux-v2.css",
   "src/popup.js",
   "src/popup-hardening.js",
   "src/sidepanel.html",
@@ -63,6 +65,12 @@ if ((isolatedWorld?.js ?? []).indexOf("src/privacy-transport.js") > (isolatedWor
 if (!(isolatedWorld?.js ?? []).includes("src/navigation-performance.js")) {
   problems.push("isolated-world SPA rescan handler is missing")
 }
+if (!(isolatedWorld?.js ?? []).includes("src/page-ux-v2.js")) {
+  problems.push("warning-only page UX handler is missing")
+}
+if ((isolatedWorld?.js ?? []).indexOf("src/page-ux-v2.js") < (isolatedWorld?.js ?? []).indexOf("src/content.js")) {
+  problems.push("src/page-ux-v2.js must load after the primary content UI")
+}
 const webAccessibleResources = (manifest.web_accessible_resources ?? []).flatMap((entry) => entry.resources ?? [])
 if (!webAccessibleResources.includes("assets/icon48.png")) {
   problems.push("assets/icon48.png must remain web-accessible for the page launcher")
@@ -98,6 +106,7 @@ const classicScripts = [
   "src/ui-fix.js",
   "src/security-hardening.js",
   "src/navigation-performance.js",
+  "src/page-ux-v2.js",
   "src/injected.js",
   "src/navigation-main.js",
   "src/popup.js",
@@ -150,6 +159,9 @@ if (!hardeningSource.includes("scamguardTrustedDomainHints") || !hardeningSource
 if (!hardeningSource.includes("AbortController") || !hardeningSource.includes("DEFAULT_FETCH_TIMEOUT_MS")) {
   problems.push("bounded extension network timeout is incomplete")
 }
+if (!hardeningSource.includes("chrome.action.setBadgeText") || !hardeningSource.includes("scamguardPageBadgeStateV2")) {
+  problems.push("per-tab toolbar risk badge wiring is incomplete")
+}
 
 const privacySource = readFileSync(join(extensionDir, "src/privacy-transport.js"), "utf8")
 if (!privacySource.includes("url.search = \"\"") || !privacySource.includes("url.hash = \"\"")) {
@@ -162,6 +174,16 @@ if (!privacySource.includes("SCAN_TRANSACTION") || !privacySource.includes("SCAN
 const navigationPerformanceSource = readFileSync(join(extensionDir, "src/navigation-performance.js"), "utf8")
 if (!navigationPerformanceSource.includes('chrome.runtime.getURL("src/navigation-main.js")') || !navigationPerformanceSource.includes("scanCurrentUrl(true)")) {
   problems.push("SPA navigation injection/rescan wiring is incomplete")
+}
+
+const pageUxSource = readFileSync(join(extensionDir, "src/page-ux-v2.js"), "utf8")
+if (!pageUxSource.includes('risk === "safe"') || !pageUxSource.includes("banner.hidden = true") || !pageUxSource.includes("scamguardPageBadgeStateV2")) {
+  problems.push("warning-only page UI behavior is incomplete")
+}
+
+const popupHardeningSource = readFileSync(join(extensionDir, "src/popup-hardening.js"), "utf8")
+if (!popupHardeningSource.includes("installDecisionFirstLayout") || !popupHardeningSource.includes("sgx-popup-drawer")) {
+  problems.push("decision-first popup rearrangement is incomplete")
 }
 
 if (problems.length) {
