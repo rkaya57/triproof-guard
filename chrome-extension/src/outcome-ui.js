@@ -65,11 +65,18 @@
     return breakdown
   }
 
+  function markBlockedMetricAsOutcomeBacked(element) {
+    const label = element?.parentElement?.querySelector("span")
+    if (label && label.textContent !== "blocked actions") label.textContent = "blocked actions"
+  }
+
   function renderSummary(summary) {
     const popupBlocked = document.getElementById("centerBlocked")
     const panelBlocked = document.getElementById("blockedEvents")
     setTextWithoutLoop(popupBlocked, summary.blocked)
     setTextWithoutLoop(panelBlocked, summary.blocked)
+    markBlockedMetricAsOutcomeBacked(popupBlocked)
+    markBlockedMetricAsOutcomeBacked(panelBlocked)
 
     const anchor = popupBlocked ?? panelBlocked
     const breakdown = ensureBreakdown(anchor)
