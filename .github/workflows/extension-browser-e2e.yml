@@ -6,6 +6,7 @@ on:
       - "chrome-extension/**"
       - "scripts/extension-browser-e2e.mjs"
       - "scripts/extension-browser-e2e-v2.mjs"
+      - "scripts/extension-browser-e2e-runner.mjs"
       - ".github/workflows/extension-browser-e2e.yml"
       - "package.json"
       - "package-lock.json"
@@ -16,6 +17,7 @@ on:
       - "chrome-extension/**"
       - "scripts/extension-browser-e2e.mjs"
       - "scripts/extension-browser-e2e-v2.mjs"
+      - "scripts/extension-browser-e2e-runner.mjs"
       - ".github/workflows/extension-browser-e2e.yml"
       - "package.json"
       - "package-lock.json"
@@ -41,7 +43,9 @@ jobs:
         run: npm ci
 
       - name: Syntax-check browser regression
-        run: node --check scripts/extension-browser-e2e-v2.mjs
+        run: |
+          node --check scripts/extension-browser-e2e-v2.mjs
+          node --check scripts/extension-browser-e2e-runner.mjs
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
@@ -51,4 +55,4 @@ jobs:
           DEBUG: "pw:browser"
         run: |
           echo "Starting bounded ScamGuard real-browser regression..."
-          timeout --signal=TERM --kill-after=15s 6m xvfb-run -a node scripts/extension-browser-e2e-v2.mjs
+          timeout --signal=TERM --kill-after=15s 6m xvfb-run -a node scripts/extension-browser-e2e-runner.mjs
