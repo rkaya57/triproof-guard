@@ -7,6 +7,7 @@ on:
       - "scripts/extension-wallet-compat.test.mjs"
       - "scripts/extension-wallet-compat-v2.test.mjs"
       - "scripts/extension-privacy-performance.test.mjs"
+      - "scripts/extension-ux-v2.test.mjs"
       - "scripts/validate-chrome-extension.mjs"
       - "package.json"
       - "package-lock.json"
@@ -15,11 +16,13 @@ on:
       - "feat/extension-security-hardening-v1"
       - "feat/extension-privacy-performance-v1"
       - "feat/extension-wallet-compat-v2"
+      - "feat/extension-ux-v2"
     paths:
       - "chrome-extension/**"
       - "scripts/extension-wallet-compat.test.mjs"
       - "scripts/extension-wallet-compat-v2.test.mjs"
       - "scripts/extension-privacy-performance.test.mjs"
+      - "scripts/extension-ux-v2.test.mjs"
       - "scripts/validate-chrome-extension.mjs"
       - "package.json"
       - "package-lock.json"
@@ -55,3 +58,6 @@ jobs:
 
       - name: Run privacy and SPA performance tests
         run: node --test scripts/extension-privacy-performance.test.mjs
+
+      - name: Run extension UX tests
+        run: node --test scripts/extension-ux-v2.test.mjs
