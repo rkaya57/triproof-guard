@@ -9,6 +9,7 @@ on:
       - "scripts/extension-privacy-performance.test.mjs"
       - "scripts/extension-ux-v2.test.mjs"
       - "scripts/extension-outcome-integrity.test.mjs"
+      - "scripts/extension-shadow-dom-ui.test.mjs"
       - "scripts/validate-chrome-extension.mjs"
       - "package.json"
       - "package-lock.json"
@@ -19,6 +20,7 @@ on:
       - "feat/extension-wallet-compat-v2"
       - "feat/extension-ux-v2"
       - "feat/extension-outcome-integrity-v1"
+      - "feat/extension-shadow-dom-ui-v1"
     paths:
       - "chrome-extension/**"
       - "scripts/extension-wallet-compat.test.mjs"
@@ -26,6 +28,7 @@ on:
       - "scripts/extension-privacy-performance.test.mjs"
       - "scripts/extension-ux-v2.test.mjs"
       - "scripts/extension-outcome-integrity.test.mjs"
+      - "scripts/extension-shadow-dom-ui.test.mjs"
       - "scripts/validate-chrome-extension.mjs"
       - "package.json"
       - "package-lock.json"
@@ -67,3 +70,6 @@ jobs:
 
       - name: Run protection outcome integrity tests
         run: node --test scripts/extension-outcome-integrity.test.mjs
+
+      - name: Run Shadow DOM isolation tests
+        run: node --test scripts/extension-shadow-dom-ui.test.mjs
