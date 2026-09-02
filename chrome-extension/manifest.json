@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ScamGuard Web3 Shield",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "description": "Pre-sign protection for Solana and EVM dApps, airdrops, token claims, and suspicious wallet actions.",
   "minimum_chrome_version": "114",
   "icons": {
@@ -57,7 +57,8 @@
         "src/ui-fix.js",
         "src/security-hardening.js",
         "src/navigation-performance.js",
-        "src/page-ux-v2.js"
+        "src/page-ux-v2.js",
+        "src/outcome-recorder.js"
       ],
       "css": [
         "src/content.css",

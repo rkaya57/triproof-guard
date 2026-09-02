@@ -22,6 +22,7 @@ const requiredFiles = [
   "src/security-hardening.js",
   "src/navigation-performance.js",
   "src/page-ux-v2.js",
+  "src/outcome-recorder.js",
   "src/injected.js",
   "src/navigation-main.js",
   "src/popup.html",
@@ -29,6 +30,7 @@ const requiredFiles = [
   "src/popup-ux-v2.css",
   "src/popup.js",
   "src/popup-hardening.js",
+  "src/outcome-ui.js",
   "src/sidepanel.html",
   "src/sidepanel.css",
   "src/sidepanel.js",
@@ -71,6 +73,12 @@ if (!(isolatedWorld?.js ?? []).includes("src/page-ux-v2.js")) {
 if ((isolatedWorld?.js ?? []).indexOf("src/page-ux-v2.js") < (isolatedWorld?.js ?? []).indexOf("src/content.js")) {
   problems.push("src/page-ux-v2.js must load after the primary content UI")
 }
+if (!(isolatedWorld?.js ?? []).includes("src/outcome-recorder.js")) {
+  problems.push("protection outcome recorder is missing")
+}
+if ((isolatedWorld?.js ?? []).indexOf("src/outcome-recorder.js") < (isolatedWorld?.js ?? []).indexOf("src/content.js")) {
+  problems.push("src/outcome-recorder.js must load after the decision overlay implementation")
+}
 const webAccessibleResources = (manifest.web_accessible_resources ?? []).flatMap((entry) => entry.resources ?? [])
 if (!webAccessibleResources.includes("assets/icon48.png")) {
   problems.push("assets/icon48.png must remain web-accessible for the page launcher")
@@ -107,10 +115,12 @@ const classicScripts = [
   "src/security-hardening.js",
   "src/navigation-performance.js",
   "src/page-ux-v2.js",
+  "src/outcome-recorder.js",
   "src/injected.js",
   "src/navigation-main.js",
   "src/popup.js",
   "src/popup-hardening.js",
+  "src/outcome-ui.js",
   "src/sidepanel.js",
 ]
 for (const file of classicScripts) {
@@ -184,6 +194,26 @@ if (!pageUxSource.includes('risk === "safe"') || !pageUxSource.includes("banner.
 const popupHardeningSource = readFileSync(join(extensionDir, "src/popup-hardening.js"), "utf8")
 if (!popupHardeningSource.includes("installDecisionFirstLayout") || !popupHardeningSource.includes("sgx-popup-drawer")) {
   problems.push("decision-first popup rearrangement is incomplete")
+}
+if (!popupHardeningSource.includes("outcome-ui.js")) {
+  problems.push("popup outcome metrics loader is missing")
+}
+
+const outcomeRecorderSource = readFileSync(join(extensionDir, "src/outcome-recorder.js"), "utf8")
+for (const outcome of ["blocked", "cancelled", "continued", "scanned"]) {
+  if (!outcomeRecorderSource.includes(`\"${outcome}\"`)) problems.push(`outcome recorder is missing ${outcome}`)
+}
+if (!outcomeRecorderSource.includes("window.location.pathname") || outcomeRecorderSource.includes("window.location.search") || outcomeRecorderSource.includes("window.location.hash")) {
+  problems.push("outcome recorder target must stay privacy-bounded to origin + pathname")
+}
+
+const outcomeUiSource = readFileSync(join(extensionDir, "src/outcome-ui.js"), "utf8")
+if (!outcomeUiSource.includes("scamguardProtectionOutcomesV2") || !outcomeUiSource.includes("Clear local protection data")) {
+  problems.push("outcome-backed Security Center/privacy UI is incomplete")
+}
+const sidepanelSource = readFileSync(join(extensionDir, "src/sidepanel.html"), "utf8")
+if (!sidepanelSource.includes('src="outcome-ui.js"') || !sidepanelSource.includes("blocked actions")) {
+  problems.push("Security Center must render actual blocked-action outcomes")
 }
 
 if (problems.length) {

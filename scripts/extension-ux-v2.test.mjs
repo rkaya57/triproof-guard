@@ -10,6 +10,17 @@ const popupHardeningSource = readFileSync(join(extensionDir, "src", "popup-harde
 const popupUxCss = readFileSync(join(extensionDir, "src", "popup-ux-v2.css"), "utf8")
 const backgroundHardeningSource = readFileSync(join(extensionDir, "src", "background-hardening.js"), "utf8")
 
+function versionAtLeast(actual, minimum) {
+  const a = String(actual).split(".").map(Number)
+  const b = String(minimum).split(".").map(Number)
+  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+    const left = a[index] ?? 0
+    const right = b[index] ?? 0
+    if (left !== right) return left > right
+  }
+  return true
+}
+
 test("UX v2 ships after the primary isolated content UI and preserves the private MAIN entry", () => {
   const main = manifest.content_scripts.find((entry) => entry.world === "MAIN")
   const isolated = manifest.content_scripts.find((entry) => entry.world === "ISOLATED")
@@ -17,7 +28,7 @@ test("UX v2 ships after the primary isolated content UI and preserves the privat
   assert.deepEqual(main?.js, ["src/injected.js"])
   assert.ok(isolated?.js?.includes("src/page-ux-v2.js"))
   assert.ok(isolated?.js?.indexOf("src/page-ux-v2.js") > isolated?.js?.indexOf("src/content.js"))
-  assert.equal(manifest.version, "0.7.3")
+  assert.equal(versionAtLeast(manifest.version, "0.7.3"), true)
 })
 
 test("safe pages hide both page surfaces while caution and higher states can restore the prior UI mode", () => {
