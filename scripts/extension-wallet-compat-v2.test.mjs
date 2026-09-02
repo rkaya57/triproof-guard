@@ -215,7 +215,7 @@ test("Solana Wallet Standard registrations are guarded without relying on window
   assert.ok(value.inputs[0].message)
 })
 
-test("permission inventory chooses a connected announced EVM provider instead of a disconnected root", async () => {
+test("permission inventory prefers a connected announced EVM provider over a disconnected root", async () => {
   const disconnected = evmProvider("disconnected", { accounts: [] })
   const connected = evmProvider("connected")
   const lab = compatibilityLab({ ethereum: disconnected })
@@ -242,7 +242,8 @@ test("permission inventory chooses a connected announced EVM provider instead of
   assert.equal(response?.ok, true)
   assert.equal(evm?.wallet, connected.selectedAddress)
   assert.equal(evm?.permissions?.[0]?.status, "active_onchain")
-  assert.ok(disconnected.calls.some((call) => call.method === "eth_accounts"))
+  assert.equal(disconnected.calls.some((call) => call.method === "eth_accounts"), false)
+  assert.ok(connected.calls.some((call) => call.method === "eth_accounts"))
   assert.ok(connected.calls.some((call) => call.method === "eth_call"))
 })
 
