@@ -5,6 +5,7 @@ on:
     paths:
       - "chrome-extension/**"
       - "scripts/extension-browser-e2e.mjs"
+      - "scripts/extension-browser-e2e-v2.mjs"
       - ".github/workflows/extension-browser-e2e.yml"
       - "package.json"
       - "package-lock.json"
@@ -14,6 +15,7 @@ on:
     paths:
       - "chrome-extension/**"
       - "scripts/extension-browser-e2e.mjs"
+      - "scripts/extension-browser-e2e-v2.mjs"
       - ".github/workflows/extension-browser-e2e.yml"
       - "package.json"
       - "package-lock.json"
@@ -24,7 +26,7 @@ permissions:
 jobs:
   browser-e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,10 +41,14 @@ jobs:
         run: npm ci
 
       - name: Syntax-check browser regression
-        run: node --check scripts/extension-browser-e2e.mjs
+        run: node --check scripts/extension-browser-e2e-v2.mjs
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
       - name: Run unpacked extension in real Chromium
-        run: xvfb-run -a node scripts/extension-browser-e2e.mjs
+        env:
+          DEBUG: "pw:browser"
+        run: |
+          echo "Starting bounded ScamGuard real-browser regression..."
+          timeout --signal=TERM --kill-after=15s 6m xvfb-run -a node scripts/extension-browser-e2e-v2.mjs
