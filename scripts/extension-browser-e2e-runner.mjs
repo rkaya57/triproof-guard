@@ -6,6 +6,12 @@ const sourcePath = path.join(process.cwd(), "scripts", "extension-browser-e2e-v2
 const generatedPath = path.join(process.cwd(), "scripts", ".extension-browser-e2e-runtime.mjs")
 let source = await readFile(sourcePath, "utf8")
 
+// background.js intentionally accepts only the production origin or localhost
+// as API base URLs. Keep the real-browser fixture inside that contract instead
+// of weakening production URL validation for tests.
+source = source.replace('server.listen(0, "127.0.0.1", resolve)', 'server.listen(0, "127.0.0.1", resolve)')
+source = source.replace('const baseUrl = `http://127.0.0.1:${address.port}`', 'const baseUrl = `http://localhost:${address.port}`')
+
 const workerDeclaration = '    const worker = await step("resolve extension service worker", async () => {'
 if (!source.includes(workerDeclaration)) throw new Error("Browser E2E worker declaration marker not found")
 source = source.replace(workerDeclaration, '    let worker = await step("resolve extension service worker", async () => {')
