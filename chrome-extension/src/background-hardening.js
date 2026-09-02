@@ -1,11 +1,52 @@
 const LEGACY_TRUSTED_DOMAINS_KEY = "trustedDomains"
 const TRUSTED_DOMAIN_HINTS_KEY = "scamguardTrustedDomainHints"
+const PAGE_BADGE_STATE_KEY = "scamguardPageBadgeStateV2"
 const DEFAULT_FETCH_TIMEOUT_MS = 18_000
 
 function normalizeDomains(values) {
   return [...new Set((Array.isArray(values) ? values : [])
     .map((value) => String(value ?? "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, ""))
     .filter(Boolean))]
+}
+
+function normalizeBadgeRisk(value) {
+  return ["SAFE", "CAUTION", "HIGH_RISK", "CRITICAL"].includes(value) ? value : "SAFE"
+}
+
+function badgePresentation(riskLevel) {
+  if (riskLevel === "CRITICAL") return { text: "!!", color: [190, 24, 93, 255], title: "ScamGuard: Critical risk" }
+  if (riskLevel === "HIGH_RISK") return { text: "!", color: [220, 38, 38, 255], title: "ScamGuard: High risk" }
+  if (riskLevel === "CAUTION") return { text: "!", color: [217, 119, 6, 255], title: "ScamGuard: Review recommended" }
+  return { text: "", color: [22, 163, 74, 255], title: "ScamGuard: No major risk signal found" }
+}
+
+async function applyPageBadgeState(state) {
+  if (!state?.pageUrl || !state?.riskLevel || !chrome.action?.setBadgeText) return
+  const riskLevel = normalizeBadgeRisk(state.riskLevel)
+  const presentation = badgePresentation(riskLevel)
+  let tabs = []
+  try {
+    tabs = await chrome.tabs.query({})
+  } catch {
+    return
+  }
+
+  for (const tab of tabs) {
+    if (!tab?.id || !tab.url?.startsWith("http")) continue
+    let pageUrl
+    try {
+      const url = new URL(tab.url)
+      pageUrl = `${url.origin}${url.pathname}`
+    } catch {
+      continue
+    }
+    if (pageUrl !== state.pageUrl) continue
+    await chrome.action.setBadgeText({ tabId: tab.id, text: presentation.text }).catch(() => {})
+    if (presentation.text) {
+      await chrome.action.setBadgeBackgroundColor({ tabId: tab.id, color: presentation.color }).catch(() => {})
+    }
+    await chrome.action.setTitle({ tabId: tab.id, title: presentation.title }).catch(() => {})
+  }
 }
 
 export async function neutralizeLegacyTrustedDomainBypass() {
@@ -47,8 +88,11 @@ export function installBoundedFetchTimeout(timeoutMs = DEFAULT_FETCH_TIMEOUT_MS)
 }
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== "sync") return
-  const next = changes[LEGACY_TRUSTED_DOMAINS_KEY]?.newValue
-  if (!Array.isArray(next) || !next.length) return
-  void neutralizeLegacyTrustedDomainBypass()
+  if (areaName === "sync") {
+    const next = changes[LEGACY_TRUSTED_DOMAINS_KEY]?.newValue
+    if (Array.isArray(next) && next.length) void neutralizeLegacyTrustedDomainBypass()
+  }
+  if (areaName === "local" && changes[PAGE_BADGE_STATE_KEY]?.newValue) {
+    void applyPageBadgeState(changes[PAGE_BADGE_STATE_KEY].newValue)
+  }
 })
