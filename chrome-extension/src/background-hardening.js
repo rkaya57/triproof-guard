@@ -21,7 +21,7 @@ function badgePresentation(riskLevel) {
 }
 
 async function applyPageBadgeState(state) {
-  if (!state?.origin || !state?.riskLevel || !chrome.action?.setBadgeText) return
+  if (!state?.pageUrl || !state?.riskLevel || !chrome.action?.setBadgeText) return
   const riskLevel = normalizeBadgeRisk(state.riskLevel)
   const presentation = badgePresentation(riskLevel)
   let tabs = []
@@ -33,13 +33,14 @@ async function applyPageBadgeState(state) {
 
   for (const tab of tabs) {
     if (!tab?.id || !tab.url?.startsWith("http")) continue
-    let origin
+    let pageUrl
     try {
-      origin = new URL(tab.url).origin
+      const url = new URL(tab.url)
+      pageUrl = `${url.origin}${url.pathname}`
     } catch {
       continue
     }
-    if (origin !== state.origin) continue
+    if (pageUrl !== state.pageUrl) continue
     await chrome.action.setBadgeText({ tabId: tab.id, text: presentation.text }).catch(() => {})
     if (presentation.text) {
       await chrome.action.setBadgeBackgroundColor({ tabId: tab.id, color: presentation.color }).catch(() => {})
