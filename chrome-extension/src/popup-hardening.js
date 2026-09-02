@@ -27,6 +27,14 @@
     document.head.appendChild(link)
   }
 
+  function ensureOutcomeUi() {
+    if (document.querySelector('script[data-sgx-outcome-ui="v2"]')) return
+    const script = document.createElement("script")
+    script.src = "outcome-ui.js"
+    script.dataset.sgxOutcomeUi = "v2"
+    document.body.appendChild(script)
+  }
+
   function drawer(title, description, nodes) {
     const details = document.createElement("details")
     details.className = "sgx-popup-drawer"
@@ -106,5 +114,6 @@
   }
 
   installDecisionFirstLayout()
+  ensureOutcomeUi()
   void loadHints()
 })()
