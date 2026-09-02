@@ -2,8 +2,14 @@
   const OUTCOMES_KEY = "scamguardProtectionOutcomesV2"
   const OUTCOME_LIMIT = 200
   const DEDUPE_WINDOW_MS = 60_000
+  const shadowUi = globalThis.ScamGuardShadowUI
+  const uiRoot = shadowUi?.root ?? document.documentElement
   let lastScanFingerprint = ""
   let writeChain = Promise.resolve()
+
+  function uiById(id) {
+    return shadowUi?.getById?.(id) ?? document.getElementById(id)
+  }
 
   function pageTarget() {
     try {
@@ -58,7 +64,7 @@
   }
 
   function recordScanFromBanner() {
-    const banner = document.getElementById("scamguard-extension-banner")
+    const banner = uiById("scamguard-extension-banner")
     const risk = banner?.dataset?.risk
     if (!risk) return
     const target = pageTarget()
@@ -87,7 +93,7 @@
     })
   }
 
-  document.addEventListener("click", (event) => {
+  uiRoot.addEventListener("click", (event) => {
     const target = event.target
     if (!(target instanceof Element)) return
     const decisionButton = target.closest("[data-decision]")
@@ -99,13 +105,13 @@
 
   window.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return
-    const overlay = document.getElementById("scamguard-extension-overlay")
+    const overlay = uiById("scamguard-extension-overlay")
     if (!(overlay instanceof HTMLElement)) return
     recordOverlayDecision(overlay, "cancel")
   }, true)
 
   const observer = new MutationObserver(() => recordScanFromBanner())
-  observer.observe(document.documentElement, {
+  observer.observe(uiRoot, {
     subtree: true,
     childList: true,
     attributes: true,
