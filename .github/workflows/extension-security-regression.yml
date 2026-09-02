@@ -5,6 +5,7 @@ on:
     paths:
       - "chrome-extension/**"
       - "scripts/extension-wallet-compat.test.mjs"
+      - "scripts/extension-wallet-compat-v2.test.mjs"
       - "scripts/extension-privacy-performance.test.mjs"
       - "scripts/validate-chrome-extension.mjs"
       - "package.json"
@@ -13,9 +14,11 @@ on:
     branches:
       - "feat/extension-security-hardening-v1"
       - "feat/extension-privacy-performance-v1"
+      - "feat/extension-wallet-compat-v2"
     paths:
       - "chrome-extension/**"
       - "scripts/extension-wallet-compat.test.mjs"
+      - "scripts/extension-wallet-compat-v2.test.mjs"
       - "scripts/extension-privacy-performance.test.mjs"
       - "scripts/validate-chrome-extension.mjs"
       - "package.json"
@@ -35,7 +38,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -46,6 +49,9 @@ jobs:
 
       - name: Run wallet compatibility and bridge tests
         run: npm run extension:test
+
+      - name: Run modern wallet compatibility tests
+        run: node --test scripts/extension-wallet-compat-v2.test.mjs
 
       - name: Run privacy and SPA performance tests
         run: node --test scripts/extension-privacy-performance.test.mjs
