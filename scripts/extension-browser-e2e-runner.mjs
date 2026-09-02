@@ -11,6 +11,40 @@ let source = await readFile(sourcePath, "utf8")
 // of weakening production URL validation for tests.
 source = source.replace('const baseUrl = `http://127.0.0.1:${address.port}`', 'const baseUrl = `http://localhost:${address.port}`')
 
+// Coordinate-based Input.dispatchMouseEvent is flaky under Xvfb and can hang
+// even though the closed ShadowRoot node is already resolved. Resolve the real
+// DOM node through CDP and invoke the element's native click() instead. This
+// still executes the real browser event listener while removing X11 input
+// delivery from the regression's critical path.
+const clickNodeBlock = `async function clickNode(cdp, node) {
+  if (!node?.nodeId) throw new Error("Missing CDP node")
+  const { model } = await cdpSend(cdp, "DOM.getBoxModel", { nodeId: node.nodeId })
+  const quad = model.border
+  const x = (quad[0] + quad[2] + quad[4] + quad[6]) / 4
+  const y = (quad[1] + quad[3] + quad[5] + quad[7]) / 4
+  await cdpSend(cdp, "Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", clickCount: 1 })
+  await cdpSend(cdp, "Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", clickCount: 1 })
+}`
+const clickNodeReplacement = `async function clickNode(cdp, node) {
+  if (!node?.nodeId) throw new Error("Missing CDP node")
+  const resolved = await cdpSend(cdp, "DOM.resolveNode", { nodeId: node.nodeId })
+  const objectId = resolved?.object?.objectId
+  if (!objectId) throw new Error("Unable to resolve CDP node object")
+  try {
+    const result = await cdpSend(cdp, "Runtime.callFunctionOn", {
+      objectId,
+      functionDeclaration: "function () { this.click(); return true }",
+      returnByValue: true,
+      awaitPromise: true,
+    })
+    if (result?.exceptionDetails) throw new Error(result.exceptionDetails.text || "CDP click failed")
+  } finally {
+    await cdpSend(cdp, "Runtime.releaseObject", { objectId }).catch(() => {})
+  }
+}`
+if (!source.includes(clickNodeBlock)) throw new Error("Browser E2E clickNode marker not found")
+source = source.replace(clickNodeBlock, clickNodeReplacement)
+
 const workerDeclaration = '    const worker = await step("resolve extension service worker", async () => {'
 if (!source.includes(workerDeclaration)) throw new Error("Browser E2E worker declaration marker not found")
 source = source.replace(workerDeclaration, '    let worker = await step("resolve extension service worker", async () => {')
