@@ -39,6 +39,26 @@ const replacement = `    const extensionId = new URL(worker.url()).hostname
 if (!source.includes(extensionIdBlock)) throw new Error("Browser E2E extension control marker not found")
 source = source.replace(extensionIdBlock, replacement)
 
+const configureEndMarker = `    }, fixture.baseUrl), 8_000)
+
+    const page = context.pages()[0] ?? await context.newPage()`
+const configureEndReplacement = `    }, fixture.baseUrl), 8_000)
+
+    await step("probe background runtime listener", async () => {
+      const response = await worker.evaluate(() => new Promise((resolve) => {
+        chrome.runtime.sendMessage({ type: "GET_SETTINGS" }, (value) => {
+          resolve(chrome.runtime.lastError ? { ok: false, error: chrome.runtime.lastError.message } : value)
+        })
+      }))
+      log(\`DIAG background GET_SETTINGS=\${JSON.stringify(response)}\`)
+      assert.equal(response?.ok, true)
+      assert.equal(response?.settings?.apiBaseUrl, fixture.baseUrl)
+    }, 8_000)
+
+    const page = context.pages()[0] ?? await context.newPage()`
+if (!source.includes(configureEndMarker)) throw new Error("Browser E2E configure-end marker not found")
+source = source.replace(configureEndMarker, configureEndReplacement)
+
 const pageBlock = `    const page = context.pages()[0] ?? await context.newPage()
     page.setDefaultTimeout(10_000)
     page.setDefaultNavigationTimeout(12_000)
@@ -68,9 +88,11 @@ const diagnosticBlock = [
   '        hostClosed: document.getElementById(hostId)?.shadowRoot === null,',
   '        documentState: document.readyState,',
   '      }), HOST_ID).catch((error) => ({ pageDiagnosticError: String(error) }))',
+  '      const bannerDiagnostic = Boolean(await findId(cdp, BANNER_ID).catch(() => null))',
+  '      const launcherDiagnostic = Boolean(await findId(cdp, LAUNCHER_ID).catch(() => null))',
   '      const settingsDiagnostic = await worker.evaluate(async () => chrome.storage.sync.get(null)).catch((error) => ({ storageDiagnosticError: String(error) }))',
-  '      const badgeDiagnostic = await worker.evaluate(async () => chrome.storage.local.get(BADGE_KEY)).catch((error) => ({ badgeDiagnosticError: String(error) }))',
-  '      log("DIAG caution page=" + JSON.stringify(diagnostics))',
+  '      const badgeDiagnostic = await worker.evaluate(async (key) => chrome.storage.local.get(key), BADGE_KEY).catch((error) => ({ badgeDiagnosticError: String(error) }))',
+  '      log("DIAG caution page=" + JSON.stringify({ ...diagnostics, bannerDiagnostic, launcherDiagnostic }))',
   '      log("DIAG settings=" + JSON.stringify(settingsDiagnostic))',
   '      log("DIAG badge=" + JSON.stringify(badgeDiagnostic))',
   '      log("DIAG fixtureRequests=" + JSON.stringify(fixture.requests.slice(-5)))',
