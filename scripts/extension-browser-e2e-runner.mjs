@@ -45,6 +45,53 @@ const clickNodeReplacement = `async function clickNode(cdp, node) {
 if (!source.includes(clickNodeBlock)) throw new Error("Browser E2E clickNode marker not found")
 source = source.replace(clickNodeBlock, clickNodeReplacement)
 
+// Configure through ScamGuard's own message API instead of writing Chrome Sync
+// directly. Chrome for Testing is launched with --disable-sync, so direct sync
+// writes are nondeterministic; SAVE_SETTINGS exercises the real product path
+// and fills the bounded local fail-safe used by the service worker.
+const configureStorageBlock = `    await step("configure extension for local fixture", () => worker.evaluate(async (baseUrl) => {
+      await chrome.storage.local.clear()
+      await chrome.storage.sync.clear()
+      await chrome.storage.sync.set({
+        apiBaseUrl: baseUrl,
+        protectionLevel: "strict",
+        enableNotifications: false,
+        warnOnCaution: true,
+        blockCriticalSites: true,
+        blockRiskyNavigation: true,
+        blockUnlimitedApprovals: false,
+        blockApprovalToEoa: false,
+        blockAuthorityChanges: false,
+        requireNewDomainReview: false,
+        trustedDomains: [],
+        scamguardTrustedDomainHints: [],
+      })
+    }, fixture.baseUrl), 8_000)`
+const configureStorageReplacement = `    await step("configure extension for local fixture", () => worker.evaluate(async (baseUrl) => {
+      await chrome.storage.local.clear()
+      const settings = {
+        apiBaseUrl: baseUrl,
+        protectionLevel: "strict",
+        enableNotifications: false,
+        warnOnCaution: true,
+        blockCriticalSites: true,
+        blockRiskyNavigation: true,
+        blockUnlimitedApprovals: false,
+        blockApprovalToEoa: false,
+        blockAuthorityChanges: false,
+        requireNewDomainReview: false,
+        trustedDomainsText: "",
+      }
+      const response = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ type: "SAVE_SETTINGS", settings }, (value) => {
+          resolve(chrome.runtime.lastError ? { ok: false, error: chrome.runtime.lastError.message } : value)
+        })
+      })
+      if (!response?.ok) throw new Error(response?.error ?? "Unable to configure ScamGuard")
+    }, fixture.baseUrl), 8_000)`
+if (!source.includes(configureStorageBlock)) throw new Error("Browser E2E configure-storage marker not found")
+source = source.replace(configureStorageBlock, configureStorageReplacement)
+
 const workerDeclaration = '    const worker = await step("resolve extension service worker", async () => {'
 if (!source.includes(workerDeclaration)) throw new Error("Browser E2E worker declaration marker not found")
 source = source.replace(workerDeclaration, '    let worker = await step("resolve extension service worker", async () => {')
