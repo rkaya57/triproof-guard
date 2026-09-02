@@ -59,27 +59,25 @@ const pageReplacement = `    const page = context.pages().find((candidate) => !c
 if (!source.includes(pageBlock)) throw new Error("Browser E2E page marker not found")
 source = source.replace(pageBlock, pageReplacement)
 
-const cautionGoto = `      await page.goto(\`${fixture.baseUrl}/caution?session=private#fragment\`, { waitUntil: "domcontentloaded", timeout: 12_000 })
-      const expected = \`${fixture.baseUrl}/caution\`
-      await waitBadge(worker, { riskLevel: "CAUTION", pageUrl: expected })`
-const cautionReplacement = `      await page.goto(\`${fixture.baseUrl}/caution?session=private#fragment\`, { waitUntil: "domcontentloaded", timeout: 12_000 })
-      const expected = \`${fixture.baseUrl}/caution\`
-      await sleep(1200)
-      const diagnostics = await page.evaluate((hostId) => ({
-        href: location.href,
-        hostPresent: Boolean(document.getElementById(hostId)),
-        hostClosed: document.getElementById(hostId)?.shadowRoot === null,
-        documentState: document.readyState,
-      }), HOST_ID).catch((error) => ({ pageDiagnosticError: String(error) }))
-      const settingsDiagnostic = await worker.evaluate(async () => chrome.storage.sync.get(null)).catch((error) => ({ storageDiagnosticError: String(error) }))
-      const badgeDiagnostic = await worker.evaluate(async () => chrome.storage.local.get(BADGE_KEY)).catch((error) => ({ badgeDiagnosticError: String(error) }))
-      log(\`DIAG caution page=\${JSON.stringify(diagnostics)}\`)
-      log(\`DIAG settings=\${JSON.stringify(settingsDiagnostic)}\`)
-      log(\`DIAG badge=\${JSON.stringify(badgeDiagnostic)}\`)
-      log(\`DIAG fixtureRequests=\${JSON.stringify(fixture.requests.slice(-5))}\`)
-      await waitBadge(worker, { riskLevel: "CAUTION", pageUrl: expected })`
-if (!source.includes(cautionGoto)) throw new Error("Browser E2E caution marker not found")
-source = source.replace(cautionGoto, cautionReplacement)
+const badgeWaitMarker = '      await waitBadge(worker, { riskLevel: "CAUTION", pageUrl: expected })'
+const diagnosticBlock = [
+  '      await sleep(1200)',
+  '      const diagnostics = await page.evaluate((hostId) => ({',
+  '        href: location.href,',
+  '        hostPresent: Boolean(document.getElementById(hostId)),',
+  '        hostClosed: document.getElementById(hostId)?.shadowRoot === null,',
+  '        documentState: document.readyState,',
+  '      }), HOST_ID).catch((error) => ({ pageDiagnosticError: String(error) }))',
+  '      const settingsDiagnostic = await worker.evaluate(async () => chrome.storage.sync.get(null)).catch((error) => ({ storageDiagnosticError: String(error) }))',
+  '      const badgeDiagnostic = await worker.evaluate(async () => chrome.storage.local.get(BADGE_KEY)).catch((error) => ({ badgeDiagnosticError: String(error) }))',
+  '      log("DIAG caution page=" + JSON.stringify(diagnostics))',
+  '      log("DIAG settings=" + JSON.stringify(settingsDiagnostic))',
+  '      log("DIAG badge=" + JSON.stringify(badgeDiagnostic))',
+  '      log("DIAG fixtureRequests=" + JSON.stringify(fixture.requests.slice(-5)))',
+  badgeWaitMarker,
+].join("\n")
+if (!source.includes(badgeWaitMarker)) throw new Error("Browser E2E CAUTION badge marker not found")
+source = source.replace(badgeWaitMarker, diagnosticBlock)
 
 await writeFile(generatedPath, source, "utf8")
 try {
