@@ -1,11 +1,13 @@
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
+import { spawnSync } from "node:child_process"
 import test from "node:test"
 
 const extensionDir = join(process.cwd(), "chrome-extension")
 const manifest = JSON.parse(readFileSync(join(extensionDir, "manifest.json"), "utf8"))
-const shadowSource = readFileSync(join(extensionDir, "src", "shadow-ui.js"), "utf8")
+const shadowPath = join(extensionDir, "src", "shadow-ui.js")
+const shadowSource = readFileSync(shadowPath, "utf8")
 const markerCss = readFileSync(join(extensionDir, "src", "page-markers.css"), "utf8")
 const contentSource = readFileSync(join(extensionDir, "src", "content.js"), "utf8")
 const uiFixSource = readFileSync(join(extensionDir, "src", "ui-fix.js"), "utf8")
@@ -22,6 +24,11 @@ function versionAtLeast(actual, minimum) {
   }
   return true
 }
+
+test("Shadow DOM bootstrap is valid JavaScript", () => {
+  const result = spawnSync(process.execPath, ["--check", shadowPath], { encoding: "utf8" })
+  assert.equal(result.status, 0, result.stderr || result.stdout)
+})
 
 test("closed Shadow DOM bootstrap loads before the legacy page UI", () => {
   const main = manifest.content_scripts.find((entry) => entry.world === "MAIN")
