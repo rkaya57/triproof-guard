@@ -11,11 +11,11 @@ let source = await readFile(sourcePath, "utf8")
 // of weakening production URL validation for tests.
 source = source.replace('const baseUrl = `http://127.0.0.1:${address.port}`', 'const baseUrl = `http://localhost:${address.port}`')
 
-// Coordinate-based Input.dispatchMouseEvent is flaky under Xvfb and can hang
-// even though the closed ShadowRoot node is already resolved. Resolve the real
-// DOM node through CDP and invoke the element's native click() instead. This
-// still executes the real browser event listener while removing X11 input
-// delivery from the regression's critical path.
+// Coordinate-based input and cross-world Runtime.callFunctionOn are both flaky
+// for nodes inside a closed ShadowRoot under Xvfb. Mark the pierced DOM node as
+// DevTools' inspected node and activate it through the command-line $0 handle.
+// This keeps the real element and its real click listener in play without X11
+// mouse delivery or a remote-object call across execution worlds.
 const clickNodeBlock = `async function clickNode(cdp, node) {
   if (!node?.nodeId) throw new Error("Missing CDP node")
   const { model } = await cdpSend(cdp, "DOM.getBoxModel", { nodeId: node.nodeId })
@@ -27,20 +27,18 @@ const clickNodeBlock = `async function clickNode(cdp, node) {
 }`
 const clickNodeReplacement = `async function clickNode(cdp, node) {
   if (!node?.nodeId) throw new Error("Missing CDP node")
-  const resolved = await cdpSend(cdp, "DOM.resolveNode", { nodeId: node.nodeId })
-  const objectId = resolved?.object?.objectId
-  if (!objectId) throw new Error("Unable to resolve CDP node object")
-  try {
-    const result = await cdpSend(cdp, "Runtime.callFunctionOn", {
-      objectId,
-      functionDeclaration: "function () { this.click(); return true }",
-      returnByValue: true,
-      awaitPromise: true,
-    })
-    if (result?.exceptionDetails) throw new Error(result.exceptionDetails.text || "CDP click failed")
-  } finally {
-    await cdpSend(cdp, "Runtime.releaseObject", { objectId }).catch(() => {})
+  await cdpSend(cdp, "DOM.setInspectedNode", { nodeId: node.nodeId })
+  const result = await cdpSend(cdp, "Runtime.evaluate", {
+    expression: "$0.click(); true",
+    includeCommandLineAPI: true,
+    returnByValue: true,
+    awaitPromise: false,
+  })
+  if (result?.exceptionDetails) {
+    const detail = result.exceptionDetails?.exception?.description ?? result.exceptionDetails?.text ?? "CDP inspected-node click failed"
+    throw new Error(detail)
   }
+  if (result?.result?.value !== true) throw new Error("CDP inspected-node click did not complete")
 }`
 if (!source.includes(clickNodeBlock)) throw new Error("Browser E2E clickNode marker not found")
 source = source.replace(clickNodeBlock, clickNodeReplacement)
