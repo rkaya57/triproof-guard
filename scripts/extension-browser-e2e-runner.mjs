@@ -21,6 +21,17 @@ const extensionIdBlock = `    const extensionId = new URL(worker.url()).hostname
     await step("configure extension for local fixture", () => worker.evaluate(async (baseUrl) => {`
 const replacement = `    const extensionId = new URL(worker.url()).hostname
     assert.match(extensionId, /^[a-p]{32}$/)
+    const serviceWorker = worker
+
+    const workerBootstrapDiagnostic = await step("inspect service-worker bootstrap", () => serviceWorker.evaluate(() => ({
+      href: self.location.href,
+      boundedFetch: Boolean(globalThis.__scamguardBoundedFetchInstalled),
+      boundedSync: Boolean(globalThis.__scamguardBoundedSyncStorageInstalled),
+      hasRuntime: Boolean(chrome?.runtime),
+      hasStorage: Boolean(chrome?.storage?.sync),
+      syncGetType: typeof chrome?.storage?.sync?.get,
+    })), 5_000)
+    log(\`DIAG serviceWorker bootstrap=\${JSON.stringify(workerBootstrapDiagnostic)}\`)
 
     // MV3 service workers are intentionally ephemeral. Do not use the worker
     // itself as the long-lived test-control surface: Chrome may suspend it
@@ -44,16 +55,27 @@ const configureEndMarker = `    }, fixture.baseUrl), 8_000)
     const page = context.pages()[0] ?? await context.newPage()`
 const configureEndReplacement = `    }, fixture.baseUrl), 8_000)
 
-    await step("probe background runtime listener", async () => {
+    await step("probe background listener without storage", async () => {
+      const response = await worker.evaluate(() => new Promise((resolve) => {
+        chrome.runtime.sendMessage({ type: "__SCAMGUARD_E2E_UNKNOWN__" }, (value) => {
+          resolve(chrome.runtime.lastError ? { transportError: chrome.runtime.lastError.message } : value)
+        })
+      }))
+      log(\`DIAG background UNKNOWN=\${JSON.stringify(response)}\`)
+      assert.equal(response?.ok, false)
+      assert.match(String(response?.error ?? ""), /Unknown ScamGuard extension message/)
+    }, 5_000)
+
+    await step("probe background GET_SETTINGS", async () => {
       const response = await worker.evaluate(() => new Promise((resolve) => {
         chrome.runtime.sendMessage({ type: "GET_SETTINGS" }, (value) => {
-          resolve(chrome.runtime.lastError ? { ok: false, error: chrome.runtime.lastError.message } : value)
+          resolve(chrome.runtime.lastError ? { transportError: chrome.runtime.lastError.message } : value)
         })
       }))
       log(\`DIAG background GET_SETTINGS=\${JSON.stringify(response)}\`)
       assert.equal(response?.ok, true)
       assert.equal(response?.settings?.apiBaseUrl, fixture.baseUrl)
-    }, 8_000)
+    }, 6_000)
 
     const page = context.pages()[0] ?? await context.newPage()`
 if (!source.includes(configureEndMarker)) throw new Error("Browser E2E configure-end marker not found")
