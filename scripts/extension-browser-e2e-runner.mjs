@@ -11,10 +11,10 @@ let source = await readFile(sourcePath, "utf8")
 // of weakening production URL validation for tests.
 source = source.replace('const baseUrl = `http://127.0.0.1:${address.port}`', 'const baseUrl = `http://localhost:${address.port}`')
 
-// Closed ShadowRoot controls belong to the extension content-script isolated
-// world. Driving them from the page's main world or through Xvfb input can hang
-// Chromium. Capture execution contexts and invoke the actual element click from
-// the isolated world that owns ScamGuardShadowUI.
+// The controls live in a closed ShadowRoot, so Playwright locators cannot reach
+// them. Mouse input is flaky under Xvfb and extension isolated-world evaluation
+// is not a reliable CDP execution target. Focus the pierced DOM node directly,
+// then activate the real HTMLButtonElement through Chrome's keyboard pipeline.
 const clickNodeBlock = `async function clickNode(cdp, node) {
   if (!node?.nodeId) throw new Error("Missing CDP node")
   const { model } = await cdpSend(cdp, "DOM.getBoxModel", { nodeId: node.nodeId })
@@ -28,42 +28,15 @@ const clickNodeReplacement = `const scamGuardExecutionContexts = new Set()
 
 async function clickNode(cdp, node) {
   if (!node?.nodeId) throw new Error("Missing CDP node")
-  const attributes = attrs(node)
-  const target = {
-    id: String(attributes.id ?? ""),
-    className: String(attributes.class ?? "").split(/\\s+/).find(Boolean) ?? "",
+  await cdpSend(cdp, "DOM.focus", { nodeId: node.nodeId }, 2_000)
+  const key = {
+    key: "Enter",
+    code: "Enter",
+    windowsVirtualKeyCode: 13,
+    nativeVirtualKeyCode: 13,
   }
-  if (!target.id && !target.className) throw new Error("ScamGuard click target has no id or class")
-
-  const expression = \`(() => {
-    const api = globalThis.ScamGuardShadowUI
-    if (!api) return { matched: false, reason: "no-shadow-api" }
-    const target = \${JSON.stringify(target)}
-    const element = target.id ? api.getById(target.id) : api.query("." + target.className)
-    if (!element) return { matched: false, reason: "node-not-found" }
-    element.click()
-    return { matched: true }
-  })()\`
-
-  const failures = []
-  for (const contextId of [...scamGuardExecutionContexts]) {
-    try {
-      const result = await cdpSend(cdp, "Runtime.evaluate", {
-        expression,
-        contextId,
-        returnByValue: true,
-        awaitPromise: false,
-      }, 1_500)
-      if (result?.exceptionDetails) {
-        failures.push(\`context \${contextId}: \${result.exceptionDetails?.text ?? "exception"}\`)
-        continue
-      }
-      if (result?.result?.value?.matched) return
-    } catch (error) {
-      failures.push(\`context \${contextId}: \${error?.message ?? String(error)}\`)
-    }
-  }
-  throw new Error(\`Unable to click ScamGuard control in extension isolated world: \${failures.join(" | ") || "no execution contexts"}\`)
+  await cdpSend(cdp, "Input.dispatchKeyEvent", { type: "keyDown", ...key }, 2_000)
+  await cdpSend(cdp, "Input.dispatchKeyEvent", { type: "keyUp", ...key }, 2_000)
 }`
 if (!source.includes(clickNodeBlock)) throw new Error("Browser E2E clickNode marker not found")
 source = source.replace(clickNodeBlock, clickNodeReplacement)
