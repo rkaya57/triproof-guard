@@ -11,11 +11,10 @@ let source = await readFile(sourcePath, "utf8")
 // of weakening production URL validation for tests.
 source = source.replace('const baseUrl = `http://127.0.0.1:${address.port}`', 'const baseUrl = `http://localhost:${address.port}`')
 
-// Coordinate-based input and cross-world Runtime.callFunctionOn are both flaky
-// for nodes inside a closed ShadowRoot under Xvfb. Mark the pierced DOM node as
-// DevTools' inspected node and activate it through the command-line $0 handle.
-// This keeps the real element and its real click listener in play without X11
-// mouse delivery or a remote-object call across execution worlds.
+// Closed ShadowRoot controls belong to the extension content-script isolated
+// world. Driving them from the page's main world or through Xvfb input can hang
+// Chromium. Capture execution contexts and invoke the actual element click from
+// the isolated world that owns ScamGuardShadowUI.
 const clickNodeBlock = `async function clickNode(cdp, node) {
   if (!node?.nodeId) throw new Error("Missing CDP node")
   const { model } = await cdpSend(cdp, "DOM.getBoxModel", { nodeId: node.nodeId })
@@ -25,20 +24,46 @@ const clickNodeBlock = `async function clickNode(cdp, node) {
   await cdpSend(cdp, "Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", clickCount: 1 })
   await cdpSend(cdp, "Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", clickCount: 1 })
 }`
-const clickNodeReplacement = `async function clickNode(cdp, node) {
+const clickNodeReplacement = `const scamGuardExecutionContexts = new Set()
+
+async function clickNode(cdp, node) {
   if (!node?.nodeId) throw new Error("Missing CDP node")
-  await cdpSend(cdp, "DOM.setInspectedNode", { nodeId: node.nodeId })
-  const result = await cdpSend(cdp, "Runtime.evaluate", {
-    expression: "$0.click(); true",
-    includeCommandLineAPI: true,
-    returnByValue: true,
-    awaitPromise: false,
-  })
-  if (result?.exceptionDetails) {
-    const detail = result.exceptionDetails?.exception?.description ?? result.exceptionDetails?.text ?? "CDP inspected-node click failed"
-    throw new Error(detail)
+  const attributes = attrs(node)
+  const target = {
+    id: String(attributes.id ?? ""),
+    className: String(attributes.class ?? "").split(/\\s+/).find(Boolean) ?? "",
   }
-  if (result?.result?.value !== true) throw new Error("CDP inspected-node click did not complete")
+  if (!target.id && !target.className) throw new Error("ScamGuard click target has no id or class")
+
+  const expression = \`(() => {
+    const api = globalThis.ScamGuardShadowUI
+    if (!api) return { matched: false, reason: "no-shadow-api" }
+    const target = \${JSON.stringify(target)}
+    const element = target.id ? api.getById(target.id) : api.query("." + target.className)
+    if (!element) return { matched: false, reason: "node-not-found" }
+    element.click()
+    return { matched: true }
+  })()\`
+
+  const failures = []
+  for (const contextId of [...scamGuardExecutionContexts]) {
+    try {
+      const result = await cdpSend(cdp, "Runtime.evaluate", {
+        expression,
+        contextId,
+        returnByValue: true,
+        awaitPromise: false,
+      }, 1_500)
+      if (result?.exceptionDetails) {
+        failures.push(\`context \${contextId}: \${result.exceptionDetails?.text ?? "exception"}\`)
+        continue
+      }
+      if (result?.result?.value?.matched) return
+    } catch (error) {
+      failures.push(\`context \${contextId}: \${error?.message ?? String(error)}\`)
+    }
+  }
+  throw new Error(\`Unable to click ScamGuard control in extension isolated world: \${failures.join(" | ") || "no execution contexts"}\`)
 }`
 if (!source.includes(clickNodeBlock)) throw new Error("Browser E2E clickNode marker not found")
 source = source.replace(clickNodeBlock, clickNodeReplacement)
@@ -171,6 +196,15 @@ const pageReplacement = `    const page = context.pages().find((candidate) => !c
     page.on("pageerror", (error) => log(\`PAGE ERROR: \${error.message}\`))
     page.on("requestfailed", (request) => log(\`REQUEST FAILED \${request.url()}: \${request.failure()?.errorText ?? "unknown"}\`))
     const cdp = await step("open Chrome DevTools Protocol session", () => context.newCDPSession(page), 8_000)
+    cdp.on("Runtime.executionContextCreated", (event) => {
+      const id = event?.context?.id
+      if (Number.isInteger(id)) scamGuardExecutionContexts.add(id)
+    })
+    cdp.on("Runtime.executionContextDestroyed", (event) => {
+      const id = event?.executionContextId
+      if (Number.isInteger(id)) scamGuardExecutionContexts.delete(id)
+    })
+    cdp.on("Runtime.executionContextsCleared", () => scamGuardExecutionContexts.clear())
     await cdpSend(cdp, "Runtime.enable")
     await cdpSend(cdp, "Log.enable").catch(() => {})
     cdp.on("Runtime.exceptionThrown", (event) => log(\`CDP EXCEPTION: \${event.exceptionDetails?.text ?? "unknown"} \${event.exceptionDetails?.exception?.description ?? ""}\`))
@@ -193,7 +227,7 @@ const diagnosticBlock = [
   '      const launcherDiagnostic = Boolean(await findId(cdp, LAUNCHER_ID).catch(() => null))',
   '      const settingsDiagnostic = await worker.evaluate(async () => chrome.storage.sync.get(null)).catch((error) => ({ storageDiagnosticError: String(error) }))',
   '      const badgeDiagnostic = await worker.evaluate(async (key) => chrome.storage.local.get(key), BADGE_KEY).catch((error) => ({ badgeDiagnosticError: String(error) }))',
-  '      log("DIAG caution page=" + JSON.stringify({ ...diagnostics, bannerDiagnostic, launcherDiagnostic }))',
+  '      log("DIAG caution page=" + JSON.stringify({ ...diagnostics, bannerDiagnostic, launcherDiagnostic, executionContexts: [...scamGuardExecutionContexts] }))',
   '      log("DIAG settings=" + JSON.stringify(settingsDiagnostic))',
   '      log("DIAG badge=" + JSON.stringify(badgeDiagnostic))',
   '      log("DIAG fixtureRequests=" + JSON.stringify(fixture.requests.slice(-5)))',
