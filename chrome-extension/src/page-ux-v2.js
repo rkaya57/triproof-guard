@@ -8,8 +8,14 @@
     critical: "CRITICAL",
   }
 
+  const shadowUi = globalThis.ScamGuardShadowUI
+  const uiRoot = shadowUi?.root ?? document.documentElement
   let lastPublishedRisk = null
   let syncQueued = false
+
+  function uiById(id) {
+    return shadowUi?.getById?.(id) ?? document.getElementById(id)
+  }
 
   function currentPageKey() {
     try {
@@ -35,8 +41,8 @@
 
   function syncPageUi() {
     syncQueued = false
-    const banner = document.getElementById("scamguard-extension-banner")
-    const launcher = document.getElementById("scamguard-extension-launcher")
+    const banner = uiById("scamguard-extension-banner")
+    const launcher = uiById("scamguard-extension-launcher")
     if (!banner) return
 
     const risk = banner.dataset.risk
@@ -76,12 +82,18 @@
     queueMicrotask(syncPageUi)
   }
 
-  const observer = new MutationObserver(queueSync)
-  observer.observe(document.documentElement, {
+  const uiObserver = new MutationObserver(queueSync)
+  uiObserver.observe(uiRoot, {
     subtree: true,
     childList: true,
     attributes: true,
-    attributeFilter: ["data-risk", "hidden", UI_CLOSED_ATTR],
+    attributeFilter: ["data-risk", "hidden"],
+  })
+
+  const closeStateObserver = new MutationObserver(queueSync)
+  closeStateObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: [UI_CLOSED_ATTR],
   })
 
   window.addEventListener("scamguard:navigation", () => {
