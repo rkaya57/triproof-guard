@@ -1,17 +1,17 @@
-import Image from "next/image"
 import Link from "next/link"
 import { ArrowRight, BookOpen, CalendarDays, ShieldCheck } from "lucide-react"
 
-import { listPublishedPosts } from "@/lib/blog/db"
+import { PublicTopNav } from "@/components/layout/public-top-nav"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { listPublishedPosts } from "@/lib/blog/db"
 
 export const dynamic = "force-dynamic"
 
 export const metadata = {
-  title: "Blog | Tri-Proof Guard",
-  description: "Web3 wallet risk, Sybil detection and airdrop security insights from Tri-Proof Guard.",
+  title: "Blog | Tri-Proof Protocol",
+  description: "Web3 wallet risk, Sybil defense and campaign security insights from Tri-Proof Protocol.",
 }
 
 function readingTime(content: string) {
@@ -30,18 +30,9 @@ export default async function Page() {
 
   return (
     <main className="premium-page min-h-screen bg-background text-foreground">
-      <header className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8">
-        <Link href="/" className="flex items-center gap-3">
-          <Image src="/logo.svg" alt="Tri-Proof Guard" width={36} height={36} className="rounded-lg" />
-          <span className="text-sm font-semibold">Tri-Proof Guard</span>
-        </Link>
-        <div className="flex items-center gap-3">
-          <Link href="/pricing" className={buttonVariants({ variant: "outline" })}>Pricing</Link>
-          <Link href="/scamguard" className={buttonVariants()}>Open Demo</Link>
-        </div>
-      </header>
+      <PublicTopNav />
 
-      <section className="security-grid relative overflow-hidden border-y border-border">
+      <section className="security-grid relative overflow-hidden border-b border-border">
         <div className="pointer-events-none absolute inset-0 opacity-40">
           <div className="glow-orb left-[-8rem] top-[-8rem] size-96" style={{ background: "var(--guard-cyan)" }} />
           <div className="glow-orb right-[-10rem] top-12 size-[28rem]" style={{ background: "var(--guard-purple)" }} />
@@ -50,11 +41,11 @@ export default async function Page() {
           <Badge variant="secondary" className="mb-5 w-fit border-primary/30 text-primary">
             Tri-Proof Insights
           </Badge>
-          <h1 className="text-gradient max-w-4xl text-4xl font-semibold sm:text-6xl">
+          <h1 className="text-gradient max-w-4xl text-4xl font-semibold tracking-[-0.035em] sm:text-6xl">
             Web3 wallet risk, Sybil defense and campaign security.
           </h1>
-          <p className="mt-5 max-w-2xl text-lg text-muted-foreground">
-            Practical guides for airdrop teams, testnet operators and Web3 communities that want cleaner reward distribution.
+          <p className="mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">
+            Practical guides for airdrop teams, testnet operators and Web3 communities that want cleaner reward distribution and safer wallet interactions.
           </p>
         </div>
       </section>
@@ -62,7 +53,7 @@ export default async function Page() {
       <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
         {featured ? (
           <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-stretch">
-            <Link href={`/blog/${featured.slug}`} className="glass-panel premium-card hover-lift group overflow-hidden rounded-3xl border border-primary/35">
+            <Link href={`/blog/${featured.slug}`} className="glass-panel premium-card hover-lift group overflow-hidden rounded-3xl border border-primary/25">
               <div className="flex h-72 items-center justify-center bg-primary/10 lg:h-full">
                 {featured.coverImageUrl ? (
                   <div
@@ -94,7 +85,7 @@ export default async function Page() {
             <CardHeader>
               <CardTitle>Research notes are being prepared</CardTitle>
               <CardDescription>
-                Public articles will focus on Solana campaign security, pre-sign safety, and wallet-list review methodology.
+                Public articles focus on campaign security, pre-sign safety, and explainable wallet-list review methodology.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3 sm:flex-row">
@@ -140,11 +131,11 @@ export default async function Page() {
       </section>
 
       <section className="mx-auto max-w-7xl px-5 pb-16 sm:px-8">
-        <div className="glass-panel premium-card rounded-2xl p-8">
+        <div className="glass-panel premium-card rounded-3xl p-8">
           <div className="mb-3 flex items-center gap-2 text-primary"><BookOpen className="size-5" /><span className="font-medium">For campaign teams</span></div>
           <h2 className="text-2xl font-semibold">Ready to check your own wallet list?</h2>
-          <p className="mt-2 text-muted-foreground">Start with basic protection free, then activate a 30-day USDC or SOL access plan when your campaign needs deeper intelligence.</p>
-          <Link href="/audit" className={`${buttonVariants()} mt-5`}>Start mini audit</Link>
+          <p className="mt-2 max-w-2xl text-muted-foreground">Start with the account-backed mini audit, then use wallet-credit packs when your campaign needs a saved, full Sybil analysis and decision export.</p>
+          <div className="mt-5 flex flex-wrap gap-3"><Link href="/audit" className={buttonVariants()}>Start mini audit</Link><Link href="/pricing#campaign" className={buttonVariants({ variant: "outline" })}>View wallet pricing</Link></div>
         </div>
       </section>
     </main>
