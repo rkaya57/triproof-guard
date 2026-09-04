@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export const metadata = {
-  title: "ScamGuard Multichain | Tri-Proof Guard",
+  title: "ScamGuard Multichain | Tri-Proof Protocol",
   description:
     "Scan suspicious Web3 links, wallets, token contracts, and transactions before users sign. ScamGuard Web3 Shield is available on the Chrome Web Store.",
 }

@@ -21,22 +21,22 @@ const summaryCards = [
 
 const sampleRows = [
   ["EPjF...t1v", "75", "Rejected / Not Eligible", "Known token mint / protocol entity"],
-  ["7JN...D42", "55", "Gray Zone", "V1.4 needs_review policy"],
+  ["7JN...D42", "55", "Gray Zone", "Needs project-side review"],
   ["58B...DLg", "31", "Approved", "Low risk after available evidence"],
   ["GDT...C7jT", "45", "Rejected / Not Eligible", "No reliable on-chain history"],
 ]
 
 const signals = [
-  "V1.3 behavior intelligence: low diversity / campaign concentration",
-  "V1.4 reputation and project-side policy labels",
-  "V1.5 No On-chain Data / Not Eligible language",
-  "V1.6 Conservative / Balanced / Strict policy presets",
+  "Behavior intelligence: diversity and campaign concentration",
+  "Reputation and project-side policy labels",
+  "No On-chain Data / Not Eligible handling",
+  "Conservative / Balanced / Strict policy presets",
   "Known Solana program, token mint, and protocol account detection",
 ]
 
 export const metadata = {
-  title: "Tri-Proof Guard Sample Report",
-  description: "Public sample report and demo dataset for Tri-Proof Guard wallet risk analysis.",
+  title: "Tri-Proof Sybil Analyst Sample Report",
+  description: "Public sample report and demo dataset for Tri-Proof Sybil Analyst wallet risk analysis.",
 }
 
 export default function SampleReportPage() {
@@ -47,7 +47,7 @@ export default function SampleReportPage() {
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
           <div className="mb-5 flex flex-wrap items-center gap-3">
             <Badge variant="secondary" className="border-primary/30 text-primary">
-              V1.8 Public Demo
+              Public sample report
             </Badge>
             <Badge variant="outline">Solana demo dataset</Badge>
           </div>
@@ -57,7 +57,7 @@ export default function SampleReportPage() {
                 Sample wallet risk report.
               </h1>
               <p className="mt-5 max-w-2xl leading-7 text-muted-foreground">
-                This page shows how Tri-Proof Guard explains campaign wallet decisions using approved, gray-zone, and rejected/not-eligible outputs. The public CSV can be downloaded and tested in the analysis flow.
+                This page shows how Tri-Proof Sybil Analyst explains campaign wallet decisions using approved, gray-zone, and rejected/not-eligible outputs. The public CSV can be downloaded and tested in the analysis flow.
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
@@ -109,18 +109,20 @@ export default function SampleReportPage() {
               <CardDescription>Representative rows from a public demo report.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="overflow-hidden rounded-xl border border-border">
-                <div className="grid grid-cols-[1fr_70px_150px_1.2fr] bg-primary/5 px-4 py-3 text-xs uppercase tracking-wide text-muted-foreground">
-                  <span>Wallet</span><span>Score</span><span>Decision</span><span>Main reason</span>
-                </div>
-                {sampleRows.map(([wallet, score, decision, reason]) => (
-                  <div key={wallet} className="grid grid-cols-[1fr_70px_150px_1.2fr] border-t border-border px-4 py-3 text-sm">
-                    <span className="font-mono text-muted-foreground">{wallet}</span>
-                    <span>{score}</span>
-                    <span className="text-primary">{decision}</span>
-                    <span className="text-muted-foreground">{reason}</span>
+              <div className="overflow-x-auto rounded-xl border border-border">
+                <div className="min-w-[760px]">
+                  <div className="grid grid-cols-[1fr_70px_150px_1.2fr] bg-primary/5 px-4 py-3 text-xs uppercase tracking-wide text-muted-foreground">
+                    <span>Wallet</span><span>Score</span><span>Decision</span><span>Main reason</span>
                   </div>
-                ))}
+                  {sampleRows.map(([wallet, score, decision, reason]) => (
+                    <div key={wallet} className="grid grid-cols-[1fr_70px_150px_1.2fr] border-t border-border px-4 py-3 text-sm">
+                      <span className="font-mono text-muted-foreground">{wallet}</span>
+                      <span>{score}</span>
+                      <span className="text-primary">{decision}</span>
+                      <span className="text-muted-foreground">{reason}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </CardContent>
           </Card>

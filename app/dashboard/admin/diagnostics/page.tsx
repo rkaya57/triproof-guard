@@ -78,7 +78,7 @@ export default async function DashboardAdminDiagnosticsPage() {
     <div className="flex flex-col gap-8">
       <section className="glass-panel rounded-3xl p-6 sm:p-8">
         <div className="mb-5 flex flex-wrap items-center gap-3">
-          <Badge variant="secondary" className="border-primary/30 bg-primary/10 text-cyan-100">V2.5 Production Hardening</Badge>
+          <Badge variant="secondary" className="border-primary/30 bg-primary/10 text-cyan-100">Production readiness</Badge>
           <Badge variant="outline" className={statusClass(report.status)}>{report.status.toUpperCase()}</Badge>
         </div>
         <h1 className="text-gradient max-w-4xl text-4xl font-semibold sm:text-5xl">Admin diagnostics</h1>

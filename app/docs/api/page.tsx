@@ -65,8 +65,8 @@ const feedbackExample = `curl -X POST https://triproofprotocol.com/api/scamguard
   }'`
 
 export const metadata = {
-  title: "Tri-Proof Guard API Docs",
-  description: "V1.10 API documentation for wallet risk analyses, ScamGuard scans, URL Sandbox, Scam DNA and analysis status.",
+  title: "Tri-Proof API Docs",
+  description: "API v1 documentation for wallet risk analyses, ScamGuard scans, URL Sandbox, Scam DNA and analysis status.",
 }
 
 const onboardingSteps = [
@@ -88,12 +88,12 @@ export default function ApiDocsPage() {
       <PublicTopNav />
       <section className="security-grid border-b border-border">
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
-          <Badge variant="secondary" className="mb-5 border-primary/30 text-primary">V1.10 API Endpoint</Badge>
+          <Badge variant="secondary" className="mb-5 border-primary/30 text-primary">API v1</Badge>
           <h1 className="text-gradient max-w-4xl text-4xl font-semibold sm:text-6xl">
             Create wallet risk analyses from your own workflow.
           </h1>
           <p className="mt-5 max-w-2xl leading-7 text-muted-foreground">
-            The V1 API lets teams add Tri-Proof intelligence to their own product: run ScamGuard before a wallet interaction, analyze campaign wallets before rewards, and retrieve clear decisions their users or operations team can act on.
+            API v1 lets teams add Tri-Proof intelligence to their own product: run ScamGuard before a wallet interaction, analyze campaign wallets before rewards, and retrieve clear decisions their users or operations team can act on.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link href="/api/v1" className={`${buttonVariants()} glow-primary`}>Open API index <ArrowRight data-icon="inline-end" /></Link>

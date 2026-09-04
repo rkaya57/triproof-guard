@@ -7,13 +7,13 @@ import { PublicTopNav } from "@/components/layout/public-top-nav"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 const healthApi = `curl https://triproofprotocol.com/api/health`
-const adminDiagnostics = `https://triproofprotocol.com/admin/diagnostics`
+const adminDiagnostics = `https://triproofprotocol.com/dashboard/admin/diagnostics`
 const migrations = `npx prisma generate
 npx prisma migrate deploy`
 
 export const metadata = {
-  title: "Tri-Proof Production Hardening",
-  description: "V2.5 production health checks, diagnostics and operational readiness for Tri-Proof Guard.",
+  title: "Tri-Proof Production Readiness",
+  description: "Production health checks, diagnostics and operational readiness for Tri-Proof Protocol.",
 }
 
 export default function ProductionDocsPage() {
@@ -22,13 +22,13 @@ export default function ProductionDocsPage() {
       <PublicTopNav />
       <section className="security-grid border-b border-border">
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
-          <Badge variant="secondary" className="mb-5 border-primary/30 bg-primary/10 text-cyan-100">V2.5 Production Hardening</Badge>
+          <Badge variant="secondary" className="mb-5 border-primary/30 bg-primary/10 text-cyan-100">Production readiness</Badge>
           <h1 className="text-gradient max-w-4xl text-4xl font-semibold sm:text-6xl">Keep the production app observable.</h1>
           <p className="mt-5 max-w-2xl leading-7 text-slate-300">
-            V2.5 adds health checks for the database, migrations, on-chain providers, analysis queue, webhooks and critical environment variables.
+            Health checks cover the database, migrations, on-chain providers, analysis queue, webhooks and critical environment variables.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Link href="/admin/diagnostics" className={`${buttonVariants()} glow-primary`}>Open diagnostics <ArrowRight data-icon="inline-end" /></Link>
+            <Link href="/dashboard/admin/diagnostics" className={`${buttonVariants()} glow-primary`}>Open diagnostics <ArrowRight data-icon="inline-end" /></Link>
             <Link href="/api/health" className={`${buttonVariants({ variant: "outline" })} text-white`}>Health API</Link>
           </div>
         </div>

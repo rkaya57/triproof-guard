@@ -366,7 +366,7 @@ export function NewAnalysisForm() {
               </CardDescription>
             </div>
             <Badge variant="outline" className="border-cyan-300/16 bg-cyan-300/[0.04] text-cyan-200">
-              V1.8 policy engine
+              Policy-aware analysis
             </Badge>
           </div>
         </CardHeader>

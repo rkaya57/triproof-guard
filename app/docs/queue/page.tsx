@@ -17,7 +17,7 @@ const webhookRetry = `curl -X POST "https://triproofprotocol.com/api/worker/webh
 
 export const metadata = {
   title: "Tri-Proof Queue Workers",
-  description: "Server-side analysis queue worker documentation for Tri-Proof Guard.",
+  description: "Server-side analysis queue worker documentation for Tri-Proof Protocol.",
 }
 
 export default function QueueDocsPage() {
@@ -28,7 +28,7 @@ export default function QueueDocsPage() {
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
           <Badge variant="secondary" className="mb-5 border-primary/30 text-primary">Server-side Queue Worker</Badge>
           <h1 className="text-gradient max-w-4xl text-4xl font-semibold sm:text-6xl">Scale large wallet analyses with safer workers.</h1>
-          <p className="mt-5 max-w-2xl leading-7 text-muted-foreground">Tri-Proof Guard processes AnalysisBatch jobs in a server-side worker queue. The analysis page only polls status; it does not run wallet processing from the browser.</p>
+          <p className="mt-5 max-w-2xl leading-7 text-muted-foreground">Tri-Proof Protocol processes AnalysisBatch jobs in a server-side worker queue. The analysis page only polls status; it does not run wallet processing from the browser.</p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link href="/docs/api" className={`${buttonVariants()} glow-primary`}>API docs <ArrowRight data-icon="inline-end" /></Link>
             <Link href="/docs/webhooks" className={buttonVariants({ variant: "outline" })}>Webhook docs</Link>

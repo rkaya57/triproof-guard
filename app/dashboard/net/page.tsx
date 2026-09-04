@@ -15,7 +15,7 @@ export default async function Page() {
         <div className="relative z-10 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
           <div>
             <Badge variant="outline" className="mb-3 border-amber-400/25 bg-amber-400/[0.05] text-amber-200"><Landmark className="mr-1 size-3" /> Internal office</Badge>
-            <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Tri Proof Net document command center</h2>
+            <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Tri-Proof Net document command center</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Create, route, approve and archive internal records with a clear administrative trail. The document workflow remains restricted to authorized operators.</p>
           </div>
           <div className="flex flex-wrap gap-2 text-xs text-slate-300">
