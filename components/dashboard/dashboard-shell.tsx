@@ -71,18 +71,27 @@ const navGroups = [
 
 const adminNavItems = [
   { href: "/dashboard/admin", label: "Admin Center", icon: ShieldCheck },
+  { href: "/dashboard/admin/analyses", label: "Analyses", icon: Layers3 },
   { href: "/dashboard/admin/scamguard", label: "Threat Review", icon: ShieldAlert },
+  { href: "/dashboard/admin/telegram", label: "Telegram Guardian", icon: ShieldCheck },
   { href: "/dashboard/admin/airdrop", label: "Airdrop Review", icon: Gift },
+  { href: "/dashboard/admin/benchmark", label: "Benchmark", icon: BarChart3 },
   { href: "/dashboard/admin/diagnostics", label: "Diagnostics", icon: HeartPulse },
+  { href: "/dashboard/admin/health", label: "System Health", icon: HeartPulse },
   { href: "/dashboard/admin/payments", label: "Payments", icon: Tags },
   { href: "/dashboard/admin/users", label: "Users", icon: UsersRound },
+  { href: "/dashboard/admin/blog", label: "Blog Admin", icon: FileText },
+  { href: "/dashboard/admin/bugs", label: "Issue Console", icon: ShieldAlert },
   { href: "/dashboard/net", label: "Tri-Proof Net", icon: Landmark },
 ] as const
 
 const routeTitles = [
   { href: "/dashboard/admin/airdrop", title: "Airdrop Review", eyebrow: "Season 0 task moderation" },
   { href: "/dashboard/admin/scamguard", title: "Threat Review", eyebrow: "ScamGuard community moderation" },
-  { href: "/dashboard/admin/diagnostics", title: "Diagnostics", eyebrow: "Production hardening checks" },
+  { href: "/dashboard/admin/telegram", title: "Telegram Guardian", eyebrow: "Community protection operations" },
+  { href: "/dashboard/admin/benchmark", title: "Benchmark", eyebrow: "Blind validation and quality review" },
+  { href: "/dashboard/admin/diagnostics", title: "Diagnostics", eyebrow: "Production readiness checks" },
+  { href: "/dashboard/admin/health", title: "System Health", eyebrow: "Runtime configuration and service health" },
   { href: "/dashboard/admin/payments", title: "Payments", eyebrow: "Solana checkout operations" },
   { href: "/dashboard/admin/users", title: "Users", eyebrow: "Admin-only account directory" },
   { href: "/dashboard/admin/analyses", title: "Analysis Admin", eyebrow: "Campaign operations" },
