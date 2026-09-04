@@ -1,4 +1,3 @@
-import Image from "next/image"
 import Link from "next/link"
 import {
   ArrowRight,
@@ -17,17 +16,10 @@ import {
   Zap,
 } from "lucide-react"
 
+import { PublicTopNav } from "@/components/layout/public-top-nav"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { scamGuardTelegramBotUrl } from "@/lib/telegram/links"
-
-const navLinks = [
-  ["Solutions", "#solutions"],
-  ["Use Cases", "#workflow"],
-  ["Pricing", "/pricing"],
-  ["Docs", "/docs"],
-  ["Proof", "#proof"],
-] as const
 
 const securitySignals = [
   [ShieldCheck, "Privacy first", "No custody or secret collection."],
@@ -87,32 +79,8 @@ const proofCards = [
 export function LandingPageV2() {
   return (
     <main className="premium-page min-h-screen overflow-hidden bg-background text-slate-100">
+      <PublicTopNav />
       <section className="relative border-b border-white/[0.055] bg-[radial-gradient(circle_at_18%_8%,rgba(73,200,245,.085),transparent_30%),radial-gradient(circle_at_82%_12%,rgba(155,140,255,.08),transparent_32%)]">
-        <header className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-5 py-5 sm:px-8">
-          <Link href="/" className="group flex items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
-            <span className="flex size-11 items-center justify-center rounded-2xl border border-cyan-300/16 bg-cyan-300/[0.05] shadow-[inset_0_1px_0_rgba(255,255,255,.04),0_14px_34px_rgba(0,0,0,.2)]">
-              <Image src="/logo.svg" alt="Tri-Proof Protocol" width={30} height={30} priority className="rounded-lg" />
-            </span>
-            <div>
-              <p className="text-sm font-semibold tracking-[-0.015em] text-white">Tri-Proof Protocol</p>
-              <p className="text-[10px] uppercase tracking-[0.18em] text-cyan-200/62">Web3 Security Platform</p>
-            </div>
-          </Link>
-
-          <nav className="hidden items-center gap-7 text-sm text-slate-400 lg:flex">
-            {navLinks.map(([label, href]) => (
-              <Link key={label} href={href} className="transition-colors duration-150 hover:text-slate-100">
-                {label}
-              </Link>
-            ))}
-          </nav>
-
-          <div className="flex items-center gap-2">
-            <Link href="/login" className={`${buttonVariants({ variant: "outline" })} hidden sm:inline-flex`}>Login</Link>
-            <Link href="/audit" className={`${buttonVariants()} glow-primary`}>Analyze a wallet</Link>
-          </div>
-        </header>
-
         <div className="mx-auto grid max-w-[1440px] gap-12 px-5 pb-20 pt-10 sm:px-8 lg:grid-cols-[1.03fr_.97fr] lg:items-center lg:pb-24 lg:pt-16">
           <div>
             <Badge variant="outline" className="mb-6 border-cyan-300/18 bg-cyan-300/[0.045] text-cyan-100">
@@ -149,7 +117,7 @@ export function LandingPageV2() {
             <div className="pointer-events-none absolute -right-16 -top-16 size-56 rounded-full bg-violet-400/[0.055] blur-3xl" />
             <div className="relative flex items-center justify-between gap-4 border-b border-white/[0.06] pb-5">
               <div>
-                <p className="font-semibold text-white">Tri-Proof Guard Platform</p>
+                <p className="font-semibold text-white">Tri-Proof Protocol</p>
                 <p className="mt-1 text-xs text-slate-500">One platform, three security outcomes.</p>
               </div>
               <Badge variant="outline" className="border-emerald-300/18 bg-emerald-300/[0.04] text-emerald-200">
