@@ -1,4 +1,3 @@
-import Image from "next/image"
 import Link from "next/link"
 import {
   ArrowRight,
@@ -6,98 +5,97 @@ import {
   Code2,
   CreditCard,
   FileSpreadsheet,
-  Globe2,
+  GraduationCap,
   MessageCircleWarning,
-  Network,
   Puzzle,
   ScanSearch,
   Send,
-  ShieldAlert,
   ShieldCheck,
   UsersRound,
   WalletCards,
 } from "lucide-react"
 
+import { PublicTopNav } from "@/components/layout/public-top-nav"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { scamGuardChromeWebStoreUrl } from "@/lib/scamguard/links"
 import { scamGuardTelegramBotUrl } from "@/lib/telegram/links"
 
 export const metadata = {
-  title: "Product Academy | Tri-Proof Guard",
-  description:
-    "Step-by-step training for ScamGuard, the Chrome extension, Telegram Group Guardian, Sybil Analyst, reports, billing, and the Tri-Proof Protocol API.",
+  title: "Product Academy | Tri-Proof Protocol",
+  description: "Guided training for ScamGuard, Chrome extension, Telegram Group Guardian, Sybil Analyst and Tri-Proof APIs.",
 }
 
-const quickStart = [
-  [ScanSearch, "Run your first ScamGuard scan", "Open the scanner, choose URL, wallet, token, or transaction, then review the evidence before you act.", "/scamguard", "Open ScamGuard"],
-  [Puzzle, "Install the browser extension", "Load the extension in Chrome, pin it, then let it explain supported wallet connection and signing requests.", "#extension", "Extension guide"],
-  [Bot, "Message the Telegram Bot", "Send /start, paste a Web3 URL, wallet, token, or transaction, and receive a readable pre-sign report.", "#telegram-bot", "Bot guide"],
-  [WalletCards, "Start a Sybil analysis", "Buy wallet credits when needed, upload a campaign CSV, review the graph evidence, then export the decision list.", "#sybil", "Sybil guide"],
-  [Code2, "Connect your product", "Choose an API plan, create a private API key in the dashboard, then add ScamGuard or Sybil decisions to your backend.", "#integrate", "API guide"],
-] as const
-
-const productNavigation = [
+const moduleNav = [
   ["Start here", "#start"],
   ["ScamGuard", "#scamguard"],
   ["Extension", "#extension"],
   ["Telegram", "#telegram-bot"],
   ["Group Guardian", "#group-guardian"],
   ["Sybil Analyst", "#sybil"],
-  ["Reports & API", "#integrate"],
+  ["API", "#integrate"],
   ["Plans", "#plans"],
-]
+] as const
+
+const quickStart = [
+  [ScanSearch, "Check something before signing", "Use ScamGuard for a suspicious URL, wallet, token contract or transaction request.", "/scamguard", "Open ScamGuard"],
+  [Puzzle, "Protect browser sessions", "Install the Chrome extension and review supported wallet requests before approving them.", scamGuardChromeWebStoreUrl, "Open Chrome Web Store"],
+  [Bot, "Scan inside Telegram", "Send suspicious Web3 targets to the official ScamGuard Bot for an explained result.", scamGuardTelegramBotUrl, "Open Telegram Bot"],
+  [WalletCards, "Review campaign participants", "Upload a wallet CSV, inspect evidence and clusters, simulate policy, then export decisions.", "/dashboard/new-analysis", "Start Sybil analysis"],
+] as const
 
 const scamGuardSteps = [
-  ["Choose a scan type", "Use URL for a page or campaign link, Wallet for an address, Token for a Solana mint or EVM contract, and Transaction for a signing payload."],
-  ["Choose the chain when you know it", "Select Solana or EVM for addresses and transaction data. URL scans remain chain-neutral until the passive sandbox detects a single-chain integration."],
-  ["Read the decision before the score", "Start with the risk decision, primary reason, confidence, and evidence. The score sorts urgency; the evidence explains it."],
-  ["Follow the next action", "Stop on critical evidence. For caution, verify the official source and compare the exact wallet prompt with what you expected to do."],
+  ["Choose the target", "Select URL, Wallet, Token or Transaction based on what you are about to open, trust or sign."],
+  ["Choose chain context", "Use Solana or EVM when the target is chain-specific. URL scans can begin without chain selection."],
+  ["Read decision before score", "Start with risk level, confidence, primary reason and evidence. The score is a summary, not the explanation."],
+  ["Act on the next step", "Stop on critical evidence. For caution, verify the official source and compare the wallet popup with the action you intended."],
 ] as const
 
 const extensionSteps = [
-  ["Download and unpack", "Download the ScamGuard extension package from the product page. Keep the folder in a stable location so Chrome can reload it during testing."],
-  ["Open Chrome extensions", "Visit chrome://extensions, enable Developer mode, choose Load unpacked, then select the extracted extension folder that contains manifest.json."],
-  ["Pin ScamGuard", "Use the browser extension menu to pin ScamGuard beside the address bar. Its popup can rescan the active page and open the full report."],
-  ["Review wallet requests", "When a supported wallet request appears, ScamGuard explains the request type, decoded intent, source, evidence, and the safest next move. The wallet popup remains the source of truth."],
+  ["Install from Chrome Web Store", "Use the official ScamGuard Web3 Shield listing rather than downloading an unpacked archive."],
+  ["Pin the extension", "Keep ScamGuard visible beside the address bar so the current page can be checked quickly."],
+  ["Review supported wallet requests", "When a supported request appears, compare decoded intent, source context and the final wallet popup."],
+  ["Keep the wallet as source of truth", "ScamGuard adds evidence and warnings; it never replaces the wallet confirmation screen or asks for secret wallet material."],
 ] as const
 
 const telegramSteps = [
-  ["Open the official bot", "Use the official ScamGuard Bot link below. Send /start to see the supported commands and /settings to confirm the analyst configuration."],
-  ["Scan in a private chat", "Use /scan followed by a URL, address, mint, or supported transaction payload. You can also paste a normal URL directly."],
-  ["Read the report", "The report separates summary, decision, evidence, transaction intent, and recommended action. Gemini can add an explanation, but deterministic evidence always controls the verdict."],
-  ["Use history when comparing links", "Send /history to revisit recent scans in the chat. Open the full scanner when a result needs deeper investigation."],
+  ["Open the official bot", "Start a private chat with the official ScamGuard Bot and use /start to see available commands."],
+  ["Submit a target", "Use /scan or paste a supported URL directly. Wallets, tokens and transaction requests can also be reviewed."],
+  ["Read the explained report", "The bot separates decision, evidence and recommended action instead of returning only a risk score."],
+  ["Use history when comparing threats", "Review recent scans when the same campaign, sender or target appears again."],
 ] as const
 
 const guardianSteps = [
-  ["Add the bot to your group", "Make ScamGuard a group administrator with permission to restrict members if you want time-limited moderation actions."],
-  ["Connect the group", "From the team dashboard, connect the Telegram group to a Community or API Growth plan. In the group, an authorized admin can use /guardian connect with the provided code."],
-  ["Set the alert policy", "Use /guardian on, then choose /guardian threshold caution, high, or critical. Start at HIGH_RISK for most public groups."],
-  ["Review repeated activity", "When the same sender repeatedly posts high-risk items or repeats a target, Group Guardian displays sender behavior and offers eligible administrators one-hour or twenty-four-hour mute actions."],
-  ["Enable critical containment only when ready", "Use /guardian automute on after the bot has Restrict members permission. It can mute a non-admin sender for one hour only after a critical finding or a Team Policy block. Seed phrase, recovery phrase, mnemonic, and private-key requests are detected even without a link."],
+  ["Choose Community or eligible API access", "Group Guardian is a managed community-protection workflow rather than a generic public bot setting."],
+  ["Connect the Telegram group", "Authorize the group from the Developer workspace, then complete the connection from an eligible group administrator."],
+  ["Choose an alert threshold", "Start with high-risk for most public communities; tighten the policy only after moderators understand the alert volume."],
+  ["Review repeated activity", "Guardian adds sender and repeated-target context so moderators can distinguish one-off links from recurring campaigns."],
+  ["Enable moderation deliberately", "Time-limited mute actions require the correct Telegram permissions and remain admin-controlled."],
 ] as const
 
 const sybilSteps = [
-  ["Prepare your campaign file", "Upload a CSV with a wallet address column. Optional referral, referrer, funder, and campaign fields add graph context when they are available."],
-  ["Create an analysis", "Open New analysis, name the campaign, select the policy, and upload the CSV. One Sybil credit is used for each wallet analyzed."],
-  ["Review decisions and graph evidence", "Separate approved, Gray Zone, and rejected wallets. Inspect shared funders, referral overlap, circular paths, timing, known entities, and cluster reasoning."],
-  ["Export with a human checkpoint", "Use exports only after reviewing the Gray Zone. Tri-Proof is decision support: project operators keep final control over reward eligibility."],
+  ["Prepare the participant CSV", "Use one wallet per row. Referral, funder and event timestamps are optional but can strengthen relationship evidence."],
+  ["Configure the analysis", "Choose chain, on-chain or hybrid evidence mode, and Conservative, Balanced or Strict risk policy."],
+  ["Review evidence and clusters", "Inspect clear participants, gray-zone cases, funding relationships, timing, known entities and cluster reasoning."],
+  ["Simulate policy before enforcement", "Use Policy Simulator to preview Allow, Review and Exclude outcomes before changing campaign eligibility decisions."],
+  ["Export after human review", "Resolve gray-zone cases, then use the Decision Package or exports for the campaign workflow. Tri-Proof remains decision support."],
 ] as const
 
-const integrationSteps = [
-  ["Choose an API plan", "API Starter is for small integrations with 5,000 requests per month. API Growth is for production flows, higher volume, signed webhooks, and one Telegram group."],
-  ["Create an API key", "After payment, open the Developer dashboard, create a private API key, and store it only in your server-side environment variables."],
-  ["Use a purpose-built endpoint", "Use the ScamGuard scan endpoint for pre-sign checks and the analysis endpoint for campaign wallet lists. Do not expose API keys in a browser client."],
-  ["Handle a clear response", "Show users the decision, confidence, strongest evidence, decoded intent, and next action. Never reduce a security response to only a score."],
-  ["Add webhook automation", "API Growth can send signed analysis events to your backend so your campaign or dApp workflow can react without polling."],
+const apiSteps = [
+  ["Choose the right contract", "Use API v1 for ScamGuard and general analysis integration. Use Campaign API v2 for campaign-native policy, decisions, clusters and run history."],
+  ["Create a private API key", "Generate keys in Dashboard → Developer and store them only in server-side environment variables."],
+  ["Use purpose-built endpoints", "Call ScamGuard before signing and campaign analysis before eligibility or reward distribution."],
+  ["Preserve explanation", "Show decision, confidence, strongest evidence and next action rather than reducing the response to a single score."],
+  ["Add signed webhooks when needed", "Use webhook events for backend automation while keeping wallet decisions and policy boundaries explicit."],
 ] as const
 
 function StepList({ steps }: { steps: readonly (readonly [string, string])[] }) {
   return (
     <ol className="grid gap-3">
       {steps.map(([title, text], index) => (
-        <li key={title} className="flex gap-4 rounded-lg border border-border bg-background/55 p-4">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-primary/30 bg-primary/10 font-mono text-xs font-semibold text-primary">{String(index + 1).padStart(2, "0")}</span>
+        <li key={title} className="flex gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.018] p-4 sm:p-5">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-xl border border-cyan-300/14 bg-cyan-300/[0.04] font-mono text-[10px] font-semibold text-cyan-200">{String(index + 1).padStart(2, "0")}</span>
           <div>
             <h3 className="font-semibold text-white">{title}</h3>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">{text}</p>
@@ -108,7 +106,7 @@ function StepList({ steps }: { steps: readonly (readonly [string, string])[] }) 
   )
 }
 
-function ProductSection({
+function AcademySection({
   id,
   eyebrow,
   title,
@@ -116,7 +114,6 @@ function ProductSection({
   icon: Icon,
   steps,
   actions,
-  aside,
 }: {
   id: string
   eyebrow: string
@@ -125,18 +122,16 @@ function ProductSection({
   icon: typeof ShieldCheck
   steps: readonly (readonly [string, string])[]
   actions: React.ReactNode
-  aside: React.ReactNode
 }) {
   return (
-    <section id={id} className="scroll-mt-24 border-b border-border last:border-b-0">
-      <div className="mx-auto grid max-w-7xl gap-8 px-5 py-16 sm:px-8 lg:grid-cols-[0.78fr_1.22fr] lg:py-20">
-        <div className="lg:sticky lg:top-28 lg:self-start">
-          <span className="cyber-chip">{eyebrow}</span>
-          <span className="mt-5 flex size-12 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary"><Icon className="size-6" /></span>
-          <h2 className="text-gradient mt-5 text-3xl font-semibold sm:text-5xl">{title}</h2>
-          <p className="mt-5 max-w-xl leading-7 text-muted-foreground">{description}</p>
+    <section id={id} className="scroll-mt-24 border-t border-border first:border-t-0">
+      <div className="mx-auto grid max-w-7xl gap-8 px-5 py-14 sm:px-8 lg:grid-cols-[0.72fr_1.28fr] lg:py-16">
+        <div className="lg:sticky lg:top-24 lg:self-start">
+          <Badge variant="outline" className="border-cyan-300/18 bg-cyan-300/[0.035] text-cyan-100">{eyebrow}</Badge>
+          <span className="mt-5 flex size-11 items-center justify-center rounded-2xl border border-cyan-300/14 bg-cyan-300/[0.04]"><Icon className="size-5 text-cyan-300" /></span>
+          <h2 className="mt-5 text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">{title}</h2>
+          <p className="mt-4 max-w-xl text-sm leading-7 text-muted-foreground">{description}</p>
           <div className="mt-6 flex flex-wrap gap-3">{actions}</div>
-          <div className="mt-7 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm leading-6 text-muted-foreground">{aside}</div>
         </div>
         <StepList steps={steps} />
       </div>
@@ -146,71 +141,81 @@ function ProductSection({
 
 export default function LearnPage() {
   return (
-    <main className="premium-page min-h-screen overflow-hidden bg-background text-foreground">
+    <main className="premium-page min-h-screen bg-background text-foreground">
+      <PublicTopNav />
+
       <section className="security-grid border-b border-border">
-        <header className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
-          <Link href="/" className="group flex items-center gap-3">
-            <span className="flex size-11 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 transition-transform group-hover:scale-105"><Image src="/logo.svg" alt="Tri-Proof Protocol" width={30} height={30} priority className="rounded-md" /></span>
-            <span><span className="block text-sm font-semibold">Tri-Proof Guard</span><span className="font-mono text-[10px] uppercase tracking-[0.22em] text-primary/80">Product Academy</span></span>
-          </Link>
-          <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
-            <Link href="/docs" className="hover:text-primary">Docs</Link>
-            <Link href="/pricing" className="hover:text-primary">Pricing</Link>
-            <Link href="/contact" className="hover:text-primary">Contact</Link>
-          </nav>
-          <Link href="/scamguard" className={`${buttonVariants()} glow-primary`}>Open Scanner</Link>
-        </header>
-
-        <div className="mx-auto grid max-w-7xl gap-10 px-5 pb-16 pt-12 sm:px-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:pb-24 lg:pt-20">
+        <div className="mx-auto grid max-w-7xl gap-10 px-5 py-16 sm:px-8 lg:grid-cols-[1fr_0.8fr] lg:items-center lg:py-20">
           <div>
-            <div className="flex flex-wrap gap-3"><Badge variant="secondary" className="border-primary/30 text-primary">Hands-on product training</Badge><Badge variant="outline">Start in 15 minutes</Badge></div>
-            <h1 className="text-gradient mt-6 max-w-4xl text-4xl font-semibold leading-tight sm:text-6xl">Learn every Tri-Proof product, from first scan to live protection.</h1>
-            <p className="mt-6 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">This academy explains the workflows behind ScamGuard, the Chrome extension, Telegram protection, Sybil Analyst, shareable reports, and the developer API. Follow the sections in order or jump directly to the product you need.</p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <a href="#start" className={`${buttonVariants({ size: "lg" })} glow-primary`}>Start learning <ArrowRight data-icon="inline-end" /></a>
-              <Link href="/docs" className={buttonVariants({ variant: "outline", size: "lg" })}>Reference docs</Link>
-            </div>
+            <Badge variant="outline" className="border-primary/30 bg-primary/5 text-primary"><GraduationCap /> Product Academy</Badge>
+            <h1 className="text-gradient mt-6 max-w-5xl text-4xl font-semibold tracking-[-0.04em] sm:text-6xl">Learn the workflow, then use the right Tri-Proof surface with confidence.</h1>
+            <p className="mt-5 max-w-3xl text-base leading-8 text-muted-foreground sm:text-lg">Academy is the guided product layer. It explains what to do in ScamGuard, the extension, Telegram, Group Guardian, Sybil Analyst and the API without mixing those walkthroughs into technical reference docs.</p>
+            <div className="mt-8 flex flex-wrap gap-3"><a href="#start" className={`${buttonVariants()} glow-primary`}>Start learning <ArrowRight data-icon="inline-end" /></a><Link href="/docs" className={buttonVariants({ variant: "outline" })}>Technical docs</Link></div>
           </div>
-          <div className="glass-panel premium-card animated-border rounded-lg p-5">
-            <div className="mb-4 flex items-center justify-between"><div><p className="font-semibold">Your learning path</p><p className="text-sm text-muted-foreground">Personal protection, community defense, then operations.</p></div><Badge variant="secondary" className="text-primary">7 modules</Badge></div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {quickStart.map(([Icon, title, text, href, action], index) => (
-                <a key={title} href={href} className="group rounded-lg border border-border bg-background/55 p-4 transition-colors hover:border-primary/50">
-                  <div className="flex items-center justify-between"><Icon className="size-5 text-primary" /><span className="font-mono text-xs text-primary/70">0{index + 1}</span></div>
-                  <p className="mt-4 font-semibold text-white">{title}</p><p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p><p className="mt-4 text-sm font-medium text-primary">{action} <ArrowRight className="inline size-4" /></p>
-                </a>
-              ))}
-            </div>
+
+          <Card className="glass-panel premium-card rounded-3xl">
+            <CardHeader><CardTitle>Your quickest path</CardTitle><CardDescription>Choose the outcome you need right now.</CardDescription></CardHeader>
+            <CardContent className="grid gap-3">
+              {quickStart.map(([Icon, title, text, href, action]) => {
+                const external = String(href).startsWith("http")
+                return (
+                  <a key={title as string} href={href as string} target={external ? "_blank" : undefined} rel={external ? "noreferrer" : undefined} className="group flex gap-3 rounded-2xl border border-white/[0.06] bg-black/10 p-4 transition hover:border-cyan-300/18 hover:bg-cyan-300/[0.02]">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-cyan-300/14 bg-cyan-300/[0.04]"><Icon className="size-4 text-cyan-300" /></span>
+                    <div><p className="text-sm font-semibold text-white">{title as string}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{text as string}</p><p className="mt-2 text-xs font-medium text-cyan-300">{action as string} <ArrowRight className="inline size-3.5" /></p></div>
+                  </a>
+                )
+              })}
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      <nav aria-label="Academy modules" className="border-b border-border bg-background/90 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-5 py-3 sm:px-8">
+          {moduleNav.map(([label, href]) => <a key={href} href={href} className="shrink-0 rounded-xl border border-white/[0.06] px-3 py-2 text-xs text-muted-foreground transition hover:border-cyan-300/18 hover:text-cyan-200">{label}</a>)}
+        </div>
+      </nav>
+
+      <section id="start" className="mx-auto max-w-7xl px-5 py-14 sm:px-8 lg:py-16">
+        <div className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
+          <div><Badge variant="secondary" className="border-primary/30 text-primary">Module 01</Badge><h2 className="mt-4 text-3xl font-semibold text-white sm:text-4xl">Choose by the decision you need to make.</h2><p className="mt-4 max-w-xl text-sm leading-7 text-muted-foreground">ScamGuard protects a user before interaction. Group Guardian protects a community conversation. Sybil Analyst protects a campaign allocation. APIs embed the same decision infrastructure into another product.</p></div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {[
+              [ScanSearch, "Before a click or signature", "ScamGuard scanner or extension"],
+              [MessageCircleWarning, "Inside Telegram", "Bot or Group Guardian"],
+              [UsersRound, "Before campaign rewards", "Sybil Analyst"],
+              [Code2, "Inside your own product", "API and signed webhooks"],
+            ].map(([Icon, title, text]) => <Card key={title as string} className="glass-panel premium-card"><CardHeader><Icon className="size-5 text-primary" /><CardTitle className="text-base">{title as string}</CardTitle><CardDescription>{text as string}</CardDescription></CardHeader></Card>)}
           </div>
         </div>
       </section>
 
-      <nav className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur"><div className="mx-auto flex max-w-7xl gap-3 overflow-x-auto px-5 py-3 sm:px-8">{productNavigation.map(([label, href]) => <a key={href} href={href} className="shrink-0 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary">{label}</a>)}</div></nav>
+      <AcademySection id="scamguard" eyebrow="Module 02 · Pre-sign safety" title="Use ScamGuard before you interact." description="The scanner is for a concrete target you are about to open, trust, approve or sign." icon={ScanSearch} steps={scamGuardSteps} actions={<><Link href="/scamguard" className={buttonVariants()}>Open ScamGuard</Link><Link href="/threat-reports" className={buttonVariants({ variant: "outline" })}>Threat Pool</Link></>} />
 
-      <section id="start" className="mx-auto max-w-7xl px-5 py-16 sm:px-8 lg:py-20">
-        <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-          <div><span className="cyber-chip">Module 01</span><h2 className="text-gradient mt-5 text-3xl font-semibold sm:text-5xl">Choose the right product for the moment.</h2><p className="mt-5 max-w-xl leading-7 text-muted-foreground">Use ScamGuard when someone is about to click or sign. Use the extension at the wallet prompt. Use the Telegram Bot in chat. Use Group Guardian for a community. Use Sybil Analyst before a reward distribution. Use the API when your own product needs this intelligence programmatically.</p><p className="mt-4 max-w-xl text-sm leading-6 text-primary">Personal safety and chat scanning start with Free. Deeper individual protection uses Builder. Community is for one protected Telegram group. Sybil analysis uses wallet credits. API plans are for teams embedding the engine in their own product.</p></div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {[[ShieldAlert, "Before a click or signature", "ScamGuard scanner or extension"], [MessageCircleWarning, "Inside Telegram", "Bot or Group Guardian"], [UsersRound, "Before campaign rewards", "Sybil Analyst"], [Code2, "Inside a product", "API and webhooks"]].map(([Icon, title, text]) => { const ItemIcon = Icon as typeof ShieldAlert; return <Card key={title as string} className="glass-panel premium-card"><CardHeader><ItemIcon className="text-primary" /><CardTitle className="text-base">{title as string}</CardTitle><CardDescription>{text as string}</CardDescription></CardHeader></Card> })}
+      <AcademySection id="extension" eyebrow="Module 03 · Browser protection" title="Put ScamGuard next to the wallet prompt." description="The Chrome extension brings supported page and signing context into the browsing flow without asking for seed phrases or private keys." icon={Puzzle} steps={extensionSteps} actions={<><a href={scamGuardChromeWebStoreUrl} target="_blank" rel="noreferrer" className={buttonVariants()}>Chrome Web Store <ArrowRight data-icon="inline-end" /></a><Link href="/extension" className={buttonVariants({ variant: "outline" })}>Extension details</Link></>} />
+
+      <AcademySection id="telegram-bot" eyebrow="Module 04 · Chat-native scanning" title="Use ScamGuard in a private Telegram chat." description="The bot is useful when a suspicious target is already circulating in a chat and you want a readable decision without leaving Telegram." icon={Bot} steps={telegramSteps} actions={<><a href={scamGuardTelegramBotUrl} target="_blank" rel="noreferrer" className={buttonVariants()}>Open Telegram Bot</a><Link href="/telegram" className={buttonVariants({ variant: "outline" })}>Telegram security center</Link></>} />
+
+      <AcademySection id="group-guardian" eyebrow="Module 05 · Community defense" title="Protect a Telegram group with controlled automation." description="Group Guardian adds monitoring and repeated-threat context while keeping thresholds and moderator actions under authorized administrator control." icon={Send} steps={guardianSteps} actions={<><Link href="/checkout?plan=community" className={buttonVariants()}>Protect a community</Link><Link href="/dashboard/developer" className={buttonVariants({ variant: "outline" })}>Developer workspace</Link></>} />
+
+      <AcademySection id="sybil" eyebrow="Module 06 · Campaign integrity" title="Turn a participant CSV into reviewable decisions." description="Sybil Analyst enriches wallet evidence, groups suspicious relationships, separates uncertainty, and lets operators test policy before enforcement." icon={WalletCards} steps={sybilSteps} actions={<><Link href="/dashboard/new-analysis" className={buttonVariants()}>Start analysis</Link><Link href="/demo/report" className={buttonVariants({ variant: "outline" })}>Sample report</Link><Link href="/pricing#campaign" className={buttonVariants({ variant: "ghost" })}>Wallet pricing</Link></>} />
+
+      <AcademySection id="integrate" eyebrow="Module 07 · Developer integration" title="Embed explained security decisions into your product." description="Use the documented API contract that matches the workflow, keep keys server-side, and preserve evidence semantics in your own UI." icon={Code2} steps={apiSteps} actions={<><Link href="/docs/api" className={buttonVariants()}>API v1</Link><Link href="/docs/api/v2" className={buttonVariants({ variant: "outline" })}>Campaign API v2</Link><Link href="/docs/webhooks" className={buttonVariants({ variant: "outline" })}>Webhooks</Link></>} />
+
+      <section id="plans" className="border-t border-border bg-primary/[0.025]">
+        <div className="mx-auto max-w-7xl px-5 py-14 sm:px-8 lg:py-16">
+          <div className="mb-8 max-w-3xl"><Badge variant="outline" className="border-primary/25 text-primary"><CreditCard /> Access model</Badge><h2 className="mt-4 text-3xl font-semibold text-white sm:text-4xl">Use the billing model that matches the product.</h2><p className="mt-3 text-sm leading-7 text-muted-foreground">ScamGuard plans are time-based access. Sybil analysis uses persistent wallet credits. Community and API plans unlock their respective operational surfaces.</p></div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {[
+              [ShieldCheck, "Free / Builder", "Personal ScamGuard scanning and deeper individual protection."],
+              [UsersRound, "Community", "One protected Telegram group with Group Guardian controls."],
+              [FileSpreadsheet, "Sybil wallet credits", "Persistent one-time wallet analysis credits; one credit per wallet analyzed."],
+              [Code2, "API Starter / Growth", "Backend request allowances, with Growth adding signed webhooks and higher-volume workflows."],
+            ].map(([Icon, title, text]) => <Card key={title as string} className="glass-panel premium-card"><CardHeader><Icon className="size-5 text-primary" /><CardTitle className="text-base">{title as string}</CardTitle><CardDescription className="leading-6">{text as string}</CardDescription></CardHeader></Card>)}
           </div>
+          <div className="mt-8 flex flex-wrap gap-3"><Link href="/pricing" className={buttonVariants()}>View pricing</Link><Link href="/contact" className={buttonVariants({ variant: "outline" })}>Talk to Tri-Proof</Link></div>
         </div>
       </section>
-
-      <ProductSection id="scamguard" eyebrow="Module 02 · personal safety" title="Use ScamGuard before you interact." description="ScamGuard is the product for checking a suspicious Web3 surface before a click, wallet connection, approval, or signature." icon={ScanSearch} steps={scamGuardSteps} actions={<><Link href="/scamguard" className={`${buttonVariants()} glow-primary`}>Open ScamGuard <ArrowRight data-icon="inline-end" /></Link><Link href="/scamguard/report" className={buttonVariants({ variant: "outline" })}>View sample report</Link></>} aside={<><strong className="text-white">Safety boundary:</strong> a SAFE result means no stop-level signal was found from available evidence. It is not a guarantee. Never share a seed phrase, private key, password, or recovery phrase.</>} />
-
-      <ProductSection id="extension" eyebrow="Module 03 · browser protection" title="Install the Chrome extension." description="The extension brings ScamGuard into the browser and creates a human-readable checkpoint when a compatible wallet request is detected." icon={Puzzle} steps={extensionSteps} actions={<><a href="/downloads/scamguard-chrome-extension.zip" download className={buttonVariants()}>Download extension <ArrowRight data-icon="inline-end" /></a><Link href="/scamguard" className={buttonVariants({ variant: "outline" })}>Open scanner</Link></>} aside={<><strong className="text-white">Important:</strong> Chrome does not allow direct installation of an unsigned extension from a website. For local testing, Load unpacked is the correct path. Public distribution requires Chrome Web Store review.</>} />
-
-      <ProductSection id="telegram-bot" eyebrow="Module 04 · chat-native scanning" title="Use ScamGuard in Telegram." description="The bot lets a user scan a suspicious item without leaving the chat where it appeared." icon={Bot} steps={telegramSteps} actions={<><a href={scamGuardTelegramBotUrl} target="_blank" rel="noreferrer" className={`${buttonVariants()} glow-primary`}><Send data-icon="inline-start" /> Open ScamGuard Bot</a><Link href="/scamguard" className={buttonVariants({ variant: "outline" })}>Open full scanner</Link></>} aside={<><strong className="text-white">What the analyst does:</strong> Gemini improves the explanation when available. It cannot overturn deterministic threat intelligence, sandbox evidence, or transaction decoding.</>} />
-
-      <ProductSection id="group-guardian" eyebrow="Module 05 · community defense" title="Protect a Telegram community." description="Group Guardian is for teams that want automatic risk alerts, secret-material request detection, repeated-campaign intelligence, history, daily summaries, Team Policy enforcement, and controlled moderation inside a managed Telegram group." icon={UsersRound} steps={guardianSteps} actions={<><Link href="/dashboard/admin/telegram" className={`${buttonVariants()} glow-primary`}>Manage groups <ArrowRight data-icon="inline-end" /></Link><Link href="/pricing" className={buttonVariants({ variant: "outline" })}>View Community plan</Link></>} aside={<><strong className="text-white">Recommended setup:</strong> begin with a HIGH_RISK threshold. Add the bot as an admin only after connecting the correct group. Keep auto-containment off until the team intentionally grants Restrict members permission and agrees on its incident response rule.</>} />
-
-      <ProductSection id="sybil" eyebrow="Module 06 · campaign integrity" title="Analyze campaign wallets with Sybil Analyst." description="Sybil Analyst helps campaign teams investigate wallet clusters before rewards, grants, allowlists, or loyalty points are distributed." icon={Network} steps={sybilSteps} actions={<><Link href="/dashboard/new-analysis" className={`${buttonVariants()} glow-primary`}>Create analysis <ArrowRight data-icon="inline-end" /></Link><Link href="/pricing?product=sybil" className={buttonVariants({ variant: "outline" })}>Get analysis credits</Link></>} aside={<><strong className="text-white">Best practice:</strong> do not make an automated reward decision from one isolated signal. Use the evidence graph and Gray Zone queue to handle legitimate edge cases fairly.</>} />
-
-      <ProductSection id="integrate" eyebrow="Module 07 · reports and developer tools" title="Share results or integrate the engine." description="Shareable reports make a decision easy to review. The API lets dApps, wallets, launchpads, and campaign platforms request the same explainable intelligence from their own backend." icon={Code2} steps={integrationSteps} actions={<><Link href="/docs/api" className={`${buttonVariants()} glow-primary`}>Read API docs <ArrowRight data-icon="inline-end" /></Link><Link href="/dashboard/developer" className={buttonVariants({ variant: "outline" })}>Developer dashboard</Link></>} aside={<><strong className="text-white">Integration rule:</strong> send scan and wallet-list requests from your server. A browser extension or frontend should never expose a Tri-Proof API key.</>} />
-
-      <section id="plans" className="border-y border-border bg-primary/[0.03]"><div className="mx-auto max-w-7xl px-5 py-16 sm:px-8 lg:py-20"><div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]"><div><span className="cyber-chip">Access and billing</span><h2 className="text-gradient mt-5 text-3xl font-semibold sm:text-5xl">Choose access based on the job.</h2><p className="mt-5 leading-7 text-muted-foreground">Free access covers everyday scanning. Builder adds individual intelligence. Community unlocks one protected Telegram group. API plans are for integrations. Sybil analysis uses clear per-wallet credit packs.</p><div className="mt-6 flex flex-wrap gap-3"><Link href="/pricing" className={`${buttonVariants()} glow-primary`}><CreditCard data-icon="inline-start" /> View plans</Link><Link href="/checkout" className={buttonVariants({ variant: "outline" })}>Open checkout</Link></div></div><div className="grid gap-3 sm:grid-cols-2">{[[ShieldCheck, "Free", "Extension, Telegram Bot, basic scans, shareable reports, daily limit."], [Globe2, "Builder", "Scan history, deeper URL sandboxing, Scam DNA, and alerts."], [UsersRound, "Community", "One Telegram group, Group Guardian, admins, history, and monthly report."], [FileSpreadsheet, "Sybil credits", "One persistent credit per wallet analyzed. No automatic renewal."]].map(([Icon, title, text]) => { const ItemIcon = Icon as typeof ShieldCheck; return <div key={title as string} className="rounded-lg border border-border bg-background/55 p-4"><ItemIcon className="size-5 text-primary" /><p className="mt-3 font-semibold text-white">{title as string}</p><p className="mt-2 text-sm leading-6 text-muted-foreground">{text as string}</p></div> })}</div></div></div></section>
-
-      <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8 lg:py-20"><div className="glass-panel premium-card animated-border rounded-lg p-8 text-center"><ShieldCheck className="mx-auto size-8 text-primary" /><h2 className="text-gradient mt-4 text-3xl font-semibold">Ready for your first protected workflow?</h2><p className="mx-auto mt-4 max-w-2xl leading-7 text-muted-foreground">Run a live ScamGuard check, start a campaign analysis, or bring protection directly into your Telegram community.</p><div className="mt-7 flex flex-wrap justify-center gap-3"><Link href="/scamguard" className={`${buttonVariants({ size: "lg" })} glow-primary`}>Run a scan <ArrowRight data-icon="inline-end" /></Link><Link href="/dashboard/new-analysis" className={buttonVariants({ variant: "outline", size: "lg" })}>Analyze wallets</Link><a href={scamGuardTelegramBotUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "outline", size: "lg" })}><Send data-icon="inline-start" /> Telegram Bot</a></div></div></section>
     </main>
   )
 }
