@@ -1,9 +1,9 @@
-import Image from "next/image"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { ArrowLeft, BadgeCheck, BellRing, Bot, Code2, ShieldCheck, WalletCards } from "lucide-react"
 
 import { CheckoutForm } from "@/components/checkout/checkout-form"
+import { PublicTopNav } from "@/components/layout/public-top-nav"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -62,27 +62,37 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   const icons = [ShieldCheck, isCreditPack ? WalletCards : plan!.telegramGroupLimit ? Bot : Code2, BellRing]
 
   return (
-    <main className="premium-page security-grid min-h-screen bg-background text-foreground">
-      <header className="border-b border-border bg-background/70 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
-          <Link href="/" className="group flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 transition-transform group-hover:scale-105"><Image src="/logo.svg" alt="Tri-Proof Guard" width={26} height={26} priority className="rounded-md" /></span><span className="text-sm font-semibold">Tri-Proof Guard</span></Link>
-          <Badge variant="secondary" className="gap-2 border-primary/30 text-primary"><BadgeCheck className="size-3.5" /> Solana mainnet checkout</Badge>
+    <main className="premium-page min-h-screen bg-background text-foreground">
+      <PublicTopNav />
+      <section className="security-grid border-b border-border">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-8 sm:px-8 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <Badge variant="outline" className="mb-3 border-cyan-300/20 bg-cyan-300/[0.04] text-cyan-100">
+              <BadgeCheck className="size-3.5" /> Secure checkout
+            </Badge>
+            <h1 className="text-2xl font-semibold text-white sm:text-3xl">Complete your Tri-Proof purchase</h1>
+            <p className="mt-2 text-sm text-muted-foreground">Verified Solana mainnet settlement with no recurring wallet approvals.</p>
+          </div>
+          <Badge variant="secondary" className="w-fit gap-2 border-primary/30 text-primary"><BadgeCheck className="size-3.5" /> Solana mainnet</Badge>
         </div>
-      </header>
+      </section>
+
       <section className="mx-auto max-w-7xl px-5 py-10 sm:px-8 lg:py-16">
         <Link href="/pricing" className={`${buttonVariants({ variant: "ghost", size: "sm" })} mb-8 -ml-3 text-muted-foreground hover:text-foreground`}><ArrowLeft data-icon="inline-start" /> Back to pricing</Link>
         <div className="grid gap-8 lg:grid-cols-[0.82fr_1.18fr] lg:items-start">
-          <section className="relative overflow-hidden rounded-xl border border-primary/25 bg-card/75 p-6 shadow-[0_0_44px_rgba(56,189,248,0.1)] sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-px bg-primary/80" />
-            <Badge variant="secondary" className="mb-5 gap-2 border-primary/30 text-primary"><WalletCards className="size-3.5" /> {isCreditPack ? "Persistent Sybil wallet credits" : "30-day access pass"}</Badge>
-            <h1 className="text-3xl font-semibold sm:text-4xl">{isCreditPack ? `Purchase ${name}.` : `Activate ${name}.`}</h1>
-            <p className="mt-4 max-w-xl text-sm leading-7 text-muted-foreground">{isCreditPack ? "Credits are consumed one wallet at a time when a Sybil campaign analysis runs. They stay in your ledger until used, with no monthly renewal." : "A verified on-chain payment activates this plan for 30 days. Renewal is always manual: we never create wallet approvals or recurring transfers."}</p>
-            <div className="mt-8 rounded-lg border border-border bg-background/55 p-5"><p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">{isCreditPack ? "Credit-pack value" : "Plan value"}</p><p className="mt-2 text-4xl font-semibold text-primary">{amountUsdc} USDC<span className="ml-1 text-base text-muted-foreground">{isCreditPack ? ` / ${creditPack!.walletCredits.toLocaleString()} wallets` : " / 30 days"}</span></p><p className="mt-2 text-xs text-muted-foreground">{isCreditPack ? `${perWallet} USDC per wallet. Pay in USDC or a short-lived live SOL equivalent.` : "Pay in USDC or a short-lived live SOL equivalent."}</p></div>
-            <div className="mt-8 grid gap-4 border-t border-border pt-6">
-              {featureItems.map((detail, index) => { const Icon = icons[index]; return <div key={detail} className="flex gap-3"><span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-primary/25 bg-primary/10"><Icon className="size-4 text-primary" /></span><p className="pt-1 text-sm leading-5 text-muted-foreground">{detail}</p></div> })}
+          <section className="glass-panel premium-card relative overflow-hidden rounded-3xl border border-primary/20 p-6 sm:p-8">
+            <div className="pointer-events-none absolute -right-16 -top-20 size-56 rounded-full bg-cyan-300/[0.05] blur-3xl" />
+            <div className="relative">
+              <Badge variant="secondary" className="mb-5 gap-2 border-primary/30 text-primary"><WalletCards className="size-3.5" /> {isCreditPack ? "Persistent Sybil wallet credits" : "30-day access pass"}</Badge>
+              <h2 className="text-3xl font-semibold sm:text-4xl">{isCreditPack ? `Purchase ${name}.` : `Activate ${name}.`}</h2>
+              <p className="mt-4 max-w-xl text-sm leading-7 text-muted-foreground">{isCreditPack ? "Credits are consumed one wallet at a time when a Sybil campaign analysis runs. They stay in your ledger until used, with no monthly renewal." : "A verified on-chain payment activates this plan for 30 days. Renewal is always manual: we never create wallet approvals or recurring transfers."}</p>
+              <div className="mt-8 rounded-2xl border border-white/[0.07] bg-black/10 p-5"><p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">{isCreditPack ? "Credit-pack value" : "Plan value"}</p><p className="mt-2 text-4xl font-semibold text-primary">{amountUsdc} USDC<span className="ml-1 text-base text-muted-foreground">{isCreditPack ? ` / ${creditPack!.walletCredits.toLocaleString()} wallets` : " / 30 days"}</span></p><p className="mt-2 text-xs text-muted-foreground">{isCreditPack ? `${perWallet} USDC per wallet. Pay in USDC or a short-lived live SOL equivalent.` : "Pay in USDC or a short-lived live SOL equivalent."}</p></div>
+              <div className="mt-8 grid gap-4 border-t border-border pt-6">
+                {featureItems.map((detail, index) => { const Icon = icons[index]; return <div key={detail} className="flex gap-3"><span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl border border-primary/25 bg-primary/10"><Icon className="size-4 text-primary" /></span><p className="pt-1 text-sm leading-5 text-muted-foreground">{detail}</p></div> })}
+              </div>
             </div>
           </section>
-          <Card className="glass-panel premium-card animated-border overflow-hidden border-primary/35"><CardHeader className="border-b border-border bg-primary/5"><Badge variant="secondary" className="mb-3 w-fit border-primary/30 text-primary">Secure settlement</Badge><CardTitle className="text-2xl">{isCreditPack ? `Complete your ${name} purchase` : `Complete your ${name} access pass`}</CardTitle><CardDescription>{isCreditPack ? "The wallet-credit amount is fixed. Every transfer is bound to a short-lived signed checkout reference; native SOL also locks a live quote." : "The USDC amount is fixed. Every transfer is bound to a short-lived signed checkout reference; native SOL also locks a live quote."}</CardDescription></CardHeader><CardContent className="pt-6"><CheckoutForm plan={{ id: creditPack?.id ?? plan!.id, name, amount: String(amountUsdc), wallets: isCreditPack ? `${creditPack!.walletCredits.toLocaleString()} wallets` : "30 days", purchaseKind: isCreditPack ? "credits" : "subscription" }} networks={networks} initialCurrency={initialCurrency} /></CardContent></Card>
+          <Card className="glass-panel premium-card animated-border overflow-hidden border-primary/25"><CardHeader className="border-b border-border bg-primary/[0.035]"><Badge variant="secondary" className="mb-3 w-fit border-primary/30 text-primary">Secure settlement</Badge><CardTitle className="text-2xl">{isCreditPack ? `Complete your ${name} purchase` : `Complete your ${name} access pass`}</CardTitle><CardDescription>{isCreditPack ? "The wallet-credit amount is fixed. Every transfer is bound to a short-lived signed checkout reference; native SOL also locks a live quote." : "The USDC amount is fixed. Every transfer is bound to a short-lived signed checkout reference; native SOL also locks a live quote."}</CardDescription></CardHeader><CardContent className="pt-6"><CheckoutForm plan={{ id: creditPack?.id ?? plan!.id, name, amount: String(amountUsdc), wallets: isCreditPack ? `${creditPack!.walletCredits.toLocaleString()} wallets` : "30 days", purchaseKind: isCreditPack ? "credits" : "subscription" }} networks={networks} initialCurrency={initialCurrency} /></CardContent></Card>
         </div>
       </section>
     </main>
