@@ -76,7 +76,7 @@ const adminNavItems = [
   { href: "/dashboard/admin/diagnostics", label: "Diagnostics", icon: HeartPulse },
   { href: "/dashboard/admin/payments", label: "Payments", icon: Tags },
   { href: "/dashboard/admin/users", label: "Users", icon: UsersRound },
-  { href: "/dashboard/net", label: "Tri Proof Net", icon: Landmark },
+  { href: "/dashboard/net", label: "Tri-Proof Net", icon: Landmark },
 ] as const
 
 const routeTitles = [
@@ -97,7 +97,7 @@ const routeTitles = [
   { href: "/threat-reports", title: "Threat Pool", eyebrow: "Community-reviewed scam intelligence" },
   { href: "/dashboard/developer", title: "Developer", eyebrow: "API keys and Group Guardian access" },
   { href: "/dashboard/policies", title: "Team Policies", eyebrow: "B2B and Guardian safety controls" },
-  { href: "/dashboard/net", title: "Tri Proof Net", eyebrow: "Internal document office and approval workflow" },
+  { href: "/dashboard/net", title: "Tri-Proof Net", eyebrow: "Internal document office and approval workflow" },
   { href: "/dashboard/settings", title: "Settings", eyebrow: "Workspace preferences" },
   { href: "/dashboard/analysis", title: "Analysis Report", eyebrow: "Risk decision center" },
   { href: "/dashboard", title: "Overview", eyebrow: "Web3 campaign security workspace" },
