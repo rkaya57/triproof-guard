@@ -1,10 +1,10 @@
 import Link from "next/link"
 
 import { TeamReviewDashboard } from "@/components/analysis/team-review-dashboard"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { buttonVariants } from "@/components/ui/button"
-import { getCurrentUser } from "@/lib/auth/session"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { serializeAnalysis } from "@/lib/analysis/serializers"
+import { getCurrentUser } from "@/lib/auth/session"
 import { attachFundingProvenanceDecisionEvidence } from "@/lib/campaign-security/funding-provenance-evidence"
 import { loadDecisionFundingRelationships } from "@/lib/campaign-security/funding-provenance-evidence-server"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
@@ -29,6 +29,18 @@ async function loadReviewAnalysis(id: string, userId: string) {
   }
 }
 
+function StateCard({ title, description, action }: { title: string; description: string; action: React.ReactNode }) {
+  return (
+    <Card className="glass-panel mx-auto w-full max-w-2xl">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>{action}</CardContent>
+    </Card>
+  )
+}
+
 export default async function ReviewPage({
   params,
 }: {
@@ -38,53 +50,17 @@ export default async function ReviewPage({
   const user = await getCurrentUser()
 
   if (!user) {
-    return (
-      <main className="premium-page min-h-screen bg-background px-5 py-10 text-foreground sm:px-8">
-        <Card className="glass-panel mx-auto max-w-xl">
-          <CardHeader>
-            <CardTitle>Login required</CardTitle>
-            <CardDescription>Team review is available to authenticated dashboard users.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/login" className={buttonVariants()}>Login</Link>
-          </CardContent>
-        </Card>
-      </main>
-    )
+    return <StateCard title="Login required" description="Team review is available to authenticated dashboard users." action={<Link href="/login" className={buttonVariants()}>Login</Link>} />
   }
 
   const { analysis, databaseRequired } = await loadReviewAnalysis(id, user.id)
 
   if (databaseRequired) {
-    return (
-      <main className="premium-page min-h-screen bg-background px-5 py-10 text-foreground sm:px-8">
-        <Card className="glass-panel mx-auto max-w-xl">
-          <CardHeader>
-            <CardTitle>Database required</CardTitle>
-            <CardDescription>Team review requires the production database connection.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href={`/dashboard/analysis/${id}`} className={buttonVariants({ variant: "outline" })}>Back to analysis</Link>
-          </CardContent>
-        </Card>
-      </main>
-    )
+    return <StateCard title="Database required" description="Team review requires the production database connection." action={<Link href={`/dashboard/analysis/${id}`} className={buttonVariants({ variant: "outline" })}>Back to analysis</Link>} />
   }
 
   if (!analysis) {
-    return (
-      <main className="premium-page min-h-screen bg-background px-5 py-10 text-foreground sm:px-8">
-        <Card className="glass-panel mx-auto max-w-xl">
-          <CardHeader>
-            <CardTitle>Analysis not found</CardTitle>
-            <CardDescription>This review dashboard could not find the requested analysis.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/dashboard" className={buttonVariants({ variant: "outline" })}>Back to dashboard</Link>
-          </CardContent>
-        </Card>
-      </main>
-    )
+    return <StateCard title="Analysis not found" description="This review dashboard could not find the requested analysis." action={<Link href="/dashboard" className={buttonVariants({ variant: "outline" })}>Back to dashboard</Link>} />
   }
 
   const relationships = await loadDecisionFundingRelationships(id)
@@ -93,9 +69,5 @@ export default async function ReviewPage({
     relationships,
   )
 
-  return (
-    <main className="premium-page min-h-screen bg-background text-foreground">
-      <TeamReviewDashboard initialAnalysis={reviewAnalysis} />
-    </main>
-  )
+  return <TeamReviewDashboard initialAnalysis={reviewAnalysis} />
 }
