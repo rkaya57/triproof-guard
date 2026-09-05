@@ -36,6 +36,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run db:bootstrap
+      - name: Install raw SQL worker table in disposable database
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d worker_test -v ON_ERROR_STOP=1 -f prisma/migrations/20260629150000_add_analysis_batches/migration.sql
       - name: Verify isolated worker handoffs
         shell: bash
         run: |
