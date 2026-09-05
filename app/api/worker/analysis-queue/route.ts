@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server"
 
 import { recoverStaleAnalysisBatches } from "@/lib/analysis/batch-lease"
-import { finalizeReadyAnalyses } from "@/lib/analysis/batch-worker"
+import { finalizeAnalysisIfReady, finalizeReadyAnalyses } from "@/lib/analysis/batch-worker"
 import { ensureProduction50KValidationQueued } from "@/lib/analysis/production-50k-validation"
 import {
   getAnalysisQueueStatus,
   processAnalysisQueue,
 } from "@/lib/analysis/queue-optimizer"
-import { dispatchAnalysisWorkerContinuation } from "@/lib/analysis/worker-dispatch"
+import { dispatchAnalysisWorker, dispatchAnalysisWorkerContinuation } from "@/lib/analysis/worker-dispatch"
 import { isDatabaseConnectionError } from "@/lib/db/errors"
 import {
   boundedNumber,
@@ -68,7 +68,8 @@ export async function GET(request: Request) {
     const timeBudgetMs = remainingQueueBudget(startedAt, requestedBudget)
 
     if (timeBudgetMs < 1_000) {
-      const queue = await getAnalysisQueueStatus({ analysisId })
+      const queue = await getAnalysisQueueStatus({ analysisId, activeOnly: true })
+      dispatchAnalysisWorkerContinuation({ analysisId, queue, reason: "worker-budget-exhausted" })
       return NextResponse.json({
         ok: true,
         source: "get",
@@ -79,7 +80,7 @@ export async function GET(request: Request) {
         elapsedMs: Date.now() - startedAt,
         queue,
         message:
-          "The invocation budget was used to collect and queue real wallets. Batch processing will continue on the next authorized worker call.",
+          "The invocation budget was used to collect and queue real wallets. Remaining work has been considered for a separate worker invocation.",
       })
     }
 
@@ -89,13 +90,12 @@ export async function GET(request: Request) {
       timeBudgetMs,
       recoverStale: true,
     })
-    if (analysisId) {
-      dispatchAnalysisWorkerContinuation({
-        analysisId,
-        queue: result.queue,
-        reason: "worker-get",
-      })
-    }
+    dispatchAnalysisWorkerContinuation({
+      analysisId,
+      queue: result.queue,
+      workerLockAcquired: result.workerLockAcquired,
+      reason: "worker-get",
+    })
 
     return NextResponse.json({
       ok: true,
@@ -144,10 +144,15 @@ export async function POST(request: Request) {
   )
 
   try {
+    if (booleanParam(url.searchParams.get("defer"), false) && !recoverOnly) {
+      dispatchAnalysisWorker({ analysisId: requestedAnalysisId, maxBatches, timeBudgetMs: requestedBudget, reason: "worker-deferred" })
+      return NextResponse.json({ accepted: true, analysisId: requestedAnalysisId }, { status: 202 })
+    }
     if (recoverOnly) {
       const recovered = await recoverStaleAnalysisBatches(
         requestedAnalysisId ?? undefined
       )
+      if (requestedAnalysisId) await finalizeAnalysisIfReady(requestedAnalysisId)
       const finalizedReadyAnalyses = requestedAnalysisId
         ? { checked: 0, finalized: 0 }
         : await finalizeReadyAnalyses(maxBatches)
@@ -175,7 +180,8 @@ export async function POST(request: Request) {
     const timeBudgetMs = remainingQueueBudget(startedAt, requestedBudget)
 
     if (timeBudgetMs < 1_000) {
-      const queue = await getAnalysisQueueStatus({ analysisId })
+      const queue = await getAnalysisQueueStatus({ analysisId, activeOnly: true })
+      dispatchAnalysisWorkerContinuation({ analysisId, queue, reason: "worker-budget-exhausted" })
       return NextResponse.json({
         ok: true,
         runtimeProfile: WORKER_RUNTIME_PROFILE,
@@ -185,7 +191,7 @@ export async function POST(request: Request) {
         elapsedMs: Date.now() - startedAt,
         queue,
         message:
-          "The invocation budget was used to collect and queue real wallets. Batch processing will continue on the next authorized worker call.",
+          "The invocation budget was used to collect and queue real wallets. Remaining work has been considered for a separate worker invocation.",
       })
     }
 
@@ -195,13 +201,12 @@ export async function POST(request: Request) {
       timeBudgetMs,
       recoverStale,
     })
-    if (analysisId) {
-      dispatchAnalysisWorkerContinuation({
-        analysisId,
-        queue: result.queue,
-        reason: "worker-post",
-      })
-    }
+    dispatchAnalysisWorkerContinuation({
+      analysisId,
+      queue: result.queue,
+      workerLockAcquired: result.workerLockAcquired,
+      reason: "worker-post",
+    })
 
     return NextResponse.json({
       ok: true,

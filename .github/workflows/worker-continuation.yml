@@ -1,0 +1,59 @@
+name: Worker continuation integration
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  worker-continuation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: worker_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U postgres -d worker_test"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/worker_test?schema=public
+      NEXTAUTH_SECRET: worker-integration-only-secret-not-for-production
+      WORKER_SECRET: worker-integration-only-token-not-for-production
+      E2E_TEST_MODE: "1"
+      DEV_ALLOW_INSECURE_SECRETS: "true"
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3116
+      TRIPROOF_DISABLE_50K_VALIDATION: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run db:bootstrap
+      - name: Install raw SQL worker table in disposable database
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d worker_test -v ON_ERROR_STOP=1 -f prisma/migrations/20260629150000_add_analysis_batches/migration.sql
+      - name: Verify isolated worker handoffs
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run dev -- --hostname 127.0.0.1 --port 3116 > worker-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl -s http://127.0.0.1:3116/api/worker/analysis-queue > /dev/null; then break; fi
+            sleep 1
+          done
+          node --import tsx scripts/test-worker-continuation.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: worker-continuation-log
+          path: worker-server.log
