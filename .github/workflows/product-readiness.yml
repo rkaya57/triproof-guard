@@ -23,6 +23,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:product-readiness
+      - run: npm run test:analysis-recovery
       - run: npm run demo:check
       - run: npm run benchmark:labeled
       - run: npm run benchmark:adversarial

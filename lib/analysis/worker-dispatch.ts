@@ -1,5 +1,6 @@
 import { after } from "next/server"
 
+import { continuationUrl, needsContinuation, type QueueSnapshot } from "@/lib/analysis/continuation-policy"
 import { processAnalysisQueue } from "@/lib/analysis/queue-optimizer"
 
 // A Solana screening batch can spend roughly two minutes on real RPC history.
@@ -10,12 +11,6 @@ const DEFAULT_BOOTSTRAP_BATCHES = Number.parseInt(process.env.WORKER_BOOTSTRAP_M
 const DEFAULT_BOOTSTRAP_TIME_BUDGET_MS = Number.parseInt(process.env.WORKER_BOOTSTRAP_TIME_BUDGET_MS ?? "240000", 10)
 const CONTINUATION_BATCHES = Number.parseInt(process.env.WORKER_CONTINUATION_MAX_BATCHES ?? "2", 10)
 const CONTINUATION_TIME_BUDGET_MS = Number.parseInt(process.env.WORKER_CONTINUATION_TIME_BUDGET_MS ?? "240000", 10)
-
-type QueueSnapshot = {
-  pending: number
-  processing: number
-  staleProcessing?: number
-}
 
 function safeNumber(value: number, fallback: number, min: number, max: number) {
   if (!Number.isFinite(value)) return fallback
@@ -42,35 +37,22 @@ function workerSecret() {
   return process.env.WORKER_SECRET ?? process.env.ANALYSIS_WORKER_SECRET ?? process.env.CRON_SECRET ?? ""
 }
 
-function needsContinuation(queue: QueueSnapshot | null | undefined) {
-  if (!queue) return false
-  return (queue.staleProcessing ?? 0) > 0 || (queue.pending > 0 && queue.processing === 0)
-}
-
 async function requestWorkerContinuation({
   analysisId,
   reason,
 }: {
-  analysisId: string
+  analysisId: string | null
   reason: string
 }) {
-  const maxBatches = safeNumber(
-    CONTINUATION_BATCHES,
-    MAX_BATCHES_PER_INVOCATION,
-    1,
-    MAX_BATCHES_PER_INVOCATION
-  )
-  const timeBudgetMs = safeNumber(CONTINUATION_TIME_BUDGET_MS, 240_000, 1_000, 280_000)
-  const url = new URL("/api/worker/analysis-queue", siteOrigin())
-  url.searchParams.set("analysisId", analysisId)
-  url.searchParams.set("maxBatches", String(maxBatches))
-  url.searchParams.set("timeBudgetMs", String(timeBudgetMs))
-  url.searchParams.set("recoverStale", "true")
+  const url = continuationUrl(siteOrigin(), analysisId)
+  url.searchParams.set("maxBatches", String(safeNumber(CONTINUATION_BATCHES, 2, 1, MAX_BATCHES_PER_INVOCATION)))
+  url.searchParams.set("timeBudgetMs", String(safeNumber(CONTINUATION_TIME_BUDGET_MS, 240_000, 1_000, 280_000)))
 
   const secret = workerSecret()
   const response = await fetch(url, {
     method: "POST",
     cache: "no-store",
+    signal: AbortSignal.timeout(10_000),
     headers: secret ? { authorization: `Bearer ${secret}` } : undefined,
   })
 
@@ -83,13 +65,15 @@ async function requestWorkerContinuation({
 export function dispatchAnalysisWorkerContinuation({
   analysisId,
   queue,
+  workerLockAcquired = true,
   reason,
 }: {
-  analysisId: string
+  analysisId: string | null
   queue: QueueSnapshot | null | undefined
+  workerLockAcquired?: boolean
   reason: string
 }) {
-  if (!needsContinuation(queue)) return
+  if (!needsContinuation(queue, workerLockAcquired)) return
 
   after(async () => {
     try {
@@ -107,17 +91,21 @@ export function dispatchAnalysisWorkerContinuation({
 export function dispatchAnalysisWorker({
   analysisId,
   reason,
+  maxBatches: requestedMaxBatches = DEFAULT_BOOTSTRAP_BATCHES,
+  timeBudgetMs: requestedTimeBudgetMs = DEFAULT_BOOTSTRAP_TIME_BUDGET_MS,
 }: {
-  analysisId: string
+  analysisId: string | null
   reason: string
+  maxBatches?: number
+  timeBudgetMs?: number
 }) {
   const maxBatches = safeNumber(
-    DEFAULT_BOOTSTRAP_BATCHES,
+    requestedMaxBatches,
     MAX_BATCHES_PER_INVOCATION,
     1,
     MAX_BATCHES_PER_INVOCATION
   )
-  const timeBudgetMs = safeNumber(DEFAULT_BOOTSTRAP_TIME_BUDGET_MS, 240_000, 1_000, 280_000)
+  const timeBudgetMs = safeNumber(requestedTimeBudgetMs, 240_000, 1_000, 280_000)
 
   after(async () => {
     try {
@@ -127,7 +115,7 @@ export function dispatchAnalysisWorker({
         timeBudgetMs,
         recoverStale: true,
       })
-      if (needsContinuation(result.queue)) {
+      if (needsContinuation(result.queue, result.workerLockAcquired)) {
         await requestWorkerContinuation({ analysisId, reason: `${reason}:continuation` })
       }
     } catch (error) {

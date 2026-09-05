@@ -66,12 +66,33 @@ export async function getAnalysisQueueStatus({
   analysisId,
   userId,
   staleMinutes = DEFAULT_STALE_MINUTES,
+  activeOnly = false,
 }: {
   analysisId?: string | null
   userId?: string | null
   staleMinutes?: number
+  activeOnly?: boolean
 } = {}) {
   const minutes = safeStaleMinutes(staleMinutes)
+
+  if (activeOnly && !userId) {
+    const rows = await db.$queryRaw<QueueStatusRow[]>`
+      SELECT COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE b."status" = 'pending')::int AS pending,
+        COUNT(*) FILTER (WHERE b."status" = 'processing')::int AS processing,
+        COUNT(*) FILTER (WHERE b."status" = 'completed')::int AS completed,
+        COUNT(*) FILTER (WHERE b."status" = 'failed')::int AS failed,
+        COUNT(*) FILTER (WHERE b."status" = 'processing'
+          AND b."updatedAt" < NOW() - (${minutes} * INTERVAL '1 minute'))::int AS "staleProcessing",
+        MIN(b."createdAt") FILTER (WHERE b."status" = 'pending') AS "oldestPendingAt",
+        MIN(b."updatedAt") FILTER (WHERE b."status" = 'processing') AS "oldestProcessingAt"
+      FROM "AnalysisBatch" b JOIN "Analysis" a ON a."id" = b."analysisId"
+      WHERE a."status" IN ('pending', 'processing', 'enriching', 'analyzing')
+        AND (${analysisId ?? null}::text IS NULL OR b."analysisId" = ${analysisId ?? null})
+    `
+    return normalizeStatus(rows[0])
+  }
+
 
   if (analysisId && userId) {
     const rows = await db.$queryRaw<QueueStatusRow[]>`
@@ -188,7 +209,7 @@ async function processQueueLocked({
     : await finalizeReadyAnalyses(limit)
 
   if (analysisId) await finalizeAnalysisIfReady(analysisId)
-  const queue = await getAnalysisQueueStatus({ analysisId })
+  const queue = await getAnalysisQueueStatus({ analysisId, activeOnly: true })
 
   return {
     workerLockAcquired: true,
@@ -237,7 +258,7 @@ export async function processAnalysisQueue({
       elapsedMs: 0,
       finalizedReadyAnalyses: { checked: 0, finalized: 0 },
       results: [],
-      queue: await getAnalysisQueueStatus({ analysisId }),
+      queue: await getAnalysisQueueStatus({ analysisId, activeOnly: true }),
       message:
         "Another worker already owns this analysis. The duplicate invocation exited without claiming an additional batch.",
     }
