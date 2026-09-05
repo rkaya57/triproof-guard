@@ -13,9 +13,9 @@ export function HomeQuickLinks() {
   return (
     <aside
       aria-label="Tri-Proof Protocol official channels"
-      className="pointer-events-none fixed inset-x-3 bottom-3 z-[70] flex justify-center lg:inset-x-auto lg:bottom-6 lg:right-6"
+      className="flex justify-center border-t border-border bg-background px-5 py-6"
     >
-      <div className="glass-panel pointer-events-auto flex max-w-full items-center gap-2 rounded-2xl border border-primary/25 bg-background/90 p-2 shadow-2xl backdrop-blur-xl lg:flex-col lg:items-stretch">
+      <div className="flex max-w-full flex-wrap items-center justify-center gap-2 rounded-2xl border border-primary/25 bg-background/90 p-3">
         <span className="hidden px-2 pb-1 pt-1 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground lg:block">
           Official channels
         </span>

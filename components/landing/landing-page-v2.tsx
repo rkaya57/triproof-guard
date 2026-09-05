@@ -1,4 +1,6 @@
 import Link from "next/link"
+import { PublicEvidenceDemo } from "@/components/demo/public-evidence-demo"
+import { publicDemoSnapshot as demo } from "@/lib/demo/public-snapshot"
 import {
   ArrowRight,
   Bot,
@@ -87,15 +89,15 @@ export function LandingPageV2() {
               <Sparkles className="mr-1.5 size-3.5" /> AI-powered risk intelligence
             </Badge>
             <h1 className="max-w-4xl text-4xl font-semibold leading-[1.02] tracking-[-0.045em] text-white sm:text-5xl lg:text-[4.35rem]">
-              Stop fake participants and risky signatures before they{" "}
-              <span className="text-gradient animate-gradient-text">cost your campaign.</span>
+              Review your campaign wallets before{" "}
+              <span className="text-gradient animate-gradient-text">rewards move.</span>
             </h1>
             <p className="mt-6 max-w-3xl text-base leading-8 text-slate-400 sm:text-lg">
-              Tri-Proof helps Web3 teams analyze wallet lists, scan links and transactions, and protect Telegram communities before rewards or signatures move.
+              Find connected participation, inspect the evidence, and export a reviewable decision list. Built for campaign teams and the agencies supporting them.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/audit" className={`${buttonVariants({ size: "lg" })} glow-primary`}>
-                Analyze a wallet now <ArrowRight className="size-4" />
+              <Link href="/demo/report" className={`${buttonVariants({ size: "lg" })} glow-primary`}>
+                Explore the evidence demo <ArrowRight className="size-4" />
               </Link>
               <Link href="/contact?topic=security-pilot" className={buttonVariants({ variant: "outline", size: "lg" })}>
                 Book a demo
@@ -113,45 +115,7 @@ export function LandingPageV2() {
             </div>
           </div>
 
-          <div className="glass-panel relative overflow-hidden rounded-3xl p-5 sm:p-6">
-            <div className="pointer-events-none absolute -right-16 -top-16 size-56 rounded-full bg-violet-400/[0.055] blur-3xl" />
-            <div className="relative flex items-center justify-between gap-4 border-b border-white/[0.06] pb-5">
-              <div>
-                <p className="font-semibold text-white">Tri-Proof Protocol</p>
-                <p className="mt-1 text-xs text-slate-500">One platform, three security outcomes.</p>
-              </div>
-              <Badge variant="outline" className="border-emerald-300/18 bg-emerald-300/[0.04] text-emerald-200">
-                <span className="pulse-dot mr-1.5" /> Live surfaces
-              </Badge>
-            </div>
-
-            <div className="relative mt-5 grid gap-4">
-              {[
-                [ScanSearch, "Safer users", "ScamGuard checks risk before clicks, trust and signatures."],
-                [Radar, "Cleaner reward campaigns", "Sybil Analyst separates clear participants from coordinated or gray-zone wallets."],
-                [Bot, "Protected communities", "Group Guardian brings explained threat decisions into Telegram operations."],
-              ].map(([Icon, title, text]) => (
-                <div key={title as string} className="hover-lift rounded-2xl border border-white/[0.055] bg-black/10 p-5 hover:border-cyan-300/15 hover:bg-cyan-300/[0.018]">
-                  <div className="flex gap-4">
-                    <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-cyan-300/14 bg-cyan-300/[0.045]">
-                      <Icon className="size-5 text-cyan-300/90" />
-                    </span>
-                    <div>
-                      <p className="font-semibold text-white">{title as string}</p>
-                      <p className="mt-1 text-sm leading-6 text-slate-400">{text as string}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="relative mt-5 rounded-2xl border border-violet-300/14 bg-violet-300/[0.035] p-5">
-              <p className="text-[10px] uppercase tracking-[0.17em] text-violet-200/82">Clear product boundary</p>
-              <p className="mt-2 text-sm leading-6 text-slate-400">
-                Developer API, signed webhooks and Team Policies remain advanced capabilities offered through selected pilot integrations until real-world usage is validated.
-              </p>
-            </div>
-          </div>
+          <PublicEvidenceDemo demo={{ wallets: demo.wallets, summary: demo.summary }} compact />
         </div>
       </section>
 

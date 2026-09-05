@@ -35,7 +35,8 @@ describe("normalized event persistence rows", () => {
     assert.notEqual(first.id, anotherRun.id)
     assert.equal(first.analysisRunId, "run-1")
     assert.equal(first.amount?.toString(), "1.250000000000000001")
-    assert.equal(first.observedAt?.toISOString(), "2026-08-21T10:00:00.000Z")
+    assert.ok(first.observedAt instanceof Date)
+    assert.equal(first.observedAt.toISOString(), "2026-08-21T10:00:00.000Z")
     assert.deepEqual(first.metadata, {
       slotLikeValue: "123",
       fetchedAt: "2026-08-21T10:01:00.000Z",

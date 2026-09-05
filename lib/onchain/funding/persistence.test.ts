@@ -34,7 +34,8 @@ describe("funding relationship persistence", () => {
     assert.equal(first[0]?.kind, "SAME_FUNDER")
     assert.deepEqual(first[0]?.evidenceEventKeys, ["event-a", "event-b"])
     assert.equal(first[0]?.riskBearing, true)
-    assert.equal(first[0]?.observedAt?.toISOString(), "2026-08-01T00:00:00.000Z")
+    assert.ok(first[0]?.observedAt instanceof Date)
+    assert.equal(first[0].observedAt.toISOString(), "2026-08-01T00:00:00.000Z")
     assert.deepEqual(first[0]?.metadata, { topology: "star", bigint: "42" })
   })
 
