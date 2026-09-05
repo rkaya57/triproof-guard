@@ -181,6 +181,7 @@ function policy(): CampaignPolicyReport {
     campaignName: "Current campaign",
     analysisId: "analysis-current",
     preset: "balanced",
+    thresholds: { corroboratedRejectScore: 60, corroboratedFamilyCount: 2 },
     generatedAt: "2026-08-06T11:03:00.000Z",
     summary: {
       approveRecommendations: 1,

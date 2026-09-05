@@ -43,7 +43,11 @@
     "db:bootstrap": "node scripts/bootstrap-database.mjs",
     "db:verify-auth-schema": "node scripts/verify-auth-schema.mjs",
     "db:verify-postgrest": "node scripts/verify-postgrest-hardening.mjs",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "typecheck": "tsc --noEmit",
+    "demo:generate": "node --import tsx scripts/generate-public-demo.ts",
+    "demo:check": "node --import tsx scripts/generate-public-demo.ts --check",
+    "test:product-readiness": "node --import tsx --test lib/demo/public-demo.test.ts lib/api-v2/openapi.test.ts lib/campaign-benchmark/engine.test.ts lib/campaign-policy/simulator.test.ts lib/cluster-investigation/proposals.test.ts lib/onchain/events/persistence.test.ts lib/onchain/funding/persistence.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

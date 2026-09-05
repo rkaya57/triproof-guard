@@ -68,7 +68,7 @@ function report(): ClusterInvestigationReport {
         graphComponentId: "GC-1",
         fundingSource: null,
         evidenceConfidence: "medium",
-        decisionEvidenceFamilies: ["temporal"],
+        decisionEvidenceFamilies: ["timing"],
         decisionEvidenceCodes: ["TIMING_COORDINATION"],
         teamReview: null,
         reasons: ["Timing overlap."],

@@ -1,34 +1,2374 @@
 {
-  "version": "V1.8 Sample Report",
-  "project": "Solana Public Demo Wallet Audit",
-  "chain": "Solana",
-  "riskPolicy": "balanced",
-  "datasetUrl": "/demo/tri-proof-public-demo-wallets.csv",
+  "version": "campaign-evidence-demo-v1",
+  "provenance": {
+    "kind": "synthetic_demonstration",
+    "asOf": "2026-09-05T00:00:00.000Z",
+    "inputSha256": "15b44997053bbb7a2d7c8055a57134fc6bb4097c9646b88081d14da12ddbe232",
+    "engineVersion": "2.1.0",
+    "rulesetVersion": "2026-08-07",
+    "policy": "balanced",
+    "notice": "Illustrative addresses and observations, processed by the Tri-Proof engine. No live chain lookup, customer results, or accuracy claim."
+  },
   "summary": {
-    "totalWallets": 20,
-    "approved": 6,
-    "grayZone": 5,
-    "rejectedNotEligible": 9,
-    "averageRiskScore": 42.8,
-    "suspiciousClusters": 2,
-    "noOnchainData": 4
+    "totalWallets": 12,
+    "clusters": 1,
+    "approved": 5,
+    "review": 1,
+    "insufficient_data": 1,
+    "not_eligible": 5
   },
-  "decisionLanguage": {
-    "approved": "Wallets that look eligible for reward inclusion based on available evidence.",
-    "grayZone": "Wallets that need project-side review before a final reward decision.",
-    "rejectedNotEligible": "Wallets that are high-risk, inactive, unreadable, protocol-owned, known entities, or otherwise not eligible for automatic reward inclusion."
-  },
-  "sampleSignals": [
-    "V1.3 behavior intelligence: limited behavior diversity",
-    "V1.4 reputation/policy signal: Gray Zone",
-    "V1.5 No On-chain Data: no reliable provider-readable wallet history was available",
-    "V1.6 risk policy: Balanced",
-    "Solana account intelligence: known_protocol_or_program"
+  "wallets": [
+    {
+      "address": "6n8YVt8jHq5JLBZJMxB5FcrhuLDLGT2yyBTxU2PWM2MF",
+      "label": "Wallet 01",
+      "decision": "not_eligible",
+      "storedStatus": "rejected",
+      "riskScore": 97,
+      "riskLabel": "97 / 100",
+      "explanation": "Rejected under Balanced policy: a high-confidence graph signal is supported by a risk score of 97.",
+      "clusterId": "CL-001",
+      "funder": "CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+      "firstFundingAt": "2026-09-01T10:00:00.000Z",
+      "evidence": [
+        {
+          "code": "ON_CHAIN_EVIDENCE_WALLET_IS_BETW",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "On-chain evidence: wallet is between 7 and 30 days old",
+          "source": "risk_engine"
+        },
+        {
+          "code": "LOW_HISTORY",
+          "family": "activity_quality",
+          "effect": "corroborating_signal",
+          "title": "Limited transaction history",
+          "source": "risk_engine",
+          "description": "On-chain evidence: limited transaction history"
+        },
+        {
+          "code": "GRAPH_INTELLIGENCE_4_WALLETS_WER",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "Graph intelligence: 4 wallets were funded by one unknown source inside a 1-hour window",
+          "source": "risk_engine"
+        },
+        {
+          "code": "GRAPH_INTELLIGENCE_ONE_REFERRER_",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "Graph intelligence: one referrer controls a 4-wallet fan-out dominated by low-activity accounts",
+          "source": "risk_engine"
+        },
+        {
+          "code": "GRAPH_INTELLIGENCE_THE_SAME_WALL",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "Graph intelligence: the same wallet is both the participant's funder and referrer",
+          "source": "risk_engine"
+        },
+        {
+          "code": "GRAPH_INTELLIGENCE_4_WALLETS_SHA",
+          "family": "other",
+          "effect": "corroborating_signal",
+          "title": "Additional corroborating evidence",
+          "description": "Graph intelligence: 4 wallets share both a funding origin and referral source",
+          "source": "risk_engine"
+        },
+        {
+          "code": "SHARED_FUNDING",
+          "family": "funding",
+          "effect": "corroborating_signal",
+          "title": "Shared funding relationship",
+          "source": "risk_engine",
+          "description": "Shared funding source evidence: corroborated funding cohort with 4 wallets"
+        },
+        {
+          "code": "CLUSTER_LINKED",
+          "family": "graph",
+          "effect": "corroborating_signal",
+          "title": "Suspicious cluster membership",
+          "source": "graph",
+          "description": "Cluster evidence: part of suspicious cluster CL-001"
+        },
+        {
+          "code": "LOW_DIVERSITY",
+          "family": "behavior",
+          "effect": "corroborating_signal",
+          "title": "Low activity diversity",
+          "source": "risk_engine",
+          "description": "On-chain evidence: low protocol/program interaction diversity"
+        },
+        {
+          "code": "ON_CHAIN_EVIDENCE_LOW_TOTAL_VOLU",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "On-chain evidence: low total volume despite campaign activity",
+          "source": "risk_engine"
+        },
+        {
+          "code": "EVIDENCE_WEIGHTING_CORRELATED_RE",
+          "family": "policy",
+          "effect": "neutralizing_context",
+          "title": "Evidence-safety boundary",
+          "description": "V1.8 evidence weighting: correlated relationship-graph signals were capped at 45 points to avoid double-counting.",
+          "source": "policy"
+        }
+      ]
+    },
+    {
+      "address": "8vZ2Mewe6bvCYwbtnXXEhKKtgaNkwQHEFBSYeT6qfaww",
+      "label": "Wallet 02",
+      "decision": "not_eligible",
+      "storedStatus": "rejected",
+      "riskScore": 97,
+      "riskLabel": "97 / 100",
+      "explanation": "Rejected under Balanced policy: a high-confidence graph signal is supported by a risk score of 97.",
+      "clusterId": "CL-001",
+      "funder": "CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+      "firstFundingAt": "2026-09-01T10:00:01.000Z",
+      "evidence": [
+        {
+          "code": "ON_CHAIN_EVIDENCE_WALLET_IS_BETW",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "On-chain evidence: wallet is between 7 and 30 days old",
+          "source": "risk_engine"
+        },
+        {
+          "code": "LOW_HISTORY",
+          "family": "activity_quality",
+          "effect": "corroborating_signal",
+          "title": "Limited transaction history",
+          "source": "risk_engine",
+          "description": "On-chain evidence: limited transaction history"
+        },
+        {
+          "code": "GRAPH_INTELLIGENCE_4_WALLETS_WER",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "Graph intelligence: 4 wallets were funded by one unknown source inside a 1-hour window",
+          "source": "risk_engine"
+        },
+        {
+          "code": "GRAPH_INTELLIGENCE_ONE_REFERRER_",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "Graph intelligence: one referrer controls a 4-wallet fan-out dominated by low-activity accounts",
+          "source": "risk_engine"
+        },
+        {
+          "code": "GRAPH_INTELLIGENCE_THE_SAME_WALL",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "Graph intelligence: the same wallet is both the participant's funder and referrer",
+          "source": "risk_engine"
+        },
+        {
+          "code": "GRAPH_INTELLIGENCE_4_WALLETS_SHA",
+          "family": "other",
+          "effect": "corroborating_signal",
+          "title": "Additional corroborating evidence",
+          "description": "Graph intelligence: 4 wallets share both a funding origin and referral source",
+          "source": "risk_engine"
+        },
+        {
+          "code": "SHARED_FUNDING",
+          "family": "funding",
+          "effect": "corroborating_signal",
+          "title": "Shared funding relationship",
+          "source": "risk_engine",
+          "description": "Shared funding source evidence: corroborated funding cohort with 4 wallets"
+        },
+        {
+          "code": "CLUSTER_LINKED",
+          "family": "graph",
+          "effect": "corroborating_signal",
+          "title": "Suspicious cluster membership",
+          "source": "graph",
+          "description": "Cluster evidence: part of suspicious cluster CL-001"
+        },
+        {
+          "code": "LOW_DIVERSITY",
+          "family": "behavior",
+          "effect": "corroborating_signal",
+          "title": "Low activity diversity",
+          "source": "risk_engine",
+          "description": "On-chain evidence: low protocol/program interaction diversity"
+        },
+        {
+          "code": "ON_CHAIN_EVIDENCE_LOW_TOTAL_VOLU",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "On-chain evidence: low total volume despite campaign activity",
+          "source": "risk_engine"
+        },
+        {
+          "code": "EVIDENCE_WEIGHTING_CORRELATED_RE",
+          "family": "policy",
+          "effect": "neutralizing_context",
+          "title": "Evidence-safety boundary",
+          "description": "V1.8 evidence weighting: correlated relationship-graph signals were capped at 45 points to avoid double-counting.",
+          "source": "policy"
+        }
+      ]
+    },
+    {
+      "address": "sE7xmH6bjeVbZ5YdB6FBX1oNyuHmG3vSfJ13n4cfz4i",
+      "label": "Wallet 03",
+      "decision": "not_eligible",
+      "storedStatus": "rejected",
+      "riskScore": 97,
+      "riskLabel": "97 / 100",
+      "explanation": "Rejected under Balanced policy: a high-confidence graph signal is supported by a risk score of 97.",
+      "clusterId": "CL-001",
+      "funder": "CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+      "firstFundingAt": "2026-09-01T10:00:02.000Z",
+      "evidence": [
+        {
+          "code": "ON_CHAIN_EVIDENCE_WALLET_IS_BETW",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "On-chain evidence: wallet is between 7 and 30 days old",
+          "source": "risk_engine"
+        },
+        {
+          "code": "LOW_HISTORY",
+          "family": "activity_quality",
+          "effect": "corroborating_signal",
+          "title": "Limited transaction history",
+          "source": "risk_engine",
+          "description": "On-chain evidence: limited transaction history"
+        },
+        {
+          "code": "GRAPH_INTELLIGENCE_4_WALLETS_WER",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "Graph intelligence: 4 wallets were funded by one unknown source inside a 1-hour window",
+          "source": "risk_engine"
+        },
+        {
+          "code": "GRAPH_INTELLIGENCE_ONE_REFERRER_",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "Graph intelligence: one referrer controls a 4-wallet fan-out dominated by low-activity accounts",
+          "source": "risk_engine"
+        },
+        {
+          "code": "GRAPH_INTELLIGENCE_THE_SAME_WALL",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "Graph intelligence: the same wallet is both the participant's funder and referrer",
+          "source": "risk_engine"
+        },
+        {
+          "code": "GRAPH_INTELLIGENCE_4_WALLETS_SHA",
+          "family": "other",
+          "effect": "corroborating_signal",
+          "title": "Additional corroborating evidence",
+          "description": "Graph intelligence: 4 wallets share both a funding origin and referral source",
+          "source": "risk_engine"
+        },
+        {
+          "code": "SHARED_FUNDING",
+          "family": "funding",
+          "effect": "corroborating_signal",
+          "title": "Shared funding relationship",
+          "source": "risk_engine",
+          "description": "Shared funding source evidence: corroborated funding cohort with 4 wallets"
+        },
+        {
+          "code": "CLUSTER_LINKED",
+          "family": "graph",
+          "effect": "corroborating_signal",
+          "title": "Suspicious cluster membership",
+          "source": "graph",
+          "description": "Cluster evidence: part of suspicious cluster CL-001"
+        },
+        {
+          "code": "LOW_DIVERSITY",
+          "family": "behavior",
+          "effect": "corroborating_signal",
+          "title": "Low activity diversity",
+          "source": "risk_engine",
+          "description": "On-chain evidence: low protocol/program interaction diversity"
+        },
+        {
+          "code": "ON_CHAIN_EVIDENCE_LOW_TOTAL_VOLU",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "On-chain evidence: low total volume despite campaign activity",
+          "source": "risk_engine"
+        },
+        {
+          "code": "EVIDENCE_WEIGHTING_CORRELATED_RE",
+          "family": "policy",
+          "effect": "neutralizing_context",
+          "title": "Evidence-safety boundary",
+          "description": "V1.8 evidence weighting: correlated relationship-graph signals were capped at 45 points to avoid double-counting.",
+          "source": "policy"
+        }
+      ]
+    },
+    {
+      "address": "5RGHCV4hnBxKfCa8uS56bcqMxZxrCvrygunnqorj5vBb",
+      "label": "Wallet 04",
+      "decision": "not_eligible",
+      "storedStatus": "rejected",
+      "riskScore": 97,
+      "riskLabel": "97 / 100",
+      "explanation": "Rejected under Balanced policy: a high-confidence graph signal is supported by a risk score of 97.",
+      "clusterId": "CL-001",
+      "funder": "CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+      "firstFundingAt": "2026-09-01T10:00:03.000Z",
+      "evidence": [
+        {
+          "code": "ON_CHAIN_EVIDENCE_WALLET_IS_BETW",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "On-chain evidence: wallet is between 7 and 30 days old",
+          "source": "risk_engine"
+        },
+        {
+          "code": "LOW_HISTORY",
+          "family": "activity_quality",
+          "effect": "corroborating_signal",
+          "title": "Limited transaction history",
+          "source": "risk_engine",
+          "description": "On-chain evidence: limited transaction history"
+        },
+        {
+          "code": "GRAPH_INTELLIGENCE_4_WALLETS_WER",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "Graph intelligence: 4 wallets were funded by one unknown source inside a 1-hour window",
+          "source": "risk_engine"
+        },
+        {
+          "code": "GRAPH_INTELLIGENCE_ONE_REFERRER_",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "Graph intelligence: one referrer controls a 4-wallet fan-out dominated by low-activity accounts",
+          "source": "risk_engine"
+        },
+        {
+          "code": "GRAPH_INTELLIGENCE_THE_SAME_WALL",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "Graph intelligence: the same wallet is both the participant's funder and referrer",
+          "source": "risk_engine"
+        },
+        {
+          "code": "GRAPH_INTELLIGENCE_4_WALLETS_SHA",
+          "family": "other",
+          "effect": "corroborating_signal",
+          "title": "Additional corroborating evidence",
+          "description": "Graph intelligence: 4 wallets share both a funding origin and referral source",
+          "source": "risk_engine"
+        },
+        {
+          "code": "SHARED_FUNDING",
+          "family": "funding",
+          "effect": "corroborating_signal",
+          "title": "Shared funding relationship",
+          "source": "risk_engine",
+          "description": "Shared funding source evidence: corroborated funding cohort with 4 wallets"
+        },
+        {
+          "code": "CLUSTER_LINKED",
+          "family": "graph",
+          "effect": "corroborating_signal",
+          "title": "Suspicious cluster membership",
+          "source": "graph",
+          "description": "Cluster evidence: part of suspicious cluster CL-001"
+        },
+        {
+          "code": "LOW_DIVERSITY",
+          "family": "behavior",
+          "effect": "corroborating_signal",
+          "title": "Low activity diversity",
+          "source": "risk_engine",
+          "description": "On-chain evidence: low protocol/program interaction diversity"
+        },
+        {
+          "code": "ON_CHAIN_EVIDENCE_LOW_TOTAL_VOLU",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "On-chain evidence: low total volume despite campaign activity",
+          "source": "risk_engine"
+        },
+        {
+          "code": "EVIDENCE_WEIGHTING_CORRELATED_RE",
+          "family": "policy",
+          "effect": "neutralizing_context",
+          "title": "Evidence-safety boundary",
+          "description": "V1.8 evidence weighting: correlated relationship-graph signals were capped at 45 points to avoid double-counting.",
+          "source": "policy"
+        }
+      ]
+    },
+    {
+      "address": "JBg1ev1nRRTmHjgofbgGnA7xKy3jdG5HGkrLkWH162GV",
+      "label": "Wallet 05",
+      "decision": "approved",
+      "storedStatus": "approved",
+      "riskScore": 0,
+      "riskLabel": "0 / 100",
+      "explanation": "Approved under Balanced policy: sufficient evidence is available and no corroborated cluster or hard Sybil signal was found.",
+      "clusterId": null,
+      "funder": "5iQx6GDfCt2jFj8e7bS6fhQ1NqvfuwURbRtatkR2veHT",
+      "firstFundingAt": null,
+      "evidence": [
+        {
+          "code": "ON_CHAIN_EVIDENCE_NO_MAJOR_RISK_",
+          "family": "behavior",
+          "effect": "neutralizing_context",
+          "title": "Healthy wallet context",
+          "description": "On-chain evidence: no major risk signals detected from available provider data.",
+          "source": "risk_engine"
+        },
+        {
+          "code": "PASSED_POLICY",
+          "family": "policy",
+          "effect": "neutralizing_context",
+          "title": "Campaign policy threshold passed",
+          "source": "policy",
+          "description": "Approved under Balanced policy: sufficient evidence is available and no corroborated cluster or hard Sybil signal was found."
+        }
+      ]
+    },
+    {
+      "address": "GQNd7rT3WdAUhMTuvod1bnFMHQQ6P9g8YhPKZEeoTNYq",
+      "label": "Wallet 06",
+      "decision": "approved",
+      "storedStatus": "approved",
+      "riskScore": 0,
+      "riskLabel": "0 / 100",
+      "explanation": "Approved under Balanced policy: sufficient evidence is available and no corroborated cluster or hard Sybil signal was found.",
+      "clusterId": null,
+      "funder": "AeuCLWtA2RaR1ipN9nBFiZ37GdVz6Lcx9LXAHsaHyeDs",
+      "firstFundingAt": null,
+      "evidence": [
+        {
+          "code": "ON_CHAIN_EVIDENCE_NO_MAJOR_RISK_",
+          "family": "behavior",
+          "effect": "neutralizing_context",
+          "title": "Healthy wallet context",
+          "description": "On-chain evidence: no major risk signals detected from available provider data.",
+          "source": "risk_engine"
+        },
+        {
+          "code": "PASSED_POLICY",
+          "family": "policy",
+          "effect": "neutralizing_context",
+          "title": "Campaign policy threshold passed",
+          "source": "policy",
+          "description": "Approved under Balanced policy: sufficient evidence is available and no corroborated cluster or hard Sybil signal was found."
+        }
+      ]
+    },
+    {
+      "address": "3qxDbWpDpsjMNhxrY4rkbmn4pRdcVNkdJpUAfEr5RGTf",
+      "label": "Wallet 07",
+      "decision": "approved",
+      "storedStatus": "approved",
+      "riskScore": 0,
+      "riskLabel": "0 / 100",
+      "explanation": "Approved under Balanced policy: sufficient evidence is available and no corroborated cluster or hard Sybil signal was found.",
+      "clusterId": null,
+      "funder": "YLaQbnCxeMr3Ux783rNkHUgKSA1TgzTU13tmbJGhBpA",
+      "firstFundingAt": null,
+      "evidence": [
+        {
+          "code": "ON_CHAIN_EVIDENCE_NO_MAJOR_RISK_",
+          "family": "behavior",
+          "effect": "neutralizing_context",
+          "title": "Healthy wallet context",
+          "description": "On-chain evidence: no major risk signals detected from available provider data.",
+          "source": "risk_engine"
+        },
+        {
+          "code": "PASSED_POLICY",
+          "family": "policy",
+          "effect": "neutralizing_context",
+          "title": "Campaign policy threshold passed",
+          "source": "policy",
+          "description": "Approved under Balanced policy: sufficient evidence is available and no corroborated cluster or hard Sybil signal was found."
+        }
+      ]
+    },
+    {
+      "address": "AdWBKsnhMtB7FKzTndWyHGBTN1YwvcEhDtBbVVsy5t6P",
+      "label": "Wallet 08",
+      "decision": "approved",
+      "storedStatus": "approved",
+      "riskScore": 0,
+      "riskLabel": "0 / 100",
+      "explanation": "Approved under Balanced policy: sufficient evidence is available and no corroborated cluster or hard Sybil signal was found.",
+      "clusterId": null,
+      "funder": "AsL3QfBNs3QtoRPb93LT96KdfGU67SqEoSH7QCtq5XZH",
+      "firstFundingAt": null,
+      "evidence": [
+        {
+          "code": "ON_CHAIN_EVIDENCE_NO_MAJOR_RISK_",
+          "family": "behavior",
+          "effect": "neutralizing_context",
+          "title": "Healthy wallet context",
+          "description": "On-chain evidence: no major risk signals detected from available provider data.",
+          "source": "risk_engine"
+        },
+        {
+          "code": "PASSED_POLICY",
+          "family": "policy",
+          "effect": "neutralizing_context",
+          "title": "Campaign policy threshold passed",
+          "source": "policy",
+          "description": "Approved under Balanced policy: sufficient evidence is available and no corroborated cluster or hard Sybil signal was found."
+        }
+      ]
+    },
+    {
+      "address": "6ARe7tEeVygSho2AHhQHWuNae3P52RCUM5QJ5NEZg3sZ",
+      "label": "Wallet 09",
+      "decision": "approved",
+      "storedStatus": "approved",
+      "riskScore": 0,
+      "riskLabel": "0 / 100",
+      "explanation": "Approved under Balanced policy: sufficient evidence is available and no corroborated cluster or hard Sybil signal was found.",
+      "clusterId": null,
+      "funder": "8nSf9ZHpguidzSAroNLVV8PTFwkp84PDwR7jtRDTP4HW",
+      "firstFundingAt": null,
+      "evidence": [
+        {
+          "code": "ON_CHAIN_EVIDENCE_NO_MAJOR_RISK_",
+          "family": "behavior",
+          "effect": "neutralizing_context",
+          "title": "Healthy wallet context",
+          "description": "On-chain evidence: no major risk signals detected from available provider data.",
+          "source": "risk_engine"
+        },
+        {
+          "code": "PASSED_POLICY",
+          "family": "policy",
+          "effect": "neutralizing_context",
+          "title": "Campaign policy threshold passed",
+          "source": "policy",
+          "description": "Approved under Balanced policy: sufficient evidence is available and no corroborated cluster or hard Sybil signal was found."
+        }
+      ]
+    },
+    {
+      "address": "GvDsEkyai7tRfveefbhqwBBMfBJHwzQFmt4m8EPcD8YQ",
+      "label": "Wallet 10",
+      "decision": "review",
+      "storedStatus": "manual_review",
+      "riskScore": 42,
+      "riskLabel": "42 / 100",
+      "explanation": "Gray Zone under Balanced policy: risk evidence requires human review but does not meet the automatic Sybil rejection standard.",
+      "clusterId": null,
+      "funder": null,
+      "firstFundingAt": null,
+      "evidence": [
+        {
+          "code": "ON_CHAIN_EVIDENCE_WALLET_IS_BETW",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "On-chain evidence: wallet is between 7 and 30 days old",
+          "source": "risk_engine"
+        },
+        {
+          "code": "LOW_HISTORY",
+          "family": "activity_quality",
+          "effect": "corroborating_signal",
+          "title": "Limited transaction history",
+          "source": "risk_engine",
+          "description": "On-chain evidence: limited transaction history"
+        },
+        {
+          "code": "LOW_DIVERSITY",
+          "family": "behavior",
+          "effect": "corroborating_signal",
+          "title": "Low activity diversity",
+          "source": "risk_engine",
+          "description": "On-chain evidence: low protocol/program interaction diversity"
+        }
+      ]
+    },
+    {
+      "address": "GzBZxTkWCiz7Ey7kgcwveA4yXu4vD1B1egEasjG8gSBM",
+      "label": "Wallet 11",
+      "decision": "insufficient_data",
+      "storedStatus": "manual_review",
+      "riskScore": null,
+      "riskLabel": "Not assessed",
+      "explanation": "Gray Zone: on-chain provider access was unavailable. Retry enrichment before making an eligibility decision.",
+      "clusterId": null,
+      "funder": null,
+      "firstFundingAt": null,
+      "evidence": [
+        {
+          "code": "PROVIDER_ACCESS_UNAVAILABLE_RETR",
+          "family": "data_coverage",
+          "effect": "coverage_limitation",
+          "title": "Data coverage limitation",
+          "description": "V1.5 provider access unavailable: retry on-chain enrichment before assigning wallet risk",
+          "source": "enrichment"
+        },
+        {
+          "code": "RISK_SCORE_INTERPRETATION_NO_MAL",
+          "family": "other",
+          "effect": "neutralizing_context",
+          "title": "Additional decision context",
+          "description": "Risk score interpretation: no malicious-risk score was assigned because the decision is based on data coverage, not wallet misconduct.",
+          "source": "risk_engine"
+        }
+      ]
+    },
+    {
+      "address": "EJebGrj2siYnR4hmHR7Kk7DULymjbf169k8m3vaCE3CV",
+      "label": "Wallet 12",
+      "decision": "not_eligible",
+      "storedStatus": "rejected",
+      "riskScore": null,
+      "riskLabel": "Not applicable",
+      "explanation": "Rejected / Not Eligible: non-user Solana account detected (known_protocol_or_program). Program, token, sysvar, protocol, closed, or program-owned accounts are excluded from normal user reward lists.",
+      "clusterId": null,
+      "funder": "DSQeFfVKrfZ3L9Sgj1YsuM7j5KLi1ewKNRT22poZk7ic",
+      "firstFundingAt": null,
+      "evidence": [
+        {
+          "code": "KNOWN_ENTITY",
+          "family": "known_entity",
+          "effect": "eligibility_exclusion",
+          "title": "Known non-participant entity: Illustrative protocol account",
+          "source": "risk_engine",
+          "description": "On-chain entity evidence: known public exchange/service/protocol wallet detected. This address is not a typical individual reward campaign participant."
+        },
+        {
+          "code": "SOLANA_ACCOUNT_STATE",
+          "family": "account_state",
+          "effect": "eligibility_exclusion",
+          "title": "Non-user Solana account state",
+          "description": "Solana account intelligence: known_protocol_or_program",
+          "source": "enrichment"
+        },
+        {
+          "code": "NON_USER_ACCOUNT",
+          "family": "account_state",
+          "effect": "eligibility_exclusion",
+          "title": "Non-user account: Illustrative protocol account",
+          "source": "enrichment",
+          "description": "V1.5 eligibility: not a normal end-user wallet"
+        },
+        {
+          "code": "RISK_SCORE_INTERPRETATION_NO_MAL",
+          "family": "account_state",
+          "effect": "eligibility_exclusion",
+          "title": "Campaign eligibility exclusion",
+          "description": "Risk score interpretation: no malicious-risk score was assigned because the decision is an eligibility exclusion for a non-user account.",
+          "source": "enrichment"
+        }
+      ]
+    }
   ],
-  "exports": {
-    "approvedCandidates": "approved_reward_candidates.csv",
-    "grayZone": "gray_zone_wallets.csv",
-    "rejectedNotEligible": "rejected_not_eligible_wallets.csv",
-    "fullReport": "full_analysis_report.csv"
+  "inputs": [
+    {
+      "walletAddress": "6n8YVt8jHq5JLBZJMxB5FcrhuLDLGT2yyBTxU2PWM2MF",
+      "chain": "Solana",
+      "txCount": 4,
+      "walletAgeDays": 7,
+      "fundingSource": "CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+      "firstSeen": null,
+      "lastSeen": null,
+      "totalVolume": 0.1,
+      "contractsCount": 1,
+      "campaignActionsCount": 4,
+      "firstFundingAt": "2026-09-01T10:00:00.000Z",
+      "firstFundingAmount": 0.02,
+      "referrerAddress": "CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+      "referralCode": "DEMO-COHORT",
+      "referralTimestamp": "2026-09-01T10:01:00.000Z",
+      "behaviorFingerprint": [
+        "demo-claim",
+        "demo-transfer"
+      ]
+    },
+    {
+      "walletAddress": "8vZ2Mewe6bvCYwbtnXXEhKKtgaNkwQHEFBSYeT6qfaww",
+      "chain": "Solana",
+      "txCount": 4,
+      "walletAgeDays": 7,
+      "fundingSource": "CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+      "firstSeen": null,
+      "lastSeen": null,
+      "totalVolume": 0.1,
+      "contractsCount": 1,
+      "campaignActionsCount": 4,
+      "firstFundingAt": "2026-09-01T10:00:01.000Z",
+      "firstFundingAmount": 0.02,
+      "referrerAddress": "CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+      "referralCode": "DEMO-COHORT",
+      "referralTimestamp": "2026-09-01T10:01:01.000Z",
+      "behaviorFingerprint": [
+        "demo-claim",
+        "demo-transfer"
+      ]
+    },
+    {
+      "walletAddress": "sE7xmH6bjeVbZ5YdB6FBX1oNyuHmG3vSfJ13n4cfz4i",
+      "chain": "Solana",
+      "txCount": 4,
+      "walletAgeDays": 7,
+      "fundingSource": "CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+      "firstSeen": null,
+      "lastSeen": null,
+      "totalVolume": 0.1,
+      "contractsCount": 1,
+      "campaignActionsCount": 4,
+      "firstFundingAt": "2026-09-01T10:00:02.000Z",
+      "firstFundingAmount": 0.02,
+      "referrerAddress": "CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+      "referralCode": "DEMO-COHORT",
+      "referralTimestamp": "2026-09-01T10:01:02.000Z",
+      "behaviorFingerprint": [
+        "demo-claim",
+        "demo-transfer"
+      ]
+    },
+    {
+      "walletAddress": "5RGHCV4hnBxKfCa8uS56bcqMxZxrCvrygunnqorj5vBb",
+      "chain": "Solana",
+      "txCount": 4,
+      "walletAgeDays": 7,
+      "fundingSource": "CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+      "firstSeen": null,
+      "lastSeen": null,
+      "totalVolume": 0.1,
+      "contractsCount": 1,
+      "campaignActionsCount": 4,
+      "firstFundingAt": "2026-09-01T10:00:03.000Z",
+      "firstFundingAmount": 0.02,
+      "referrerAddress": "CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+      "referralCode": "DEMO-COHORT",
+      "referralTimestamp": "2026-09-01T10:01:03.000Z",
+      "behaviorFingerprint": [
+        "demo-claim",
+        "demo-transfer"
+      ]
+    },
+    {
+      "walletAddress": "JBg1ev1nRRTmHjgofbgGnA7xKy3jdG5HGkrLkWH162GV",
+      "chain": "Solana",
+      "txCount": 154,
+      "walletAgeDays": 365,
+      "fundingSource": "5iQx6GDfCt2jFj8e7bS6fhQ1NqvfuwURbRtatkR2veHT",
+      "firstSeen": null,
+      "lastSeen": null,
+      "totalVolume": 500,
+      "contractsCount": 15,
+      "campaignActionsCount": 2
+    },
+    {
+      "walletAddress": "GQNd7rT3WdAUhMTuvod1bnFMHQQ6P9g8YhPKZEeoTNYq",
+      "chain": "Solana",
+      "txCount": 155,
+      "walletAgeDays": 365,
+      "fundingSource": "AeuCLWtA2RaR1ipN9nBFiZ37GdVz6Lcx9LXAHsaHyeDs",
+      "firstSeen": null,
+      "lastSeen": null,
+      "totalVolume": 500,
+      "contractsCount": 15,
+      "campaignActionsCount": 2
+    },
+    {
+      "walletAddress": "3qxDbWpDpsjMNhxrY4rkbmn4pRdcVNkdJpUAfEr5RGTf",
+      "chain": "Solana",
+      "txCount": 156,
+      "walletAgeDays": 365,
+      "fundingSource": "YLaQbnCxeMr3Ux783rNkHUgKSA1TgzTU13tmbJGhBpA",
+      "firstSeen": null,
+      "lastSeen": null,
+      "totalVolume": 500,
+      "contractsCount": 15,
+      "campaignActionsCount": 2
+    },
+    {
+      "walletAddress": "AdWBKsnhMtB7FKzTndWyHGBTN1YwvcEhDtBbVVsy5t6P",
+      "chain": "Solana",
+      "txCount": 157,
+      "walletAgeDays": 365,
+      "fundingSource": "AsL3QfBNs3QtoRPb93LT96KdfGU67SqEoSH7QCtq5XZH",
+      "firstSeen": null,
+      "lastSeen": null,
+      "totalVolume": 500,
+      "contractsCount": 15,
+      "campaignActionsCount": 2
+    },
+    {
+      "walletAddress": "6ARe7tEeVygSho2AHhQHWuNae3P52RCUM5QJ5NEZg3sZ",
+      "chain": "Solana",
+      "txCount": 158,
+      "walletAgeDays": 365,
+      "fundingSource": "8nSf9ZHpguidzSAroNLVV8PTFwkp84PDwR7jtRDTP4HW",
+      "firstSeen": null,
+      "lastSeen": null,
+      "totalVolume": 500,
+      "contractsCount": 15,
+      "campaignActionsCount": 2
+    },
+    {
+      "walletAddress": "GvDsEkyai7tRfveefbhqwBBMfBJHwzQFmt4m8EPcD8YQ",
+      "chain": "Solana",
+      "txCount": 5,
+      "walletAgeDays": 8,
+      "fundingSource": null,
+      "firstSeen": null,
+      "lastSeen": null,
+      "totalVolume": 2,
+      "contractsCount": 1,
+      "campaignActionsCount": 2
+    },
+    {
+      "walletAddress": "GzBZxTkWCiz7Ey7kgcwveA4yXu4vD1B1egEasjG8gSBM",
+      "chain": "Solana",
+      "txCount": null,
+      "walletAgeDays": null,
+      "fundingSource": null,
+      "firstSeen": null,
+      "lastSeen": null,
+      "totalVolume": null,
+      "contractsCount": null,
+      "campaignActionsCount": null,
+      "enrichmentStatus": "failed"
+    },
+    {
+      "walletAddress": "EJebGrj2siYnR4hmHR7Kk7DULymjbf169k8m3vaCE3CV",
+      "chain": "Solana",
+      "txCount": 161,
+      "walletAgeDays": 365,
+      "fundingSource": "DSQeFfVKrfZ3L9Sgj1YsuM7j5KLi1ewKNRT22poZk7ic",
+      "firstSeen": null,
+      "lastSeen": null,
+      "totalVolume": 500,
+      "contractsCount": 15,
+      "campaignActionsCount": 2,
+      "knownEntityLabel": "Illustrative protocol account",
+      "knownEntityType": "protocol",
+      "accountType": "known_protocol_or_program"
+    }
+  ],
+  "analysis": {
+    "id": "public-demo",
+    "status": "completed",
+    "totalWallets": 12,
+    "approvedCount": 5,
+    "manualReviewCount": 2,
+    "rejectedCount": 5,
+    "averageRiskScore": 35.8,
+    "suspiciousClustersCount": 1,
+    "csvFileName": "illustrative-campaign-inputs.csv",
+    "createdAt": "2026-09-05T00:00:00.000Z",
+    "completedAt": "2026-09-05T00:00:00.000Z",
+    "riskPolicy": "balanced",
+    "project": {
+      "id": "public-demo",
+      "name": "Illustrative Solana campaign",
+      "chain": "Solana",
+      "campaignType": "Airdrop",
+      "notes": "Synthetic demo only. No measured customer outcomes."
+    },
+    "wallets": [
+      {
+        "walletAddress": "6n8YVt8jHq5JLBZJMxB5FcrhuLDLGT2yyBTxU2PWM2MF",
+        "chain": "Solana",
+        "entityLabel": null,
+        "entityType": "user",
+        "entityRiskReason": null,
+        "riskScore": 97,
+        "riskLevel": "critical",
+        "status": "rejected",
+        "recommendedAction": "reject",
+        "statusExplanation": "Rejected under Balanced policy: a high-confidence graph signal is supported by a risk score of 97.",
+        "fundingSource": "CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+        "firstFundingAt": "2026-09-01T10:00:00.000Z",
+        "firstFundingAmount": 0.02,
+        "historyTruncated": null,
+        "txCount": 4,
+        "walletAgeDays": 7,
+        "totalVolume": 0.1,
+        "contractsCount": 1,
+        "campaignActionsCount": 4,
+        "clusterId": "CL-001",
+        "graphComponentId": "GC-001",
+        "graphRiskScore": 54,
+        "reasons": [
+          "V1.8 risk policy: Balanced",
+          "On-chain evidence: wallet is between 7 and 30 days old",
+          "On-chain evidence: limited transaction history",
+          "Graph intelligence: 4 wallets were funded by one unknown source inside a 1-hour window",
+          "Graph intelligence: one referrer controls a 4-wallet fan-out dominated by low-activity accounts",
+          "Graph intelligence: the same wallet is both the participant's funder and referrer",
+          "Graph intelligence: 4 wallets share both a funding origin and referral source",
+          "Shared funding source evidence: corroborated funding cohort with 4 wallets",
+          "Cluster evidence: part of suspicious cluster CL-001",
+          "On-chain evidence: low protocol/program interaction diversity",
+          "On-chain evidence: low total volume despite campaign activity",
+          "V1.8 evidence weighting: correlated relationship-graph signals were capped at 45 points to avoid double-counting.",
+          "Decision category: rejected_sybil",
+          "Engine version: 2.1.0",
+          "Ruleset version: 2026-08-07"
+        ],
+        "firstSeen": null,
+        "lastSeen": null,
+        "nativeBalance": null,
+        "tokenCount": null,
+        "uniqueCounterparties": null,
+        "lastActiveDaysAgo": null,
+        "isContract": null,
+        "accountType": null,
+        "ownerProgram": null,
+        "behaviorFingerprint": [
+          "demo-claim",
+          "demo-transfer"
+        ],
+        "campaignQualityScore": null,
+        "campaignOnlyRatio": null,
+        "behaviorDiversityScore": null,
+        "botScriptScore": null,
+        "policyAction": null,
+        "reputationLabel": null,
+        "policyReason": null,
+        "customerLabel": null,
+        "enrichmentProvider": null,
+        "enrichmentStatus": null
+      },
+      {
+        "walletAddress": "8vZ2Mewe6bvCYwbtnXXEhKKtgaNkwQHEFBSYeT6qfaww",
+        "chain": "Solana",
+        "entityLabel": null,
+        "entityType": "user",
+        "entityRiskReason": null,
+        "riskScore": 97,
+        "riskLevel": "critical",
+        "status": "rejected",
+        "recommendedAction": "reject",
+        "statusExplanation": "Rejected under Balanced policy: a high-confidence graph signal is supported by a risk score of 97.",
+        "fundingSource": "CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+        "firstFundingAt": "2026-09-01T10:00:01.000Z",
+        "firstFundingAmount": 0.02,
+        "historyTruncated": null,
+        "txCount": 4,
+        "walletAgeDays": 7,
+        "totalVolume": 0.1,
+        "contractsCount": 1,
+        "campaignActionsCount": 4,
+        "clusterId": "CL-001",
+        "graphComponentId": "GC-001",
+        "graphRiskScore": 54,
+        "reasons": [
+          "V1.8 risk policy: Balanced",
+          "On-chain evidence: wallet is between 7 and 30 days old",
+          "On-chain evidence: limited transaction history",
+          "Graph intelligence: 4 wallets were funded by one unknown source inside a 1-hour window",
+          "Graph intelligence: one referrer controls a 4-wallet fan-out dominated by low-activity accounts",
+          "Graph intelligence: the same wallet is both the participant's funder and referrer",
+          "Graph intelligence: 4 wallets share both a funding origin and referral source",
+          "Shared funding source evidence: corroborated funding cohort with 4 wallets",
+          "Cluster evidence: part of suspicious cluster CL-001",
+          "On-chain evidence: low protocol/program interaction diversity",
+          "On-chain evidence: low total volume despite campaign activity",
+          "V1.8 evidence weighting: correlated relationship-graph signals were capped at 45 points to avoid double-counting.",
+          "Decision category: rejected_sybil",
+          "Engine version: 2.1.0",
+          "Ruleset version: 2026-08-07"
+        ],
+        "firstSeen": null,
+        "lastSeen": null,
+        "nativeBalance": null,
+        "tokenCount": null,
+        "uniqueCounterparties": null,
+        "lastActiveDaysAgo": null,
+        "isContract": null,
+        "accountType": null,
+        "ownerProgram": null,
+        "behaviorFingerprint": [
+          "demo-claim",
+          "demo-transfer"
+        ],
+        "campaignQualityScore": null,
+        "campaignOnlyRatio": null,
+        "behaviorDiversityScore": null,
+        "botScriptScore": null,
+        "policyAction": null,
+        "reputationLabel": null,
+        "policyReason": null,
+        "customerLabel": null,
+        "enrichmentProvider": null,
+        "enrichmentStatus": null
+      },
+      {
+        "walletAddress": "sE7xmH6bjeVbZ5YdB6FBX1oNyuHmG3vSfJ13n4cfz4i",
+        "chain": "Solana",
+        "entityLabel": null,
+        "entityType": "user",
+        "entityRiskReason": null,
+        "riskScore": 97,
+        "riskLevel": "critical",
+        "status": "rejected",
+        "recommendedAction": "reject",
+        "statusExplanation": "Rejected under Balanced policy: a high-confidence graph signal is supported by a risk score of 97.",
+        "fundingSource": "CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+        "firstFundingAt": "2026-09-01T10:00:02.000Z",
+        "firstFundingAmount": 0.02,
+        "historyTruncated": null,
+        "txCount": 4,
+        "walletAgeDays": 7,
+        "totalVolume": 0.1,
+        "contractsCount": 1,
+        "campaignActionsCount": 4,
+        "clusterId": "CL-001",
+        "graphComponentId": "GC-001",
+        "graphRiskScore": 54,
+        "reasons": [
+          "V1.8 risk policy: Balanced",
+          "On-chain evidence: wallet is between 7 and 30 days old",
+          "On-chain evidence: limited transaction history",
+          "Graph intelligence: 4 wallets were funded by one unknown source inside a 1-hour window",
+          "Graph intelligence: one referrer controls a 4-wallet fan-out dominated by low-activity accounts",
+          "Graph intelligence: the same wallet is both the participant's funder and referrer",
+          "Graph intelligence: 4 wallets share both a funding origin and referral source",
+          "Shared funding source evidence: corroborated funding cohort with 4 wallets",
+          "Cluster evidence: part of suspicious cluster CL-001",
+          "On-chain evidence: low protocol/program interaction diversity",
+          "On-chain evidence: low total volume despite campaign activity",
+          "V1.8 evidence weighting: correlated relationship-graph signals were capped at 45 points to avoid double-counting.",
+          "Decision category: rejected_sybil",
+          "Engine version: 2.1.0",
+          "Ruleset version: 2026-08-07"
+        ],
+        "firstSeen": null,
+        "lastSeen": null,
+        "nativeBalance": null,
+        "tokenCount": null,
+        "uniqueCounterparties": null,
+        "lastActiveDaysAgo": null,
+        "isContract": null,
+        "accountType": null,
+        "ownerProgram": null,
+        "behaviorFingerprint": [
+          "demo-claim",
+          "demo-transfer"
+        ],
+        "campaignQualityScore": null,
+        "campaignOnlyRatio": null,
+        "behaviorDiversityScore": null,
+        "botScriptScore": null,
+        "policyAction": null,
+        "reputationLabel": null,
+        "policyReason": null,
+        "customerLabel": null,
+        "enrichmentProvider": null,
+        "enrichmentStatus": null
+      },
+      {
+        "walletAddress": "5RGHCV4hnBxKfCa8uS56bcqMxZxrCvrygunnqorj5vBb",
+        "chain": "Solana",
+        "entityLabel": null,
+        "entityType": "user",
+        "entityRiskReason": null,
+        "riskScore": 97,
+        "riskLevel": "critical",
+        "status": "rejected",
+        "recommendedAction": "reject",
+        "statusExplanation": "Rejected under Balanced policy: a high-confidence graph signal is supported by a risk score of 97.",
+        "fundingSource": "CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+        "firstFundingAt": "2026-09-01T10:00:03.000Z",
+        "firstFundingAmount": 0.02,
+        "historyTruncated": null,
+        "txCount": 4,
+        "walletAgeDays": 7,
+        "totalVolume": 0.1,
+        "contractsCount": 1,
+        "campaignActionsCount": 4,
+        "clusterId": "CL-001",
+        "graphComponentId": "GC-001",
+        "graphRiskScore": 54,
+        "reasons": [
+          "V1.8 risk policy: Balanced",
+          "On-chain evidence: wallet is between 7 and 30 days old",
+          "On-chain evidence: limited transaction history",
+          "Graph intelligence: 4 wallets were funded by one unknown source inside a 1-hour window",
+          "Graph intelligence: one referrer controls a 4-wallet fan-out dominated by low-activity accounts",
+          "Graph intelligence: the same wallet is both the participant's funder and referrer",
+          "Graph intelligence: 4 wallets share both a funding origin and referral source",
+          "Shared funding source evidence: corroborated funding cohort with 4 wallets",
+          "Cluster evidence: part of suspicious cluster CL-001",
+          "On-chain evidence: low protocol/program interaction diversity",
+          "On-chain evidence: low total volume despite campaign activity",
+          "V1.8 evidence weighting: correlated relationship-graph signals were capped at 45 points to avoid double-counting.",
+          "Decision category: rejected_sybil",
+          "Engine version: 2.1.0",
+          "Ruleset version: 2026-08-07"
+        ],
+        "firstSeen": null,
+        "lastSeen": null,
+        "nativeBalance": null,
+        "tokenCount": null,
+        "uniqueCounterparties": null,
+        "lastActiveDaysAgo": null,
+        "isContract": null,
+        "accountType": null,
+        "ownerProgram": null,
+        "behaviorFingerprint": [
+          "demo-claim",
+          "demo-transfer"
+        ],
+        "campaignQualityScore": null,
+        "campaignOnlyRatio": null,
+        "behaviorDiversityScore": null,
+        "botScriptScore": null,
+        "policyAction": null,
+        "reputationLabel": null,
+        "policyReason": null,
+        "customerLabel": null,
+        "enrichmentProvider": null,
+        "enrichmentStatus": null
+      },
+      {
+        "walletAddress": "JBg1ev1nRRTmHjgofbgGnA7xKy3jdG5HGkrLkWH162GV",
+        "chain": "Solana",
+        "entityLabel": null,
+        "entityType": "user",
+        "entityRiskReason": null,
+        "riskScore": 0,
+        "riskLevel": "low",
+        "status": "approved",
+        "recommendedAction": "approve",
+        "statusExplanation": "Approved under Balanced policy: sufficient evidence is available and no corroborated cluster or hard Sybil signal was found.",
+        "fundingSource": "5iQx6GDfCt2jFj8e7bS6fhQ1NqvfuwURbRtatkR2veHT",
+        "firstFundingAt": null,
+        "firstFundingAmount": null,
+        "historyTruncated": null,
+        "txCount": 154,
+        "walletAgeDays": 365,
+        "totalVolume": 500,
+        "contractsCount": 15,
+        "campaignActionsCount": 2,
+        "clusterId": null,
+        "graphComponentId": "GC-002",
+        "graphRiskScore": 0,
+        "reasons": [
+          "V1.8 risk policy: Balanced",
+          "On-chain evidence: no major risk signals detected from available provider data.",
+          "Decision category: approved",
+          "Engine version: 2.1.0",
+          "Ruleset version: 2026-08-07"
+        ],
+        "firstSeen": null,
+        "lastSeen": null,
+        "nativeBalance": null,
+        "tokenCount": null,
+        "uniqueCounterparties": null,
+        "lastActiveDaysAgo": null,
+        "isContract": null,
+        "accountType": null,
+        "ownerProgram": null,
+        "behaviorFingerprint": null,
+        "campaignQualityScore": null,
+        "campaignOnlyRatio": null,
+        "behaviorDiversityScore": null,
+        "botScriptScore": null,
+        "policyAction": null,
+        "reputationLabel": null,
+        "policyReason": null,
+        "customerLabel": null,
+        "enrichmentProvider": null,
+        "enrichmentStatus": null
+      },
+      {
+        "walletAddress": "GQNd7rT3WdAUhMTuvod1bnFMHQQ6P9g8YhPKZEeoTNYq",
+        "chain": "Solana",
+        "entityLabel": null,
+        "entityType": "user",
+        "entityRiskReason": null,
+        "riskScore": 0,
+        "riskLevel": "low",
+        "status": "approved",
+        "recommendedAction": "approve",
+        "statusExplanation": "Approved under Balanced policy: sufficient evidence is available and no corroborated cluster or hard Sybil signal was found.",
+        "fundingSource": "AeuCLWtA2RaR1ipN9nBFiZ37GdVz6Lcx9LXAHsaHyeDs",
+        "firstFundingAt": null,
+        "firstFundingAmount": null,
+        "historyTruncated": null,
+        "txCount": 155,
+        "walletAgeDays": 365,
+        "totalVolume": 500,
+        "contractsCount": 15,
+        "campaignActionsCount": 2,
+        "clusterId": null,
+        "graphComponentId": "GC-003",
+        "graphRiskScore": 0,
+        "reasons": [
+          "V1.8 risk policy: Balanced",
+          "On-chain evidence: no major risk signals detected from available provider data.",
+          "Decision category: approved",
+          "Engine version: 2.1.0",
+          "Ruleset version: 2026-08-07"
+        ],
+        "firstSeen": null,
+        "lastSeen": null,
+        "nativeBalance": null,
+        "tokenCount": null,
+        "uniqueCounterparties": null,
+        "lastActiveDaysAgo": null,
+        "isContract": null,
+        "accountType": null,
+        "ownerProgram": null,
+        "behaviorFingerprint": null,
+        "campaignQualityScore": null,
+        "campaignOnlyRatio": null,
+        "behaviorDiversityScore": null,
+        "botScriptScore": null,
+        "policyAction": null,
+        "reputationLabel": null,
+        "policyReason": null,
+        "customerLabel": null,
+        "enrichmentProvider": null,
+        "enrichmentStatus": null
+      },
+      {
+        "walletAddress": "3qxDbWpDpsjMNhxrY4rkbmn4pRdcVNkdJpUAfEr5RGTf",
+        "chain": "Solana",
+        "entityLabel": null,
+        "entityType": "user",
+        "entityRiskReason": null,
+        "riskScore": 0,
+        "riskLevel": "low",
+        "status": "approved",
+        "recommendedAction": "approve",
+        "statusExplanation": "Approved under Balanced policy: sufficient evidence is available and no corroborated cluster or hard Sybil signal was found.",
+        "fundingSource": "YLaQbnCxeMr3Ux783rNkHUgKSA1TgzTU13tmbJGhBpA",
+        "firstFundingAt": null,
+        "firstFundingAmount": null,
+        "historyTruncated": null,
+        "txCount": 156,
+        "walletAgeDays": 365,
+        "totalVolume": 500,
+        "contractsCount": 15,
+        "campaignActionsCount": 2,
+        "clusterId": null,
+        "graphComponentId": "GC-004",
+        "graphRiskScore": 0,
+        "reasons": [
+          "V1.8 risk policy: Balanced",
+          "On-chain evidence: no major risk signals detected from available provider data.",
+          "Decision category: approved",
+          "Engine version: 2.1.0",
+          "Ruleset version: 2026-08-07"
+        ],
+        "firstSeen": null,
+        "lastSeen": null,
+        "nativeBalance": null,
+        "tokenCount": null,
+        "uniqueCounterparties": null,
+        "lastActiveDaysAgo": null,
+        "isContract": null,
+        "accountType": null,
+        "ownerProgram": null,
+        "behaviorFingerprint": null,
+        "campaignQualityScore": null,
+        "campaignOnlyRatio": null,
+        "behaviorDiversityScore": null,
+        "botScriptScore": null,
+        "policyAction": null,
+        "reputationLabel": null,
+        "policyReason": null,
+        "customerLabel": null,
+        "enrichmentProvider": null,
+        "enrichmentStatus": null
+      },
+      {
+        "walletAddress": "AdWBKsnhMtB7FKzTndWyHGBTN1YwvcEhDtBbVVsy5t6P",
+        "chain": "Solana",
+        "entityLabel": null,
+        "entityType": "user",
+        "entityRiskReason": null,
+        "riskScore": 0,
+        "riskLevel": "low",
+        "status": "approved",
+        "recommendedAction": "approve",
+        "statusExplanation": "Approved under Balanced policy: sufficient evidence is available and no corroborated cluster or hard Sybil signal was found.",
+        "fundingSource": "AsL3QfBNs3QtoRPb93LT96KdfGU67SqEoSH7QCtq5XZH",
+        "firstFundingAt": null,
+        "firstFundingAmount": null,
+        "historyTruncated": null,
+        "txCount": 157,
+        "walletAgeDays": 365,
+        "totalVolume": 500,
+        "contractsCount": 15,
+        "campaignActionsCount": 2,
+        "clusterId": null,
+        "graphComponentId": "GC-005",
+        "graphRiskScore": 0,
+        "reasons": [
+          "V1.8 risk policy: Balanced",
+          "On-chain evidence: no major risk signals detected from available provider data.",
+          "Decision category: approved",
+          "Engine version: 2.1.0",
+          "Ruleset version: 2026-08-07"
+        ],
+        "firstSeen": null,
+        "lastSeen": null,
+        "nativeBalance": null,
+        "tokenCount": null,
+        "uniqueCounterparties": null,
+        "lastActiveDaysAgo": null,
+        "isContract": null,
+        "accountType": null,
+        "ownerProgram": null,
+        "behaviorFingerprint": null,
+        "campaignQualityScore": null,
+        "campaignOnlyRatio": null,
+        "behaviorDiversityScore": null,
+        "botScriptScore": null,
+        "policyAction": null,
+        "reputationLabel": null,
+        "policyReason": null,
+        "customerLabel": null,
+        "enrichmentProvider": null,
+        "enrichmentStatus": null
+      },
+      {
+        "walletAddress": "6ARe7tEeVygSho2AHhQHWuNae3P52RCUM5QJ5NEZg3sZ",
+        "chain": "Solana",
+        "entityLabel": null,
+        "entityType": "user",
+        "entityRiskReason": null,
+        "riskScore": 0,
+        "riskLevel": "low",
+        "status": "approved",
+        "recommendedAction": "approve",
+        "statusExplanation": "Approved under Balanced policy: sufficient evidence is available and no corroborated cluster or hard Sybil signal was found.",
+        "fundingSource": "8nSf9ZHpguidzSAroNLVV8PTFwkp84PDwR7jtRDTP4HW",
+        "firstFundingAt": null,
+        "firstFundingAmount": null,
+        "historyTruncated": null,
+        "txCount": 158,
+        "walletAgeDays": 365,
+        "totalVolume": 500,
+        "contractsCount": 15,
+        "campaignActionsCount": 2,
+        "clusterId": null,
+        "graphComponentId": "GC-006",
+        "graphRiskScore": 0,
+        "reasons": [
+          "V1.8 risk policy: Balanced",
+          "On-chain evidence: no major risk signals detected from available provider data.",
+          "Decision category: approved",
+          "Engine version: 2.1.0",
+          "Ruleset version: 2026-08-07"
+        ],
+        "firstSeen": null,
+        "lastSeen": null,
+        "nativeBalance": null,
+        "tokenCount": null,
+        "uniqueCounterparties": null,
+        "lastActiveDaysAgo": null,
+        "isContract": null,
+        "accountType": null,
+        "ownerProgram": null,
+        "behaviorFingerprint": null,
+        "campaignQualityScore": null,
+        "campaignOnlyRatio": null,
+        "behaviorDiversityScore": null,
+        "botScriptScore": null,
+        "policyAction": null,
+        "reputationLabel": null,
+        "policyReason": null,
+        "customerLabel": null,
+        "enrichmentProvider": null,
+        "enrichmentStatus": null
+      },
+      {
+        "walletAddress": "GvDsEkyai7tRfveefbhqwBBMfBJHwzQFmt4m8EPcD8YQ",
+        "chain": "Solana",
+        "entityLabel": null,
+        "entityType": "user",
+        "entityRiskReason": null,
+        "riskScore": 42,
+        "riskLevel": "medium",
+        "status": "manual_review",
+        "recommendedAction": "manual_review",
+        "statusExplanation": "Gray Zone under Balanced policy: risk evidence requires human review but does not meet the automatic Sybil rejection standard.",
+        "fundingSource": null,
+        "firstFundingAt": null,
+        "firstFundingAmount": null,
+        "historyTruncated": null,
+        "txCount": 5,
+        "walletAgeDays": 8,
+        "totalVolume": 2,
+        "contractsCount": 1,
+        "campaignActionsCount": 2,
+        "clusterId": null,
+        "graphComponentId": null,
+        "graphRiskScore": 0,
+        "reasons": [
+          "V1.8 risk policy: Balanced",
+          "On-chain evidence: wallet is between 7 and 30 days old",
+          "On-chain evidence: limited transaction history",
+          "On-chain evidence: low protocol/program interaction diversity",
+          "Decision category: manual_review",
+          "Engine version: 2.1.0",
+          "Ruleset version: 2026-08-07"
+        ],
+        "firstSeen": null,
+        "lastSeen": null,
+        "nativeBalance": null,
+        "tokenCount": null,
+        "uniqueCounterparties": null,
+        "lastActiveDaysAgo": null,
+        "isContract": null,
+        "accountType": null,
+        "ownerProgram": null,
+        "behaviorFingerprint": null,
+        "campaignQualityScore": null,
+        "campaignOnlyRatio": null,
+        "behaviorDiversityScore": null,
+        "botScriptScore": null,
+        "policyAction": null,
+        "reputationLabel": null,
+        "policyReason": null,
+        "customerLabel": null,
+        "enrichmentProvider": null,
+        "enrichmentStatus": null
+      },
+      {
+        "walletAddress": "GzBZxTkWCiz7Ey7kgcwveA4yXu4vD1B1egEasjG8gSBM",
+        "chain": "Solana",
+        "entityLabel": null,
+        "entityType": "user",
+        "entityRiskReason": null,
+        "riskScore": 0,
+        "riskLevel": "low",
+        "status": "manual_review",
+        "recommendedAction": "manual_review",
+        "statusExplanation": "Gray Zone: on-chain provider access was unavailable. Retry enrichment before making an eligibility decision.",
+        "fundingSource": null,
+        "firstFundingAt": null,
+        "firstFundingAmount": null,
+        "historyTruncated": null,
+        "txCount": null,
+        "walletAgeDays": null,
+        "totalVolume": null,
+        "contractsCount": null,
+        "campaignActionsCount": null,
+        "clusterId": null,
+        "graphComponentId": null,
+        "graphRiskScore": 0,
+        "reasons": [
+          "V1.8 risk policy: Balanced",
+          "V1.5 provider access unavailable: retry on-chain enrichment before assigning wallet risk",
+          "Decision category: provider_unavailable",
+          "Engine version: 2.1.0",
+          "Ruleset version: 2026-08-07",
+          "Risk score interpretation: no malicious-risk score was assigned because the decision is based on data coverage, not wallet misconduct."
+        ],
+        "firstSeen": null,
+        "lastSeen": null,
+        "nativeBalance": null,
+        "tokenCount": null,
+        "uniqueCounterparties": null,
+        "lastActiveDaysAgo": null,
+        "isContract": null,
+        "accountType": null,
+        "ownerProgram": null,
+        "behaviorFingerprint": null,
+        "campaignQualityScore": null,
+        "campaignOnlyRatio": null,
+        "behaviorDiversityScore": null,
+        "botScriptScore": null,
+        "policyAction": null,
+        "reputationLabel": null,
+        "policyReason": null,
+        "customerLabel": null,
+        "enrichmentProvider": null,
+        "enrichmentStatus": "failed"
+      },
+      {
+        "walletAddress": "EJebGrj2siYnR4hmHR7Kk7DULymjbf169k8m3vaCE3CV",
+        "chain": "Solana",
+        "entityLabel": "Illustrative protocol account",
+        "entityType": "protocol",
+        "entityRiskReason": "On-chain entity evidence: known public exchange/service/protocol wallet detected. This address is not a typical individual reward campaign participant.",
+        "riskScore": 0,
+        "riskLevel": "low",
+        "status": "rejected",
+        "recommendedAction": "reject",
+        "statusExplanation": "Rejected / Not Eligible: non-user Solana account detected (known_protocol_or_program). Program, token, sysvar, protocol, closed, or program-owned accounts are excluded from normal user reward lists.",
+        "fundingSource": "DSQeFfVKrfZ3L9Sgj1YsuM7j5KLi1ewKNRT22poZk7ic",
+        "firstFundingAt": null,
+        "firstFundingAmount": null,
+        "historyTruncated": null,
+        "txCount": 161,
+        "walletAgeDays": 365,
+        "totalVolume": 500,
+        "contractsCount": 15,
+        "campaignActionsCount": 2,
+        "clusterId": null,
+        "graphComponentId": "GC-007",
+        "graphRiskScore": 0,
+        "reasons": [
+          "On-chain entity evidence: known public exchange/service/protocol wallet detected. This address is not a typical individual reward campaign participant.",
+          "V1.8 risk policy: Balanced",
+          "Solana account intelligence: known_protocol_or_program",
+          "V1.5 eligibility: not a normal end-user wallet",
+          "Decision category: ineligible_non_user_account",
+          "Engine version: 2.1.0",
+          "Ruleset version: 2026-08-07",
+          "Risk score interpretation: no malicious-risk score was assigned because the decision is an eligibility exclusion for a non-user account."
+        ],
+        "firstSeen": null,
+        "lastSeen": null,
+        "nativeBalance": null,
+        "tokenCount": null,
+        "uniqueCounterparties": null,
+        "lastActiveDaysAgo": null,
+        "isContract": null,
+        "accountType": "known_protocol_or_program",
+        "ownerProgram": null,
+        "behaviorFingerprint": null,
+        "campaignQualityScore": null,
+        "campaignOnlyRatio": null,
+        "behaviorDiversityScore": null,
+        "botScriptScore": null,
+        "policyAction": null,
+        "reputationLabel": null,
+        "policyReason": null,
+        "customerLabel": null,
+        "enrichmentProvider": null,
+        "enrichmentStatus": null
+      }
+    ],
+    "clusters": [
+      {
+        "clusterLabel": "CL-001",
+        "walletCount": 4,
+        "averageRiskScore": 97,
+        "sharedFundingSource": "CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+        "behaviorSimilarityScore": 96,
+        "suggestedAction": "reject",
+        "reasons": [
+          "V1.8 corroborated Sybil cohort: at least two independent relationship signals overlap",
+          "Behavior evidence: similar activity shape and sampled program/instruction fingerprint",
+          "Funding evidence: shared first observed funding source",
+          "Referral evidence: shared referrer wallet or campaign referral code",
+          "Temporal evidence: tightly aligned first funding or first observed activity window",
+          "Funding, timing, behavior, referral, campaign event, or participant evidence is never treated as conclusive in isolation."
+        ],
+        "walletAddresses": [
+          "6n8YVt8jHq5JLBZJMxB5FcrhuLDLGT2yyBTxU2PWM2MF",
+          "8vZ2Mewe6bvCYwbtnXXEhKKtgaNkwQHEFBSYeT6qfaww",
+          "sE7xmH6bjeVbZ5YdB6FBX1oNyuHmG3vSfJ13n4cfz4i",
+          "5RGHCV4hnBxKfCa8uS56bcqMxZxrCvrygunnqorj5vBb"
+        ]
+      }
+    ],
+    "graph": {
+      "nodes": [
+        {
+          "nodeKey": "address:solana:6n8YVt8jHq5JLBZJMxB5FcrhuLDLGT2yyBTxU2PWM2MF",
+          "address": "6n8YVt8jHq5JLBZJMxB5FcrhuLDLGT2yyBTxU2PWM2MF",
+          "chain": "Solana",
+          "kind": "wallet",
+          "label": null,
+          "walletAddress": "6n8YVt8jHq5JLBZJMxB5FcrhuLDLGT2yyBTxU2PWM2MF",
+          "metadata": {
+            "txCount": 4,
+            "walletAgeDays": 7
+          },
+          "componentId": "GC-001"
+        },
+        {
+          "nodeKey": "address:solana:8vZ2Mewe6bvCYwbtnXXEhKKtgaNkwQHEFBSYeT6qfaww",
+          "address": "8vZ2Mewe6bvCYwbtnXXEhKKtgaNkwQHEFBSYeT6qfaww",
+          "chain": "Solana",
+          "kind": "wallet",
+          "label": null,
+          "walletAddress": "8vZ2Mewe6bvCYwbtnXXEhKKtgaNkwQHEFBSYeT6qfaww",
+          "metadata": {
+            "txCount": 4,
+            "walletAgeDays": 7
+          },
+          "componentId": "GC-001"
+        },
+        {
+          "nodeKey": "address:solana:sE7xmH6bjeVbZ5YdB6FBX1oNyuHmG3vSfJ13n4cfz4i",
+          "address": "sE7xmH6bjeVbZ5YdB6FBX1oNyuHmG3vSfJ13n4cfz4i",
+          "chain": "Solana",
+          "kind": "wallet",
+          "label": null,
+          "walletAddress": "sE7xmH6bjeVbZ5YdB6FBX1oNyuHmG3vSfJ13n4cfz4i",
+          "metadata": {
+            "txCount": 4,
+            "walletAgeDays": 7
+          },
+          "componentId": "GC-001"
+        },
+        {
+          "nodeKey": "address:solana:5RGHCV4hnBxKfCa8uS56bcqMxZxrCvrygunnqorj5vBb",
+          "address": "5RGHCV4hnBxKfCa8uS56bcqMxZxrCvrygunnqorj5vBb",
+          "chain": "Solana",
+          "kind": "wallet",
+          "label": null,
+          "walletAddress": "5RGHCV4hnBxKfCa8uS56bcqMxZxrCvrygunnqorj5vBb",
+          "metadata": {
+            "txCount": 4,
+            "walletAgeDays": 7
+          },
+          "componentId": "GC-001"
+        },
+        {
+          "nodeKey": "address:solana:JBg1ev1nRRTmHjgofbgGnA7xKy3jdG5HGkrLkWH162GV",
+          "address": "JBg1ev1nRRTmHjgofbgGnA7xKy3jdG5HGkrLkWH162GV",
+          "chain": "Solana",
+          "kind": "wallet",
+          "label": null,
+          "walletAddress": "JBg1ev1nRRTmHjgofbgGnA7xKy3jdG5HGkrLkWH162GV",
+          "metadata": {
+            "txCount": 154,
+            "walletAgeDays": 365
+          },
+          "componentId": "GC-002"
+        },
+        {
+          "nodeKey": "address:solana:GQNd7rT3WdAUhMTuvod1bnFMHQQ6P9g8YhPKZEeoTNYq",
+          "address": "GQNd7rT3WdAUhMTuvod1bnFMHQQ6P9g8YhPKZEeoTNYq",
+          "chain": "Solana",
+          "kind": "wallet",
+          "label": null,
+          "walletAddress": "GQNd7rT3WdAUhMTuvod1bnFMHQQ6P9g8YhPKZEeoTNYq",
+          "metadata": {
+            "txCount": 155,
+            "walletAgeDays": 365
+          },
+          "componentId": "GC-003"
+        },
+        {
+          "nodeKey": "address:solana:3qxDbWpDpsjMNhxrY4rkbmn4pRdcVNkdJpUAfEr5RGTf",
+          "address": "3qxDbWpDpsjMNhxrY4rkbmn4pRdcVNkdJpUAfEr5RGTf",
+          "chain": "Solana",
+          "kind": "wallet",
+          "label": null,
+          "walletAddress": "3qxDbWpDpsjMNhxrY4rkbmn4pRdcVNkdJpUAfEr5RGTf",
+          "metadata": {
+            "txCount": 156,
+            "walletAgeDays": 365
+          },
+          "componentId": "GC-004"
+        },
+        {
+          "nodeKey": "address:solana:AdWBKsnhMtB7FKzTndWyHGBTN1YwvcEhDtBbVVsy5t6P",
+          "address": "AdWBKsnhMtB7FKzTndWyHGBTN1YwvcEhDtBbVVsy5t6P",
+          "chain": "Solana",
+          "kind": "wallet",
+          "label": null,
+          "walletAddress": "AdWBKsnhMtB7FKzTndWyHGBTN1YwvcEhDtBbVVsy5t6P",
+          "metadata": {
+            "txCount": 157,
+            "walletAgeDays": 365
+          },
+          "componentId": "GC-005"
+        },
+        {
+          "nodeKey": "address:solana:6ARe7tEeVygSho2AHhQHWuNae3P52RCUM5QJ5NEZg3sZ",
+          "address": "6ARe7tEeVygSho2AHhQHWuNae3P52RCUM5QJ5NEZg3sZ",
+          "chain": "Solana",
+          "kind": "wallet",
+          "label": null,
+          "walletAddress": "6ARe7tEeVygSho2AHhQHWuNae3P52RCUM5QJ5NEZg3sZ",
+          "metadata": {
+            "txCount": 158,
+            "walletAgeDays": 365
+          },
+          "componentId": "GC-006"
+        },
+        {
+          "nodeKey": "address:solana:GvDsEkyai7tRfveefbhqwBBMfBJHwzQFmt4m8EPcD8YQ",
+          "address": "GvDsEkyai7tRfveefbhqwBBMfBJHwzQFmt4m8EPcD8YQ",
+          "chain": "Solana",
+          "kind": "wallet",
+          "label": null,
+          "walletAddress": "GvDsEkyai7tRfveefbhqwBBMfBJHwzQFmt4m8EPcD8YQ",
+          "metadata": {
+            "txCount": 5,
+            "walletAgeDays": 8
+          },
+          "componentId": null
+        },
+        {
+          "nodeKey": "address:solana:GzBZxTkWCiz7Ey7kgcwveA4yXu4vD1B1egEasjG8gSBM",
+          "address": "GzBZxTkWCiz7Ey7kgcwveA4yXu4vD1B1egEasjG8gSBM",
+          "chain": "Solana",
+          "kind": "wallet",
+          "label": null,
+          "walletAddress": "GzBZxTkWCiz7Ey7kgcwveA4yXu4vD1B1egEasjG8gSBM",
+          "metadata": {
+            "txCount": null,
+            "walletAgeDays": null
+          },
+          "componentId": null
+        },
+        {
+          "nodeKey": "address:solana:EJebGrj2siYnR4hmHR7Kk7DULymjbf169k8m3vaCE3CV",
+          "address": "EJebGrj2siYnR4hmHR7Kk7DULymjbf169k8m3vaCE3CV",
+          "chain": "Solana",
+          "kind": "wallet",
+          "label": "Illustrative protocol account",
+          "walletAddress": "EJebGrj2siYnR4hmHR7Kk7DULymjbf169k8m3vaCE3CV",
+          "metadata": {
+            "txCount": 161,
+            "walletAgeDays": 365
+          },
+          "componentId": "GC-007"
+        },
+        {
+          "nodeKey": "address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+          "address": "CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+          "chain": "Solana",
+          "kind": "funder",
+          "label": null,
+          "walletAddress": null,
+          "metadata": {
+            "neutralService": false,
+            "knownBadFundingSource": false,
+            "entityType": null
+          },
+          "componentId": "GC-001"
+        },
+        {
+          "nodeKey": "address:solana:5iQx6GDfCt2jFj8e7bS6fhQ1NqvfuwURbRtatkR2veHT",
+          "address": "5iQx6GDfCt2jFj8e7bS6fhQ1NqvfuwURbRtatkR2veHT",
+          "chain": "Solana",
+          "kind": "funder",
+          "label": null,
+          "walletAddress": null,
+          "metadata": {
+            "neutralService": false,
+            "knownBadFundingSource": false,
+            "entityType": null
+          },
+          "componentId": "GC-002"
+        },
+        {
+          "nodeKey": "address:solana:AeuCLWtA2RaR1ipN9nBFiZ37GdVz6Lcx9LXAHsaHyeDs",
+          "address": "AeuCLWtA2RaR1ipN9nBFiZ37GdVz6Lcx9LXAHsaHyeDs",
+          "chain": "Solana",
+          "kind": "funder",
+          "label": null,
+          "walletAddress": null,
+          "metadata": {
+            "neutralService": false,
+            "knownBadFundingSource": false,
+            "entityType": null
+          },
+          "componentId": "GC-003"
+        },
+        {
+          "nodeKey": "address:solana:YLaQbnCxeMr3Ux783rNkHUgKSA1TgzTU13tmbJGhBpA",
+          "address": "YLaQbnCxeMr3Ux783rNkHUgKSA1TgzTU13tmbJGhBpA",
+          "chain": "Solana",
+          "kind": "funder",
+          "label": null,
+          "walletAddress": null,
+          "metadata": {
+            "neutralService": false,
+            "knownBadFundingSource": false,
+            "entityType": null
+          },
+          "componentId": "GC-004"
+        },
+        {
+          "nodeKey": "address:solana:AsL3QfBNs3QtoRPb93LT96KdfGU67SqEoSH7QCtq5XZH",
+          "address": "AsL3QfBNs3QtoRPb93LT96KdfGU67SqEoSH7QCtq5XZH",
+          "chain": "Solana",
+          "kind": "funder",
+          "label": null,
+          "walletAddress": null,
+          "metadata": {
+            "neutralService": false,
+            "knownBadFundingSource": false,
+            "entityType": null
+          },
+          "componentId": "GC-005"
+        },
+        {
+          "nodeKey": "address:solana:8nSf9ZHpguidzSAroNLVV8PTFwkp84PDwR7jtRDTP4HW",
+          "address": "8nSf9ZHpguidzSAroNLVV8PTFwkp84PDwR7jtRDTP4HW",
+          "chain": "Solana",
+          "kind": "funder",
+          "label": null,
+          "walletAddress": null,
+          "metadata": {
+            "neutralService": false,
+            "knownBadFundingSource": false,
+            "entityType": null
+          },
+          "componentId": "GC-006"
+        },
+        {
+          "nodeKey": "address:solana:DSQeFfVKrfZ3L9Sgj1YsuM7j5KLi1ewKNRT22poZk7ic",
+          "address": "DSQeFfVKrfZ3L9Sgj1YsuM7j5KLi1ewKNRT22poZk7ic",
+          "chain": "Solana",
+          "kind": "funder",
+          "label": null,
+          "walletAddress": null,
+          "metadata": {
+            "neutralService": false,
+            "knownBadFundingSource": false,
+            "entityType": null
+          },
+          "componentId": "GC-007"
+        }
+      ],
+      "edges": [
+        {
+          "edgeKey": "funded:address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ:address:solana:6n8YVt8jHq5JLBZJMxB5FcrhuLDLGT2yyBTxU2PWM2MF",
+          "sourceKey": "address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+          "targetKey": "address:solana:6n8YVt8jHq5JLBZJMxB5FcrhuLDLGT2yyBTxU2PWM2MF",
+          "kind": "funded",
+          "confidence": 78,
+          "isRiskBearing": true,
+          "componentId": "GC-001",
+          "observedAt": "2026-09-01T10:00:00.000Z",
+          "transactionId": null,
+          "amount": 0.02,
+          "evidence": [
+            "Funding source supplied with campaign data",
+            "Funding timestamps form a tight campaign cohort"
+          ],
+          "metadata": {
+            "neutralService": false,
+            "knownBadFundingSource": false,
+            "historyTruncated": null
+          }
+        },
+        {
+          "edgeKey": "referred:address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ:address:solana:6n8YVt8jHq5JLBZJMxB5FcrhuLDLGT2yyBTxU2PWM2MF",
+          "sourceKey": "address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+          "targetKey": "address:solana:6n8YVt8jHq5JLBZJMxB5FcrhuLDLGT2yyBTxU2PWM2MF",
+          "kind": "referred",
+          "confidence": 96,
+          "isRiskBearing": true,
+          "componentId": "GC-001",
+          "observedAt": "2026-09-01T10:01:00.000Z",
+          "transactionId": null,
+          "amount": null,
+          "evidence": [
+            "Explicit referrer wallet supplied with campaign data",
+            "Referral fan-out is dominated by low-activity wallets"
+          ],
+          "metadata": {
+            "referralCode": "DEMO-COHORT"
+          }
+        },
+        {
+          "edgeKey": "funded:address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ:address:solana:8vZ2Mewe6bvCYwbtnXXEhKKtgaNkwQHEFBSYeT6qfaww",
+          "sourceKey": "address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+          "targetKey": "address:solana:8vZ2Mewe6bvCYwbtnXXEhKKtgaNkwQHEFBSYeT6qfaww",
+          "kind": "funded",
+          "confidence": 78,
+          "isRiskBearing": true,
+          "componentId": "GC-001",
+          "observedAt": "2026-09-01T10:00:01.000Z",
+          "transactionId": null,
+          "amount": 0.02,
+          "evidence": [
+            "Funding source supplied with campaign data",
+            "Funding timestamps form a tight campaign cohort"
+          ],
+          "metadata": {
+            "neutralService": false,
+            "knownBadFundingSource": false,
+            "historyTruncated": null
+          }
+        },
+        {
+          "edgeKey": "referred:address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ:address:solana:8vZ2Mewe6bvCYwbtnXXEhKKtgaNkwQHEFBSYeT6qfaww",
+          "sourceKey": "address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+          "targetKey": "address:solana:8vZ2Mewe6bvCYwbtnXXEhKKtgaNkwQHEFBSYeT6qfaww",
+          "kind": "referred",
+          "confidence": 96,
+          "isRiskBearing": true,
+          "componentId": "GC-001",
+          "observedAt": "2026-09-01T10:01:01.000Z",
+          "transactionId": null,
+          "amount": null,
+          "evidence": [
+            "Explicit referrer wallet supplied with campaign data",
+            "Referral fan-out is dominated by low-activity wallets"
+          ],
+          "metadata": {
+            "referralCode": "DEMO-COHORT"
+          }
+        },
+        {
+          "edgeKey": "funded:address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ:address:solana:sE7xmH6bjeVbZ5YdB6FBX1oNyuHmG3vSfJ13n4cfz4i",
+          "sourceKey": "address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+          "targetKey": "address:solana:sE7xmH6bjeVbZ5YdB6FBX1oNyuHmG3vSfJ13n4cfz4i",
+          "kind": "funded",
+          "confidence": 78,
+          "isRiskBearing": true,
+          "componentId": "GC-001",
+          "observedAt": "2026-09-01T10:00:02.000Z",
+          "transactionId": null,
+          "amount": 0.02,
+          "evidence": [
+            "Funding source supplied with campaign data",
+            "Funding timestamps form a tight campaign cohort"
+          ],
+          "metadata": {
+            "neutralService": false,
+            "knownBadFundingSource": false,
+            "historyTruncated": null
+          }
+        },
+        {
+          "edgeKey": "referred:address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ:address:solana:sE7xmH6bjeVbZ5YdB6FBX1oNyuHmG3vSfJ13n4cfz4i",
+          "sourceKey": "address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+          "targetKey": "address:solana:sE7xmH6bjeVbZ5YdB6FBX1oNyuHmG3vSfJ13n4cfz4i",
+          "kind": "referred",
+          "confidence": 96,
+          "isRiskBearing": true,
+          "componentId": "GC-001",
+          "observedAt": "2026-09-01T10:01:02.000Z",
+          "transactionId": null,
+          "amount": null,
+          "evidence": [
+            "Explicit referrer wallet supplied with campaign data",
+            "Referral fan-out is dominated by low-activity wallets"
+          ],
+          "metadata": {
+            "referralCode": "DEMO-COHORT"
+          }
+        },
+        {
+          "edgeKey": "funded:address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ:address:solana:5RGHCV4hnBxKfCa8uS56bcqMxZxrCvrygunnqorj5vBb",
+          "sourceKey": "address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+          "targetKey": "address:solana:5RGHCV4hnBxKfCa8uS56bcqMxZxrCvrygunnqorj5vBb",
+          "kind": "funded",
+          "confidence": 78,
+          "isRiskBearing": true,
+          "componentId": "GC-001",
+          "observedAt": "2026-09-01T10:00:03.000Z",
+          "transactionId": null,
+          "amount": 0.02,
+          "evidence": [
+            "Funding source supplied with campaign data",
+            "Funding timestamps form a tight campaign cohort"
+          ],
+          "metadata": {
+            "neutralService": false,
+            "knownBadFundingSource": false,
+            "historyTruncated": null
+          }
+        },
+        {
+          "edgeKey": "referred:address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ:address:solana:5RGHCV4hnBxKfCa8uS56bcqMxZxrCvrygunnqorj5vBb",
+          "sourceKey": "address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+          "targetKey": "address:solana:5RGHCV4hnBxKfCa8uS56bcqMxZxrCvrygunnqorj5vBb",
+          "kind": "referred",
+          "confidence": 96,
+          "isRiskBearing": true,
+          "componentId": "GC-001",
+          "observedAt": "2026-09-01T10:01:03.000Z",
+          "transactionId": null,
+          "amount": null,
+          "evidence": [
+            "Explicit referrer wallet supplied with campaign data",
+            "Referral fan-out is dominated by low-activity wallets"
+          ],
+          "metadata": {
+            "referralCode": "DEMO-COHORT"
+          }
+        },
+        {
+          "edgeKey": "funded:address:solana:5iQx6GDfCt2jFj8e7bS6fhQ1NqvfuwURbRtatkR2veHT:address:solana:JBg1ev1nRRTmHjgofbgGnA7xKy3jdG5HGkrLkWH162GV",
+          "sourceKey": "address:solana:5iQx6GDfCt2jFj8e7bS6fhQ1NqvfuwURbRtatkR2veHT",
+          "targetKey": "address:solana:JBg1ev1nRRTmHjgofbgGnA7xKy3jdG5HGkrLkWH162GV",
+          "kind": "funded",
+          "confidence": 78,
+          "isRiskBearing": true,
+          "componentId": "GC-002",
+          "observedAt": null,
+          "transactionId": null,
+          "amount": null,
+          "evidence": [
+            "Funding source supplied with campaign data"
+          ],
+          "metadata": {
+            "neutralService": false,
+            "knownBadFundingSource": false,
+            "historyTruncated": null
+          }
+        },
+        {
+          "edgeKey": "funded:address:solana:AeuCLWtA2RaR1ipN9nBFiZ37GdVz6Lcx9LXAHsaHyeDs:address:solana:GQNd7rT3WdAUhMTuvod1bnFMHQQ6P9g8YhPKZEeoTNYq",
+          "sourceKey": "address:solana:AeuCLWtA2RaR1ipN9nBFiZ37GdVz6Lcx9LXAHsaHyeDs",
+          "targetKey": "address:solana:GQNd7rT3WdAUhMTuvod1bnFMHQQ6P9g8YhPKZEeoTNYq",
+          "kind": "funded",
+          "confidence": 78,
+          "isRiskBearing": true,
+          "componentId": "GC-003",
+          "observedAt": null,
+          "transactionId": null,
+          "amount": null,
+          "evidence": [
+            "Funding source supplied with campaign data"
+          ],
+          "metadata": {
+            "neutralService": false,
+            "knownBadFundingSource": false,
+            "historyTruncated": null
+          }
+        },
+        {
+          "edgeKey": "funded:address:solana:YLaQbnCxeMr3Ux783rNkHUgKSA1TgzTU13tmbJGhBpA:address:solana:3qxDbWpDpsjMNhxrY4rkbmn4pRdcVNkdJpUAfEr5RGTf",
+          "sourceKey": "address:solana:YLaQbnCxeMr3Ux783rNkHUgKSA1TgzTU13tmbJGhBpA",
+          "targetKey": "address:solana:3qxDbWpDpsjMNhxrY4rkbmn4pRdcVNkdJpUAfEr5RGTf",
+          "kind": "funded",
+          "confidence": 78,
+          "isRiskBearing": true,
+          "componentId": "GC-004",
+          "observedAt": null,
+          "transactionId": null,
+          "amount": null,
+          "evidence": [
+            "Funding source supplied with campaign data"
+          ],
+          "metadata": {
+            "neutralService": false,
+            "knownBadFundingSource": false,
+            "historyTruncated": null
+          }
+        },
+        {
+          "edgeKey": "funded:address:solana:AsL3QfBNs3QtoRPb93LT96KdfGU67SqEoSH7QCtq5XZH:address:solana:AdWBKsnhMtB7FKzTndWyHGBTN1YwvcEhDtBbVVsy5t6P",
+          "sourceKey": "address:solana:AsL3QfBNs3QtoRPb93LT96KdfGU67SqEoSH7QCtq5XZH",
+          "targetKey": "address:solana:AdWBKsnhMtB7FKzTndWyHGBTN1YwvcEhDtBbVVsy5t6P",
+          "kind": "funded",
+          "confidence": 78,
+          "isRiskBearing": true,
+          "componentId": "GC-005",
+          "observedAt": null,
+          "transactionId": null,
+          "amount": null,
+          "evidence": [
+            "Funding source supplied with campaign data"
+          ],
+          "metadata": {
+            "neutralService": false,
+            "knownBadFundingSource": false,
+            "historyTruncated": null
+          }
+        },
+        {
+          "edgeKey": "funded:address:solana:8nSf9ZHpguidzSAroNLVV8PTFwkp84PDwR7jtRDTP4HW:address:solana:6ARe7tEeVygSho2AHhQHWuNae3P52RCUM5QJ5NEZg3sZ",
+          "sourceKey": "address:solana:8nSf9ZHpguidzSAroNLVV8PTFwkp84PDwR7jtRDTP4HW",
+          "targetKey": "address:solana:6ARe7tEeVygSho2AHhQHWuNae3P52RCUM5QJ5NEZg3sZ",
+          "kind": "funded",
+          "confidence": 78,
+          "isRiskBearing": true,
+          "componentId": "GC-006",
+          "observedAt": null,
+          "transactionId": null,
+          "amount": null,
+          "evidence": [
+            "Funding source supplied with campaign data"
+          ],
+          "metadata": {
+            "neutralService": false,
+            "knownBadFundingSource": false,
+            "historyTruncated": null
+          }
+        },
+        {
+          "edgeKey": "funded:address:solana:DSQeFfVKrfZ3L9Sgj1YsuM7j5KLi1ewKNRT22poZk7ic:address:solana:EJebGrj2siYnR4hmHR7Kk7DULymjbf169k8m3vaCE3CV",
+          "sourceKey": "address:solana:DSQeFfVKrfZ3L9Sgj1YsuM7j5KLi1ewKNRT22poZk7ic",
+          "targetKey": "address:solana:EJebGrj2siYnR4hmHR7Kk7DULymjbf169k8m3vaCE3CV",
+          "kind": "funded",
+          "confidence": 78,
+          "isRiskBearing": true,
+          "componentId": "GC-007",
+          "observedAt": null,
+          "transactionId": null,
+          "amount": null,
+          "evidence": [
+            "Funding source supplied with campaign data"
+          ],
+          "metadata": {
+            "neutralService": false,
+            "knownBadFundingSource": false,
+            "historyTruncated": null
+          }
+        }
+      ],
+      "totalNodes": 19,
+      "totalEdges": 14,
+      "connectedWallets": 10,
+      "externalFunders": 7,
+      "referralLinks": 4,
+      "highRiskComponents": 1,
+      "neutralServiceFunders": 0,
+      "largestComponent": 4,
+      "maxComponentRisk": 100,
+      "components": [
+        {
+          "componentId": "GC-001",
+          "nodeKeys": [
+            "address:solana:6n8YVt8jHq5JLBZJMxB5FcrhuLDLGT2yyBTxU2PWM2MF",
+            "address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+            "address:solana:8vZ2Mewe6bvCYwbtnXXEhKKtgaNkwQHEFBSYeT6qfaww",
+            "address:solana:sE7xmH6bjeVbZ5YdB6FBX1oNyuHmG3vSfJ13n4cfz4i",
+            "address:solana:5RGHCV4hnBxKfCa8uS56bcqMxZxrCvrygunnqorj5vBb"
+          ],
+          "walletAddresses": [
+            "6n8YVt8jHq5JLBZJMxB5FcrhuLDLGT2yyBTxU2PWM2MF",
+            "8vZ2Mewe6bvCYwbtnXXEhKKtgaNkwQHEFBSYeT6qfaww",
+            "sE7xmH6bjeVbZ5YdB6FBX1oNyuHmG3vSfJ13n4cfz4i",
+            "5RGHCV4hnBxKfCa8uS56bcqMxZxrCvrygunnqorj5vBb"
+          ],
+          "edgeCount": 8,
+          "riskScore": 100,
+          "severity": "critical",
+          "dominantFunder": "address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ",
+          "dominantReferrer": null,
+          "reasons": [
+            "Shared unknown funding origin",
+            "Burst funding cohort",
+            "Referral fan-out",
+            "Funder and referrer overlap",
+            "Funder and referrer overlap"
+          ]
+        },
+        {
+          "componentId": "GC-002",
+          "nodeKeys": [
+            "address:solana:JBg1ev1nRRTmHjgofbgGnA7xKy3jdG5HGkrLkWH162GV",
+            "address:solana:5iQx6GDfCt2jFj8e7bS6fhQ1NqvfuwURbRtatkR2veHT"
+          ],
+          "walletAddresses": [
+            "JBg1ev1nRRTmHjgofbgGnA7xKy3jdG5HGkrLkWH162GV"
+          ],
+          "edgeCount": 1,
+          "riskScore": 0,
+          "severity": "info",
+          "dominantFunder": "address:solana:5iQx6GDfCt2jFj8e7bS6fhQ1NqvfuwURbRtatkR2veHT",
+          "dominantReferrer": null,
+          "reasons": []
+        },
+        {
+          "componentId": "GC-003",
+          "nodeKeys": [
+            "address:solana:GQNd7rT3WdAUhMTuvod1bnFMHQQ6P9g8YhPKZEeoTNYq",
+            "address:solana:AeuCLWtA2RaR1ipN9nBFiZ37GdVz6Lcx9LXAHsaHyeDs"
+          ],
+          "walletAddresses": [
+            "GQNd7rT3WdAUhMTuvod1bnFMHQQ6P9g8YhPKZEeoTNYq"
+          ],
+          "edgeCount": 1,
+          "riskScore": 0,
+          "severity": "info",
+          "dominantFunder": "address:solana:AeuCLWtA2RaR1ipN9nBFiZ37GdVz6Lcx9LXAHsaHyeDs",
+          "dominantReferrer": null,
+          "reasons": []
+        },
+        {
+          "componentId": "GC-004",
+          "nodeKeys": [
+            "address:solana:3qxDbWpDpsjMNhxrY4rkbmn4pRdcVNkdJpUAfEr5RGTf",
+            "address:solana:YLaQbnCxeMr3Ux783rNkHUgKSA1TgzTU13tmbJGhBpA"
+          ],
+          "walletAddresses": [
+            "3qxDbWpDpsjMNhxrY4rkbmn4pRdcVNkdJpUAfEr5RGTf"
+          ],
+          "edgeCount": 1,
+          "riskScore": 0,
+          "severity": "info",
+          "dominantFunder": "address:solana:YLaQbnCxeMr3Ux783rNkHUgKSA1TgzTU13tmbJGhBpA",
+          "dominantReferrer": null,
+          "reasons": []
+        },
+        {
+          "componentId": "GC-005",
+          "nodeKeys": [
+            "address:solana:AdWBKsnhMtB7FKzTndWyHGBTN1YwvcEhDtBbVVsy5t6P",
+            "address:solana:AsL3QfBNs3QtoRPb93LT96KdfGU67SqEoSH7QCtq5XZH"
+          ],
+          "walletAddresses": [
+            "AdWBKsnhMtB7FKzTndWyHGBTN1YwvcEhDtBbVVsy5t6P"
+          ],
+          "edgeCount": 1,
+          "riskScore": 0,
+          "severity": "info",
+          "dominantFunder": "address:solana:AsL3QfBNs3QtoRPb93LT96KdfGU67SqEoSH7QCtq5XZH",
+          "dominantReferrer": null,
+          "reasons": []
+        },
+        {
+          "componentId": "GC-006",
+          "nodeKeys": [
+            "address:solana:6ARe7tEeVygSho2AHhQHWuNae3P52RCUM5QJ5NEZg3sZ",
+            "address:solana:8nSf9ZHpguidzSAroNLVV8PTFwkp84PDwR7jtRDTP4HW"
+          ],
+          "walletAddresses": [
+            "6ARe7tEeVygSho2AHhQHWuNae3P52RCUM5QJ5NEZg3sZ"
+          ],
+          "edgeCount": 1,
+          "riskScore": 0,
+          "severity": "info",
+          "dominantFunder": "address:solana:8nSf9ZHpguidzSAroNLVV8PTFwkp84PDwR7jtRDTP4HW",
+          "dominantReferrer": null,
+          "reasons": []
+        },
+        {
+          "componentId": "GC-007",
+          "nodeKeys": [
+            "address:solana:EJebGrj2siYnR4hmHR7Kk7DULymjbf169k8m3vaCE3CV",
+            "address:solana:DSQeFfVKrfZ3L9Sgj1YsuM7j5KLi1ewKNRT22poZk7ic"
+          ],
+          "walletAddresses": [
+            "EJebGrj2siYnR4hmHR7Kk7DULymjbf169k8m3vaCE3CV"
+          ],
+          "edgeCount": 1,
+          "riskScore": 0,
+          "severity": "info",
+          "dominantFunder": "address:solana:DSQeFfVKrfZ3L9Sgj1YsuM7j5KLi1ewKNRT22poZk7ic",
+          "dominantReferrer": null,
+          "reasons": []
+        }
+      ],
+      "findings": [
+        {
+          "code": "COORDINATED_REFERRAL_FUNDING",
+          "title": "Coordinated funding and referral cohort",
+          "description": "4 wallets share both a funding origin and referral source",
+          "severity": "high",
+          "evidenceCount": 8,
+          "walletAddresses": [
+            "6n8YVt8jHq5JLBZJMxB5FcrhuLDLGT2yyBTxU2PWM2MF",
+            "8vZ2Mewe6bvCYwbtnXXEhKKtgaNkwQHEFBSYeT6qfaww",
+            "sE7xmH6bjeVbZ5YdB6FBX1oNyuHmG3vSfJ13n4cfz4i",
+            "5RGHCV4hnBxKfCa8uS56bcqMxZxrCvrygunnqorj5vBb"
+          ],
+          "nodeKey": "address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ"
+        },
+        {
+          "code": "FUNDER_REFERRER_OVERLAP",
+          "title": "Funder and referrer overlap",
+          "description": "The same external wallet both funded and referred a campaign participant.",
+          "severity": "high",
+          "evidenceCount": 2,
+          "walletAddresses": [
+            "6n8YVt8jHq5JLBZJMxB5FcrhuLDLGT2yyBTxU2PWM2MF"
+          ],
+          "nodeKey": "address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ"
+        },
+        {
+          "code": "FUNDER_REFERRER_OVERLAP",
+          "title": "Funder and referrer overlap",
+          "description": "The same external wallet both funded and referred a campaign participant.",
+          "severity": "high",
+          "evidenceCount": 2,
+          "walletAddresses": [
+            "8vZ2Mewe6bvCYwbtnXXEhKKtgaNkwQHEFBSYeT6qfaww"
+          ],
+          "nodeKey": "address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ"
+        },
+        {
+          "code": "FUNDER_REFERRER_OVERLAP",
+          "title": "Funder and referrer overlap",
+          "description": "The same external wallet both funded and referred a campaign participant.",
+          "severity": "high",
+          "evidenceCount": 2,
+          "walletAddresses": [
+            "sE7xmH6bjeVbZ5YdB6FBX1oNyuHmG3vSfJ13n4cfz4i"
+          ],
+          "nodeKey": "address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ"
+        },
+        {
+          "code": "FUNDER_REFERRER_OVERLAP",
+          "title": "Funder and referrer overlap",
+          "description": "The same external wallet both funded and referred a campaign participant.",
+          "severity": "high",
+          "evidenceCount": 2,
+          "walletAddresses": [
+            "5RGHCV4hnBxKfCa8uS56bcqMxZxrCvrygunnqorj5vBb"
+          ],
+          "nodeKey": "address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ"
+        },
+        {
+          "code": "UNKNOWN_FUNDER_FANOUT",
+          "title": "Shared unknown funding origin",
+          "description": "4 campaign wallets trace their first observed funding to the same unrecognized source.",
+          "severity": "caution",
+          "evidenceCount": 4,
+          "walletAddresses": [
+            "6n8YVt8jHq5JLBZJMxB5FcrhuLDLGT2yyBTxU2PWM2MF",
+            "8vZ2Mewe6bvCYwbtnXXEhKKtgaNkwQHEFBSYeT6qfaww",
+            "sE7xmH6bjeVbZ5YdB6FBX1oNyuHmG3vSfJ13n4cfz4i",
+            "5RGHCV4hnBxKfCa8uS56bcqMxZxrCvrygunnqorj5vBb"
+          ],
+          "nodeKey": "address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ"
+        },
+        {
+          "code": "BURST_FUNDING",
+          "title": "Burst funding cohort",
+          "description": "4 wallets were funded by one unknown source inside a 1-hour window",
+          "severity": "caution",
+          "evidenceCount": 4,
+          "walletAddresses": [
+            "6n8YVt8jHq5JLBZJMxB5FcrhuLDLGT2yyBTxU2PWM2MF",
+            "8vZ2Mewe6bvCYwbtnXXEhKKtgaNkwQHEFBSYeT6qfaww",
+            "sE7xmH6bjeVbZ5YdB6FBX1oNyuHmG3vSfJ13n4cfz4i",
+            "5RGHCV4hnBxKfCa8uS56bcqMxZxrCvrygunnqorj5vBb"
+          ],
+          "nodeKey": "address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ"
+        },
+        {
+          "code": "REFERRAL_FANOUT",
+          "title": "Referral fan-out",
+          "description": "4 campaign wallets share one referrer wallet.",
+          "severity": "caution",
+          "evidenceCount": 4,
+          "walletAddresses": [
+            "6n8YVt8jHq5JLBZJMxB5FcrhuLDLGT2yyBTxU2PWM2MF",
+            "8vZ2Mewe6bvCYwbtnXXEhKKtgaNkwQHEFBSYeT6qfaww",
+            "sE7xmH6bjeVbZ5YdB6FBX1oNyuHmG3vSfJ13n4cfz4i",
+            "5RGHCV4hnBxKfCa8uS56bcqMxZxrCvrygunnqorj5vBb"
+          ],
+          "nodeKey": "address:solana:CodoWy26G5WniHRumejaYgLYjTbNSiyTRPNQKuRYWaPQ"
+        }
+      ]
+    }
   }
 }

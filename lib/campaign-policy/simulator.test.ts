@@ -71,15 +71,27 @@ function memoryMatch(
 
 function memory(matches: RiskMemoryMatch[]): CrossCampaignRiskMemory {
   return {
-    schemaVersion: "cross-campaign-risk-memory-v1",
+    schemaVersion: "tri-proof-cross-campaign-risk-memory-v1",
     campaignId: "campaign-1",
+    campaignName: "Campaign 1",
     generatedAt: new Date("2026-08-21T12:00:00.000Z").toISOString(),
+    summary: {
+      matchedEntities: matches.length,
+      repeatedParticipants: matches.filter((item) => item.roles.includes("participant") && item.priorCampaignCount > 0).length,
+      repeatedInfrastructure: matches.filter((item) => item.roles.some((role) => role !== "participant") && item.priorCampaignCount > 0).length,
+      crossRoleEntities: matches.filter((item) => item.crossRole).length,
+      entitiesWithPriorRejection: matches.filter((item) => item.priorRejectedCount > 0).length,
+      telegramLinkedEntities: matches.filter((item) => item.telegramEvidenceCount > 0).length,
+    },
     coverage: {
       campaignsConsidered: 2,
       analysesConsidered: 2,
-      graphNodesConsidered: 0,
-      walletAnalysesConsidered: matches.length,
-      telegramEventsConsidered: matches.length,
+      graphNodeLimit: 50_000,
+      graphNodesRead: 0,
+      walletAnalysisLimit: 50_000,
+      walletAnalysesRead: matches.length,
+      telegramEventLimit: 50_000,
+      telegramEventsRead: matches.length,
       graphNodesTruncated: false,
       walletAnalysesTruncated: false,
       telegramEventsTruncated: false,

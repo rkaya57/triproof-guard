@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { AlertTriangle, ArrowLeft, GitBranch, GitCompareArrows, Network, RotateCcw, Users } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -21,28 +21,39 @@ function actionClass(action: string) {
 }
 
 export function ClusterInvestigationIndex({ analysisId }: { analysisId: string }) {
+  return <ClusterInvestigationIndexContent key={analysisId} analysisId={analysisId} />
+}
+
+function ClusterInvestigationIndexContent({ analysisId }: { analysisId: string }) {
   const [analysis, setAnalysis] = useState<AnalysisDetail | null>(null)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(true)
 
+  const requestData = useCallback((signal?: AbortSignal) => {
+    return fetch(`/api/analysis/${analysisId}`, { cache: "no-store", signal }).then(async (response) => {
+      const body = (await response.json().catch(() => ({}))) as { analysis?: AnalysisDetail; error?: string }
+      if (signal?.aborted) return
+      if (!response.ok || !body.analysis) throw new Error(body.error ?? "Analysis could not be loaded")
+      setAnalysis(body.analysis)
+    }).catch((loadError) => {
+      if (signal?.aborted) return
+      setError(loadError instanceof Error ? loadError.message : "Analysis could not be loaded")
+    }).finally(() => {
+      if (!signal?.aborted) setLoading(false)
+    })
+  }, [analysisId])
+
   async function load() {
     setLoading(true)
     setError("")
-    try {
-      const response = await fetch(`/api/analysis/${analysisId}`, { cache: "no-store" })
-      const body = (await response.json().catch(() => ({}))) as { analysis?: AnalysisDetail; error?: string }
-      if (!response.ok || !body.analysis) throw new Error(body.error ?? "Analysis could not be loaded")
-      setAnalysis(body.analysis)
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Analysis could not be loaded")
-    } finally {
-      setLoading(false)
-    }
+    await requestData()
   }
 
   useEffect(() => {
-    void load()
-  }, [analysisId])
+    const controller = new AbortController()
+    void requestData(controller.signal)
+    return () => controller.abort()
+  }, [requestData])
 
   if (loading) {
     return (

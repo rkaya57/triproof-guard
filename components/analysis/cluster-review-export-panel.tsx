@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   AlertTriangle,
   CheckCircle2,
@@ -48,6 +48,10 @@ function dispositionClass(disposition: ClusterReviewDisposition) {
 }
 
 export function ClusterReviewExportPanel({ report }: { report: ClusterInvestigationReport }) {
+  return <ClusterReviewExportPanelContent key={`${report.analysisId}:${report.cluster.clusterLabel}`} report={report} />
+}
+
+function ClusterReviewExportPanelContent({ report }: { report: ClusterInvestigationReport }) {
   const [reviewState, setReviewState] = useState<ReviewState | null>(null)
   const [disposition, setDisposition] = useState<ClusterReviewDisposition>("needs_more_data")
   const [notes, setNotes] = useState("")
@@ -60,26 +64,31 @@ export function ClusterReviewExportPanel({ report }: { report: ClusterInvestigat
   const reviewPath = `/api/analysis/${report.analysisId}/clusters/${encodedLabel}/review`
   const exportPath = `/api/analysis/${report.analysisId}/clusters/${encodedLabel}/export`
 
+  const requestData = useCallback((signal?: AbortSignal) => {
+    return fetch(reviewPath, { cache: "no-store", signal }).then(async (response) => {
+      const body = (await response.json().catch(() => ({}))) as ReviewState & { error?: string }
+      if (signal?.aborted) return
+      if (!response.ok) throw new Error(body.error ?? "Cluster review history could not be loaded")
+      setReviewState(body)
+    }).catch((loadError) => {
+      if (signal?.aborted) return
+      setError(loadError instanceof Error ? loadError.message : "Cluster review history could not be loaded")
+    }).finally(() => {
+      if (!signal?.aborted) setLoading(false)
+    })
+  }, [reviewPath])
+
   async function loadReviews() {
     setLoading(true)
     setError("")
-    try {
-      const response = await fetch(reviewPath, { cache: "no-store" })
-      const body = (await response.json().catch(() => ({}))) as ReviewState & { error?: string }
-      if (!response.ok) throw new Error(body.error ?? "Cluster review history could not be loaded")
-      setReviewState(body)
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Cluster review history could not be loaded")
-    } finally {
-      setLoading(false)
-    }
+    await requestData()
   }
 
   useEffect(() => {
-    void loadReviews()
-    // reviewPath is stable for the lifetime of this investigation route.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reviewPath])
+    const controller = new AbortController()
+    void requestData(controller.signal)
+    return () => controller.abort()
+  }, [requestData])
 
   async function saveReview() {
     setSaving(true)

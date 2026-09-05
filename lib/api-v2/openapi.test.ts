@@ -3,6 +3,13 @@ import test from "node:test"
 
 import { campaignApiV2OpenApiWithAnalysisRunCatalog as campaignApiV2OpenApi } from "@/lib/api-v2/openapi-analysis-run-catalog"
 
+type Parameter = {
+  name: string
+  required?: boolean
+  description?: string
+  schema?: Readonly<Record<string, unknown>>
+}
+
 const expectedOperations = [
   ["/api/v2/campaigns", "get"],
   ["/api/v2/campaigns", "post"],
@@ -69,7 +76,7 @@ test("analysis run catalog OpenAPI contract is read-only, bounded, and non-recom
   assert.equal(operation["x-triproof-stored-run-metadata"], true)
   assert.equal(operation["x-triproof-max-page-size"], 500)
 
-  const parameters = operation.parameters as Array<{ name: string; description?: string; schema?: Record<string, unknown> }>
+  const parameters: readonly Parameter[] = operation.parameters
   assert.equal(parameters.find((item) => item.name === "limit")?.schema?.maximum, 500)
   assert.match(String(parameters.find((item) => item.name === "cursor")?.description), /opaque/i)
   assert.ok(campaignApiV2OpenApi.paths["/api/v2/campaigns/{id}/analyses"].post)
@@ -98,7 +105,7 @@ test("evidence OpenAPI contract freezes lane, scan, cursor, and no-rescore seman
   assert.equal(operation["x-triproof-rescores-evidence"], false)
   assert.equal(operation["x-triproof-max-source-scan-rows"], 10000)
 
-  const parameters = operation.parameters as Array<{ name: string; schema?: Record<string, unknown> }>
+  const parameters: readonly Parameter[] = operation.parameters
   const lane = parameters.find((parameter) => parameter.name === "lane")
   const limit = parameters.find((parameter) => parameter.name === "limit")
   const cursor = parameters.find((parameter) => parameter.name === "cursor")
@@ -115,7 +122,7 @@ test("cluster case export OpenAPI contract freezes formats and no-recompute sema
   assert.equal(operation["x-triproof-rescores-evidence"], false)
   assert.equal(operation["x-triproof-export-boundary"], "read-only-no-recompute")
 
-  const parameters = operation.parameters as Array<{ name: string; schema?: Record<string, unknown> }>
+  const parameters: readonly Parameter[] = operation.parameters
   const format = parameters.find((parameter) => parameter.name === "format")
   assert.deepEqual(format?.schema?.enum, ["json", "csv", "markdown"])
   assert.ok(operation.responses["200"].content["text/markdown"])
@@ -128,7 +135,7 @@ test("run decision OpenAPI contract is exact-run, paginated, and does not rerun 
   assert.equal(operation["x-triproof-rescores-evidence"], false)
   assert.equal(operation["x-triproof-historical-run-scope"], true)
   assert.equal(operation["x-triproof-max-page-size"], 500)
-  const parameters = operation.parameters as Array<{ name: string; description?: string; schema?: Record<string, unknown> }>
+  const parameters: readonly Parameter[] = operation.parameters
   assert.equal(parameters.find((item) => item.name === "limit")?.schema?.maximum, 500)
   assert.match(String(parameters.find((item) => item.name === "cursor")?.description), /opaque/i)
 })
@@ -144,7 +151,7 @@ test("run decision diff OpenAPI contract compares persisted runs without recompu
   assert.equal(operation["x-triproof-max-page-size"], 500)
   assert.equal(operation["x-triproof-max-decisions-per-run"], 50000)
 
-  const parameters = operation.parameters as Array<{ name: string; required?: boolean; description?: string; schema?: Record<string, unknown> }>
+  const parameters: readonly Parameter[] = operation.parameters
   assert.equal(parameters.find((item) => item.name === "compareTo")?.required, true)
   assert.equal(parameters.find((item) => item.name === "limit")?.schema?.maximum, 500)
   assert.match(String(parameters.find((item) => item.name === "cursor")?.description), /opaque/i)

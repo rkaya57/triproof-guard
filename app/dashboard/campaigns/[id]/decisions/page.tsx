@@ -10,25 +10,9 @@ export default async function CampaignDecisionPackagePage({ params }: { params: 
   const { id } = await params
   const user = await requirePageUser(`/dashboard/campaigns/${id}/decisions`)
 
+  let loaded: Awaited<ReturnType<typeof loadCampaignDecisionPackage>>
   try {
-    const loaded = await loadCampaignDecisionPackage(id, user.id)
-    if (!loaded) notFound()
-    if (!loaded.package) {
-      return (
-        <Card className="glass-panel premium-card border-dashed">
-          <CardHeader>
-            <CardTitle>Campaign analysis required</CardTitle>
-            <CardDescription>
-              A Decision Package is produced only after the campaign has a stored analysis run.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            No wallet decision, campaign policy, or reward list was changed.
-          </CardContent>
-        </Card>
-      )
-    }
-    return <CampaignDecisionPackageView pkg={loaded.package} />
+    loaded = await loadCampaignDecisionPackage(id, user.id)
   } catch (error) {
     if (!isDatabaseConnectionError(error)) throw error
     return (
@@ -42,4 +26,22 @@ export default async function CampaignDecisionPackagePage({ params }: { params: 
       </Card>
     )
   }
+
+  if (!loaded) notFound()
+  if (!loaded.package) {
+    return (
+      <Card className="glass-panel premium-card border-dashed">
+        <CardHeader>
+          <CardTitle>Campaign analysis required</CardTitle>
+          <CardDescription>
+            A Decision Package is produced only after the campaign has a stored analysis run.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          No wallet decision, campaign policy, or reward list was changed.
+        </CardContent>
+      </Card>
+    )
+  }
+  return <CampaignDecisionPackageView pkg={loaded.package} />
 }

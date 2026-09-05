@@ -28,7 +28,7 @@ export const decisionCopy: Record<WalletStatus, DecisionCopy> = {
     shortLabel: "Not Eligible",
     csvLabel: "Rejected / Not Eligible",
     apiDecision: "rejected_not_eligible",
-    explanation: "High-risk, unreadable, protocol-owned, or otherwise unsuitable for automatic rewards.",
+    explanation: "Excluded from automatic rewards based on recorded risk evidence or eligibility rules. Ineligibility does not establish malicious intent; insufficient evidence requires review.",
   },
 }
 

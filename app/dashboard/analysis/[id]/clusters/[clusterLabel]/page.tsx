@@ -23,31 +23,9 @@ export default async function ClusterInvestigationPage({
   const user = await requirePageUser(`/dashboard/analysis/${id}/clusters/${clusterLabel}`)
   const normalizedClusterLabel = decodeURIComponent(clusterLabel).trim()
 
+  let result: Awaited<ReturnType<typeof loadClusterInvestigation>>
   try {
-    const result = await loadClusterInvestigation(id, user.id, normalizedClusterLabel)
-    if (!result || !result.report) notFound()
-    const briefPath = `/dashboard/analysis/${id}/clusters/${encodeURIComponent(normalizedClusterLabel)}/brief`
-    return (
-      <>
-        <ClusterInvestigationWorkspace report={result.report} />
-        {result.intelligence && <ClusterSupportIntelligencePanel intelligence={result.intelligence} />}
-        <ClusterArchetypePanel report={result.report} />
-        <ClusterForensicGraphPanel report={result.report} />
-        <ClusterAnalystProposalPanel report={result.report} />
-        <div className="mx-auto max-w-7xl px-5 pb-5 sm:px-8">
-          <Card className="glass-panel premium-card border-primary/25 bg-primary/5">
-            <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="flex items-center gap-2 font-medium"><FileText className="size-4 text-primary" /> Customer decision package</p>
-                <p className="mt-1 text-sm text-muted-foreground">Turn this technical investigation into a concise case brief with stored decisions, reviewer disposition, matching campaign policy, and explicit decision boundaries.</p>
-              </div>
-              <Link href={briefPath} className={buttonVariants({ variant: "default" })}>Open Case Brief</Link>
-            </CardContent>
-          </Card>
-        </div>
-        <ClusterReviewExportPanel report={result.report} />
-      </>
-    )
+    result = await loadClusterInvestigation(id, user.id, normalizedClusterLabel)
   } catch (error) {
     if (!isDatabaseConnectionError(error)) throw error
     return (
@@ -61,4 +39,28 @@ export default async function ClusterInvestigationPage({
       </Card>
     )
   }
+
+  if (!result || !result.report) notFound()
+  const briefPath = `/dashboard/analysis/${id}/clusters/${encodeURIComponent(normalizedClusterLabel)}/brief`
+  return (
+    <>
+      <ClusterInvestigationWorkspace report={result.report} />
+      {result.intelligence && <ClusterSupportIntelligencePanel intelligence={result.intelligence} />}
+      <ClusterArchetypePanel report={result.report} />
+      <ClusterForensicGraphPanel report={result.report} />
+      <ClusterAnalystProposalPanel report={result.report} />
+      <div className="mx-auto max-w-7xl px-5 pb-5 sm:px-8">
+        <Card className="glass-panel premium-card border-primary/25 bg-primary/5">
+          <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="flex items-center gap-2 font-medium"><FileText className="size-4 text-primary" /> Customer decision package</p>
+              <p className="mt-1 text-sm text-muted-foreground">Turn this technical investigation into a concise case brief with stored decisions, reviewer disposition, matching campaign policy, and explicit decision boundaries.</p>
+            </div>
+            <Link href={briefPath} className={buttonVariants({ variant: "default" })}>Open Case Brief</Link>
+          </CardContent>
+        </Card>
+      </div>
+      <ClusterReviewExportPanel report={result.report} />
+    </>
+  )
 }

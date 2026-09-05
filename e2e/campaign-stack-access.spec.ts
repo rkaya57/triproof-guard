@@ -23,7 +23,8 @@ const apiRoutes = [
 
 function nextCampaignTestIp() {
   campaignIpSequence = campaignIpSequence >= 250 ? 10 : campaignIpSequence + 1
-  return `203.0.113.${campaignIpSequence}`
+  // A retry starts a new worker; keep its disposable identity independent.
+  return `2001:db8:1::${test.info().workerIndex.toString(16)}:${campaignIpSequence.toString(16)}`
 }
 
 async function registerWithBrowser(page: Page, destination = "/dashboard/campaigns") {
@@ -37,7 +38,12 @@ async function registerWithBrowser(page: Page, destination = "/dashboard/campaig
   const consents = page.getByRole("checkbox")
   await consents.nth(0).check()
   await consents.nth(1).check()
+  const registration = page.waitForResponse((response) =>
+    response.url().endsWith("/api/auth/register") && response.request().method() === "POST"
+  )
   await page.getByRole("button", { name: "Create Account", exact: true }).click()
+  const response = await registration
+  expect(response.status(), await response.text()).toBe(201)
   await expect(page).toHaveURL(
     new RegExp(`/onboarding\\?next=${encodeURIComponent(destination)}$`),
     { timeout: 15_000 }
@@ -72,7 +78,9 @@ test.describe("campaign stack integration and access boundaries", () => {
     await registerWithBrowser(page)
     await expect(page).toHaveURL(/\/dashboard\/campaigns$/)
     await expect(page.getByText("No campaigns yet", { exact: true })).toBeVisible()
-    await expect(page.getByRole("link", { name: "Start analysis", exact: true })).toBeVisible()
+    const createCampaign = page.getByRole("link", { name: "Create campaign", exact: true })
+    await expect(createCampaign).toBeVisible()
+    await expect(createCampaign).toHaveAttribute("href", "/dashboard/campaigns/new")
   })
 
   test("keeps all nested campaign workspace tabs visible without mobile overflow", async ({ page }) => {
@@ -93,7 +101,7 @@ test.describe("campaign stack integration and access boundaries", () => {
 
     const workspace = page.getByRole("navigation", { name: "Campaign workspace" })
     await expect(workspace).toBeVisible()
-    for (const name of ["Overview", "Risk Graph", "Risk Memory", "Policy", "Metrics"]) {
+    for (const name of ["Overview", "Decisions", "Risk Graph", "Risk Memory", "Policy Simulator", "Metrics"]) {
       await expect(workspace.getByRole("link", { name, exact: true })).toBeVisible()
     }
 
