@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { FormEvent, useEffect, useMemo, useState } from "react"
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react"
 import {
   AlertCircle,
   ArrowRight,
@@ -166,34 +166,47 @@ export function AirdropTasksClientV3() {
   const [filter, setFilter] = useState<FilterMode>("all")
   const [query, setQuery] = useState("")
 
-  async function refresh(silent = false) {
-    if (silent) setRefreshing(true)
-    else setLoading(true)
-    setError(null)
-    try {
-      const response = await fetch(`/api/airdrop/me?ts=${Date.now()}`, {
-        cache: "no-store",
-        headers: { "Cache-Control": "no-cache" },
-      })
+  const loadTasks = useCallback((silent = false, signal?: AbortSignal) => {
+    return fetch(`/api/airdrop/me?ts=${Date.now()}`, {
+      cache: "no-store",
+      signal,
+      headers: { "Cache-Control": "no-cache" },
+    }).then(async (response) => {
+      if (signal?.aborted) return
       if (response.status === 401) {
         setUnauthorized(true)
         return
       }
       if (!response.ok) throw new Error(await readError(response))
       const body = (await response.json()) as AirdropResponse
+      if (signal?.aborted) return
       if (!Array.isArray(body.tasks)) throw new Error("Airdrop task response is not ready yet.")
       setData((current) => mergeResponse(current, body))
       setScamGuardResult(body.tasks.find((task) => task.type === "HUMANITY_GATE_FEEDBACK")?.submission?.humanityTestResult ?? null)
-    } catch (err) {
+    }).catch((err) => {
+      if (signal?.aborted) return
       if (!silent) setData(null)
       setError(err instanceof Error ? err.message : "Could not load airdrop tasks.")
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
+    }).finally(() => {
+      if (!signal?.aborted) {
+        setLoading(false)
+        setRefreshing(false)
+      }
+    })
+  }, [])
+
+  async function refresh(silent = false) {
+    if (silent) setRefreshing(true)
+    else setLoading(true)
+    setError(null)
+    await loadTasks(silent)
   }
 
-  useEffect(() => { void refresh() }, [])
+  useEffect(() => {
+    const controller = new AbortController()
+    void loadTasks(false, controller.signal)
+    return () => controller.abort()
+  }, [loadTasks])
 
   const completion = useMemo(() => {
     if (!data?.tasks.length) return 0

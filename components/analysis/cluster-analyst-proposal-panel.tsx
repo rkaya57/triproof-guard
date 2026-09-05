@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   AlertTriangle,
   CheckCircle2,
@@ -68,6 +68,10 @@ function proposalPayloadSummary(proposal: ClusterAnalystProposalRecord) {
 }
 
 export function ClusterAnalystProposalPanel({ report }: { report: ClusterInvestigationReport }) {
+  return <ClusterAnalystProposalPanelContent key={`${report.analysisId}:${report.cluster.clusterLabel}`} report={report} />
+}
+
+function ClusterAnalystProposalPanelContent({ report }: { report: ClusterInvestigationReport }) {
   const [state, setState] = useState<ProposalState | null>(null)
   const [proposalType, setProposalType] = useState<ClusterAnalystProposalType>("needs_review")
   const [notes, setNotes] = useState("")
@@ -89,26 +93,31 @@ export function ClusterAnalystProposalPanel({ report }: { report: ClusterInvesti
       .slice(0, 100)
   }, [report.members, splitQuery])
 
+  const requestData = useCallback((signal?: AbortSignal) => {
+    return fetch(proposalsPath, { cache: "no-store", signal }).then(async (response) => {
+      const body = (await response.json().catch(() => ({}))) as ProposalState & { error?: string }
+      if (signal?.aborted) return
+      if (!response.ok) throw new Error(body.error ?? "Analyst proposal history could not be loaded")
+      setState(body)
+    }).catch((loadError) => {
+      if (signal?.aborted) return
+      setError(loadError instanceof Error ? loadError.message : "Analyst proposal history could not be loaded")
+    }).finally(() => {
+      if (!signal?.aborted) setLoading(false)
+    })
+  }, [proposalsPath])
+
   async function loadHistory() {
     setLoading(true)
     setError("")
-    try {
-      const response = await fetch(proposalsPath, { cache: "no-store" })
-      const body = (await response.json().catch(() => ({}))) as ProposalState & { error?: string }
-      if (!response.ok) throw new Error(body.error ?? "Analyst proposal history could not be loaded")
-      setState(body)
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Analyst proposal history could not be loaded")
-    } finally {
-      setLoading(false)
-    }
+    await requestData()
   }
 
   useEffect(() => {
-    void loadHistory()
-    // proposalsPath is stable for this investigation route.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [proposalsPath])
+    const controller = new AbortController()
+    void requestData(controller.signal)
+    return () => controller.abort()
+  }, [requestData])
 
   function toggleMember(chain: string, walletAddress: string) {
     const key = memberKey(chain, walletAddress)

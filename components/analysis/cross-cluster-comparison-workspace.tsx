@@ -88,6 +88,10 @@ function ClusterSummaryCard({ cluster }: { cluster: ClusterComparisonItem }) {
 }
 
 export function CrossClusterComparisonWorkspace({ analysisId }: { analysisId: string }) {
+  return <CrossClusterComparisonContent key={analysisId} analysisId={analysisId} />
+}
+
+function CrossClusterComparisonContent({ analysisId }: { analysisId: string }) {
   const [analysis, setAnalysis] = useState<AnalysisDetail | null>(null)
   const [selected, setSelected] = useState<string[]>([])
   const [query, setQuery] = useState("")
@@ -118,10 +122,7 @@ export function CrossClusterComparisonWorkspace({ analysisId }: { analysisId: st
   }, [analysisId])
 
   useEffect(() => {
-    if (selected.length < 2) {
-      setReport(null)
-      return
-    }
+    if (selected.length < 2) return
     let active = true
     async function compare() {
       setComparing(true)
@@ -156,11 +157,13 @@ export function CrossClusterComparisonWorkspace({ analysisId }: { analysisId: st
   }, [analysis?.clusters, query])
 
   function toggleCluster(clusterLabel: string) {
-    setSelected((current) => {
-      if (current.includes(clusterLabel)) return current.filter((label) => label !== clusterLabel)
-      if (current.length >= MAX_COMPARED_CLUSTERS) return current
-      return [...current, clusterLabel]
-    })
+    if (!selected.includes(clusterLabel) && selected.length >= MAX_COMPARED_CLUSTERS) return
+    setReport(null)
+    setComparing(false)
+    setError("")
+    setSelected(selected.includes(clusterLabel)
+      ? selected.filter((label) => label !== clusterLabel)
+      : [...selected, clusterLabel])
   }
 
   if (loadingAnalysis) {

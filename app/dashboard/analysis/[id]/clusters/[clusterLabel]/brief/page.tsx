@@ -17,10 +17,9 @@ export default async function InvestigationCaseBriefPage({
     `/dashboard/analysis/${id}/clusters/${encodeURIComponent(normalizedClusterLabel)}/brief`,
   )
 
+  let result: Awaited<ReturnType<typeof loadInvestigationCaseBrief>>
   try {
-    const result = await loadInvestigationCaseBrief(id, user.id, normalizedClusterLabel)
-    if (!result?.brief) notFound()
-    return <InvestigationCaseBriefView brief={result.brief} />
+    result = await loadInvestigationCaseBrief(id, user.id, normalizedClusterLabel)
   } catch (error) {
     if (!isDatabaseConnectionError(error)) throw error
     return (
@@ -32,4 +31,7 @@ export default async function InvestigationCaseBriefPage({
       </Card>
     )
   }
+
+  if (!result?.brief) notFound()
+  return <InvestigationCaseBriefView brief={result.brief} />
 }

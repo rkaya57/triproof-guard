@@ -5,6 +5,7 @@ This first implementation batch follows the product review of main commit `59454
 ## Delivered
 
 - Fixed twelve TypeScript errors in six existing test files by aligning fixtures and narrowing values to the existing contracts. No risk thresholds or engine decisions were changed.
+- Resolved 27 pre-existing React lint errors that blocked six hosted workflows: server pages now catch data-loading failures before constructing their result views; initial client loads update state in response callbacks and cancel on unmount. Route-specific investigation state resets when its analysis or cluster changes. Comparison selection clears stale results in the selection handler.
 - Replaced the public static report with twelve reproducible synthetic Solana examples processed by the existing risk engine. The homepage, public report, case study, CSV, PDF and JSON now share one frozen snapshot.
 - Added interactive cases for linked wallets, limited history, missing evidence, protocol eligibility and an approved reward candidate. The demo works without signing in or contacting a chain provider.
 - Separated missing evidence and account eligibility from malicious-risk scoring in the public presentation. Raw engine status and analysis remain available in JSON. The sample contains five approved, one review, one insufficient-data and five not-eligible decisions.
@@ -19,6 +20,8 @@ Local validation on Node 24 with generated Prisma client:
 - `npm test`: 484 tests passed.
 - `npm run test:product-readiness`: 34 tests passed, including four public-demo regressions.
 - ESLint over changed source and test files: passed.
+- Full repository ESLint after follow-up fixes: zero errors, eleven existing unused-variable warnings.
+- Follow-up cluster investigation tests: 28 passed; airdrop tests: six passed.
 - `npm run demo:check`: generated snapshot matches the committed fixture.
 - `npm run benchmark:labeled`: passed, 15 reference cases across nine scenarios.
 - `npm run benchmark:adversarial`: passed, 13 scenarios / 66 wallets.
@@ -26,7 +29,7 @@ Local validation on Node 24 with generated Prisma client:
 - Desktop browser inspection: homepage and public report render; missing-data, protocol-account and limited-history selections show the expected decision semantics.
 - Local HTTP CSV/PDF downloads succeeded. All three PDF pages were rendered and visually inspected.
 
-This is synthetic workflow validation, not a customer accuracy result. Mobile-device testing, production provider integration and hosted CI execution are not claimed.
+This is synthetic workflow validation, not a customer accuracy result. Mobile-device testing and production provider integration are not claimed. The first hosted run passed product-readiness and Vercel preview, but six other workflows exposed the repository-wide lint failures addressed in the follow-up commit. Check PR #135 for the latest hosted status.
 
 ## Maintenance
 
