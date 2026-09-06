@@ -108,7 +108,7 @@ export async function POST(request: Request) {
         level: campaign.challengeLevel,
         attemptsUsed: attemptsUsed + 1,
         attemptsRemaining: Math.max(0, campaign.maxAttemptsPerWallet - attemptsUsed - 1),
-        trustMode: "TRIPROOF_LIVENESS_V1_EXPERIMENTAL",
+        trustMode: "TRIPROOF_LIVENESS_V2_2_CAPTURE_INTEGRITY_REVIEW",
       },
       { status: 201 }
     )
