@@ -3,6 +3,7 @@ import { CheckCircle2, CircleDashed, Fingerprint, ShieldCheck, TriangleAlert, Wa
 
 import { AdminWorkspaceHeader } from "@/components/admin/admin-workspace-header"
 import { HumanityV2AdminCameraSandbox } from "@/components/humanity/v2/admin-camera-sandbox"
+import { HumanityV2AdminCampaignCreator } from "@/components/humanity/v2/admin-campaign-creator"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -88,17 +89,18 @@ export default async function Page() {
         ))}
       </section>
 
+      <HumanityV2AdminCampaignCreator />
       <HumanityV2AdminCameraSandbox campaigns={cameraCampaigns} />
 
       <section className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
         <Card className="glass-panel">
           <CardHeader>
             <CardTitle>Campaigns</CardTitle>
-            <CardDescription>Challenge policy and proof lifetime. Campaign creation is available through the admin V2 API.</CardDescription>
+            <CardDescription>Challenge policy and proof lifetime. New campaigns can be created directly from this console.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {campaigns.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-slate-400">No Humanity V2 campaigns exist yet. Create the first one through <code>POST /api/humanity/v2/admin/campaigns</code>.</div>
+              <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-slate-400">No Humanity V2 campaigns exist yet. Create the first campaign above, then use it in the camera sandbox.</div>
             ) : campaigns.map((campaign) => (
               <div key={campaign.id} className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
