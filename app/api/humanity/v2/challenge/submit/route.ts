@@ -12,6 +12,7 @@ import {
   normalizeWalletAddress,
   validateStepEvidence,
 } from "@/lib/humanity/v2/core"
+import { verifyTriProofLivenessToken } from "@/lib/humanity/v2/liveness-engine"
 
 export const runtime = "nodejs"
 
@@ -30,6 +31,7 @@ const requestSchema = z.object({
   walletAddress: z.string().trim().min(10).max(200),
   walletChain: z.string().trim().min(1).max(32).optional(),
   attestationToken: z.string().trim().min(64).max(16_000).optional(),
+  triproofLivenessToken: z.string().trim().min(64).max(16_000).optional(),
   scores: z.object({
     facePresenceScore: scoreSchema,
     headPoseScore: scoreSchema,
@@ -58,7 +60,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid Humanity V2 submission", issues: parsed.error.issues }, { status: 400 })
   }
 
-  const { sessionId, walletChain, scores, stepEvidence, attestationToken } = parsed.data
+  const { sessionId, walletChain, scores, stepEvidence, attestationToken, triproofLivenessToken } = parsed.data
   const walletAddress = normalizeWalletAddress(parsed.data.walletAddress, walletChain)
 
   try {
@@ -94,19 +96,42 @@ export async function POST(request: Request) {
       )
     }
 
+    const secret = getHumanityNullifierSecret()
+    const expectedAttestation = {
+      sessionId: session.id,
+      campaignId: session.campaignId,
+      nonce: session.nonce,
+      walletAddress,
+      walletChain: effectiveWalletChain,
+    }
+
     let attestation = null
-    if (attestationToken) {
+    let trustMode = "CLIENT_TELEMETRY_REVIEW_ONLY"
+
+    if (triproofLivenessToken) {
+      try {
+        attestation = await verifyTriProofLivenessToken({
+          token: triproofLivenessToken,
+          expected: expectedAttestation,
+          secret,
+        })
+        trustMode = "TRIPROOF_LIVENESS_V1_SERVER_SCORED_REVIEW"
+      } catch (error) {
+        return NextResponse.json(
+          {
+            error: "Tri-Proof Liveness V1 token could not be verified",
+            reason: error instanceof Error ? error.message : "Invalid Tri-Proof liveness token",
+          },
+          { status: 400 }
+        )
+      }
+    } else if (attestationToken) {
       try {
         attestation = await verifyHumanityAttestationToken({
           token: attestationToken,
-          expected: {
-            sessionId: session.id,
-            campaignId: session.campaignId,
-            nonce: session.nonce,
-            walletAddress,
-            walletChain: effectiveWalletChain,
-          },
+          expected: expectedAttestation,
         })
+        trustMode = "SERVER_VERIFIED_PROVIDER_ATTESTATION"
       } catch (error) {
         return NextResponse.json(
           {
@@ -120,7 +145,7 @@ export async function POST(request: Request) {
 
     const decision = computeHumanityDecision(scores, attestation)
     const nullifierHash = buildNullifierHash({
-      secret: getHumanityNullifierSecret(),
+      secret,
       campaignId: session.campaignId,
       walletAddress,
       walletChain: effectiveWalletChain,
@@ -188,7 +213,7 @@ export async function POST(request: Request) {
         proofExpiresAt: verification.proofExpiresAt.toISOString(),
         proofMessage,
         signatureRequired: true,
-        trustMode: attestation ? "SERVER_VERIFIED_PROVIDER_ATTESTATION" : "CLIENT_TELEMETRY_REVIEW_ONLY",
+        trustMode,
       },
       { status: 201 }
     )
