@@ -27,6 +27,15 @@ export type HumanityStepEvidence = {
   heldForMs: number
 }
 
+export type HumanityVerifiedAttestationInput = {
+  verified: true
+  passed: boolean
+  livenessScore: number
+  antiSpoofScore: number
+  issuer: string
+  jtiHash: string
+}
+
 const REQUIRED_CLIENT_REASON = "CLIENT_TELEMETRY_UNATTESTED"
 
 function clampScore(value: unknown, fallback = 0) {
@@ -138,6 +147,58 @@ export function computeClientTelemetryDecision(scores: HumanityTelemetryInput) {
   }
 
   return { normalized, humanSessionScore, decision, reasonCodes }
+}
+
+export function computeHumanityDecision(
+  scores: HumanityTelemetryInput,
+  attestation?: HumanityVerifiedAttestationInput | null
+) {
+  const client = computeClientTelemetryDecision(scores)
+  if (client.decision === "REJECTED" || !attestation?.verified || !attestation.passed) return client
+
+  const livenessScore = clampScore(attestation.livenessScore)
+  const antiSpoofScore = clampScore(attestation.antiSpoofScore)
+  const attestationReason = `SERVER_VERIFIED_PROVIDER_ATTESTATION:${attestation.jtiHash}`
+
+  const clientCanCorroborate =
+    client.humanSessionScore >= 65 &&
+    client.normalized.facePresenceScore >= 55 &&
+    client.normalized.frameConsistencyScore >= 50 &&
+    client.normalized.replayRiskScore < 70 &&
+    client.normalized.injectionRiskScore < 70
+
+  if (livenessScore < 80 || antiSpoofScore < 80 || !clientCanCorroborate) {
+    return {
+      ...client,
+      reasonCodes: [
+        ...client.reasonCodes,
+        attestationReason,
+        "PROVIDER_ATTESTATION_PRESENT_CLIENT_RISK_REVIEW_REQUIRED",
+      ],
+    }
+  }
+
+  const humanSessionScore = Math.max(
+    0,
+    Math.min(100, Math.round(client.humanSessionScore * 0.4 + livenessScore * 0.3 + antiSpoofScore * 0.3))
+  )
+  const reasonCodes = client.reasonCodes.filter(
+    (code) =>
+      code !== REQUIRED_CLIENT_REASON &&
+      code !== "SERVER_ATTESTATION_REQUIRED_FOR_APPROVAL" &&
+      code !== "MANUAL_REVIEW_REQUIRED"
+  )
+  reasonCodes.push(attestationReason)
+  reasonCodes.push(`ATTESTATION_ISSUER:${attestation.issuer}`)
+  reasonCodes.push("CLIENT_TELEMETRY_CORROBORATED_BY_PROVIDER")
+  reasonCodes.push("HUMANITY_APPROVED_WITH_PROVIDER_ATTESTATION")
+
+  return {
+    normalized: client.normalized,
+    humanSessionScore,
+    decision: "APPROVED" as HumanityDecision,
+    reasonCodes,
+  }
 }
 
 export function buildNullifierHash({
