@@ -4,10 +4,11 @@ import { z } from "zod"
 import { getAdminUser } from "@/lib/auth/admin"
 import { db } from "@/lib/db/prisma"
 import { getHumanityNullifierSecret } from "@/lib/env/validation"
+import { verifyHumanityAttestationToken } from "@/lib/humanity/v2/attestation"
 import {
   buildNullifierHash,
   buildProofMessage,
-  computeClientTelemetryDecision,
+  computeHumanityDecision,
   normalizeWalletAddress,
   validateStepEvidence,
 } from "@/lib/humanity/v2/core"
@@ -28,6 +29,7 @@ const requestSchema = z.object({
   sessionId: z.string().trim().min(1).max(200),
   walletAddress: z.string().trim().min(10).max(200),
   walletChain: z.string().trim().min(1).max(32).optional(),
+  attestationToken: z.string().trim().min(64).max(16_000).optional(),
   scores: z.object({
     facePresenceScore: scoreSchema,
     headPoseScore: scoreSchema,
@@ -56,7 +58,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid Humanity V2 submission", issues: parsed.error.issues }, { status: 400 })
   }
 
-  const { sessionId, walletChain, scores, stepEvidence } = parsed.data
+  const { sessionId, walletChain, scores, stepEvidence, attestationToken } = parsed.data
   const walletAddress = normalizeWalletAddress(parsed.data.walletAddress, walletChain)
 
   try {
@@ -66,6 +68,7 @@ export async function POST(request: Request) {
     })
     if (!session) return NextResponse.json({ error: "Humanity V2 challenge session not found" }, { status: 404 })
 
+    const effectiveWalletChain = walletChain ?? session.walletChain
     const sessionWallet = normalizeWalletAddress(session.walletAddress, session.walletChain)
     if (sessionWallet !== walletAddress) {
       return NextResponse.json({ error: "Wallet does not match Humanity V2 session" }, { status: 403 })
@@ -91,12 +94,36 @@ export async function POST(request: Request) {
       )
     }
 
-    const decision = computeClientTelemetryDecision(scores)
+    let attestation = null
+    if (attestationToken) {
+      try {
+        attestation = await verifyHumanityAttestationToken({
+          token: attestationToken,
+          expected: {
+            sessionId: session.id,
+            campaignId: session.campaignId,
+            nonce: session.nonce,
+            walletAddress,
+            walletChain: effectiveWalletChain,
+          },
+        })
+      } catch (error) {
+        return NextResponse.json(
+          {
+            error: "Humanity provider attestation could not be verified",
+            reason: error instanceof Error ? error.message : "Invalid provider attestation",
+          },
+          { status: 400 }
+        )
+      }
+    }
+
+    const decision = computeHumanityDecision(scores, attestation)
     const nullifierHash = buildNullifierHash({
       secret: getHumanityNullifierSecret(),
       campaignId: session.campaignId,
       walletAddress,
-      walletChain: walletChain ?? session.walletChain,
+      walletChain: effectiveWalletChain,
     })
 
     const existingProof = await db.humanityVerification.findUnique({ where: { nullifierHash } })
@@ -119,7 +146,7 @@ export async function POST(request: Request) {
           campaignId: session.campaignId,
           sessionId: session.id,
           walletAddress,
-          walletChain: walletChain?.toLowerCase() ?? session.walletChain,
+          walletChain: effectiveWalletChain?.toLowerCase() ?? null,
           nullifierHash,
           humanSessionScore: decision.humanSessionScore,
           facePresenceScore: decision.normalized.facePresenceScore,
@@ -161,7 +188,7 @@ export async function POST(request: Request) {
         proofExpiresAt: verification.proofExpiresAt.toISOString(),
         proofMessage,
         signatureRequired: true,
-        trustMode: "CLIENT_TELEMETRY_REVIEW_ONLY",
+        trustMode: attestation ? "SERVER_VERIFIED_PROVIDER_ATTESTATION" : "CLIENT_TELEMETRY_REVIEW_ONLY",
       },
       { status: 201 }
     )
