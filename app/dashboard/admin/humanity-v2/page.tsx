@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { CheckCircle2, CircleDashed, Fingerprint, ShieldCheck, TriangleAlert, WalletCards } from "lucide-react"
+import { CheckCircle2, CircleDashed, Fingerprint, ShieldCheck, TriangleAlert, WalletCards, type LucideIcon } from "lucide-react"
 
 import { AdminWorkspaceHeader } from "@/components/admin/admin-workspace-header"
 import { Badge } from "@/components/ui/badge"
@@ -42,6 +42,12 @@ export default async function Page() {
 
   const signedCount = recentVerifications.filter((item) => item.signatureVerified).length
   const reviewCount = recentVerifications.filter((item) => item.decision === "MANUAL_REVIEW").length
+  const summaryCards: Array<{ icon: LucideIcon; label: string; value: number; detail: string }> = [
+    { icon: Fingerprint, label: "Campaigns", value: campaigns.length, detail: "Configured Humanity campaigns" },
+    { icon: CircleDashed, label: "Recent verifications", value: recentVerifications.length, detail: "Latest V2 verification records" },
+    { icon: WalletCards, label: "Signed proofs", value: signedCount, detail: "Cryptographically verified wallet signatures" },
+    { icon: TriangleAlert, label: "Review queue", value: reviewCount, detail: "Client-only telemetry awaiting stronger attestation" },
+  ]
 
   return (
     <div className="grid gap-6 pb-10">
@@ -61,19 +67,14 @@ export default async function Page() {
       />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          [Fingerprint, "Campaigns", campaigns.length, "Configured Humanity campaigns"],
-          [CircleDashed, "Recent verifications", recentVerifications.length, "Latest V2 verification records"],
-          [WalletCards, "Signed proofs", signedCount, "Cryptographically verified wallet signatures"],
-          [TriangleAlert, "Review queue", reviewCount, "Client-only telemetry awaiting stronger attestation"],
-        ].map(([Icon, label, value, detail]) => (
-          <Card key={label as string} className="glass-panel premium-card">
+        {summaryCards.map(({ icon: Icon, label, value, detail }) => (
+          <Card key={label} className="glass-panel premium-card">
             <CardContent className="p-5">
               <div className="flex items-start justify-between gap-3">
-                <div><p className="text-xs uppercase tracking-[0.13em] text-slate-400">{label as string}</p><p className="mt-3 text-3xl font-semibold text-white">{String(value)}</p></div>
+                <div><p className="text-xs uppercase tracking-[0.13em] text-slate-400">{label}</p><p className="mt-3 text-3xl font-semibold text-white">{value}</p></div>
                 <span className="rounded-xl border border-white/10 bg-white/[0.04] p-2"><Icon className="size-5 text-cyan-300" /></span>
               </div>
-              <p className="mt-3 text-xs leading-5 text-slate-400">{detail as string}</p>
+              <p className="mt-3 text-xs leading-5 text-slate-400">{detail}</p>
             </CardContent>
           </Card>
         ))}
