@@ -34,6 +34,7 @@ export type HumanityVerifiedAttestationInput = {
   antiSpoofScore: number
   issuer: string
   jtiHash: string
+  approvalEligible?: boolean
 }
 
 const REQUIRED_CLIENT_REASON = "CLIENT_TELEMETRY_UNATTESTED"
@@ -158,7 +159,7 @@ export function computeHumanityDecision(
 
   const livenessScore = clampScore(attestation.livenessScore)
   const antiSpoofScore = clampScore(attestation.antiSpoofScore)
-  const attestationReason = `SERVER_VERIFIED_PROVIDER_ATTESTATION:${attestation.jtiHash}`
+  const attestationReason = `SERVER_VERIFIED_ATTESTATION:${attestation.jtiHash}`
 
   const clientCanCorroborate =
     client.humanSessionScore >= 65 &&
@@ -166,6 +167,21 @@ export function computeHumanityDecision(
     client.normalized.frameConsistencyScore >= 50 &&
     client.normalized.replayRiskScore < 70 &&
     client.normalized.injectionRiskScore < 70
+
+  if (attestation.approvalEligible === false) {
+    return {
+      ...client,
+      reasonCodes: [
+        ...client.reasonCodes,
+        attestationReason,
+        `ATTESTATION_ISSUER:${attestation.issuer}`,
+        `TRIPROOF_LIVENESS_SCORE:${livenessScore}`,
+        `TRIPROOF_ANTI_SPOOF_SCORE:${antiSpoofScore}`,
+        "TRIPROOF_LIVENESS_V1_SERVER_SCORED",
+        "TRIPROOF_LIVENESS_V1_NOT_YET_APPROVAL_ELIGIBLE",
+      ],
+    }
+  }
 
   if (livenessScore < 80 || antiSpoofScore < 80 || !clientCanCorroborate) {
     return {
