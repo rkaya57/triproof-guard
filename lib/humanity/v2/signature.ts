@@ -32,11 +32,9 @@ function decodeHex(value: string) {
 }
 
 function decodeSolanaSignature(signature: string) {
-  try {
-    return decodeBase58(signature)
-  } catch {
-    return decodeHex(signature)
-  }
+  const clean = signature.trim()
+  if (clean.startsWith("0x") || /^[0-9a-fA-F]{128}$/.test(clean)) return decodeHex(clean)
+  return decodeBase58(clean)
 }
 
 function verifySolanaMessage(walletAddress: string, message: string, signature: string) {
