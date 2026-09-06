@@ -319,6 +319,7 @@ export function HumanityV2IntegratedLivenessSandbox({ campaigns }: { campaigns: 
   }
 
   function sampleFrame(step: HumanityV2ClientStep): HumanityV2FrameSample | null {
+    void step
     const video = videoRef.current
     const canvas = sampleCanvasRef.current
     if (!video || !canvas || !video.videoWidth || !video.videoHeight) return null
