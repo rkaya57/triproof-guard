@@ -87,6 +87,30 @@ const ALLOWED_STEPS = new Set<HumanityV2ClientStep>(["LOOK_CENTER", "TURN_LEFT",
 const LIGHT_COLORS = new Set<LightColor>(["RED", "GREEN", "BLUE", "WHITE"])
 const STEP_TIMEOUT_MS = 18_000
 
+const FACE_CONTOURS = [
+  [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109, 10],
+  [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246, 33],
+  [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398, 362],
+  [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185, 61],
+  [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191, 78],
+  [70, 63, 105, 66, 107],
+  [336, 296, 334, 293, 300],
+  [168, 6, 197, 195, 5, 4, 1, 19, 94, 2, 164],
+] as const
+
+const FACE_GUIDE_CONNECTIONS = [
+  [10, 1], [152, 1], [234, 1], [454, 1], [33, 168], [263, 168], [61, 1], [291, 1],
+  [127, 33], [356, 263], [93, 61], [323, 291], [133, 6], [362, 6], [168, 0], [1, 13],
+] as const
+
+const HAND_CONNECTIONS = [
+  [0, 1], [1, 2], [2, 3], [3, 4],
+  [0, 5], [5, 6], [6, 7], [7, 8],
+  [5, 9], [9, 10], [10, 11], [11, 12],
+  [9, 13], [13, 14], [14, 15], [15, 16],
+  [13, 17], [17, 18], [18, 19], [19, 20], [0, 17],
+] as const
+
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -182,6 +206,14 @@ function pulseBackground(pulse: LightPulse | null) {
   return `rgba(255, 255, 255, ${pulse.intensity})`
 }
 
+function meshPolyline(landmarks: Landmark[], indices: readonly number[]) {
+  return indices
+    .map((index) => landmarks[index])
+    .filter((landmark): landmark is Landmark => Boolean(landmark))
+    .map((landmark) => `${landmark.x},${landmark.y}`)
+    .join(" ")
+}
+
 async function createDetectors(): Promise<{ face: FaceDetector; hand: HandDetector | null }> {
   const vision = (await import(/* webpackIgnore: true */ VISION_MODULE_URL)) as unknown as VisionModule
   const fileset = await vision.FilesetResolver.forVisionTasks(VISION_WASM_URL)
@@ -228,6 +260,8 @@ export function HumanityV2IntegratedLivenessSandbox({ campaigns }: { campaigns: 
   const [activePulse, setActivePulse] = useState<LightPulse | null>(null)
   const [signatureStatus, setSignatureStatus] = useState<string | null>(null)
   const [liveSignal, setLiveSignal] = useState<LiveSignal>(() => emptySignal())
+  const [faceMesh, setFaceMesh] = useState<Landmark[]>([])
+  const [handMesh, setHandMesh] = useState<Landmark[]>([])
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const sampleCanvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -249,6 +283,8 @@ export function HumanityV2IntegratedLivenessSandbox({ campaigns }: { campaigns: 
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
     setActivePulse(null)
+    setFaceMesh([])
+    setHandMesh([])
   }
 
   useEffect(() => () => stopCamera(), [])
@@ -260,6 +296,8 @@ export function HumanityV2IntegratedLivenessSandbox({ campaigns }: { campaigns: 
     liveSignalRef.current = emptySignal()
     setLiveSignal(emptySignal())
     setLivenessResult(null)
+    setFaceMesh([])
+    setHandMesh([])
     setStepIndex(0)
     setProgress(0)
   }
@@ -290,7 +328,9 @@ export function HumanityV2IntegratedLivenessSandbox({ campaigns }: { campaigns: 
     const timestamp = performance.now()
     const faceDetection = faceDetectorRef.current?.detectForVideo(video, timestamp)
     const landmarks = faceDetection?.faceLandmarks?.[0] ?? []
-    const handLandmarks = step === "RAISE_HAND" ? handDetectorRef.current?.detectForVideo(video, timestamp).landmarks?.[0] ?? [] : []
+    const handLandmarks = handDetectorRef.current?.detectForVideo(video, timestamp).landmarks?.[0] ?? []
+    setFaceMesh(landmarks)
+    setHandMesh(handLandmarks)
     const facePresent = landmarks.length >= 450
     const sample: HumanityV2FrameSample = {
       brightness: brightnessSum / pixels,
@@ -550,11 +590,43 @@ export function HumanityV2IntegratedLivenessSandbox({ campaigns }: { campaigns: 
 
       {session && phase !== "idle" && phase !== "starting" ? (
         <div className="mt-5 grid gap-4 lg:grid-cols-[1.15fr_.85fr]">
-          <div className="overflow-hidden rounded-2xl border border-cyan-300/20 bg-black"><video ref={videoRef} playsInline muted className="aspect-[4/3] w-full -scale-x-100 object-contain" /><canvas ref={sampleCanvasRef} className="hidden" /></div>
+          <div className="relative overflow-hidden rounded-2xl border border-cyan-300/20 bg-black">
+            <video ref={videoRef} playsInline muted className="aspect-[4/3] w-full -scale-x-100 object-contain" />
+            <svg viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100">
+              <g fill="none" stroke="rgba(103, 232, 249, 0.82)" strokeWidth="0.0024" strokeLinecap="round" strokeLinejoin="round">
+                {FACE_CONTOURS.map((indices, contourIndex) => (
+                  <polyline key={`face-contour-${contourIndex}`} points={meshPolyline(faceMesh, indices)} />
+                ))}
+                {FACE_GUIDE_CONNECTIONS.map(([from, to], connectionIndex) => {
+                  const a = faceMesh[from]
+                  const b = faceMesh[to]
+                  return a && b ? <line key={`face-guide-${connectionIndex}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} opacity="0.45" /> : null
+                })}
+              </g>
+              <g fill="rgba(165, 243, 252, 0.76)">
+                {faceMesh.map((landmark, index) => index % 2 === 0 ? <circle key={`face-point-${index}`} cx={landmark.x} cy={landmark.y} r="0.0027" /> : null)}
+              </g>
+              <g fill="none" stroke="rgba(196, 181, 253, 0.95)" strokeWidth="0.0038" strokeLinecap="round" strokeLinejoin="round">
+                {HAND_CONNECTIONS.map(([from, to], connectionIndex) => {
+                  const a = handMesh[from]
+                  const b = handMesh[to]
+                  return a && b ? <line key={`hand-line-${connectionIndex}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} /> : null
+                })}
+              </g>
+              <g fill="rgba(221, 214, 254, 0.96)">
+                {handMesh.map((landmark, index) => <circle key={`hand-point-${index}`} cx={landmark.x} cy={landmark.y} r="0.005" />)}
+              </g>
+            </svg>
+            <div className="pointer-events-none absolute inset-x-3 top-3 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.12em]">
+              <span className={`rounded-full border px-2.5 py-1 backdrop-blur-md ${faceMesh.length >= 450 ? "border-cyan-300/35 bg-cyan-950/55 text-cyan-100" : "border-white/10 bg-black/45 text-slate-400"}`}>Face mesh {faceMesh.length >= 450 ? "locked" : "searching"}</span>
+              <span className={`rounded-full border px-2.5 py-1 backdrop-blur-md ${handMesh.length >= 16 ? "border-violet-300/35 bg-violet-950/55 text-violet-100" : "border-white/10 bg-black/45 text-slate-400"}`}>Hand mesh {handMesh.length >= 16 ? "locked" : "searching"}</span>
+            </div>
+            <canvas ref={sampleCanvasRef} className="hidden" />
+          </div>
           <div className="grid gap-3">
             <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 text-sm text-slate-300">
               <p className="font-medium text-white">{phase === "motion" ? stepTitle(currentStep) : phase === "light" ? "Active-light anti-spoof" : "Camera ready"}</p>
-              <p className="mt-2 text-xs leading-6 text-slate-500">FACE {liveSignal.facePresent ? "LOCK" : "WAIT"} · yaw {liveSignal.yaw.toFixed(2)} · blink {Math.round(liveSignal.blinkScore * 100)}% · smile {Math.round(liveSignal.smileScore * 100)}%</p>
+              <p className="mt-2 text-xs leading-6 text-slate-500">FACE {liveSignal.facePresent ? "LOCK" : "WAIT"} · {faceMesh.length} pts · HAND {handMesh.length >= 16 ? "LOCK" : "WAIT"} · yaw {liveSignal.yaw.toFixed(2)} · blink {Math.round(liveSignal.blinkScore * 100)}% · smile {Math.round(liveSignal.smileScore * 100)}%</p>
               {phase === "motion" ? <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800"><div className="h-full bg-cyan-300" style={{ width: `${Math.round(progress * 100)}%` }} /></div> : null}
             </div>
             {livenessResult ? <div className="rounded-2xl border border-violet-300/15 bg-violet-300/[0.03] p-4 text-xs leading-6 text-slate-300"><p className="font-semibold text-white">Liveness {livenessResult.verdict} · {livenessResult.livenessScore}/100</p><p>Anti-spoof {livenessResult.antiSpoofScore} · optical response {livenessResult.chromaticResponseScore} · replay risk {livenessResult.replayRiskScore} · injection risk {livenessResult.injectionRiskScore}</p></div> : null}
