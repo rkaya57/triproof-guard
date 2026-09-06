@@ -4,15 +4,21 @@ on:
   pull_request:
     paths:
       - "app/api/humanity/v2/**"
+      - "app/dashboard/admin/humanity-v2/**"
+      - "components/humanity/v2/**"
       - "lib/humanity/v2/**"
       - "lib/env/validation.ts"
+      - "next.config.ts"
       - ".github/workflows/humanity-v2.yml"
   push:
     branches: [main]
     paths:
       - "app/api/humanity/v2/**"
+      - "app/dashboard/admin/humanity-v2/**"
+      - "components/humanity/v2/**"
       - "lib/humanity/v2/**"
       - "lib/env/validation.ts"
+      - "next.config.ts"
 
 permissions:
   contents: read
@@ -29,6 +35,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx prisma generate
-      - run: npx eslint lib/humanity/v2 app/api/humanity/v2 lib/env/validation.ts
-      - run: node --import tsx --test lib/humanity/v2/core.test.ts
+      - run: npx eslint lib/humanity/v2 app/api/humanity/v2 app/dashboard/admin/humanity-v2 components/humanity/v2 lib/env/validation.ts next.config.ts
+      - run: node --import tsx --test lib/humanity/v2/core.test.ts lib/humanity/v2/client-telemetry.test.ts
       - run: npm run typecheck
