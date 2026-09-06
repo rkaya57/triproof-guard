@@ -115,11 +115,11 @@ export async function POST(request: Request) {
           expected: expectedAttestation,
           secret,
         })
-        trustMode = "TRIPROOF_LIVENESS_V1_SERVER_SCORED_REVIEW"
+        trustMode = "TRIPROOF_LIVENESS_V2_2_SERVER_SCORED_REVIEW"
       } catch (error) {
         return NextResponse.json(
           {
-            error: "Tri-Proof Liveness V1 token could not be verified",
+            error: "Tri-Proof Liveness V2.2 token could not be verified",
             reason: error instanceof Error ? error.message : "Invalid Tri-Proof liveness token",
           },
           { status: 400 }
