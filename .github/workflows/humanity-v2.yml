@@ -1,0 +1,34 @@
+name: Humanity V2
+
+on:
+  pull_request:
+    paths:
+      - "app/api/humanity/v2/**"
+      - "lib/humanity/v2/**"
+      - "lib/env/validation.ts"
+      - ".github/workflows/humanity-v2.yml"
+  push:
+    branches: [main]
+    paths:
+      - "app/api/humanity/v2/**"
+      - "lib/humanity/v2/**"
+      - "lib/env/validation.ts"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx eslint lib/humanity/v2 app/api/humanity/v2 lib/env/validation.ts
+      - run: node --import tsx --test lib/humanity/v2/core.test.ts
+      - run: npm run typecheck
