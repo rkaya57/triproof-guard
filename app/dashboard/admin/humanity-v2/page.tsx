@@ -2,6 +2,7 @@ import Link from "next/link"
 import { CheckCircle2, CircleDashed, Fingerprint, ShieldCheck, TriangleAlert, WalletCards, type LucideIcon } from "lucide-react"
 
 import { AdminWorkspaceHeader } from "@/components/admin/admin-workspace-header"
+import { HumanityV2AdminCameraSandbox } from "@/components/humanity/v2/admin-camera-sandbox"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -48,6 +49,13 @@ export default async function Page() {
     { icon: WalletCards, label: "Signed proofs", value: signedCount, detail: "Cryptographically verified wallet signatures" },
     { icon: TriangleAlert, label: "Review queue", value: reviewCount, detail: "Client-only telemetry awaiting stronger attestation" },
   ]
+  const cameraCampaigns = campaigns.map((campaign) => ({
+    id: campaign.id,
+    name: campaign.name,
+    slug: campaign.slug,
+    challengeLevel: campaign.challengeLevel,
+    enabled: campaign.humanityGateEnabled,
+  }))
 
   return (
     <div className="grid gap-6 pb-10">
@@ -79,6 +87,8 @@ export default async function Page() {
           </Card>
         ))}
       </section>
+
+      <HumanityV2AdminCameraSandbox campaigns={cameraCampaigns} />
 
       <section className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
         <Card className="glass-panel">
@@ -113,6 +123,7 @@ export default async function Page() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
             <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />Challenge nonce, sequence, expiry and attempt policy are issued by the server.</p>
+            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />Camera sandbox follows the issued sequence exactly and does not upload raw video.</p>
             <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />Nullifiers are stable per campaign + wallet and do not change with a new session nonce.</p>
             <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />EVM and Solana signatures bind to a canonical message rebuilt from stored proof state.</p>
             <p><TriangleAlert className="mr-2 inline size-4 text-amber-300" />Browser face/hand scores remain untrusted telemetry and cannot issue an automatic APPROVED result.</p>
