@@ -15,6 +15,7 @@ type VideoWithFrameCallback = HTMLVideoElement & {
   requestVideoFrameCallback?: (callback: (now: number, metadata: FrameMetadataLike) => void) => number
   cancelVideoFrameCallback?: (handle: number) => void
 }
+type ExtendedMediaTrackSettings = MediaTrackSettings & { resizeMode?: string }
 
 const MOTION_LANDMARKS = [1, 33, 263, 61, 291, 152, 234, 454] as const
 
@@ -23,7 +24,7 @@ function finiteOrNull(value: unknown) {
 }
 
 function snapshotTrack(track: MediaStreamTrack, video: HTMLVideoElement): TriProofCaptureTrackSnapshot {
-  const settings = track.getSettings?.() ?? {}
+  const settings = (track.getSettings?.() ?? {}) as ExtendedMediaTrackSettings
   return {
     width: Math.max(0, Number(settings.width ?? video.videoWidth ?? 0)),
     height: Math.max(0, Number(settings.height ?? video.videoHeight ?? 0)),
