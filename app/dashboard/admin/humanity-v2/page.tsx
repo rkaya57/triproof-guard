@@ -2,8 +2,8 @@ import Link from "next/link"
 import { CheckCircle2, CircleDashed, Fingerprint, ShieldCheck, TriangleAlert, WalletCards, type LucideIcon } from "lucide-react"
 
 import { AdminWorkspaceHeader } from "@/components/admin/admin-workspace-header"
-import { HumanityV2AdminCameraSandbox } from "@/components/humanity/v2/admin-camera-sandbox"
 import { HumanityV2AdminCampaignCreator } from "@/components/humanity/v2/admin-campaign-creator"
+import { HumanityV2IntegratedLivenessSandbox } from "@/components/humanity/v2/admin-integrated-liveness-sandbox"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -48,7 +48,7 @@ export default async function Page() {
     { icon: Fingerprint, label: "Campaigns", value: campaigns.length, detail: "Configured Humanity campaigns" },
     { icon: CircleDashed, label: "Recent verifications", value: recentVerifications.length, detail: "Latest V2 verification records" },
     { icon: WalletCards, label: "Signed proofs", value: signedCount, detail: "Cryptographically verified wallet signatures" },
-    { icon: TriangleAlert, label: "Review queue", value: reviewCount, detail: "Client-only telemetry awaiting stronger attestation" },
+    { icon: TriangleAlert, label: "Review queue", value: reviewCount, detail: "Experimental liveness proofs awaiting production-grade approval policy" },
   ]
   const cameraCampaigns = campaigns.map((campaign) => ({
     id: campaign.id,
@@ -64,12 +64,12 @@ export default async function Page() {
         icon={Fingerprint}
         eyebrow="Humanity V2"
         title="Proof-of-human recovery console"
-        description="Server-bound challenge sessions, campaign-scoped nullifiers and canonical wallet signatures. Client camera telemetry is deliberately review-only until server-attested anti-spoof evidence is available."
+        description="Server-bound motion challenges, Tri-Proof Liveness Engine V1 active-light scoring, campaign-scoped nullifiers and canonical wallet signatures. Automatic approval remains disabled for our experimental liveness engine until adversarial validation is strong enough."
         tone="amber"
         meta={
           <>
-            <span className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/12 bg-cyan-300/[0.025] px-3 py-2 text-xs text-cyan-200"><ShieldCheck className="size-3.5" /> V2 trust boundary active</span>
-            <span className="inline-flex items-center gap-2 rounded-xl border border-amber-300/12 bg-amber-300/[0.025] px-3 py-2 text-xs text-amber-200"><TriangleAlert className="size-3.5" /> Client telemetry cannot auto-approve</span>
+            <span className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/12 bg-cyan-300/[0.025] px-3 py-2 text-xs text-cyan-200"><ShieldCheck className="size-3.5" /> Tri-Proof Liveness V1 active</span>
+            <span className="inline-flex items-center gap-2 rounded-xl border border-amber-300/12 bg-amber-300/[0.025] px-3 py-2 text-xs text-amber-200"><TriangleAlert className="size-3.5" /> V1 remains review-only</span>
           </>
         }
         actions={<Link href="/dashboard/admin" className={buttonVariants({ variant: "outline", size: "sm" })}>Admin center</Link>}
@@ -90,7 +90,7 @@ export default async function Page() {
       </section>
 
       <HumanityV2AdminCampaignCreator />
-      <HumanityV2AdminCameraSandbox campaigns={cameraCampaigns} />
+      <HumanityV2IntegratedLivenessSandbox campaigns={cameraCampaigns} />
 
       <section className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
         <Card className="glass-panel">
@@ -100,7 +100,7 @@ export default async function Page() {
           </CardHeader>
           <CardContent className="space-y-3">
             {campaigns.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-slate-400">No Humanity V2 campaigns exist yet. Create the first campaign above, then use it in the camera sandbox.</div>
+              <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-slate-400">No Humanity V2 campaigns exist yet. Create the first campaign above, then use it in the integrated liveness sandbox.</div>
             ) : campaigns.map((campaign) => (
               <div key={campaign.id} className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -121,14 +121,14 @@ export default async function Page() {
         <Card className="glass-panel border-amber-300/15">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><ShieldCheck className="size-5 text-amber-300" /> Current security boundary</CardTitle>
-            <CardDescription>What this recovery phase does and does not claim.</CardDescription>
+            <CardDescription>What Tri-Proof Liveness V1 does and does not claim.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
-            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />Challenge nonce, sequence, expiry and attempt policy are issued by the server.</p>
-            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />Camera sandbox follows the issued sequence exactly and does not upload raw video.</p>
-            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />Nullifiers are stable per campaign + wallet and do not change with a new session nonce.</p>
-            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />EVM and Solana signatures bind to a canonical message rebuilt from stored proof state.</p>
-            <p><TriangleAlert className="mr-2 inline size-4 text-amber-300" />Browser face/hand scores remain untrusted telemetry and cannot issue an automatic APPROVED result.</p>
+            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />Motion sequence, active-light color order, nonce, expiry and attempt policy are issued by the server.</p>
+            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />The server independently scores transient 32×32 RGB samples for optical response, frame diversity, texture, replay and timing signals.</p>
+            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />No video is persisted by Humanity V2; the active-light endpoint analyzes five low-resolution samples in-request and returns an HMAC-signed Tri-Proof liveness token.</p>
+            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />Nullifiers are stable per campaign + wallet and EVM/Solana signatures bind the proof to wallet control.</p>
+            <p><TriangleAlert className="mr-2 inline size-4 text-amber-300" />A malicious virtual camera or browser-injection client may still fabricate evidence. V1 therefore cannot auto-approve until adversarial testing and stronger capture-integrity defenses are complete.</p>
           </CardContent>
         </Card>
       </section>
