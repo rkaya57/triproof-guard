@@ -7,6 +7,7 @@ import {
   buildNullifierHash,
   buildProofMessage,
   computeClientTelemetryDecision,
+  computeHumanityDecision,
   validateStepEvidence,
 } from "@/lib/humanity/v2/core"
 import { verifyHumanityWalletSignature } from "@/lib/humanity/v2/signature"
@@ -41,11 +42,41 @@ const perfectScores = {
   injectionRiskScore: 0,
 }
 
+const verifiedAttestation = {
+  verified: true as const,
+  passed: true,
+  livenessScore: 94,
+  antiSpoofScore: 92,
+  issuer: "https://liveness.example.test",
+  jtiHash: "abc123abc123abc123abc123",
+}
+
 test("client-only telemetry can never auto-approve a Humanity V2 proof", () => {
   const result = computeClientTelemetryDecision(perfectScores)
   assert.equal(result.decision, "MANUAL_REVIEW")
   assert.ok(result.reasonCodes.includes("CLIENT_TELEMETRY_UNATTESTED"))
   assert.ok(result.reasonCodes.includes("SERVER_ATTESTATION_REQUIRED_FOR_APPROVAL"))
+})
+
+test("verified provider attestation can approve only when client telemetry is non-risky", () => {
+  const result = computeHumanityDecision(perfectScores, verifiedAttestation)
+  assert.equal(result.decision, "APPROVED")
+  assert.ok(result.reasonCodes.includes("HUMANITY_APPROVED_WITH_PROVIDER_ATTESTATION"))
+  assert.ok(result.reasonCodes.some((reason) => reason.startsWith("SERVER_VERIFIED_PROVIDER_ATTESTATION:")))
+  assert.ok(!result.reasonCodes.includes("CLIENT_TELEMETRY_UNATTESTED"))
+})
+
+test("verified provider attestation cannot override suspicious client telemetry", () => {
+  const result = computeHumanityDecision({ ...perfectScores, replayRiskScore: 78 }, verifiedAttestation)
+  assert.equal(result.decision, "MANUAL_REVIEW")
+  assert.ok(result.reasonCodes.includes("SCREEN_REPLAY_RISK"))
+  assert.ok(result.reasonCodes.includes("PROVIDER_ATTESTATION_PRESENT_CLIENT_RISK_REVIEW_REQUIRED"))
+})
+
+test("provider attestation cannot override a rejected session", () => {
+  const result = computeHumanityDecision({ ...perfectScores, injectionRiskScore: 95 }, verifiedAttestation)
+  assert.equal(result.decision, "REJECTED")
+  assert.ok(result.reasonCodes.includes("INJECTION_RISK"))
 })
 
 test("high replay or injection risk rejects the session", () => {
