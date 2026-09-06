@@ -8,29 +8,20 @@ function decodeBase58(value: string) {
   const clean = value.trim()
   if (!clean) throw new Error("Missing base58 value")
 
-  const bytes = [0]
+  let numeric = 0n
   for (const character of clean) {
     const digit = BASE58_INDEX.get(character)
     if (digit === undefined) throw new Error("Invalid base58 value")
-
-    let carry = digit
-    for (let index = 0; index < bytes.length; index += 1) {
-      const numeric = bytes[index] * 58 + carry
-      bytes[index] = numeric & 0xff
-      carry = numeric >> 8
-    }
-    while (carry > 0) {
-      bytes.push(carry & 0xff)
-      carry >>= 8
-    }
+    numeric = numeric * 58n + BigInt(digit)
   }
 
   let leadingZeroes = 0
   while (leadingZeroes < clean.length && clean[leadingZeroes] === "1") leadingZeroes += 1
-  const output = new Uint8Array(leadingZeroes + bytes.length)
-  for (let index = 0; index < bytes.length; index += 1) {
-    output[output.length - 1 - index] = bytes[index]
-  }
+
+  const hex = numeric === 0n ? "" : numeric.toString(16).padStart(Math.ceil(numeric.toString(16).length / 2) * 2, "0")
+  const body = hex ? Uint8Array.from(hex.match(/.{2}/g)?.map((byte) => Number.parseInt(byte, 16)) ?? []) : new Uint8Array()
+  const output = new Uint8Array(leadingZeroes + body.length)
+  output.set(body, leadingZeroes)
   return output
 }
 
