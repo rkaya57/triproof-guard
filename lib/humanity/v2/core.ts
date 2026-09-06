@@ -159,7 +159,9 @@ export function computeHumanityDecision(
 
   const livenessScore = clampScore(attestation.livenessScore)
   const antiSpoofScore = clampScore(attestation.antiSpoofScore)
-  const attestationReason = `SERVER_VERIFIED_ATTESTATION:${attestation.jtiHash}`
+  const attestationReason = attestation.approvalEligible === false
+    ? `SERVER_VERIFIED_TRIPROOF_LIVENESS_ATTESTATION:${attestation.jtiHash}`
+    : `SERVER_VERIFIED_PROVIDER_ATTESTATION:${attestation.jtiHash}`
 
   const clientCanCorroborate =
     client.humanSessionScore >= 65 &&
