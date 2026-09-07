@@ -29,6 +29,20 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: triproof_humanity_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d triproof_humanity_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,6 +51,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx prisma generate
+      - name: Apply full Prisma migration chain to isolated Postgres
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/triproof_humanity_ci?schema=public
       - run: npx eslint lib/humanity/v2 app/api/humanity/v2 app/dashboard/admin/humanity-v2 components/humanity/v2 lib/env/validation.ts next.config.ts
       - run: node --import tsx --test lib/humanity/v2/core.test.ts lib/humanity/v2/client-telemetry.test.ts lib/humanity/v2/attestation.test.ts lib/humanity/v2/liveness-engine.test.ts lib/humanity/v2/capture-integrity.test.ts lib/humanity/v2/liveness-adversarial.test.ts lib/humanity/v2/liveness-chain.test.ts lib/humanity/v2/abuse-defense.test.ts
       - run: npm run typecheck
