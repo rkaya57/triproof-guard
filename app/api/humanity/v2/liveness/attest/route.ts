@@ -22,6 +22,46 @@ const frameSchema = z.object({
   rgbBase64: z.string().min(100).max(8_000),
 })
 
+const trackSnapshotSchema = z.object({
+  width: z.number().finite().nonnegative().max(7680),
+  height: z.number().finite().nonnegative().max(4320),
+  frameRate: z.number().finite().nonnegative().max(240).nullable().optional(),
+  facingMode: z.string().trim().max(32).nullable().optional(),
+  resizeMode: z.string().trim().max(32).nullable().optional(),
+  readyState: z.string().trim().max(24).nullable().optional(),
+  muted: z.boolean(),
+  enabled: z.boolean(),
+})
+
+const captureIntegritySchema = z.object({
+  secureContext: z.boolean(),
+  frameCallbacksSupported: z.boolean(),
+  observedDurationMs: z.number().finite().nonnegative().max(120_000),
+  trackStart: trackSnapshotSchema,
+  trackEnd: trackSnapshotSchema,
+  frameCallbacks: z.array(z.object({
+    callbackAtMs: z.number().finite().nonnegative().max(120_000),
+    mediaTimeMs: z.number().finite().nonnegative().max(120_000),
+    presentedFrames: z.number().int().nonnegative().max(1_000_000_000),
+    expectedDisplayTimeMs: z.number().finite().nonnegative().max(120_000).nullable().optional(),
+  })).max(360),
+  visualSignatures: z.array(z.string().regex(/^[0-9a-f]{8,64}$/i)).max(240),
+  motionPairs: z.array(z.object({
+    capturedAtMs: z.number().finite().nonnegative().max(120_000),
+    landmarkMotion: z.number().finite().nonnegative().max(100),
+    pixelMotion: z.number().finite().nonnegative().max(255),
+  })).max(240),
+  eventCounts: z.object({
+    settingsChanges: z.number().int().nonnegative().max(100),
+    mute: z.number().int().nonnegative().max(100),
+    unmute: z.number().int().nonnegative().max(100),
+    ended: z.number().int().nonnegative().max(100),
+    visibilityHidden: z.number().int().nonnegative().max(100),
+    windowBlur: z.number().int().nonnegative().max(100),
+    windowFocus: z.number().int().nonnegative().max(100),
+  }),
+})
+
 const requestSchema = z.object({
   sessionId: z.string().trim().min(1).max(200),
   walletAddress: z.string().trim().min(10).max(200),
@@ -31,6 +71,7 @@ const requestSchema = z.object({
     index: z.number().int().min(0).max(3),
     color: colorSchema,
   })).length(4),
+  captureIntegrity: captureIntegritySchema.optional(),
 })
 
 export async function POST(request: Request) {
@@ -39,10 +80,10 @@ export async function POST(request: Request) {
 
   const parsed = requestSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid Tri-Proof Liveness V1 evidence", issues: parsed.error.issues }, { status: 400 })
+    return NextResponse.json({ error: "Invalid Tri-Proof Liveness V2.2 evidence", issues: parsed.error.issues }, { status: 400 })
   }
 
-  const { sessionId, walletChain, baseline, pulses } = parsed.data
+  const { sessionId, walletChain, baseline, pulses, captureIntegrity } = parsed.data
   const walletAddress = normalizeWalletAddress(parsed.data.walletAddress, walletChain)
 
   try {
@@ -70,6 +111,7 @@ export async function POST(request: Request) {
       evidence: {
         baseline,
         pulses: pulses.map((pulse) => ({ ...pulse, color: pulse.color as TriProofLightColor })),
+        captureIntegrity,
       },
     })
 
@@ -81,6 +123,7 @@ export async function POST(request: Request) {
           result,
           attestationIssued: false,
           rawFramesStored: false,
+          captureMetadataStored: false,
         },
         { status: result.verdict === "REVIEW" ? 202 : 422 }
       )
@@ -105,9 +148,10 @@ export async function POST(request: Request) {
       attestationIssued: true,
       attestationToken: token,
       rawFramesStored: false,
+      captureMetadataStored: false,
     })
   } catch (error) {
-    console.error("Tri-Proof Liveness V1 attestation failed", error)
-    return NextResponse.json({ error: "Could not evaluate Tri-Proof Liveness V1 evidence" }, { status: 500 })
+    console.error("Tri-Proof Liveness V2.2 attestation failed", error)
+    return NextResponse.json({ error: "Could not evaluate Tri-Proof Liveness V2.2 evidence" }, { status: 500 })
   }
 }

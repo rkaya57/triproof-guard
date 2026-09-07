@@ -5,6 +5,10 @@ import { Camera, CheckCircle2, Fingerprint, Loader2, RefreshCw, ShieldAlert, Sig
 
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
+import {
+  createTriProofCaptureIntegrityCollector,
+  type TriProofBrowserCaptureIntegrityCollector,
+} from "@/lib/humanity/v2/browser-capture-integrity"
 import { requestHumanityV2WalletSignature } from "@/lib/humanity/v2/browser-wallet-signature"
 import {
   deriveHumanityV2ClientTelemetry,
@@ -23,7 +27,7 @@ type CampaignOption = {
 
 type LightColor = "RED" | "GREEN" | "BLUE" | "WHITE"
 type LightPulse = { index: number; color: LightColor; displayMs: number; settleMs: number; intensity: number }
-type LightChallenge = { engine: "TRIPROOF_LIVENESS_V1"; frameWidth: 32; frameHeight: 32; pulses: LightPulse[] }
+type LightChallenge = { engine: "TRIPROOF_LIVENESS_V2_2"; frameWidth: 32; frameHeight: 32; pulses: LightPulse[] }
 
 type Session = {
   sessionId: string
@@ -50,14 +54,21 @@ type Result = {
 
 type LivenessResult = {
   verdict: "PASS" | "REVIEW" | "FAIL"
+  engineVersion: "2.2"
   livenessScore: number
   antiSpoofScore: number
   chromaticResponseScore: number
+  spatialResponseScore: number
   frameDiversityScore: number
   textureScore: number
   timingScore: number
+  captureIntegrityScore: number
+  temporalConsistencyScore: number
   replayRiskScore: number
   injectionRiskScore: number
+  virtualCameraRiskScore: number
+  frameInjectionRiskScore: number
+  deepfakeHeuristicRiskScore: number
   reasonCodes: string[]
 }
 
@@ -268,6 +279,7 @@ export function HumanityV2IntegratedLivenessSandbox({ campaigns }: { campaigns: 
   const streamRef = useRef<MediaStream | null>(null)
   const faceDetectorRef = useRef<FaceDetector | null>(null)
   const handDetectorRef = useRef<HandDetector | null>(null)
+  const captureIntegrityRef = useRef<TriProofBrowserCaptureIntegrityCollector | null>(null)
   const previousPixelsRef = useRef<Uint8ClampedArray | null>(null)
   const samplesRef = useRef<HumanityV2FrameSample[]>([])
   const evidenceRef = useRef<HumanityV2ClientStepEvidence[]>([])
@@ -276,6 +288,8 @@ export function HumanityV2IntegratedLivenessSandbox({ campaigns }: { campaigns: 
 
   function stopCamera() {
     cancelRef.current = true
+    captureIntegrityRef.current?.stop()
+    captureIntegrityRef.current = null
     faceDetectorRef.current?.close?.()
     handDetectorRef.current?.close?.()
     faceDetectorRef.current = null
@@ -290,6 +304,8 @@ export function HumanityV2IntegratedLivenessSandbox({ campaigns }: { campaigns: 
   useEffect(() => () => stopCamera(), [])
 
   function resetEvidence() {
+    captureIntegrityRef.current?.stop()
+    captureIntegrityRef.current = null
     samplesRef.current = []
     evidenceRef.current = []
     previousPixelsRef.current = null
@@ -303,6 +319,7 @@ export function HumanityV2IntegratedLivenessSandbox({ campaigns }: { campaigns: 
   }
 
   function sampleFrame(step: HumanityV2ClientStep): HumanityV2FrameSample | null {
+    void step
     const video = videoRef.current
     const canvas = sampleCanvasRef.current
     if (!video || !canvas || !video.videoWidth || !video.videoHeight) return null
@@ -345,6 +362,13 @@ export function HumanityV2IntegratedLivenessSandbox({ campaigns }: { campaigns: 
       handPresent: handLandmarks.length >= 16,
       handLandmarkCount: handLandmarks.length,
     }
+    captureIntegrityRef.current?.recordAnalyzedFrame({
+      rgba: data,
+      width: canvas.width,
+      height: canvas.height,
+      landmarks,
+      pixelMotion: sample.motion,
+    })
     liveSignalRef.current = sample
     setLiveSignal(sample)
     return sample
@@ -392,7 +416,7 @@ export function HumanityV2IntegratedLivenessSandbox({ campaigns }: { campaigns: 
       const data = await response.json() as Session & { error?: string }
       if (!response.ok) throw new Error(data.error ?? "Could not create Humanity session")
       if (!Array.isArray(data.challengeSequence) || data.challengeSequence.some((step) => !ALLOWED_STEPS.has(step))) throw new Error("Invalid server motion challenge")
-      if (data.livenessChallenge?.engine !== "TRIPROOF_LIVENESS_V1" || data.livenessChallenge.pulses.length !== 4 || data.livenessChallenge.pulses.some((pulse) => !LIGHT_COLORS.has(pulse.color))) throw new Error("Invalid server active-light challenge")
+      if (data.livenessChallenge?.engine !== "TRIPROOF_LIVENESS_V2_2" || data.livenessChallenge.pulses.length !== 4 || data.livenessChallenge.pulses.some((pulse) => !LIGHT_COLORS.has(pulse.color))) throw new Error("Invalid server active-light challenge")
       setSession(data)
       setPhase("camera")
     } catch (cause) {
@@ -413,6 +437,7 @@ export function HumanityV2IntegratedLivenessSandbox({ campaigns }: { campaigns: 
       if (!videoRef.current) throw new Error("Camera preview is not mounted")
       videoRef.current.srcObject = stream
       await videoRef.current.play()
+      captureIntegrityRef.current = createTriProofCaptureIntegrityCollector({ video: videoRef.current, stream })
       const detectors = await createDetectors()
       faceDetectorRef.current = detectors.face
       handDetectorRef.current = detectors.hand
@@ -473,6 +498,7 @@ export function HumanityV2IntegratedLivenessSandbox({ campaigns }: { campaigns: 
       await delay(220)
     }
 
+    const captureIntegrity = captureIntegrityRef.current?.snapshot()
     const response = await fetch("/api/humanity/v2/liveness/attest", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -482,12 +508,13 @@ export function HumanityV2IntegratedLivenessSandbox({ campaigns }: { campaigns: 
         walletChain,
         baseline,
         pulses,
+        captureIntegrity,
       }),
     })
     const data = await response.json() as { error?: string; result?: LivenessResult; attestationToken?: string }
     if (data.result) setLivenessResult(data.result)
     if (response.status === 202 || response.status === 422) return null
-    if (!response.ok) throw new Error(data.error ?? "Tri-Proof Liveness V1 scoring failed")
+    if (!response.ok) throw new Error(data.error ?? "Tri-Proof Liveness V2.2 scoring failed")
     return data.attestationToken ?? null
   }
 
@@ -560,7 +587,7 @@ export function HumanityV2IntegratedLivenessSandbox({ campaigns }: { campaigns: 
           <div className="rounded-2xl border border-black/10 bg-black/45 px-5 py-4 text-center text-white backdrop-blur-sm">
             <Sparkles className="mx-auto mb-2 size-5" />
             <p className="font-semibold">Tri-Proof active-light pulse {activePulse.index + 1}/4</p>
-            <p className="mt-1 text-xs text-white/80">Keep looking at the screen. Soft color pulses are used for optical response scoring.</p>
+            <p className="mt-1 text-xs text-white/80">Keep looking at the screen. Physical optical response and spatial consistency are scored server-side.</p>
           </div>
         </div>
       ) : null}
@@ -568,12 +595,12 @@ export function HumanityV2IntegratedLivenessSandbox({ campaigns }: { campaigns: 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap gap-2">
-            <Badge variant="outline" className="border-cyan-300/20 text-cyan-100">Tri-Proof Liveness Engine V1</Badge>
-            <Badge variant="outline" className="border-violet-300/20 text-violet-100">MediaPipe + active light</Badge>
+            <Badge variant="outline" className="border-cyan-300/20 text-cyan-100">Tri-Proof Liveness V2.2</Badge>
+            <Badge variant="outline" className="border-violet-300/20 text-violet-100">Capture integrity + virtual-camera defense</Badge>
             <Badge variant="outline" className="border-amber-300/20 text-amber-100">Experimental / review-only</Badge>
           </div>
           <h3 className="mt-3 text-xl font-semibold text-white">Integrated Humanity liveness scan</h3>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">Motion challenges run first. Then the server-issued color sequence measures optical response. No video is stored; five transient 32×32 RGB samples are server-scored and discarded.</p>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">Motion and active-light challenges are combined with privacy-minimized frame cadence, continuity, loop and motion-correlation signals. Raw video and device identifiers are not stored.</p>
         </div>
         <Fingerprint className="size-5 text-cyan-300" />
       </div>
@@ -625,11 +652,17 @@ export function HumanityV2IntegratedLivenessSandbox({ campaigns }: { campaigns: 
           </div>
           <div className="grid gap-3">
             <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 text-sm text-slate-300">
-              <p className="font-medium text-white">{phase === "motion" ? stepTitle(currentStep) : phase === "light" ? "Active-light anti-spoof" : "Camera ready"}</p>
+              <p className="font-medium text-white">{phase === "motion" ? stepTitle(currentStep) : phase === "light" ? "Active-light + capture integrity" : "Camera ready"}</p>
               <p className="mt-2 text-xs leading-6 text-slate-500">FACE {liveSignal.facePresent ? "LOCK" : "WAIT"} · {faceMesh.length} pts · HAND {handMesh.length >= 16 ? "LOCK" : "WAIT"} · yaw {liveSignal.yaw.toFixed(2)} · blink {Math.round(liveSignal.blinkScore * 100)}% · smile {Math.round(liveSignal.smileScore * 100)}%</p>
               {phase === "motion" ? <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800"><div className="h-full bg-cyan-300" style={{ width: `${Math.round(progress * 100)}%` }} /></div> : null}
             </div>
-            {livenessResult ? <div className="rounded-2xl border border-violet-300/15 bg-violet-300/[0.03] p-4 text-xs leading-6 text-slate-300"><p className="font-semibold text-white">Liveness {livenessResult.verdict} · {livenessResult.livenessScore}/100</p><p>Anti-spoof {livenessResult.antiSpoofScore} · optical response {livenessResult.chromaticResponseScore} · replay risk {livenessResult.replayRiskScore} · injection risk {livenessResult.injectionRiskScore}</p></div> : null}
+            {livenessResult ? (
+              <div className="rounded-2xl border border-violet-300/15 bg-violet-300/[0.03] p-4 text-xs leading-6 text-slate-300">
+                <p className="font-semibold text-white">Liveness {livenessResult.verdict} · {livenessResult.livenessScore}/100 · anti-spoof {livenessResult.antiSpoofScore}/100</p>
+                <p>Optical {livenessResult.chromaticResponseScore} · spatial {livenessResult.spatialResponseScore} · capture integrity {livenessResult.captureIntegrityScore} · temporal {livenessResult.temporalConsistencyScore}</p>
+                <p>Replay risk {livenessResult.replayRiskScore} · virtual-camera risk {livenessResult.virtualCameraRiskScore} · injection risk {livenessResult.frameInjectionRiskScore} · deepfake heuristic {livenessResult.deepfakeHeuristicRiskScore}</p>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : <canvas ref={sampleCanvasRef} className="hidden" />}
@@ -638,15 +671,15 @@ export function HumanityV2IntegratedLivenessSandbox({ campaigns }: { campaigns: 
 
       <div className="mt-5 flex flex-wrap gap-3">
         {phase === "idle" ? <button type="button" onClick={startSession} className={buttonVariants()}><Camera className="size-4" /> Start integrated scan</button> : null}
-        {phase === "starting" ? <span className="text-sm text-cyan-200"><Loader2 className="mr-2 inline size-4 animate-spin" />Issuing motion + active-light challenge…</span> : null}
+        {phase === "starting" ? <span className="text-sm text-cyan-200"><Loader2 className="mr-2 inline size-4 animate-spin" />Issuing V2.2 motion + active-light challenge…</span> : null}
         {phase === "camera" ? <button type="button" onClick={allowCameraAndRun} className={buttonVariants()}><Camera className="size-4" /> Allow camera & run</button> : null}
-        {phase === "motion" || phase === "light" || phase === "submitting" ? <span className="text-sm text-cyan-200"><Loader2 className="mr-2 inline size-4 animate-spin" />{phase === "motion" ? "Validating motion…" : phase === "light" ? "Measuring optical response…" : "Submitting proof evidence…"}</span> : null}
+        {phase === "motion" || phase === "light" || phase === "submitting" ? <span className="text-sm text-cyan-200"><Loader2 className="mr-2 inline size-4 animate-spin" />{phase === "motion" ? "Validating motion + capture integrity…" : phase === "light" ? "Measuring optical + injection signals…" : "Submitting proof evidence…"}</span> : null}
         {phase === "result" && result?.decision !== "REJECTED" ? <button type="button" onClick={signProof} className={buttonVariants()}><Signature className="size-4" /> Sign canonical proof</button> : null}
         {phase === "signing" ? <span className="text-sm text-cyan-200"><Loader2 className="mr-2 inline size-4 animate-spin" />Waiting for wallet signature…</span> : null}
         {(phase === "result" || phase === "signed" || phase === "error") ? <button type="button" onClick={reset} className={buttonVariants({ variant: "outline" })}><RefreshCw className="size-4" /> Reset</button> : null}
       </div>
 
-      <div className="mt-4 rounded-2xl border border-amber-300/15 bg-amber-300/[0.025] p-4 text-xs leading-6 text-amber-100/80"><ShieldAlert className="mr-2 inline size-4" />V1 is our own server-scored anti-spoof engine. It raises the bar against simple replay, but remains intentionally in review-only mode until virtual-camera, deepfake and frame-injection adversarial testing is strong enough for automatic approval.</div>
+      <div className="mt-4 rounded-2xl border border-amber-300/15 bg-amber-300/[0.025] p-4 text-xs leading-6 text-amber-100/80"><ShieldAlert className="mr-2 inline size-4" />V2.2 adds virtual-camera, loop, frame-injection and deepfake/reenactment heuristic risk signals. These browser-derived signals are intentionally review-only and are not treated as definitive proof that a camera is genuine or that media is a deepfake.</div>
     </section>
   )
 }

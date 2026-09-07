@@ -48,7 +48,7 @@ export default async function Page() {
     { icon: Fingerprint, label: "Campaigns", value: campaigns.length, detail: "Configured Humanity campaigns" },
     { icon: CircleDashed, label: "Recent verifications", value: recentVerifications.length, detail: "Latest V2 verification records" },
     { icon: WalletCards, label: "Signed proofs", value: signedCount, detail: "Cryptographically verified wallet signatures" },
-    { icon: TriangleAlert, label: "Review queue", value: reviewCount, detail: "Experimental liveness proofs awaiting production-grade approval policy" },
+    { icon: TriangleAlert, label: "Review queue", value: reviewCount, detail: "V2.2 capture-integrity proofs remain review-only during adversarial validation" },
   ]
   const cameraCampaigns = campaigns.map((campaign) => ({
     id: campaign.id,
@@ -64,12 +64,13 @@ export default async function Page() {
         icon={Fingerprint}
         eyebrow="Humanity V2"
         title="Proof-of-human recovery console"
-        description="Server-bound motion challenges, Tri-Proof Liveness Engine V1 active-light scoring, campaign-scoped nullifiers and canonical wallet signatures. Automatic approval remains disabled for our experimental liveness engine until adversarial validation is strong enough."
+        description="Tri-Proof Liveness V2.2 combines server-bound motion and active-light challenges with privacy-minimized capture-integrity, virtual-camera, frame-injection and deepfake/reenactment heuristic risk signals. V2.3 adversarial suites continuously test replay and synthetic-media attack patterns. Automatic approval remains disabled."
         tone="amber"
         meta={
           <>
-            <span className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/12 bg-cyan-300/[0.025] px-3 py-2 text-xs text-cyan-200"><ShieldCheck className="size-3.5" /> Tri-Proof Liveness V1 active</span>
-            <span className="inline-flex items-center gap-2 rounded-xl border border-amber-300/12 bg-amber-300/[0.025] px-3 py-2 text-xs text-amber-200"><TriangleAlert className="size-3.5" /> V1 remains review-only</span>
+            <span className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/12 bg-cyan-300/[0.025] px-3 py-2 text-xs text-cyan-200"><ShieldCheck className="size-3.5" /> Liveness V2.2 active</span>
+            <span className="inline-flex items-center gap-2 rounded-xl border border-violet-300/12 bg-violet-300/[0.025] px-3 py-2 text-xs text-violet-200"><ShieldCheck className="size-3.5" /> V2.3 adversarial CI</span>
+            <span className="inline-flex items-center gap-2 rounded-xl border border-amber-300/12 bg-amber-300/[0.025] px-3 py-2 text-xs text-amber-200"><TriangleAlert className="size-3.5" /> Review-only trust boundary</span>
           </>
         }
         actions={<Link href="/dashboard/admin" className={buttonVariants({ variant: "outline", size: "sm" })}>Admin center</Link>}
@@ -121,14 +122,15 @@ export default async function Page() {
         <Card className="glass-panel border-amber-300/15">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><ShieldCheck className="size-5 text-amber-300" /> Current security boundary</CardTitle>
-            <CardDescription>What Tri-Proof Liveness V1 does and does not claim.</CardDescription>
+            <CardDescription>What Tri-Proof Liveness V2.2 / V2.3 does and does not claim.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
             <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />Motion sequence, active-light color order, nonce, expiry and attempt policy are issued by the server.</p>
-            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />The server independently scores transient 32×32 RGB samples for optical response, frame diversity, texture, replay and timing signals.</p>
-            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />No video is persisted by Humanity V2; the active-light endpoint analyzes five low-resolution samples in-request and returns an HMAC-signed Tri-Proof liveness token.</p>
-            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />Nullifiers are stable per campaign + wallet and EVM/Solana signatures bind the proof to wallet control.</p>
-            <p><TriangleAlert className="mr-2 inline size-4 text-amber-300" />A malicious virtual camera or browser-injection client may still fabricate evidence. V1 therefore cannot auto-approve until adversarial testing and stronger capture-integrity defenses are complete.</p>
+            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />The server scores transient 32×32 RGB evidence for chromatic response, spatial variation, texture, replay and digital-tint injection patterns.</p>
+            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />V2.2 evaluates requestVideoFrameCallback cadence, media-time continuity, presented-frame order, track changes, loop signatures and face-motion/pixel-motion coupling as risk signals.</p>
+            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />V2.3 CI includes static-photo, looped-video, uniform digital tint, frame injection, impossible timing and deepfake/reenactment-like motion-decoupling adversarial fixtures.</p>
+            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />Raw video, device identifiers and capture telemetry are not persisted by Humanity V2; capture evidence is scored in-request and discarded.</p>
+            <p><TriangleAlert className="mr-2 inline size-4 text-amber-300" />Browser-derived capture metadata is forgeable by a fully compromised client. Virtual-camera and deepfake values are heuristic risk scores, not definitive classification. Automatic approval therefore remains disabled.</p>
           </CardContent>
         </Card>
       </section>

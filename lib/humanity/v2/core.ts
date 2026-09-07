@@ -35,6 +35,11 @@ export type HumanityVerifiedAttestationInput = {
   issuer: string
   jtiHash: string
   approvalEligible?: boolean
+  engineVersion?: string
+  captureIntegrityScore?: number
+  virtualCameraRiskScore?: number
+  frameInjectionRiskScore?: number
+  deepfakeHeuristicRiskScore?: number
 }
 
 const REQUIRED_CLIENT_REASON = "CLIENT_TELEMETRY_UNATTESTED"
@@ -171,17 +176,31 @@ export function computeHumanityDecision(
     client.normalized.injectionRiskScore < 70
 
   if (attestation.approvalEligible === false) {
+    const engineVersion = attestation.engineVersion ?? "1.0"
+    const internalReasons = [
+      ...client.reasonCodes,
+      attestationReason,
+      `ATTESTATION_ISSUER:${attestation.issuer}`,
+      `TRIPROOF_LIVENESS_SCORE:${livenessScore}`,
+      `TRIPROOF_ANTI_SPOOF_SCORE:${antiSpoofScore}`,
+      `TRIPROOF_LIVENESS_ENGINE_VERSION:${engineVersion}`,
+    ]
+
+    if (engineVersion === "2.2") {
+      internalReasons.push(`TRIPROOF_CAPTURE_INTEGRITY_SCORE:${clampScore(attestation.captureIntegrityScore)}`)
+      internalReasons.push(`TRIPROOF_VIRTUAL_CAMERA_RISK:${clampScore(attestation.virtualCameraRiskScore)}`)
+      internalReasons.push(`TRIPROOF_FRAME_INJECTION_RISK:${clampScore(attestation.frameInjectionRiskScore)}`)
+      internalReasons.push(`TRIPROOF_DEEPFAKE_HEURISTIC_RISK:${clampScore(attestation.deepfakeHeuristicRiskScore)}`)
+      internalReasons.push("TRIPROOF_LIVENESS_V2_2_SERVER_SCORED")
+      internalReasons.push("TRIPROOF_LIVENESS_V2_2_NOT_YET_APPROVAL_ELIGIBLE")
+    } else {
+      internalReasons.push("TRIPROOF_LIVENESS_V1_SERVER_SCORED")
+      internalReasons.push("TRIPROOF_LIVENESS_V1_NOT_YET_APPROVAL_ELIGIBLE")
+    }
+
     return {
       ...client,
-      reasonCodes: [
-        ...client.reasonCodes,
-        attestationReason,
-        `ATTESTATION_ISSUER:${attestation.issuer}`,
-        `TRIPROOF_LIVENESS_SCORE:${livenessScore}`,
-        `TRIPROOF_ANTI_SPOOF_SCORE:${antiSpoofScore}`,
-        "TRIPROOF_LIVENESS_V1_SERVER_SCORED",
-        "TRIPROOF_LIVENESS_V1_NOT_YET_APPROVAL_ELIGIBLE",
-      ],
+      reasonCodes: internalReasons,
     }
   }
 

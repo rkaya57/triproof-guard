@@ -1,6 +1,11 @@
 import { createHash, createHmac, randomUUID } from "node:crypto"
 import { jwtVerify, SignJWT } from "jose"
 
+import {
+  scoreTriProofCaptureIntegrity,
+  type TriProofCaptureIntegrityEvidence,
+  type TriProofCaptureIntegrityResult,
+} from "./capture-integrity"
 import { normalizeWalletAddress, type HumanityVerifiedAttestationInput } from "./core"
 
 export type TriProofLightColor = "RED" | "GREEN" | "BLUE" | "WHITE"
@@ -14,7 +19,7 @@ export type TriProofLightPulse = {
 }
 
 export type TriProofLightChallenge = {
-  engine: "TRIPROOF_LIVENESS_V1"
+  engine: "TRIPROOF_LIVENESS_V2_2"
   frameWidth: 32
   frameHeight: 32
   pulses: TriProofLightPulse[]
@@ -35,18 +40,26 @@ export type TriProofPulseFrame = TriProofRgbFrame & {
 export type TriProofLivenessEvidence = {
   baseline: TriProofRgbFrame
   pulses: TriProofPulseFrame[]
+  captureIntegrity?: TriProofCaptureIntegrityEvidence
 }
 
 export type TriProofLivenessResult = {
   verdict: "PASS" | "REVIEW" | "FAIL"
+  engineVersion: "2.2"
   livenessScore: number
   antiSpoofScore: number
   chromaticResponseScore: number
+  spatialResponseScore: number
   frameDiversityScore: number
   textureScore: number
   timingScore: number
+  captureIntegrityScore: number
+  temporalConsistencyScore: number
   replayRiskScore: number
   injectionRiskScore: number
+  virtualCameraRiskScore: number
+  frameInjectionRiskScore: number
+  deepfakeHeuristicRiskScore: number
   reasonCodes: string[]
 }
 
@@ -58,7 +71,7 @@ export type TriProofLivenessExpectation = {
   walletChain?: string | null
 }
 
-const TOKEN_ISSUER = "urn:triproof:humanity:liveness:v1"
+const TOKEN_ISSUER = "urn:triproof:humanity:liveness:v2.2"
 const TOKEN_AUDIENCE = "urn:triproof:humanity:submit:v2"
 const TOKEN_CLAIM = "https://triproofprotocol.com/humanity/v2/triproof-liveness"
 const COLORS: TriProofLightColor[] = ["RED", "GREEN", "BLUE", "WHITE"]
@@ -69,15 +82,20 @@ function clamp(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)))
 }
 
+function average(values: number[], fallback = 0) {
+  const clean = values.filter((value) => Number.isFinite(value))
+  return clean.length ? clean.reduce((sum, value) => sum + value, 0) / clean.length : fallback
+}
+
 function signingKey(secret: string) {
   return createHmac("sha256", secret)
-    .update("triproof-humanity-v2:liveness-engine-v1:token-key")
+    .update("triproof-humanity-v2:liveness-engine-v2.2:token-key")
     .digest()
 }
 
 function challengeDigest(nonce: string, secret: string) {
   return createHmac("sha256", secret)
-    .update(`triproof-humanity-v2:liveness-engine-v1:challenge:${nonce}`)
+    .update(`triproof-humanity-v2:liveness-engine-v2.2:challenge:${nonce}`)
     .digest()
 }
 
@@ -91,7 +109,7 @@ export function deriveTriProofLightChallenge(nonce: string, secret: string): Tri
   }
 
   return {
-    engine: "TRIPROOF_LIVENESS_V1",
+    engine: "TRIPROOF_LIVENESS_V2_2",
     frameWidth: 32,
     frameHeight: 32,
     pulses: ordered.map((color, index) => ({
@@ -106,7 +124,7 @@ export function deriveTriProofLightChallenge(nonce: string, secret: string): Tri
 
 function decodeFrame(frame: TriProofRgbFrame) {
   if (!Number.isInteger(frame.width) || !Number.isInteger(frame.height)) throw new Error("Invalid liveness frame dimensions")
-  if (frame.width !== 32 || frame.height !== 32) throw new Error("Tri-Proof Liveness V1 requires 32x32 RGB frames")
+  if (frame.width !== 32 || frame.height !== 32) throw new Error("Tri-Proof Liveness V2.2 requires 32x32 RGB frames")
   if (!Number.isFinite(frame.capturedAtMs) || frame.capturedAtMs < 0) throw new Error("Invalid liveness frame timestamp")
 
   const bytes = Buffer.from(frame.rgbBase64, "base64")
@@ -160,6 +178,44 @@ function meanAbsoluteDifference(a: Uint8Array, b: Uint8Array) {
   return total / a.length
 }
 
+function pixelResponse(color: TriProofLightColor, baseline: Uint8Array, pulse: Uint8Array, offset: number) {
+  const dr = pulse[offset] - baseline[offset]
+  const dg = pulse[offset + 1] - baseline[offset + 1]
+  const db = pulse[offset + 2] - baseline[offset + 2]
+  if (color === "RED") return dr - (dg + db) / 2
+  if (color === "GREEN") return dg - (dr + db) / 2
+  if (color === "BLUE") return db - (dr + dg) / 2
+  return dr * 0.2126 + dg * 0.7152 + db * 0.0722
+}
+
+function spatialResponseForColor(
+  color: TriProofLightColor,
+  baseline: Uint8Array,
+  pulse: Uint8Array,
+  width: number,
+  height: number
+) {
+  const responses: number[] = []
+  const center: number[] = []
+  const border: number[] = []
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const offset = (y * width + x) * 3
+      const response = pixelResponse(color, baseline, pulse, offset)
+      responses.push(response)
+      const isCenter = x >= width * 0.25 && x < width * 0.75 && y >= height * 0.2 && y < height * 0.8
+      ;(isCenter ? center : border).push(response)
+    }
+  }
+
+  const mean = average(responses)
+  const variance = average(responses.map((value) => (value - mean) ** 2))
+  const standardDeviation = Math.sqrt(Math.max(0, variance))
+  const centerBorderDifference = Math.abs(average(center) - average(border))
+  const positiveRatio = responses.filter((value) => value > 2).length / Math.max(1, responses.length)
+  return clamp(standardDeviation * 5.8 + centerBorderDifference * 4.5 + positiveRatio * 18)
+}
+
 function responseForColor(
   color: TriProofLightColor,
   baseline: ReturnType<typeof frameStats>,
@@ -174,6 +230,21 @@ function responseForColor(
   if (color === "GREEN") return dg - (dr + db) / 2
   if (color === "BLUE") return db - (dr + dg) / 2
   return dl
+}
+
+function fallbackCaptureIntegrity(): TriProofCaptureIntegrityResult {
+  return {
+    captureIntegrityScore: 50,
+    temporalConsistencyScore: 50,
+    virtualCameraRiskScore: 35,
+    frameInjectionRiskScore: 35,
+    deepfakeHeuristicRiskScore: 25,
+    observedFps: null,
+    cadenceJitterRatio: null,
+    visualDuplicateRatio: 0,
+    detectedLoopPeriod: null,
+    reasonCodes: ["CAPTURE_INTEGRITY_EVIDENCE_NOT_PROVIDED", "CAPTURE_INTEGRITY_V2_2_REVIEW_ONLY"],
+  }
 }
 
 export function scoreTriProofLivenessEvidence({
@@ -211,7 +282,12 @@ export function scoreTriProofLivenessEvidence({
     const response = responseForColor(pulse.color, baselineStats, pulseStats[index])
     return clamp(48 + response * (pulse.color === "WHITE" ? 3.2 : 4.4))
   })
-  const chromaticResponseScore = clamp(responseScores.reduce((sum, value) => sum + value, 0) / responseScores.length)
+  const chromaticResponseScore = clamp(average(responseScores))
+
+  const spatialScores = challenge.pulses.map((pulse, index) =>
+    spatialResponseForColor(pulse.color, baselineBytes, pulseBytes[index], evidence.baseline.width, evidence.baseline.height)
+  )
+  const spatialResponseScore = clamp(average(spatialScores))
 
   const differences = pulseBytes.map((bytes) => meanAbsoluteDifference(baselineBytes, bytes))
   const interPulseDifferences = pulseBytes.slice(1).map((bytes, index) => meanAbsoluteDifference(pulseBytes[index], bytes))
@@ -226,65 +302,106 @@ export function scoreTriProofLivenessEvidence({
 
   const hashes = [baselineStats.hash, ...pulseStats.map((item) => item.hash)]
   const duplicateFrames = hashes.length - new Set(hashes).size
-  const replayRiskScore = clamp(
+  const opticalReplayRisk = clamp(
     duplicateFrames > 0
       ? 94
       : 86 - frameDiversityScore * 0.52 - chromaticResponseScore * 0.28 - Math.min(18, textureScore * 0.12)
   )
-  const injectionRiskScore = clamp(
+  const uniformDigitalTint = chromaticResponseScore >= 58 && spatialResponseScore <= 22
+  const opticalInjectionRisk = clamp(
     !timingValid
       ? 86
-      : frameDiversityScore < 18
-        ? 78
-        : chromaticResponseScore < 45
-          ? 68
-          : 18
+      : uniformDigitalTint
+        ? 84
+        : frameDiversityScore < 18
+          ? 78
+          : chromaticResponseScore < 45
+            ? 68
+            : 18
   )
+
+  const captureIntegrity = evidence.captureIntegrity
+    ? scoreTriProofCaptureIntegrity(evidence.captureIntegrity)
+    : fallbackCaptureIntegrity()
+
+  const replayRiskScore = clamp(Math.max(
+    opticalReplayRisk,
+    captureIntegrity.virtualCameraRiskScore * 0.72 + captureIntegrity.deepfakeHeuristicRiskScore * 0.18
+  ))
+  const injectionRiskScore = clamp(Math.max(
+    opticalInjectionRisk,
+    captureIntegrity.frameInjectionRiskScore
+  ))
 
   const livenessScore = clamp(
-    chromaticResponseScore * 0.45 +
-    frameDiversityScore * 0.25 +
-    textureScore * 0.15 +
-    timingScore * 0.15
+    chromaticResponseScore * 0.32 +
+    spatialResponseScore * 0.10 +
+    frameDiversityScore * 0.18 +
+    textureScore * 0.12 +
+    timingScore * 0.10 +
+    captureIntegrity.captureIntegrityScore * 0.12 +
+    captureIntegrity.temporalConsistencyScore * 0.06
   )
-  const antiSpoofScore = clamp(100 - replayRiskScore * 0.55 - injectionRiskScore * 0.45)
+  const antiSpoofScore = clamp(
+    100 -
+    replayRiskScore * 0.4 -
+    injectionRiskScore * 0.35 -
+    captureIntegrity.virtualCameraRiskScore * 0.15 -
+    captureIntegrity.deepfakeHeuristicRiskScore * 0.10
+  )
 
   if (chromaticResponseScore < 45) reasonCodes.push("ACTIVE_LIGHT_RESPONSE_WEAK")
+  if (spatialResponseScore < 24) reasonCodes.push("ACTIVE_LIGHT_SPATIAL_RESPONSE_WEAK")
+  if (uniformDigitalTint) reasonCodes.push("UNIFORM_DIGITAL_TINT_PATTERN")
   if (frameDiversityScore < 25) reasonCodes.push("FRAME_DIVERSITY_WEAK")
   if (textureScore < 25) reasonCodes.push("TEXTURE_SIGNAL_WEAK")
   if (!timingValid) reasonCodes.push("ACTIVE_LIGHT_TIMING_ANOMALY")
   if (duplicateFrames > 0) reasonCodes.push("DUPLICATE_FRAME_REPLAY_PATTERN")
   if (replayRiskScore >= 70) reasonCodes.push("TRIPROOF_REPLAY_RISK_HIGH")
   if (injectionRiskScore >= 70) reasonCodes.push("TRIPROOF_INJECTION_RISK_HIGH")
+  reasonCodes.push(...captureIntegrity.reasonCodes)
 
   let verdict: TriProofLivenessResult["verdict"] = "FAIL"
   if (
     timingValid &&
     chromaticResponseScore >= 58 &&
+    spatialResponseScore >= 24 &&
     frameDiversityScore >= 32 &&
     textureScore >= 25 &&
-    livenessScore >= 64 &&
-    antiSpoofScore >= 58
+    captureIntegrity.captureIntegrityScore >= 58 &&
+    captureIntegrity.temporalConsistencyScore >= 55 &&
+    captureIntegrity.virtualCameraRiskScore < 70 &&
+    captureIntegrity.frameInjectionRiskScore < 70 &&
+    captureIntegrity.deepfakeHeuristicRiskScore < 75 &&
+    livenessScore >= 62 &&
+    antiSpoofScore >= 56
   ) {
     verdict = "PASS"
-    reasonCodes.push("TRIPROOF_LIVENESS_V1_PASS")
-  } else if (livenessScore >= 50 && antiSpoofScore >= 42) {
+    reasonCodes.push("TRIPROOF_LIVENESS_V2_2_PASS")
+  } else if (livenessScore >= 48 && antiSpoofScore >= 38) {
     verdict = "REVIEW"
-    reasonCodes.push("TRIPROOF_LIVENESS_V1_REVIEW")
+    reasonCodes.push("TRIPROOF_LIVENESS_V2_2_REVIEW")
   } else {
-    reasonCodes.push("TRIPROOF_LIVENESS_V1_FAIL")
+    reasonCodes.push("TRIPROOF_LIVENESS_V2_2_FAIL")
   }
 
   return {
     verdict,
+    engineVersion: "2.2",
     livenessScore,
     antiSpoofScore,
     chromaticResponseScore,
+    spatialResponseScore,
     frameDiversityScore,
     textureScore,
     timingScore,
+    captureIntegrityScore: captureIntegrity.captureIntegrityScore,
+    temporalConsistencyScore: captureIntegrity.temporalConsistencyScore,
     replayRiskScore,
     injectionRiskScore,
+    virtualCameraRiskScore: captureIntegrity.virtualCameraRiskScore,
+    frameInjectionRiskScore: captureIntegrity.frameInjectionRiskScore,
+    deepfakeHeuristicRiskScore: captureIntegrity.deepfakeHeuristicRiskScore,
     reasonCodes,
   }
 }
@@ -304,10 +421,15 @@ export async function issueTriProofLivenessToken({
     [TOKEN_CLAIM]: {
       ...expected,
       walletAddress: normalizeWalletAddress(expected.walletAddress, expected.walletChain),
-      engineVersion: "1.0",
+      engineVersion: result.engineVersion,
       verdict: result.verdict,
       livenessScore: result.livenessScore,
       antiSpoofScore: result.antiSpoofScore,
+      captureIntegrityScore: result.captureIntegrityScore,
+      temporalConsistencyScore: result.temporalConsistencyScore,
+      virtualCameraRiskScore: result.virtualCameraRiskScore,
+      frameInjectionRiskScore: result.frameInjectionRiskScore,
+      deepfakeHeuristicRiskScore: result.deepfakeHeuristicRiskScore,
       replayRiskScore: result.replayRiskScore,
       injectionRiskScore: result.injectionRiskScore,
     },
@@ -348,10 +470,24 @@ export async function verifyTriProofLivenessToken({
   if (value.nonce !== expected.nonce) throw new Error("Tri-Proof liveness token nonce mismatch")
   if (claimedWallet !== expectedWallet) throw new Error("Tri-Proof liveness token wallet mismatch")
   if (value.verdict !== "PASS") throw new Error("Tri-Proof liveness token did not pass")
+  if (value.engineVersion !== "2.2") throw new Error("Tri-Proof liveness token engine version mismatch")
 
   const livenessScore = Number(value.livenessScore)
   const antiSpoofScore = Number(value.antiSpoofScore)
-  if (!Number.isFinite(livenessScore) || !Number.isFinite(antiSpoofScore)) throw new Error("Tri-Proof liveness token scores are invalid")
+  const captureIntegrityScore = Number(value.captureIntegrityScore)
+  const virtualCameraRiskScore = Number(value.virtualCameraRiskScore)
+  const frameInjectionRiskScore = Number(value.frameInjectionRiskScore)
+  const deepfakeHeuristicRiskScore = Number(value.deepfakeHeuristicRiskScore)
+  if (
+    !Number.isFinite(livenessScore) ||
+    !Number.isFinite(antiSpoofScore) ||
+    !Number.isFinite(captureIntegrityScore) ||
+    !Number.isFinite(virtualCameraRiskScore) ||
+    !Number.isFinite(frameInjectionRiskScore) ||
+    !Number.isFinite(deepfakeHeuristicRiskScore)
+  ) {
+    throw new Error("Tri-Proof liveness token scores are invalid")
+  }
 
   return {
     verified: true,
@@ -361,6 +497,11 @@ export async function verifyTriProofLivenessToken({
     issuer: TOKEN_ISSUER,
     jtiHash: createHash("sha256").update(`${TOKEN_ISSUER}:${String(payload.jti ?? "")}`).digest("hex").slice(0, 24),
     approvalEligible: false,
+    engineVersion: "2.2",
+    captureIntegrityScore: clamp(captureIntegrityScore),
+    virtualCameraRiskScore: clamp(virtualCameraRiskScore),
+    frameInjectionRiskScore: clamp(frameInjectionRiskScore),
+    deepfakeHeuristicRiskScore: clamp(deepfakeHeuristicRiskScore),
   }
 }
 
