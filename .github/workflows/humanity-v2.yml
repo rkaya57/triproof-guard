@@ -1,4 +1,4 @@
-name: Humanity V2
+name: Humanity Liveness
 
 on:
   pull_request:
@@ -53,17 +53,21 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx prisma generate
-      - name: Create current pre-V2.5 database baseline in isolated Postgres
+      - name: Create pre-release database baseline in isolated Postgres
         run: npx prisma db push --schema prisma/schema.prisma --accept-data-loss
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/triproof_humanity_ci?schema=public
-      - name: Apply V2.5 migration SQL to isolated Postgres
+      - name: Apply Humanity abuse-control migration
         run: npx prisma db execute --file prisma/migrations/20260907220000_humanity_v25_abuse_defense/migration.sql
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/triproof_humanity_ci?schema=public
+      - name: Apply Humanity PostgREST hardening migration
+        run: npx prisma db execute --file prisma/migrations/20260907235900_humanity_release_rls/migration.sql
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/triproof_humanity_ci?schema=public
       - run: npx eslint lib/humanity/v2 app/api/humanity/v2 app/dashboard/admin/humanity-v2 components/humanity/v2 lib/env/validation.ts next.config.ts
       - run: node --import tsx --test lib/humanity/v2/core.test.ts lib/humanity/v2/client-telemetry.test.ts lib/humanity/v2/attestation.test.ts lib/humanity/v2/liveness-engine.test.ts lib/humanity/v2/capture-integrity.test.ts lib/humanity/v2/liveness-adversarial.test.ts lib/humanity/v2/liveness-chain.test.ts lib/humanity/v2/abuse-defense.test.ts
-      - name: Exercise V2.5 DB-backed limiter and lifecycle audit
+      - name: Exercise Humanity DB-backed abuse controls, RLS and lifecycle audit
         run: node --import tsx --test lib/humanity/v2/abuse-defense.integration.test.ts
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/triproof_humanity_ci?schema=public

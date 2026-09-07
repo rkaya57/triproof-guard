@@ -69,7 +69,7 @@ type LivenessResult = {
   deepfakeHeuristicRiskScore: number
   reasonCodes: string[]
 }
-type Phase = "idle" | "starting" | "camera" | "motion" | "light" | "submitting" | "result" | "signing" | "signed" | "error"
+type Phase = "idle" | "starting" | "camera" | "motion" | "light" | "submitting" | "result" | "signing" | "signed" | "cancelling" | "error"
 type Landmark = { x: number; y: number; z?: number }
 type DetectorResult = {
   faceLandmarks?: Landmark[][]
@@ -198,7 +198,11 @@ async function createDetectors(): Promise<{ face: FaceDetector; hand: HandDetect
     baseOptions: { modelAssetPath: FACE_MODEL_URL, delegate: "GPU" }, runningMode: "VIDEO", numFaces: 1,
     minFaceDetectionConfidence: 0.55, minFacePresenceConfidence: 0.55, minTrackingConfidence: 0.55, outputFaceBlendshapes: true,
   }).catch(() => vision.FaceLandmarker.createFromOptions(fileset, { baseOptions: { modelAssetPath: FACE_MODEL_URL, delegate: "CPU" }, runningMode: "VIDEO", numFaces: 1, outputFaceBlendshapes: true }))
-  const hand = await vision.HandLandmarker.createFromOptions(fileset, { baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: "GPU" }, runningMode: "VIDEO", numHands: 1 }).catch(() => null)
+  const hand = await vision.HandLandmarker.createFromOptions(fileset, {
+    baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: "GPU" }, runningMode: "VIDEO", numHands: 1,
+  }).catch(() => vision.HandLandmarker.createFromOptions(fileset, {
+    baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: "CPU" }, runningMode: "VIDEO", numHands: 1,
+  })).catch(() => null)
   return { face, hand }
 }
 function bytesToBase64(bytes: Uint8Array) {
@@ -236,6 +240,7 @@ export function HumanityV24AdminLivenessSandbox({ campaigns }: { campaigns: Camp
   const evidenceRef = useRef<HumanityV2ClientStepEvidence[]>([])
   const liveSignalRef = useRef<LiveSignal>(emptySignal())
   const cancelRef = useRef(false)
+  const userCancelledRef = useRef(false)
 
   function stopCamera() {
     cancelRef.current = true
@@ -340,19 +345,21 @@ export function HumanityV24AdminLivenessSandbox({ campaigns }: { campaigns: Camp
 
   async function startSession() {
     if (!campaignId || !walletAddress.trim()) { setError("Select an enabled campaign and enter a wallet address"); return }
+    userCancelledRef.current = false
     setError(null); setResult(null); setSignatureStatus(null); resetEvidence(); setPhase("starting")
     try {
       const response = await fetch("/api/humanity/v2/challenge/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ campaignId, walletAddress: walletAddress.trim(), walletChain }) })
       const data = await response.json() as Session & { error?: string }
       if (!response.ok) throw new Error(data.error ?? "Could not create Humanity session")
       if (!Array.isArray(data.challengeSequence) || data.challengeSequence.some((step) => !ALLOWED_STEPS.has(step))) throw new Error("Invalid server motion challenge")
-      if (data.livenessChallenge?.engine !== "TRIPROOF_LIVENESS_V2_4_SERVER_CHAIN" || data.livenessChallenge.pulseCount !== 4 || data.livenessChallenge.sequenceDisclosed !== false) throw new Error("Invalid V2.4 server-chain descriptor")
+      if (data.livenessChallenge?.engine !== "TRIPROOF_LIVENESS_V2_4_SERVER_CHAIN" || data.livenessChallenge.pulseCount !== 4 || data.livenessChallenge.sequenceDisclosed !== false) throw new Error("Invalid Humanity liveness descriptor")
       setSession(data); setPhase("camera")
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not create Humanity session"); setPhase("error") }
   }
 
   async function allowCameraAndRun() {
     if (!session) return
+    userCancelledRef.current = false
     setError(null); cancelRef.current = false; resetEvidence()
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error("Camera API is unavailable")
@@ -366,9 +373,17 @@ export function HumanityV24AdminLivenessSandbox({ campaigns }: { campaigns: Camp
       faceDetectorRef.current = detectors.face
       handDetectorRef.current = detectors.hand
       await runMotionChallenge(session)
+      if (userCancelledRef.current) return
       const token = await runServerChainedLightChallenge(session)
+      if (userCancelledRef.current) return
       await submitEvidence(session, token)
-    } catch (cause) { stopCamera(); setError(cause instanceof Error ? cause.message : "Integrated V2.4 liveness challenge failed"); setPhase("error") }
+    } catch (cause) {
+      const wasCancelled = userCancelledRef.current
+      stopCamera()
+      if (wasCancelled) return
+      setError(cause instanceof Error ? cause.message : "Integrated Humanity liveness challenge failed")
+      setPhase("error")
+    }
   }
 
   async function runMotionChallenge(activeSession: Session) {
@@ -396,12 +411,14 @@ export function HumanityV24AdminLivenessSandbox({ campaigns }: { campaigns: Camp
         }
         await delay(170)
       }
+      if (cancelRef.current) return
       await delay(180)
     }
   }
 
   async function runServerChainedLightChallenge(activeSession: Session) {
     setPhase("light"); setActivePulse(null); await delay(380)
+    if (userCancelledRef.current) return null
     const started = performance.now()
     const baseline = captureRgb32(0)
     const startResponse = await fetch("/api/humanity/v2/liveness/chain/start", {
@@ -410,15 +427,17 @@ export function HumanityV24AdminLivenessSandbox({ campaigns }: { campaigns: Camp
     })
     const startData = await startResponse.json() as ChainStartResponse
     if (!startResponse.ok || startData.protocol !== "TRIPROOF_LIVENESS_V2_4_SERVER_CHAIN" || !startData.stateToken || !startData.pulse || startData.pulseCount !== 4) {
-      throw new Error(startData.error ?? "Could not start V2.4 active-light server chain")
+      throw new Error(startData.error ?? "Could not start Active Light server chain")
     }
 
     let stateToken = startData.stateToken
     let pulse = startData.pulse
     for (let index = 0; index < 4; index += 1) {
-      if (pulse.index !== index || !LIGHT_COLORS.has(pulse.color)) throw new Error("Server returned an invalid V2.4 pulse")
+      if (userCancelledRef.current) return null
+      if (pulse.index !== index || !LIGHT_COLORS.has(pulse.color)) throw new Error("Server returned an invalid Active Light pulse")
       setActivePulse(pulse)
       await delay(pulse.settleMs)
+      if (userCancelledRef.current) return null
       const capturedPulse = { ...captureRgb32(Math.round(performance.now() - started)), index: pulse.index, color: pulse.color }
       const isFinal = index === 3
       const captureIntegrity = isFinal ? captureIntegrityRef.current?.snapshot() : undefined
@@ -432,12 +451,12 @@ export function HumanityV24AdminLivenessSandbox({ campaigns }: { campaigns: Camp
 
       if (isFinal) {
         if (stepResponse.status === 202 || (stepResponse.status === 422 && stepData.result)) return null
-        if (!stepResponse.ok || stepData.final !== true) throw new Error(stepData.error ?? stepData.reason ?? "V2.4 final server-chain scoring failed")
+        if (!stepResponse.ok || stepData.final !== true) throw new Error(stepData.error ?? stepData.reason ?? "Final server-chain scoring failed")
         return stepData.attestationToken ?? null
       }
 
       if (!stepResponse.ok || stepData.final !== false || !stepData.stateToken || !stepData.pulse) {
-        throw new Error(stepData.error ?? stepData.reason ?? "V2.4 server-chain pulse was rejected")
+        throw new Error(stepData.error ?? stepData.reason ?? "Server-chain pulse was rejected")
       }
       stateToken = stepData.stateToken
       pulse = stepData.pulse
@@ -470,24 +489,55 @@ export function HumanityV24AdminLivenessSandbox({ campaigns }: { campaigns: Camp
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Wallet signature failed"); setPhase("result") }
   }
 
-  function reset() { stopCamera(); resetEvidence(); setSession(null); setResult(null); setError(null); setSignatureStatus(null); setPhase("idle") }
+  async function cancelSession() {
+    if (!session) { reset(); return }
+    const activeSession = session
+    userCancelledRef.current = true
+    stopCamera()
+    setError(null)
+    setPhase("cancelling")
+    try {
+      const response = await fetch("/api/humanity/v2/challenge/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: activeSession.sessionId, reason: "ADMIN_CANCELLED_FROM_LIVENESS_CONSOLE" }),
+      })
+      const data = await response.json() as { error?: string }
+      if (!response.ok) throw new Error(data.error ?? "Could not cancel Humanity attempt")
+      resetEvidence()
+      setSession(null)
+      setResult(null)
+      setSignatureStatus(null)
+      setPhase("idle")
+      userCancelledRef.current = false
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not cancel Humanity attempt")
+      setPhase("error")
+    }
+  }
+
+  function reset() {
+    stopCamera(); resetEvidence(); setSession(null); setResult(null); setError(null); setSignatureStatus(null); setPhase("idle")
+    userCancelledRef.current = false
+  }
   if (!enabledCampaigns.length) return <div className="rounded-3xl border border-amber-300/20 bg-amber-300/[0.035] p-6 text-sm text-amber-100"><ShieldAlert className="mr-2 inline size-4" />Create an enabled Humanity campaign first.</div>
   const currentStep = session?.challengeSequence[stepIndex]
+  const canCancel = Boolean(session) && (phase === "camera" || phase === "motion" || phase === "light" || phase === "error") && !result
 
   return (
     <section className="relative overflow-hidden rounded-3xl border border-cyan-300/15 bg-slate-950/45 p-5 sm:p-6">
-      {activePulse ? <div className="pointer-events-none fixed inset-0 z-[80] flex items-center justify-center" style={{ backgroundColor: pulseBackground(activePulse) }}><div className="rounded-2xl border border-black/10 bg-black/45 px-5 py-4 text-center text-white backdrop-blur-sm"><Sparkles className="mx-auto mb-2 size-5" /><p className="font-semibold">Server-chained pulse {activePulse.index + 1}/4</p><p className="mt-1 text-xs text-white/80">The next color is disclosed only after the previous pulse is accepted by the server.</p></div></div> : null}
+      {activePulse ? <div className="pointer-events-none fixed inset-0 z-[80] flex items-center justify-center" style={{ backgroundColor: pulseBackground(activePulse) }}><div className="rounded-2xl border border-black/10 bg-black/45 px-5 py-4 text-center text-white backdrop-blur-sm"><Sparkles className="mx-auto mb-2 size-5" /><p className="font-semibold">Active Light pulse {activePulse.index + 1}/4</p><p className="mt-1 text-xs text-white/80">The next color is disclosed only after the previous pulse is accepted by the server.</p></div></div> : null}
 
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="flex flex-wrap gap-2"><Badge variant="outline" className="border-cyan-300/20 text-cyan-100">Tri-Proof Liveness V2.4</Badge><Badge variant="outline" className="border-violet-300/20 text-violet-100">Server-chained Active Light</Badge><Badge variant="outline" className="border-amber-300/20 text-amber-100">Review-only</Badge></div><h3 className="mt-3 text-xl font-semibold text-white">Capture-integrity liveness scan</h3><p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">Motion + mesh validation, capture integrity and optical scoring now run behind a single-use per-pulse server chain. The full color sequence is never disclosed up front.</p></div><Fingerprint className="size-5 text-cyan-300" /></div>
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="flex flex-wrap gap-2"><Badge variant="outline" className="border-cyan-300/20 text-cyan-100">Humanity Liveness</Badge><Badge variant="outline" className="border-violet-300/20 text-violet-100">Server-chained Active Light</Badge><Badge variant="outline" className="border-amber-300/20 text-amber-100">Review-only</Badge></div><h3 className="mt-3 text-xl font-semibold text-white">Capture-integrity liveness scan</h3><p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">Motion + mesh validation, capture integrity and optical scoring run behind a single-use per-pulse server chain. The full color sequence is never disclosed up front.</p></div><Fingerprint className="size-5 text-cyan-300" /></div>
 
       <div className="mt-5 grid gap-3 md:grid-cols-3"><select value={campaignId} onChange={(event) => setCampaignId(event.target.value)} disabled={phase !== "idle"} className="h-11 rounded-xl border border-white/10 bg-slate-950 px-3 text-sm text-white">{enabledCampaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name} · {campaign.challengeLevel}</option>)}</select><select value={walletChain} onChange={(event) => setWalletChain(event.target.value)} disabled={phase !== "idle"} className="h-11 rounded-xl border border-white/10 bg-slate-950 px-3 text-sm text-white"><option value="solana">Solana</option><option value="evm">EVM</option></select><input value={walletAddress} onChange={(event) => setWalletAddress(event.target.value)} disabled={phase !== "idle"} placeholder={walletChain === "solana" ? "Solana public key" : "0x…"} className="h-11 rounded-xl border border-white/10 bg-slate-950 px-3 font-mono text-sm text-white" /></div>
       {error ? <div className="mt-4 rounded-2xl border border-rose-300/20 bg-rose-300/[0.04] p-4 text-sm text-rose-100"><XCircle className="mr-2 inline size-4" />{error}</div> : null}
 
-      {session && phase !== "idle" && phase !== "starting" ? <div className="mt-5 grid gap-4 lg:grid-cols-[1.15fr_.85fr]"><div className="relative overflow-hidden rounded-2xl border border-cyan-300/20 bg-black"><video ref={videoRef} playsInline muted className="aspect-[4/3] w-full -scale-x-100 object-contain" /><svg viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100"><g fill="none" stroke="rgba(103,232,249,.82)" strokeWidth="0.0024" strokeLinecap="round" strokeLinejoin="round">{FACE_CONTOURS.map((indices, contourIndex) => <polyline key={contourIndex} points={meshPolyline(faceMesh, indices)} />)}</g><g fill="rgba(165,243,252,.76)">{faceMesh.map((landmark, index) => index % 2 === 0 ? <circle key={index} cx={landmark.x} cy={landmark.y} r="0.0027" /> : null)}</g><g fill="none" stroke="rgba(196,181,253,.95)" strokeWidth="0.0038">{HAND_CONNECTIONS.map(([from, to], index) => { const a = handMesh[from]; const b = handMesh[to]; return a && b ? <line key={index} x1={a.x} y1={a.y} x2={b.x} y2={b.y} /> : null })}</g><g fill="rgba(221,214,254,.96)">{handMesh.map((landmark, index) => <circle key={index} cx={landmark.x} cy={landmark.y} r="0.005" />)}</g></svg><div className="pointer-events-none absolute inset-x-3 top-3 flex gap-2 text-[10px] font-semibold uppercase"><span className="rounded-full border border-cyan-300/25 bg-black/50 px-2.5 py-1 text-cyan-100">Face {faceMesh.length >= 450 ? "locked" : "searching"}</span><span className="rounded-full border border-violet-300/25 bg-black/50 px-2.5 py-1 text-violet-100">Hand {handMesh.length >= 16 ? "locked" : "searching"}</span></div><canvas ref={sampleCanvasRef} className="hidden" /></div><div className="grid gap-3"><div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 text-sm text-slate-300"><p className="font-medium text-white">{phase === "motion" ? stepTitle(currentStep) : phase === "light" ? "Server-chained Active Light" : "Camera ready"}</p><p className="mt-2 text-xs leading-6 text-slate-500">FACE {liveSignal.facePresent ? "LOCK" : "WAIT"} · {faceMesh.length} pts · HAND {handMesh.length >= 16 ? "LOCK" : "WAIT"} · yaw {liveSignal.yaw.toFixed(2)} · blink {Math.round(liveSignal.blinkScore * 100)}% · smile {Math.round(liveSignal.smileScore * 100)}%</p>{phase === "motion" ? <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800"><div className="h-full bg-cyan-300" style={{ width: `${Math.round(progress * 100)}%` }} /></div> : null}</div>{livenessResult ? <div className="rounded-2xl border border-violet-300/15 bg-violet-300/[0.03] p-4 text-xs leading-6 text-slate-300"><p className="font-semibold text-white">Liveness {livenessResult.verdict} · {livenessResult.livenessScore}/100 · anti-spoof {livenessResult.antiSpoofScore}/100</p><p>Capture {livenessResult.captureIntegrityScore} · temporal {livenessResult.temporalConsistencyScore} · optical {livenessResult.chromaticResponseScore} · spatial {livenessResult.spatialResponseScore}</p><p>Replay {livenessResult.replayRiskScore} · virtual-camera {livenessResult.virtualCameraRiskScore} · injection {livenessResult.frameInjectionRiskScore} · deepfake heuristic {livenessResult.deepfakeHeuristicRiskScore}</p></div> : null}</div></div> : <canvas ref={sampleCanvasRef} className="hidden" />}
+      {session && phase !== "idle" && phase !== "starting" && phase !== "cancelling" ? <div className="mt-5 grid gap-4 lg:grid-cols-[1.15fr_.85fr]"><div className="relative overflow-hidden rounded-2xl border border-cyan-300/20 bg-black"><video ref={videoRef} playsInline muted className="aspect-[4/3] w-full -scale-x-100 object-contain" /><svg viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100"><g fill="none" stroke="rgba(103,232,249,.82)" strokeWidth="0.0024" strokeLinecap="round" strokeLinejoin="round">{FACE_CONTOURS.map((indices, contourIndex) => <polyline key={contourIndex} points={meshPolyline(faceMesh, indices)} />)}</g><g fill="rgba(165,243,252,.76)">{faceMesh.map((landmark, index) => index % 2 === 0 ? <circle key={index} cx={landmark.x} cy={landmark.y} r="0.0027" /> : null)}</g><g fill="none" stroke="rgba(196,181,253,.95)" strokeWidth="0.0038">{HAND_CONNECTIONS.map(([from, to], index) => { const a = handMesh[from]; const b = handMesh[to]; return a && b ? <line key={index} x1={a.x} y1={a.y} x2={b.x} y2={b.y} /> : null })}</g><g fill="rgba(221,214,254,.96)">{handMesh.map((landmark, index) => <circle key={index} cx={landmark.x} cy={landmark.y} r="0.005" />)}</g></svg><div className="pointer-events-none absolute inset-x-3 top-3 flex gap-2 text-[10px] font-semibold uppercase"><span className="rounded-full border border-cyan-300/25 bg-black/50 px-2.5 py-1 text-cyan-100">Face {faceMesh.length >= 450 ? "locked" : "searching"}</span><span className="rounded-full border border-violet-300/25 bg-black/50 px-2.5 py-1 text-violet-100">Hand {handMesh.length >= 16 ? "locked" : "searching"}</span></div><canvas ref={sampleCanvasRef} className="hidden" /></div><div className="grid gap-3"><div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 text-sm text-slate-300"><p className="font-medium text-white">{phase === "motion" ? stepTitle(currentStep) : phase === "light" ? "Server-chained Active Light" : "Camera ready"}</p><p className="mt-2 text-xs leading-6 text-slate-500">FACE {liveSignal.facePresent ? "LOCK" : "WAIT"} · {faceMesh.length} pts · HAND {handMesh.length >= 16 ? "LOCK" : "WAIT"} · yaw {liveSignal.yaw.toFixed(2)} · blink {Math.round(liveSignal.blinkScore * 100)}% · smile {Math.round(liveSignal.smileScore * 100)}%</p>{phase === "motion" ? <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800"><div className="h-full bg-cyan-300" style={{ width: `${Math.round(progress * 100)}%` }} /></div> : null}</div>{livenessResult ? <div className="rounded-2xl border border-violet-300/15 bg-violet-300/[0.03] p-4 text-xs leading-6 text-slate-300"><p className="font-semibold text-white">Liveness {livenessResult.verdict} · {livenessResult.livenessScore}/100 · anti-spoof {livenessResult.antiSpoofScore}/100</p><p>Capture {livenessResult.captureIntegrityScore} · temporal {livenessResult.temporalConsistencyScore} · optical {livenessResult.chromaticResponseScore} · spatial {livenessResult.spatialResponseScore}</p><p>Replay {livenessResult.replayRiskScore} · virtual-camera {livenessResult.virtualCameraRiskScore} · injection {livenessResult.frameInjectionRiskScore} · deepfake heuristic {livenessResult.deepfakeHeuristicRiskScore}</p></div> : null}</div></div> : <canvas ref={sampleCanvasRef} className="hidden" />}
 
       {result ? <div className="mt-5 rounded-2xl border border-amber-300/20 bg-amber-300/[0.035] p-4 text-sm text-amber-100"><p className="font-semibold text-white">Decision {result.decision} · Humanity score {Math.round(result.humanSessionScore)}</p><p className="mt-2 text-xs leading-6">{result.reasonCodes.join(" · ")}</p><p className="mt-2 text-xs text-slate-400">Trust mode: {result.trustMode}</p>{signatureStatus ? <p className="mt-3 text-emerald-200"><CheckCircle2 className="mr-2 inline size-4" />{signatureStatus}</p> : null}</div> : null}
-      <div className="mt-5 flex flex-wrap gap-3">{phase === "idle" ? <button type="button" onClick={startSession} className={buttonVariants()}><Camera className="size-4" /> Start V2.4 scan</button> : null}{phase === "starting" ? <span className="text-sm text-cyan-200"><Loader2 className="mr-2 inline size-4 animate-spin" />Issuing motion challenge…</span> : null}{phase === "camera" ? <button type="button" onClick={allowCameraAndRun} className={buttonVariants()}><Camera className="size-4" /> Allow camera & run</button> : null}{phase === "motion" || phase === "light" || phase === "submitting" ? <span className="text-sm text-cyan-200"><Loader2 className="mr-2 inline size-4 animate-spin" />{phase === "motion" ? "Validating motion + capture integrity…" : phase === "light" ? "Chaining optical pulses with server ACKs…" : "Submitting proof evidence…"}</span> : null}{phase === "result" && result?.decision !== "REJECTED" ? <button type="button" onClick={signProof} className={buttonVariants()}><Signature className="size-4" /> Sign canonical proof</button> : null}{phase === "signing" ? <span className="text-sm text-cyan-200"><Loader2 className="mr-2 inline size-4 animate-spin" />Waiting for wallet signature…</span> : null}{(phase === "result" || phase === "signed" || phase === "error") ? <button type="button" onClick={reset} className={buttonVariants({ variant: "outline" })}><RefreshCw className="size-4" /> Reset</button> : null}</div>
-      <div className="mt-4 rounded-2xl border border-amber-300/15 bg-amber-300/[0.025] p-4 text-xs leading-6 text-amber-100/80"><ShieldAlert className="mr-2 inline size-4" />V2.4 prevents batch attestation and binds each pulse to a single-use server state transition. It remains review-only: browser capture signals and deepfake indicators are still heuristics, not proof of genuine hardware or definitive deepfake classification.</div>
+      <div className="mt-5 flex flex-wrap gap-3">{phase === "idle" ? <button type="button" onClick={startSession} className={buttonVariants()}><Camera className="size-4" /> Start Humanity scan</button> : null}{phase === "starting" ? <span className="text-sm text-cyan-200"><Loader2 className="mr-2 inline size-4 animate-spin" />Issuing motion challenge…</span> : null}{phase === "camera" ? <button type="button" onClick={allowCameraAndRun} className={buttonVariants()}><Camera className="size-4" /> Allow camera & run</button> : null}{phase === "motion" || phase === "light" || phase === "submitting" ? <span className="text-sm text-cyan-200"><Loader2 className="mr-2 inline size-4 animate-spin" />{phase === "motion" ? "Validating motion + capture integrity…" : phase === "light" ? "Chaining optical pulses with server ACKs…" : "Submitting proof evidence…"}</span> : null}{phase === "cancelling" ? <span className="text-sm text-amber-200"><Loader2 className="mr-2 inline size-4 animate-spin" />Closing Humanity attempt…</span> : null}{canCancel ? <button type="button" onClick={cancelSession} className={buttonVariants({ variant: "outline" })}><XCircle className="size-4" /> Cancel attempt</button> : null}{phase === "result" && result?.decision !== "REJECTED" ? <button type="button" onClick={signProof} className={buttonVariants()}><Signature className="size-4" /> Sign canonical proof</button> : null}{phase === "signing" ? <span className="text-sm text-cyan-200"><Loader2 className="mr-2 inline size-4 animate-spin" />Waiting for wallet signature…</span> : null}{(phase === "result" || phase === "signed" || (phase === "error" && !session)) ? <button type="button" onClick={reset} className={buttonVariants({ variant: "outline" })}><RefreshCw className="size-4" /> Reset</button> : null}</div>
+      <div className="mt-4 rounded-2xl border border-amber-300/15 bg-amber-300/[0.025] p-4 text-xs leading-6 text-amber-100/80"><ShieldAlert className="mr-2 inline size-4" />Humanity Liveness prevents batch attestation and binds each optical pulse to a single-use server state transition. It remains review-only: browser capture signals and deepfake indicators are risk heuristics, not proof of genuine hardware or definitive deepfake classification.</div>
     </section>
   )
 }

@@ -20,7 +20,7 @@ export async function POST(request: Request) {
 
   const parsed = requestSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid Humanity V2.5 cancellation request", issues: parsed.error.issues }, { status: 400 })
+    return NextResponse.json({ error: "Invalid Humanity cancellation request", issues: parsed.error.issues }, { status: 400 })
   }
 
   try {
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
       abuseDefenseVersion: "2.5",
     }, { headers: { "Cache-Control": "no-store" } })
   } catch (error) {
-    console.error("Humanity V2.5 cancellation failed", error)
-    return NextResponse.json({ error: "Could not cancel Humanity V2.5 session" }, { status: 500 })
+    console.error("Humanity cancellation failed", error)
+    return NextResponse.json({ error: "Could not cancel Humanity session" }, { status: 500 })
   }
 }
