@@ -4,7 +4,14 @@ import { z } from "zod"
 
 import { getAdminUser } from "@/lib/auth/admin"
 import { db } from "@/lib/db/prisma"
+import { getHumanityNullifierSecret } from "@/lib/env/validation"
+import {
+  enforceHumanityRateLimits,
+  humanityRateLimitResponse,
+  pruneHumanityAbuseBuckets,
+} from "@/lib/humanity/v2/abuse-defense"
 import { generateChallengeSequence, normalizeWalletAddress } from "@/lib/humanity/v2/core"
+import { pruneExpiredHumanitySessions } from "@/lib/humanity/v2/session-lifecycle"
 
 export const runtime = "nodejs"
 
@@ -27,6 +34,21 @@ export async function POST(request: Request) {
   const walletAddress = normalizeWalletAddress(parsed.data.walletAddress, walletChain)
 
   try {
+    const secret = getHumanityNullifierSecret()
+    const limited = await enforceHumanityRateLimits({
+      request,
+      action: "CHALLENGE_START",
+      principal: admin.id,
+      secret,
+      wallet: walletAddress,
+    })
+    if (limited) return humanityRateLimitResponse(limited)
+
+    await Promise.all([
+      pruneHumanityAbuseBuckets().catch(() => undefined),
+      pruneExpiredHumanitySessions().catch(() => undefined),
+    ])
+
     const campaign = await db.humanityCampaign.findFirst({
       where: { OR: [{ id: campaignId }, { slug: campaignId }] },
     })
@@ -71,10 +93,11 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: "Humanity V2 attempt limit reached for this wallet",
+          reasonCodes: ["HUMANITY_FORMAL_ATTEMPT_LIMIT_REACHED"],
           attemptsUsed,
           maxAttempts: campaign.maxAttemptsPerWallet,
         },
-        { status: 429 }
+        { status: 429, headers: { "Cache-Control": "no-store" } }
       )
     }
 
@@ -110,9 +133,9 @@ export async function POST(request: Request) {
         level: campaign.challengeLevel,
         attemptsUsed: attemptsUsed + 1,
         attemptsRemaining: Math.max(0, campaign.maxAttemptsPerWallet - attemptsUsed - 1),
-        trustMode: "TRIPROOF_LIVENESS_V2_4_SERVER_CHAIN_REVIEW",
+        trustMode: "TRIPROOF_LIVENESS_V2_5_ABUSE_DEFENSE_REVIEW",
       },
-      { status: 201 }
+      { status: 201, headers: { "Cache-Control": "no-store" } }
     )
   } catch (error) {
     console.error("Humanity V2 challenge start failed", error)
