@@ -7,6 +7,7 @@ on:
       - "app/dashboard/admin/humanity-v2/**"
       - "components/humanity/v2/**"
       - "lib/humanity/v2/**"
+      - "prisma/**/*.prisma"
       - "prisma/migrations/**"
       - "lib/env/validation.ts"
       - "next.config.ts"
@@ -18,6 +19,7 @@ on:
       - "app/dashboard/admin/humanity-v2/**"
       - "components/humanity/v2/**"
       - "lib/humanity/v2/**"
+      - "prisma/**/*.prisma"
       - "prisma/migrations/**"
       - "lib/env/validation.ts"
       - "next.config.ts"
@@ -57,4 +59,8 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/triproof_humanity_ci?schema=public
       - run: npx eslint lib/humanity/v2 app/api/humanity/v2 app/dashboard/admin/humanity-v2 components/humanity/v2 lib/env/validation.ts next.config.ts
       - run: node --import tsx --test lib/humanity/v2/core.test.ts lib/humanity/v2/client-telemetry.test.ts lib/humanity/v2/attestation.test.ts lib/humanity/v2/liveness-engine.test.ts lib/humanity/v2/capture-integrity.test.ts lib/humanity/v2/liveness-adversarial.test.ts lib/humanity/v2/liveness-chain.test.ts lib/humanity/v2/abuse-defense.test.ts
+      - name: Exercise V2.5 DB-backed limiter and lifecycle audit
+        run: node --import tsx --test lib/humanity/v2/abuse-defense.integration.test.ts
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/triproof_humanity_ci?schema=public
       - run: npm run typecheck
