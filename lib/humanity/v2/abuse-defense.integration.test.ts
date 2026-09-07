@@ -11,41 +11,29 @@ import { closeHumanitySessionAsFailed } from "@/lib/humanity/v2/session-lifecycl
 
 const SECRET = "humanity-v2-5-postgres-integration-secret"
 
-test("V2.5 Postgres bucket increments atomically and enforces its limit", async () => {
+test("V2.5 Postgres bucket increments atomically under concurrent requests", async () => {
   const subject = `integration-${randomUUID()}`
   const rule = {
     dimension: "session" as const,
     subject,
-    limit: 2,
+    limit: 5,
     windowMs: 60_000,
   }
   const nowMs = 1_800_000
 
-  const first = await consumeHumanityRateLimit({
-    action: "CHAIN_STEP",
-    rule,
-    secret: SECRET,
-    nowMs,
-  })
-  const second = await consumeHumanityRateLimit({
-    action: "CHAIN_STEP",
-    rule,
-    secret: SECRET,
-    nowMs,
-  })
-  const third = await consumeHumanityRateLimit({
-    action: "CHAIN_STEP",
-    rule,
-    secret: SECRET,
-    nowMs,
-  })
+  const results = await Promise.all(
+    Array.from({ length: 8 }, () => consumeHumanityRateLimit({
+      action: "CHAIN_STEP",
+      rule,
+      secret: SECRET,
+      nowMs,
+    }))
+  )
 
-  assert.equal(first.count, 1)
-  assert.equal(first.allowed, true)
-  assert.equal(second.count, 2)
-  assert.equal(second.allowed, true)
-  assert.equal(third.count, 3)
-  assert.equal(third.allowed, false)
+  assert.deepEqual(results.map((item) => item.count).sort((a, b) => a - b), [1, 2, 3, 4, 5, 6, 7, 8])
+  assert.equal(results.filter((item) => item.allowed).length, 5)
+  assert.equal(results.filter((item) => !item.allowed).length, 3)
+  assert.equal(Math.max(...results.map((item) => item.count)), 8)
 
   await pruneHumanityAbuseBuckets()
 })
