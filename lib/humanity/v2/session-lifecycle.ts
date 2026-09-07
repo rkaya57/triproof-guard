@@ -48,9 +48,9 @@ export async function closeHumanitySessionAsFailed({
   return false
 }
 
-export async function expireHumanitySession(sessionId: string) {
+export async function expireHumanitySession(sessionId: string, now = new Date()) {
   const updated = await db.humanityChallengeSession.updateMany({
-    where: { id: sessionId, status: "PENDING", expiresAt: { lt: new Date() } },
+    where: { id: sessionId, status: "PENDING", expiresAt: { lt: now } },
     data: { status: "EXPIRED" },
   })
   if (updated.count === 1) {
@@ -68,14 +68,9 @@ export async function pruneExpiredHumanitySessions(now = new Date()) {
   })
   if (!expired.length) return 0
 
-  const ids = expired.map((item) => item.id)
-  const updated = await db.humanityChallengeSession.updateMany({
-    where: { id: { in: ids }, status: "PENDING", expiresAt: { lt: now } },
-    data: { status: "EXPIRED" },
-  })
-
+  let closed = 0
   for (const session of expired) {
-    await recordHumanityLifecycleEvent({ sessionId: session.id, event: "SESSION_EXPIRED" }).catch(() => undefined)
+    if (await expireHumanitySession(session.id, now)) closed += 1
   }
-  return updated.count
+  return closed
 }
