@@ -186,13 +186,19 @@ export function computeHumanityDecision(
       `TRIPROOF_LIVENESS_ENGINE_VERSION:${engineVersion}`,
     ]
 
-    if (engineVersion === "2.2") {
+    if (engineVersion === "2.4" || engineVersion === "2.2") {
       internalReasons.push(`TRIPROOF_CAPTURE_INTEGRITY_SCORE:${clampScore(attestation.captureIntegrityScore)}`)
       internalReasons.push(`TRIPROOF_VIRTUAL_CAMERA_RISK:${clampScore(attestation.virtualCameraRiskScore)}`)
       internalReasons.push(`TRIPROOF_FRAME_INJECTION_RISK:${clampScore(attestation.frameInjectionRiskScore)}`)
       internalReasons.push(`TRIPROOF_DEEPFAKE_HEURISTIC_RISK:${clampScore(attestation.deepfakeHeuristicRiskScore)}`)
-      internalReasons.push("TRIPROOF_LIVENESS_V2_2_SERVER_SCORED")
-      internalReasons.push("TRIPROOF_LIVENESS_V2_2_NOT_YET_APPROVAL_ELIGIBLE")
+      if (engineVersion === "2.4") {
+        internalReasons.push("TRIPROOF_LIVENESS_V2_4_SERVER_CHAIN_VERIFIED")
+        internalReasons.push("TRIPROOF_LIVENESS_V2_4_SERVER_SCORED")
+        internalReasons.push("TRIPROOF_LIVENESS_V2_4_NOT_YET_APPROVAL_ELIGIBLE")
+      } else {
+        internalReasons.push("TRIPROOF_LIVENESS_V2_2_SERVER_SCORED")
+        internalReasons.push("TRIPROOF_LIVENESS_V2_2_NOT_YET_APPROVAL_ELIGIBLE")
+      }
     } else {
       internalReasons.push("TRIPROOF_LIVENESS_V1_SERVER_SCORED")
       internalReasons.push("TRIPROOF_LIVENESS_V1_NOT_YET_APPROVAL_ELIGIBLE")
