@@ -51,6 +51,10 @@ const requestSchema = z.object({
   ).min(1).max(10),
 })
 
+function normalizedChain(value?: string | null) {
+  return (value ?? "").trim().toLowerCase()
+}
+
 export async function POST(request: Request) {
   const admin = await getAdminUser()
   if (!admin) return NextResponse.json({ error: "Admin access required" }, { status: 403 })
@@ -61,7 +65,6 @@ export async function POST(request: Request) {
   }
 
   const { sessionId, walletChain, scores, stepEvidence, attestationToken, triproofLivenessToken } = parsed.data
-  const walletAddress = normalizeWalletAddress(parsed.data.walletAddress, walletChain)
 
   try {
     const session = await db.humanityChallengeSession.findUnique({
@@ -70,8 +73,16 @@ export async function POST(request: Request) {
     })
     if (!session) return NextResponse.json({ error: "Humanity V2 challenge session not found" }, { status: 404 })
 
-    const effectiveWalletChain = walletChain ?? session.walletChain
-    const sessionWallet = normalizeWalletAddress(session.walletAddress, session.walletChain)
+    if (walletChain && session.walletChain && normalizedChain(walletChain) !== normalizedChain(session.walletChain)) {
+      return NextResponse.json({
+        error: "Wallet chain does not match Humanity V2 session",
+        reasonCodes: ["HUMANITY_WALLET_CHAIN_MISMATCH"],
+      }, { status: 403 })
+    }
+
+    const effectiveWalletChain = session.walletChain ?? walletChain
+    const walletAddress = normalizeWalletAddress(parsed.data.walletAddress, effectiveWalletChain)
+    const sessionWallet = normalizeWalletAddress(session.walletAddress, effectiveWalletChain)
     if (sessionWallet !== walletAddress) {
       return NextResponse.json({ error: "Wallet does not match Humanity V2 session" }, { status: 403 })
     }
