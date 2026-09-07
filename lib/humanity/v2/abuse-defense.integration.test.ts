@@ -9,9 +9,23 @@ import {
 import { db } from "@/lib/db/prisma"
 import { closeHumanitySessionAsFailed } from "@/lib/humanity/v2/session-lifecycle"
 
-const SECRET = "humanity-v2-5-postgres-integration-secret"
+const SECRET = "humanity-release-postgres-integration-secret"
 
-test("V2.5 Postgres bucket increments atomically under concurrent requests", async () => {
+test("Humanity server-only abuse tables have RLS enabled", async () => {
+  const rows = await db.$queryRaw<Array<{ tableName: string; rlsEnabled: boolean }>>`
+    SELECT relation.relname AS "tableName", relation.relrowsecurity AS "rlsEnabled"
+    FROM pg_class AS relation
+    JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+    WHERE namespace.nspname = 'public'
+      AND relation.relname IN ('HumanityAbuseBucket', 'HumanitySessionLifecycleEvent')
+    ORDER BY relation.relname
+  `
+
+  assert.deepEqual(rows.map((row) => row.tableName), ["HumanityAbuseBucket", "HumanitySessionLifecycleEvent"])
+  assert.equal(rows.every((row) => row.rlsEnabled === true), true)
+})
+
+test("Humanity Postgres bucket increments atomically under concurrent requests", async () => {
   const subject = `integration-${randomUUID()}`
   const rule = {
     dimension: "session" as const,
@@ -38,12 +52,12 @@ test("V2.5 Postgres bucket increments atomically under concurrent requests", asy
   await pruneHumanityAbuseBuckets()
 })
 
-test("V2.5 lifecycle closes a pending session once and persists one audit event", async () => {
+test("Humanity lifecycle closes a pending session once and persists one audit event", async () => {
   const suffix = randomUUID().replaceAll("-", "")
   const campaign = await db.humanityCampaign.create({
     data: {
-      name: `Humanity V2.5 CI ${suffix}`,
-      slug: `humanity-v25-ci-${suffix}`,
+      name: `Humanity CI ${suffix}`,
+      slug: `humanity-ci-${suffix}`,
       maxAttemptsPerWallet: 3,
     },
   })
