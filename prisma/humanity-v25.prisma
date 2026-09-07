@@ -1,0 +1,25 @@
+// Humanity V2.5 operational state. Kept in a separate schema file so the
+// rate-limit and lifecycle tables remain part of Prisma's desired database
+// shape instead of existing only as raw migration side effects.
+
+model HumanityAbuseBucket {
+  bucketKey   String
+  windowStart DateTime @db.Timestamp(3)
+  count       Int      @default(0)
+  expiresAt   DateTime @db.Timestamp(3)
+  createdAt   DateTime @default(now()) @db.Timestamp(3)
+  updatedAt   DateTime @default(now()) @db.Timestamp(3)
+
+  @@id([bucketKey, windowStart])
+  @@index([expiresAt])
+}
+
+model HumanitySessionLifecycleEvent {
+  id        String   @id
+  sessionId String
+  event     String
+  detail    String?
+  createdAt DateTime @default(now()) @db.Timestamp(3)
+
+  @@index([sessionId, createdAt])
+}

@@ -4,6 +4,7 @@ import { z } from "zod"
 import { getAdminUser } from "@/lib/auth/admin"
 import { db } from "@/lib/db/prisma"
 import { getHumanityNullifierSecret } from "@/lib/env/validation"
+import { enforceHumanityRateLimits, humanityRateLimitResponse } from "@/lib/humanity/v2/abuse-defense"
 import { verifyHumanityAttestationToken } from "@/lib/humanity/v2/attestation"
 import {
   buildNullifierHash,
@@ -13,6 +14,7 @@ import {
   validateStepEvidence,
 } from "@/lib/humanity/v2/core"
 import { verifyTriProofLivenessV24Token } from "@/lib/humanity/v2/liveness-chain"
+import { expireHumanitySession } from "@/lib/humanity/v2/session-lifecycle"
 
 export const runtime = "nodejs"
 
@@ -67,6 +69,16 @@ export async function POST(request: Request) {
   const { sessionId, walletChain, scores, stepEvidence, attestationToken, triproofLivenessToken } = parsed.data
 
   try {
+    const secret = getHumanityNullifierSecret()
+    const limited = await enforceHumanityRateLimits({
+      request,
+      action: "SUBMIT",
+      principal: admin.id,
+      secret,
+      sessionId,
+    })
+    if (limited) return humanityRateLimitResponse(limited)
+
     const session = await db.humanityChallengeSession.findUnique({
       where: { id: sessionId },
       include: { campaign: true },
@@ -90,7 +102,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Humanity V2 session is already closed" }, { status: 409 })
     }
     if (session.expiresAt.getTime() < Date.now()) {
-      await db.humanityChallengeSession.update({ where: { id: session.id }, data: { status: "EXPIRED" } })
+      await expireHumanitySession(session.id)
       return NextResponse.json({ error: "Humanity V2 session expired" }, { status: 410 })
     }
 
@@ -107,7 +119,6 @@ export async function POST(request: Request) {
       )
     }
 
-    const secret = getHumanityNullifierSecret()
     const expectedAttestation = {
       sessionId: session.id,
       campaignId: session.campaignId,
@@ -117,7 +128,7 @@ export async function POST(request: Request) {
     }
 
     let attestation = null
-    let trustMode = "CLIENT_TELEMETRY_REVIEW_ONLY"
+    let trustMode = "CLIENT_TELEMETRY_REVIEW_ONLY_V2_5_RATE_LIMITED"
 
     if (triproofLivenessToken) {
       try {
@@ -126,7 +137,7 @@ export async function POST(request: Request) {
           expected: expectedAttestation,
           secret,
         })
-        trustMode = "TRIPROOF_LIVENESS_V2_4_SERVER_CHAIN_REVIEW"
+        trustMode = "TRIPROOF_LIVENESS_V2_4_SERVER_CHAIN_V2_5_ABUSE_DEFENSE_REVIEW"
       } catch (error) {
         return NextResponse.json(
           {
@@ -142,7 +153,7 @@ export async function POST(request: Request) {
           token: attestationToken,
           expected: expectedAttestation,
         })
-        trustMode = "SERVER_VERIFIED_PROVIDER_ATTESTATION"
+        trustMode = "SERVER_VERIFIED_PROVIDER_ATTESTATION_V2_5_ABUSE_DEFENSE"
       } catch (error) {
         return NextResponse.json(
           {
@@ -170,7 +181,7 @@ export async function POST(request: Request) {
           verificationId: existingProof.id,
           decision: existingProof.decision,
         },
-        { status: 409 }
+        { status: 409, headers: { "Cache-Control": "no-store" } }
       )
     }
 
@@ -194,7 +205,7 @@ export async function POST(request: Request) {
           replayRiskScore: decision.normalized.replayRiskScore,
           injectionRiskScore: decision.normalized.injectionRiskScore,
           decision: decision.decision,
-          reasonCodes: decision.reasonCodes,
+          reasonCodes: [...decision.reasonCodes, "TRIPROOF_ABUSE_DEFENSE_V2_5_ACTIVE"],
           signatureVerified: false,
           proofExpiresAt,
         },
@@ -225,11 +236,12 @@ export async function POST(request: Request) {
         proofMessage,
         signatureRequired: true,
         trustMode,
+        abuseDefenseVersion: "2.5",
       },
-      { status: 201 }
+      { status: 201, headers: { "Cache-Control": "no-store" } }
     )
   } catch (error) {
-    console.error("Humanity V2 challenge submit failed", error)
-    return NextResponse.json({ error: "Could not submit Humanity V2 challenge" }, { status: 500 })
+    console.error("Humanity V2.5 challenge submit failed", error)
+    return NextResponse.json({ error: "Could not submit Humanity V2.5 challenge" }, { status: 500 })
   }
 }
