@@ -54,7 +54,7 @@ jobs:
       - run: npm ci
       - run: npx prisma generate
       - name: Create current pre-V2.5 database baseline in isolated Postgres
-        run: npx prisma db push --schema prisma/schema.prisma --skip-generate --accept-data-loss
+        run: npx prisma db push --schema prisma/schema.prisma --accept-data-loss
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/triproof_humanity_ci?schema=public
       - name: Apply V2.5 migration SQL to isolated Postgres
