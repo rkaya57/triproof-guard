@@ -4,9 +4,7 @@ import { z } from "zod"
 
 import { getAdminUser } from "@/lib/auth/admin"
 import { db } from "@/lib/db/prisma"
-import { getHumanityNullifierSecret } from "@/lib/env/validation"
 import { generateChallengeSequence, normalizeWalletAddress } from "@/lib/humanity/v2/core"
-import { deriveTriProofLightChallenge } from "@/lib/humanity/v2/liveness-engine"
 
 export const runtime = "nodejs"
 
@@ -96,19 +94,23 @@ export async function POST(request: Request) {
       },
     })
 
-    const livenessChallenge = deriveTriProofLightChallenge(session.nonce, getHumanityNullifierSecret())
-
     return NextResponse.json(
       {
         sessionId: session.id,
         nonce: session.nonce,
         challengeSequence,
-        livenessChallenge,
+        livenessChallenge: {
+          engine: "TRIPROOF_LIVENESS_V2_4_SERVER_CHAIN",
+          frameWidth: 32,
+          frameHeight: 32,
+          pulseCount: 4,
+          sequenceDisclosed: false,
+        },
         expiresAt: session.expiresAt.toISOString(),
         level: campaign.challengeLevel,
         attemptsUsed: attemptsUsed + 1,
         attemptsRemaining: Math.max(0, campaign.maxAttemptsPerWallet - attemptsUsed - 1),
-        trustMode: "TRIPROOF_LIVENESS_V2_2_CAPTURE_INTEGRITY_REVIEW",
+        trustMode: "TRIPROOF_LIVENESS_V2_4_SERVER_CHAIN_REVIEW",
       },
       { status: 201 }
     )

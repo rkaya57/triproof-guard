@@ -3,7 +3,7 @@ import { CheckCircle2, CircleDashed, Fingerprint, ShieldCheck, TriangleAlert, Wa
 
 import { AdminWorkspaceHeader } from "@/components/admin/admin-workspace-header"
 import { HumanityV2AdminCampaignCreator } from "@/components/humanity/v2/admin-campaign-creator"
-import { HumanityV2IntegratedLivenessSandbox } from "@/components/humanity/v2/admin-integrated-liveness-sandbox"
+import { HumanityV24AdminLivenessSandbox } from "@/components/humanity/v2/admin-liveness-v24-sandbox"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -31,15 +31,8 @@ export default async function Page() {
   }
 
   const [campaigns, recentVerifications] = await Promise.all([
-    db.humanityCampaign.findMany({
-      orderBy: { createdAt: "desc" },
-      include: { _count: { select: { sessions: true, verifications: true } } },
-    }),
-    db.humanityVerification.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 12,
-      include: { campaign: { select: { name: true, slug: true } } },
-    }),
+    db.humanityCampaign.findMany({ orderBy: { createdAt: "desc" }, include: { _count: { select: { sessions: true, verifications: true } } } }),
+    db.humanityVerification.findMany({ orderBy: { createdAt: "desc" }, take: 12, include: { campaign: { select: { name: true, slug: true } } } }),
   ])
 
   const signedCount = recentVerifications.filter((item) => item.signatureVerified).length
@@ -48,15 +41,9 @@ export default async function Page() {
     { icon: Fingerprint, label: "Campaigns", value: campaigns.length, detail: "Configured Humanity campaigns" },
     { icon: CircleDashed, label: "Recent verifications", value: recentVerifications.length, detail: "Latest V2 verification records" },
     { icon: WalletCards, label: "Signed proofs", value: signedCount, detail: "Cryptographically verified wallet signatures" },
-    { icon: TriangleAlert, label: "Review queue", value: reviewCount, detail: "V2.2 capture-integrity proofs remain review-only during adversarial validation" },
+    { icon: TriangleAlert, label: "Review queue", value: reviewCount, detail: "V2.4 server-chain proofs remain review-only during hardening" },
   ]
-  const cameraCampaigns = campaigns.map((campaign) => ({
-    id: campaign.id,
-    name: campaign.name,
-    slug: campaign.slug,
-    challengeLevel: campaign.challengeLevel,
-    enabled: campaign.humanityGateEnabled,
-  }))
+  const cameraCampaigns = campaigns.map((campaign) => ({ id: campaign.id, name: campaign.name, slug: campaign.slug, challengeLevel: campaign.challengeLevel, enabled: campaign.humanityGateEnabled }))
 
   return (
     <div className="grid gap-6 pb-10">
@@ -64,96 +51,26 @@ export default async function Page() {
         icon={Fingerprint}
         eyebrow="Humanity V2"
         title="Proof-of-human recovery console"
-        description="Tri-Proof Liveness V2.2 combines server-bound motion and active-light challenges with privacy-minimized capture-integrity, virtual-camera, frame-injection and deepfake/reenactment heuristic risk signals. V2.3 adversarial suites continuously test replay and synthetic-media attack patterns. Automatic approval remains disabled."
+        description="Tri-Proof Liveness V2.4 adds a single-use, server-chained Active Light protocol on top of V2.2 capture integrity and V2.3 adversarial defenses. The full color sequence is no longer disclosed up front; each next pulse is released only after the previous server state is consumed. Automatic approval remains disabled."
         tone="amber"
-        meta={
-          <>
-            <span className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/12 bg-cyan-300/[0.025] px-3 py-2 text-xs text-cyan-200"><ShieldCheck className="size-3.5" /> Liveness V2.2 active</span>
-            <span className="inline-flex items-center gap-2 rounded-xl border border-violet-300/12 bg-violet-300/[0.025] px-3 py-2 text-xs text-violet-200"><ShieldCheck className="size-3.5" /> V2.3 adversarial CI</span>
-            <span className="inline-flex items-center gap-2 rounded-xl border border-amber-300/12 bg-amber-300/[0.025] px-3 py-2 text-xs text-amber-200"><TriangleAlert className="size-3.5" /> Review-only trust boundary</span>
-          </>
-        }
+        meta={<><span className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/12 bg-cyan-300/[0.025] px-3 py-2 text-xs text-cyan-200"><ShieldCheck className="size-3.5" /> Liveness V2.4 server chain</span><span className="inline-flex items-center gap-2 rounded-xl border border-violet-300/12 bg-violet-300/[0.025] px-3 py-2 text-xs text-violet-200"><ShieldCheck className="size-3.5" /> V2.3 adversarial CI</span><span className="inline-flex items-center gap-2 rounded-xl border border-amber-300/12 bg-amber-300/[0.025] px-3 py-2 text-xs text-amber-200"><TriangleAlert className="size-3.5" /> Review-only trust boundary</span></>}
         actions={<Link href="/dashboard/admin" className={buttonVariants({ variant: "outline", size: "sm" })}>Admin center</Link>}
       />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {summaryCards.map(({ icon: Icon, label, value, detail }) => (
-          <Card key={label} className="glass-panel premium-card">
-            <CardContent className="p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div><p className="text-xs uppercase tracking-[0.13em] text-slate-400">{label}</p><p className="mt-3 text-3xl font-semibold text-white">{value}</p></div>
-                <span className="rounded-xl border border-white/10 bg-white/[0.04] p-2"><Icon className="size-5 text-cyan-300" /></span>
-              </div>
-              <p className="mt-3 text-xs leading-5 text-slate-400">{detail}</p>
-            </CardContent>
-          </Card>
-        ))}
+        {summaryCards.map(({ icon: Icon, label, value, detail }) => <Card key={label} className="glass-panel premium-card"><CardContent className="p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-xs uppercase tracking-[0.13em] text-slate-400">{label}</p><p className="mt-3 text-3xl font-semibold text-white">{value}</p></div><span className="rounded-xl border border-white/10 bg-white/[0.04] p-2"><Icon className="size-5 text-cyan-300" /></span></div><p className="mt-3 text-xs leading-5 text-slate-400">{detail}</p></CardContent></Card>)}
       </section>
 
       <HumanityV2AdminCampaignCreator />
-      <HumanityV2IntegratedLivenessSandbox campaigns={cameraCampaigns} />
+      <HumanityV24AdminLivenessSandbox campaigns={cameraCampaigns} />
 
       <section className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle>Campaigns</CardTitle>
-            <CardDescription>Challenge policy and proof lifetime. New campaigns can be created directly from this console.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {campaigns.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-slate-400">No Humanity V2 campaigns exist yet. Create the first campaign above, then use it in the integrated liveness sandbox.</div>
-            ) : campaigns.map((campaign) => (
-              <div key={campaign.id} className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div><p className="font-medium text-white">{campaign.name}</p><p className="mt-1 text-xs text-slate-500">{campaign.slug}</p></div>
-                  <Badge variant="outline" className={campaign.humanityGateEnabled ? "border-emerald-300/20 text-emerald-200" : "border-slate-300/20 text-slate-300"}>{campaign.humanityGateEnabled ? "Enabled" : "Disabled"}</Badge>
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-3 text-xs text-slate-400 sm:grid-cols-4">
-                  <span>Level <strong className="text-slate-200">{campaign.challengeLevel}</strong></span>
-                  <span>Attempts <strong className="text-slate-200">{campaign.maxAttemptsPerWallet}</strong></span>
-                  <span>Sessions <strong className="text-slate-200">{campaign._count.sessions}</strong></span>
-                  <span>Proofs <strong className="text-slate-200">{campaign._count.verifications}</strong></span>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+        <Card className="glass-panel"><CardHeader><CardTitle>Campaigns</CardTitle><CardDescription>Challenge policy and proof lifetime. New campaigns can be created directly from this console.</CardDescription></CardHeader><CardContent className="space-y-3">{campaigns.length === 0 ? <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-slate-400">No Humanity V2 campaigns exist yet. Create the first campaign above, then use it in the integrated liveness sandbox.</div> : campaigns.map((campaign) => <div key={campaign.id} className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-medium text-white">{campaign.name}</p><p className="mt-1 text-xs text-slate-500">{campaign.slug}</p></div><Badge variant="outline" className={campaign.humanityGateEnabled ? "border-emerald-300/20 text-emerald-200" : "border-slate-300/20 text-slate-300"}>{campaign.humanityGateEnabled ? "Enabled" : "Disabled"}</Badge></div><div className="mt-4 grid grid-cols-2 gap-3 text-xs text-slate-400 sm:grid-cols-4"><span>Level <strong className="text-slate-200">{campaign.challengeLevel}</strong></span><span>Attempts <strong className="text-slate-200">{campaign.maxAttemptsPerWallet}</strong></span><span>Sessions <strong className="text-slate-200">{campaign._count.sessions}</strong></span><span>Proofs <strong className="text-slate-200">{campaign._count.verifications}</strong></span></div></div>)}</CardContent></Card>
 
-        <Card className="glass-panel border-amber-300/15">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><ShieldCheck className="size-5 text-amber-300" /> Current security boundary</CardTitle>
-            <CardDescription>What Tri-Proof Liveness V2.2 / V2.3 does and does not claim.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
-            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />Motion sequence, active-light color order, nonce, expiry and attempt policy are issued by the server.</p>
-            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />The server scores transient 32×32 RGB evidence for chromatic response, spatial variation, texture, replay and digital-tint injection patterns.</p>
-            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />V2.2 evaluates requestVideoFrameCallback cadence, media-time continuity, presented-frame order, track changes, loop signatures and face-motion/pixel-motion coupling as risk signals.</p>
-            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />V2.3 CI includes static-photo, looped-video, uniform digital tint, frame injection, impossible timing and deepfake/reenactment-like motion-decoupling adversarial fixtures.</p>
-            <p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />Raw video, device identifiers and capture telemetry are not persisted by Humanity V2; capture evidence is scored in-request and discarded.</p>
-            <p><TriangleAlert className="mr-2 inline size-4 text-amber-300" />Browser-derived capture metadata is forgeable by a fully compromised client. Virtual-camera and deepfake values are heuristic risk scores, not definitive classification. Automatic approval therefore remains disabled.</p>
-          </CardContent>
-        </Card>
+        <Card className="glass-panel border-amber-300/15"><CardHeader><CardTitle className="flex items-center gap-2"><ShieldCheck className="size-5 text-amber-300" /> Current security boundary</CardTitle><CardDescription>What Tri-Proof Liveness V2.4 does and does not claim.</CardDescription></CardHeader><CardContent className="space-y-3 text-sm leading-6 text-slate-300"><p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />Motion sequence, nonce, expiry and attempt policy remain server-issued.</p><p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />The full Active Light color sequence is concealed. Each pulse is disclosed only after the previous single-use server state is accepted.</p><p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />V2.4 state transitions use signed short-lived tokens plus database compare-and-swap on the Humanity session, so replayed or forked chain states are rejected.</p><p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />V2.2 capture integrity still evaluates cadence, media-time continuity, presented-frame order, loop signatures and face-motion/pixel-motion coupling.</p><p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />V2.3 adversarial CI continues to cover static photo, prerecorded loop, digital tint, frame injection, impossible timing and synthetic-media-like motion decoupling.</p><p><CheckCircle2 className="mr-2 inline size-4 text-emerald-300" />Raw video and device identifiers are not persisted. The short-lived chain token is carried by the client; the server persists only normal session state.</p><p><TriangleAlert className="mr-2 inline size-4 text-amber-300" />Capture metadata remains forgeable under a fully compromised browser. V2.4 therefore remains approval-ineligible until device benchmarks, rate limits and stronger PAD evidence are complete.</p></CardContent></Card>
       </section>
 
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle>Recent verifications</CardTitle>
-          <CardDescription>Newest persisted Humanity records, including wallet-signature state.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {recentVerifications.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-slate-400">No V2 verification has been submitted yet.</div>
-          ) : recentVerifications.map((verification) => (
-            <div key={verification.id} className="grid gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 md:grid-cols-[1fr_auto] md:items-center">
-              <div>
-                <div className="flex flex-wrap items-center gap-2"><p className="font-medium text-white">{verification.campaign.name}</p><Badge variant="outline" className={decisionClass(verification.decision)}>{verification.decision}</Badge>{verification.signatureVerified ? <Badge variant="outline" className="border-cyan-300/20 text-cyan-200">Signed</Badge> : null}</div>
-                <p className="mt-2 break-all font-mono text-xs text-slate-500">{verification.walletAddress}</p>
-              </div>
-              <div className="text-left md:text-right"><p className="text-sm font-medium text-slate-200">Score {Math.round(verification.humanSessionScore)}</p><p className="mt-1 text-xs text-slate-500">{verification.createdAt.toISOString()}</p></div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      <Card className="glass-panel"><CardHeader><CardTitle>Recent verifications</CardTitle><CardDescription>Newest persisted Humanity records, including wallet-signature state.</CardDescription></CardHeader><CardContent className="space-y-3">{recentVerifications.length === 0 ? <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-slate-400">No V2 verification has been submitted yet.</div> : recentVerifications.map((verification) => <div key={verification.id} className="grid gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 md:grid-cols-[1fr_auto] md:items-center"><div><div className="flex flex-wrap items-center gap-2"><p className="font-medium text-white">{verification.campaign.name}</p><Badge variant="outline" className={decisionClass(verification.decision)}>{verification.decision}</Badge>{verification.signatureVerified ? <Badge variant="outline" className="border-cyan-300/20 text-cyan-200">Signed</Badge> : null}</div><p className="mt-2 break-all font-mono text-xs text-slate-500">{verification.walletAddress}</p></div><div className="text-left md:text-right"><p className="text-sm font-medium text-slate-200">Score {Math.round(verification.humanSessionScore)}</p><p className="mt-1 text-xs text-slate-500">{verification.createdAt.toISOString()}</p></div></div>)}</CardContent></Card>
     </div>
   )
 }

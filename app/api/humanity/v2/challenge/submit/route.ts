@@ -12,7 +12,7 @@ import {
   normalizeWalletAddress,
   validateStepEvidence,
 } from "@/lib/humanity/v2/core"
-import { verifyTriProofLivenessToken } from "@/lib/humanity/v2/liveness-engine"
+import { verifyTriProofLivenessV24Token } from "@/lib/humanity/v2/liveness-chain"
 
 export const runtime = "nodejs"
 
@@ -51,6 +51,10 @@ const requestSchema = z.object({
   ).min(1).max(10),
 })
 
+function normalizedChain(value?: string | null) {
+  return (value ?? "").trim().toLowerCase()
+}
+
 export async function POST(request: Request) {
   const admin = await getAdminUser()
   if (!admin) return NextResponse.json({ error: "Admin access required" }, { status: 403 })
@@ -61,7 +65,6 @@ export async function POST(request: Request) {
   }
 
   const { sessionId, walletChain, scores, stepEvidence, attestationToken, triproofLivenessToken } = parsed.data
-  const walletAddress = normalizeWalletAddress(parsed.data.walletAddress, walletChain)
 
   try {
     const session = await db.humanityChallengeSession.findUnique({
@@ -70,8 +73,16 @@ export async function POST(request: Request) {
     })
     if (!session) return NextResponse.json({ error: "Humanity V2 challenge session not found" }, { status: 404 })
 
-    const effectiveWalletChain = walletChain ?? session.walletChain
-    const sessionWallet = normalizeWalletAddress(session.walletAddress, session.walletChain)
+    if (walletChain && session.walletChain && normalizedChain(walletChain) !== normalizedChain(session.walletChain)) {
+      return NextResponse.json({
+        error: "Wallet chain does not match Humanity V2 session",
+        reasonCodes: ["HUMANITY_WALLET_CHAIN_MISMATCH"],
+      }, { status: 403 })
+    }
+
+    const effectiveWalletChain = session.walletChain ?? walletChain
+    const walletAddress = normalizeWalletAddress(parsed.data.walletAddress, effectiveWalletChain)
+    const sessionWallet = normalizeWalletAddress(session.walletAddress, effectiveWalletChain)
     if (sessionWallet !== walletAddress) {
       return NextResponse.json({ error: "Wallet does not match Humanity V2 session" }, { status: 403 })
     }
@@ -110,17 +121,17 @@ export async function POST(request: Request) {
 
     if (triproofLivenessToken) {
       try {
-        attestation = await verifyTriProofLivenessToken({
+        attestation = await verifyTriProofLivenessV24Token({
           token: triproofLivenessToken,
           expected: expectedAttestation,
           secret,
         })
-        trustMode = "TRIPROOF_LIVENESS_V2_2_SERVER_SCORED_REVIEW"
+        trustMode = "TRIPROOF_LIVENESS_V2_4_SERVER_CHAIN_REVIEW"
       } catch (error) {
         return NextResponse.json(
           {
-            error: "Tri-Proof Liveness V2.2 token could not be verified",
-            reason: error instanceof Error ? error.message : "Invalid Tri-Proof liveness token",
+            error: "Tri-Proof Liveness V2.4 server-chain token could not be verified",
+            reason: error instanceof Error ? error.message : "Invalid Tri-Proof V2.4 liveness token",
           },
           { status: 400 }
         )
