@@ -24,6 +24,10 @@ const requestSchema = z.object({
   baseline: triProofRgbFrameSchema,
 })
 
+function normalizedChain(value?: string | null) {
+  return (value ?? "").trim().toLowerCase()
+}
+
 function sessionHasAlreadyStartedChain(session: { createdAt: Date; updatedAt: Date }) {
   return session.updatedAt.getTime() - session.createdAt.getTime() > INITIAL_SESSION_TIMESTAMP_TOLERANCE_MS
 }
@@ -52,8 +56,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Humanity session expired" }, { status: 410 })
     }
 
-    const sessionWallet = normalizeWalletAddress(session.walletAddress, session.walletChain)
-    if (sessionWallet !== walletAddress) return NextResponse.json({ error: "Wallet does not match Humanity session" }, { status: 403 })
+    if (walletChain && session.walletChain && normalizedChain(walletChain) !== normalizedChain(session.walletChain)) {
+      return NextResponse.json({
+        error: "Wallet chain does not match Humanity session",
+        reasonCodes: ["SERVER_CHAIN_WALLET_CHAIN_MISMATCH"],
+      }, { status: 403 })
+    }
+
+    const effectiveChain = session.walletChain ?? walletChain
+    const sessionWallet = normalizeWalletAddress(session.walletAddress, effectiveChain)
+    const requestWallet = normalizeWalletAddress(parsed.data.walletAddress, effectiveChain)
+    if (sessionWallet !== requestWallet || sessionWallet !== normalizeWalletAddress(walletAddress, effectiveChain)) {
+      return NextResponse.json({ error: "Wallet does not match Humanity session" }, { status: 403 })
+    }
 
     // A newly-created Humanity session has createdAt/updatedAt set together. V2.4 deliberately
     // advances updatedAt when the chain starts and on every accepted state transition. Rejecting
@@ -66,7 +81,6 @@ export async function POST(request: Request) {
       }, { status: 409 })
     }
 
-    const effectiveChain = walletChain ?? session.walletChain
     const secret = getHumanityNullifierSecret()
     const challenge = deriveTriProofLightChallenge(session.nonce, secret)
     const chainId = createTriProofLivenessChainId()
@@ -94,7 +108,7 @@ export async function POST(request: Request) {
         sessionId: session.id,
         campaignId: session.campaignId,
         nonce: session.nonce,
-        walletAddress,
+        walletAddress: sessionWallet,
         walletChain: effectiveChain,
         chainId,
         nextPulseIndex: 0,
