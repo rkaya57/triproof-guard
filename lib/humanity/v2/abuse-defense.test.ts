@@ -22,7 +22,7 @@ test("V2.5 fixed windows reset deterministically and expose retry-after", () => 
   assert.equal(boundary.retryAfterSec, 60)
 })
 
-test("V2.5 network subject is pseudonymous and stable for the same proxy address", () => {
+test("V2.5 network subject is pseudonymous and stable for the same Vercel address", () => {
   const requestA = new Request("https://triproofprotocol.com/api/humanity/v2/challenge/start", {
     headers: { "x-vercel-forwarded-for": "203.0.113.7, 10.0.0.2" },
   })
@@ -34,10 +34,32 @@ test("V2.5 network subject is pseudonymous and stable for the same proxy address
   })
 
   const first = deriveHumanityNetworkSubject(requestA, SECRET)
+  assert.ok(first)
   assert.equal(first, deriveHumanityNetworkSubject(requestB, SECRET))
   assert.notEqual(first, deriveHumanityNetworkSubject(requestC, SECRET))
   assert.equal(first.includes("203.0.113.7"), false)
   assert.match(first, /^[0-9a-f]{64}$/)
+})
+
+test("V2.5 ignores generic spoofable forwarding headers when Vercel identity is absent", () => {
+  const request = new Request("https://triproofprotocol.com/api/humanity/v2/challenge/start", {
+    headers: {
+      "x-forwarded-for": "203.0.113.99",
+      "x-real-ip": "203.0.113.99",
+      "cf-connecting-ip": "203.0.113.99",
+    },
+  })
+  assert.equal(deriveHumanityNetworkSubject(request, SECRET), null)
+
+  const rules = getHumanityRateLimitRules({
+    action: "CHALLENGE_START",
+    principal: "admin-user-id",
+    network: null,
+    wallet: "wallet-address",
+  })
+  assert.equal(rules.some((rule) => rule.dimension === "network"), false)
+  assert.equal(rules.some((rule) => rule.dimension === "principal"), true)
+  assert.equal(rules.some((rule) => rule.dimension === "wallet"), true)
 })
 
 test("V2.5 bucket keys are domain separated by action and dimension", () => {
