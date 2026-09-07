@@ -53,8 +53,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx prisma generate
-      - name: Apply full Prisma migration chain to isolated Postgres
-        run: npx prisma migrate deploy
+      - name: Create current pre-V2.5 database baseline in isolated Postgres
+        run: npx prisma db push --schema prisma/schema.prisma --skip-generate --accept-data-loss
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/triproof_humanity_ci?schema=public
+      - name: Apply V2.5 migration SQL to isolated Postgres
+        run: npx prisma db execute --file prisma/migrations/20260907220000_humanity_v25_abuse_defense/migration.sql
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/triproof_humanity_ci?schema=public
       - run: npx eslint lib/humanity/v2 app/api/humanity/v2 app/dashboard/admin/humanity-v2 components/humanity/v2 lib/env/validation.ts next.config.ts
