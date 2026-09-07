@@ -12,7 +12,7 @@ import {
   normalizeWalletAddress,
   validateStepEvidence,
 } from "@/lib/humanity/v2/core"
-import { verifyTriProofLivenessToken } from "@/lib/humanity/v2/liveness-engine"
+import { verifyTriProofLivenessV24Token } from "@/lib/humanity/v2/liveness-chain"
 
 export const runtime = "nodejs"
 
@@ -110,17 +110,17 @@ export async function POST(request: Request) {
 
     if (triproofLivenessToken) {
       try {
-        attestation = await verifyTriProofLivenessToken({
+        attestation = await verifyTriProofLivenessV24Token({
           token: triproofLivenessToken,
           expected: expectedAttestation,
           secret,
         })
-        trustMode = "TRIPROOF_LIVENESS_V2_2_SERVER_SCORED_REVIEW"
+        trustMode = "TRIPROOF_LIVENESS_V2_4_SERVER_CHAIN_REVIEW"
       } catch (error) {
         return NextResponse.json(
           {
-            error: "Tri-Proof Liveness V2.2 token could not be verified",
-            reason: error instanceof Error ? error.message : "Invalid Tri-Proof liveness token",
+            error: "Tri-Proof Liveness V2.4 server-chain token could not be verified",
+            reason: error instanceof Error ? error.message : "Invalid Tri-Proof V2.4 liveness token",
           },
           { status: 400 }
         )
