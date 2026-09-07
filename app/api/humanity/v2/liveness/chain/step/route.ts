@@ -4,6 +4,7 @@ import { z } from "zod"
 import { getAdminUser } from "@/lib/auth/admin"
 import { db } from "@/lib/db/prisma"
 import { getHumanityNullifierSecret } from "@/lib/env/validation"
+import { enforceHumanityRateLimits, humanityRateLimitResponse } from "@/lib/humanity/v2/abuse-defense"
 import { normalizeWalletAddress } from "@/lib/humanity/v2/core"
 import {
   assertTriProofLivenessChainBinding,
@@ -23,6 +24,10 @@ import {
   scoreTriProofLivenessEvidence,
   type TriProofLightColor,
 } from "@/lib/humanity/v2/liveness-engine"
+import {
+  closeHumanitySessionAsFailed,
+  expireHumanitySession,
+} from "@/lib/humanity/v2/session-lifecycle"
 
 export const runtime = "nodejs"
 
@@ -45,19 +50,30 @@ export async function POST(request: Request) {
 
   const parsed = requestSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid V2.4 liveness-chain step request", issues: parsed.error.issues }, { status: 400 })
+    return NextResponse.json({ error: "Invalid V2.5 liveness-chain step request", issues: parsed.error.issues }, { status: 400 })
   }
 
   const receivedAtMs = Date.now()
+  let consumedSessionId: string | null = null
 
   try {
     const secret = getHumanityNullifierSecret()
     const state = await verifyTriProofLivenessChainState({ token: parsed.data.stateToken, secret })
+
+    const limited = await enforceHumanityRateLimits({
+      request,
+      action: "CHAIN_STEP",
+      principal: admin.id,
+      secret,
+      sessionId: state.sessionId,
+    })
+    if (limited) return humanityRateLimitResponse(limited)
+
     const session = await db.humanityChallengeSession.findUnique({ where: { id: state.sessionId } })
     if (!session) return NextResponse.json({ error: "Humanity session not found" }, { status: 404 })
     if (session.status !== "PENDING") return NextResponse.json({ error: "Humanity session is already closed" }, { status: 409 })
     if (session.expiresAt.getTime() < receivedAtMs) {
-      await db.humanityChallengeSession.update({ where: { id: session.id }, data: { status: "EXPIRED" } })
+      await expireHumanitySession(session.id)
       return NextResponse.json({ error: "Humanity session expired" }, { status: 410 })
     }
 
@@ -112,6 +128,7 @@ export async function POST(request: Request) {
         reasonCodes: ["SERVER_CHAIN_STATE_REPLAY_OR_FORK"],
       }, { status: 409 })
     }
+    consumedSessionId = session.id
 
     const timing = validateTriProofServerPulseTiming({
       pulse: expectedPulse,
@@ -119,16 +136,24 @@ export async function POST(request: Request) {
       receivedAtMs,
     })
     if (!timing.ok) {
+      await closeHumanitySessionAsFailed({
+        sessionId: session.id,
+        event: "SERVER_CHAIN_TIMING_FAILURE",
+        detail: `pulse=${expectedPulse.index};elapsedMs=${Math.round(timing.elapsedMs)}`,
+      })
+      consumedSessionId = null
       return NextResponse.json({
         ok: false,
         final: false,
         protocol: "TRIPROOF_LIVENESS_V2_4_SERVER_CHAIN",
+        abuseDefenseVersion: "2.5",
         attestationIssued: false,
-        reasonCodes: ["SERVER_CHAIN_TIMING_ANOMALY"],
+        sessionClosed: true,
+        reasonCodes: ["SERVER_CHAIN_TIMING_ANOMALY", "HUMANITY_SESSION_FAILED"],
         timing,
         rawFramesStored: false,
         captureMetadataStored: false,
-      }, { status: 422 })
+      }, { status: 422, headers: { "Cache-Control": "no-store" } })
     }
 
     const acceptedPulse = {
@@ -153,10 +178,12 @@ export async function POST(request: Request) {
         },
       })
       const nextPulse = challenge.pulses[nextPulseIndex]
+      consumedSessionId = null
       return NextResponse.json({
         ok: true,
         final: false,
         protocol: "TRIPROOF_LIVENESS_V2_4_SERVER_CHAIN",
+        abuseDefenseVersion: "2.5",
         stateToken,
         pulse: nextPulse,
         acceptedPulseIndex: expectedPulse.index,
@@ -166,7 +193,7 @@ export async function POST(request: Request) {
         timingWindow: getTriProofServerPulseTimingWindow(nextPulse),
         rawFramesStored: false,
         captureMetadataStored: false,
-      })
+      }, { headers: { "Cache-Control": "no-store" } })
     }
 
     const scored = scoreTriProofLivenessEvidence({
@@ -182,20 +209,34 @@ export async function POST(request: Request) {
       engineVersion: "2.4" as const,
       scoringEngineVersion: scored.engineVersion,
       serverChainVerified: true,
-      reasonCodes: [...scored.reasonCodes, "TRIPROOF_SERVER_CHAIN_V2_4_VERIFIED"],
+      abuseDefenseVersion: "2.5" as const,
+      reasonCodes: [...scored.reasonCodes, "TRIPROOF_SERVER_CHAIN_V2_4_VERIFIED", "TRIPROOF_ABUSE_DEFENSE_V2_5_ACTIVE"],
     }
 
     if (scored.verdict !== "PASS") {
+      if (scored.verdict === "FAIL") {
+        await closeHumanitySessionAsFailed({
+          sessionId: session.id,
+          event: "LIVENESS_FAIL",
+          detail: `liveness=${scored.livenessScore};antiSpoof=${scored.antiSpoofScore}`,
+        })
+        consumedSessionId = null
+      } else {
+        consumedSessionId = null
+      }
+
       return NextResponse.json({
         ok: false,
         final: true,
         protocol: "TRIPROOF_LIVENESS_V2_4_SERVER_CHAIN",
+        abuseDefenseVersion: "2.5",
         result,
         attestationIssued: false,
+        sessionClosed: scored.verdict === "FAIL",
         timing,
         rawFramesStored: false,
         captureMetadataStored: false,
-      }, { status: scored.verdict === "REVIEW" ? 202 : 422 })
+      }, { status: scored.verdict === "REVIEW" ? 202 : 422, headers: { "Cache-Control": "no-store" } })
     }
 
     const attestationToken = await issueTriProofLivenessV24Token({
@@ -210,23 +251,32 @@ export async function POST(request: Request) {
       chainId: state.chainId,
       secret,
     })
+    consumedSessionId = null
 
     return NextResponse.json({
       ok: true,
       final: true,
       protocol: "TRIPROOF_LIVENESS_V2_4_SERVER_CHAIN",
+      abuseDefenseVersion: "2.5",
       result,
       attestationIssued: true,
       attestationToken,
       timing,
       rawFramesStored: false,
       captureMetadataStored: false,
-    })
+    }, { headers: { "Cache-Control": "no-store" } })
   } catch (error) {
-    console.error("Tri-Proof Liveness V2.4 chain step failed", error)
+    if (consumedSessionId) {
+      await closeHumanitySessionAsFailed({
+        sessionId: consumedSessionId,
+        event: "CHAIN_PROCESSING_ERROR",
+        detail: error instanceof Error ? error.message.slice(0, 500) : "unknown",
+      }).catch(() => undefined)
+    }
+    console.error("Tri-Proof Liveness V2.5 chain step failed", error)
     return NextResponse.json({
-      error: "Could not consume Tri-Proof Liveness V2.4 server-chain step",
+      error: "Could not consume Tri-Proof Liveness V2.5 server-chain step",
       reason: error instanceof Error ? error.message : "Invalid V2.4 chain state",
-    }, { status: 400 })
+    }, { status: 400, headers: { "Cache-Control": "no-store" } })
   }
 }
