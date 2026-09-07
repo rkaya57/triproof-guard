@@ -129,8 +129,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      protocol: "TRIPROOF_LIVENESS_V2_5_ABUSE_DEFENSE",
-      chainProtocol: "TRIPROOF_LIVENESS_V2_4_SERVER_CHAIN",
+      protocol: "TRIPROOF_LIVENESS_V2_4_SERVER_CHAIN",
+      abuseDefenseVersion: "2.5",
       chainId,
       stateToken,
       pulse,
