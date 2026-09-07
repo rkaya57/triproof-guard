@@ -4,6 +4,7 @@ import { z } from "zod"
 import { getAdminUser } from "@/lib/auth/admin"
 import { db } from "@/lib/db/prisma"
 import { getHumanityNullifierSecret } from "@/lib/env/validation"
+import { enforceHumanityRateLimits, humanityRateLimitResponse } from "@/lib/humanity/v2/abuse-defense"
 import { normalizeWalletAddress } from "@/lib/humanity/v2/core"
 import {
   createTriProofLivenessChainId,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/humanity/v2/liveness-chain"
 import { triProofRgbFrameSchema } from "@/lib/humanity/v2/liveness-api-schemas"
 import { deriveTriProofLightChallenge } from "@/lib/humanity/v2/liveness-engine"
+import { expireHumanitySession } from "@/lib/humanity/v2/session-lifecycle"
 
 export const runtime = "nodejs"
 
@@ -38,13 +40,23 @@ export async function POST(request: Request) {
 
   const parsed = requestSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid V2.4 liveness-chain start request", issues: parsed.error.issues }, { status: 400 })
+    return NextResponse.json({ error: "Invalid V2.5 liveness-chain start request", issues: parsed.error.issues }, { status: 400 })
   }
 
   const { sessionId, walletChain, baseline } = parsed.data
   const walletAddress = normalizeWalletAddress(parsed.data.walletAddress, walletChain)
 
   try {
+    const secret = getHumanityNullifierSecret()
+    const limited = await enforceHumanityRateLimits({
+      request,
+      action: "CHAIN_START",
+      principal: admin.id,
+      secret,
+      sessionId,
+    })
+    if (limited) return humanityRateLimitResponse(limited)
+
     const session = await db.humanityChallengeSession.findUnique({
       where: { id: sessionId },
       include: { campaign: true },
@@ -52,7 +64,7 @@ export async function POST(request: Request) {
     if (!session) return NextResponse.json({ error: "Humanity session not found" }, { status: 404 })
     if (session.status !== "PENDING") return NextResponse.json({ error: "Humanity session is already closed" }, { status: 409 })
     if (session.expiresAt.getTime() < Date.now()) {
-      await db.humanityChallengeSession.update({ where: { id: session.id }, data: { status: "EXPIRED" } })
+      await expireHumanitySession(session.id)
       return NextResponse.json({ error: "Humanity session expired" }, { status: 410 })
     }
 
@@ -70,18 +82,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Wallet does not match Humanity session" }, { status: 403 })
     }
 
-    // A newly-created Humanity session has createdAt/updatedAt set together. V2.4 deliberately
-    // advances updatedAt when the chain starts and on every accepted state transition. Rejecting
-    // sessions whose timestamps have already diverged prevents sequential chain restarts from
-    // bypassing the campaign attempt counter without adding biometric or frame persistence.
     if (sessionHasAlreadyStartedChain(session)) {
       return NextResponse.json({
-        error: "Tri-Proof Liveness V2.4 server chain has already started for this session",
+        error: "Tri-Proof Liveness server chain has already started for this session",
         reasonCodes: ["SERVER_CHAIN_ALREADY_STARTED"],
       }, { status: 409 })
     }
 
-    const secret = getHumanityNullifierSecret()
     const challenge = deriveTriProofLightChallenge(session.nonce, secret)
     const chainId = createTriProofLivenessChainId()
     const serverIssuedAtMs = Date.now()
@@ -122,7 +129,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      protocol: "TRIPROOF_LIVENESS_V2_4_SERVER_CHAIN",
+      protocol: "TRIPROOF_LIVENESS_V2_5_ABUSE_DEFENSE",
+      chainProtocol: "TRIPROOF_LIVENESS_V2_4_SERVER_CHAIN",
       chainId,
       stateToken,
       pulse,
@@ -131,9 +139,9 @@ export async function POST(request: Request) {
       timingWindow: getTriProofServerPulseTimingWindow(pulse),
       rawFramesStored: false,
       captureMetadataStored: false,
-    }, { status: 201 })
+    }, { status: 201, headers: { "Cache-Control": "no-store" } })
   } catch (error) {
-    console.error("Tri-Proof Liveness V2.4 chain start failed", error)
-    return NextResponse.json({ error: "Could not start Tri-Proof Liveness V2.4 server chain" }, { status: 500 })
+    console.error("Tri-Proof Liveness V2.5 chain start failed", error)
+    return NextResponse.json({ error: "Could not start Tri-Proof Liveness V2.5 server chain" }, { status: 500 })
   }
 }
