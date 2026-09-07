@@ -67,12 +67,13 @@ function normalizeSubject(value: string) {
 }
 
 export function deriveHumanityNetworkSubject(request: Request, secret: string) {
-  const raw =
-    request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("cf-connecting-ip")?.trim() ||
-    request.headers.get("x-real-ip")?.trim() ||
-    "unknown"
+  // Humanity currently runs on Vercel. Only Vercel's platform-provided forwarding header is
+  // accepted as a network signal. Generic X-Forwarded-For/X-Real-IP values are deliberately
+  // ignored because they are spoofable when the application is not behind a trusted proxy.
+  // If the trusted header is absent, the network dimension is omitted and independent
+  // principal/wallet/session/verification limits remain active.
+  const raw = request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim()
+  if (!raw) return null
 
   return createHmac("sha256", secret)
     .update(`triproof-humanity-v2.5:network:${raw}`)
@@ -117,7 +118,7 @@ export function getHumanityRateLimitRules({
 }: {
   action: HumanityAbuseAction
   principal: string
-  network: string
+  network?: string | null
   wallet?: string | null
   sessionId?: string | null
   verificationId?: string | null
