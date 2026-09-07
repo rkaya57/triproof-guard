@@ -35,6 +35,10 @@ const requestSchema = z.object({
   captureIntegrity: triProofCaptureIntegritySchema.optional(),
 })
 
+function normalizedChain(value?: string | null) {
+  return (value ?? "").trim().toLowerCase()
+}
+
 export async function POST(request: Request) {
   const admin = await getAdminUser()
   if (!admin) return NextResponse.json({ error: "Admin access required" }, { status: 403 })
@@ -49,10 +53,7 @@ export async function POST(request: Request) {
   try {
     const secret = getHumanityNullifierSecret()
     const state = await verifyTriProofLivenessChainState({ token: parsed.data.stateToken, secret })
-    const session = await db.humanityChallengeSession.findUnique({
-      where: { id: state.sessionId },
-      include: { campaign: true },
-    })
+    const session = await db.humanityChallengeSession.findUnique({ where: { id: state.sessionId } })
     if (!session) return NextResponse.json({ error: "Humanity session not found" }, { status: 404 })
     if (session.status !== "PENDING") return NextResponse.json({ error: "Humanity session is already closed" }, { status: 409 })
     if (session.expiresAt.getTime() < receivedAtMs) {
@@ -60,8 +61,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Humanity session expired" }, { status: 410 })
     }
 
-    const effectiveChain = state.walletChain ?? session.walletChain
-    const walletAddress = normalizeWalletAddress(session.walletAddress, session.walletChain)
+    if (state.walletChain && session.walletChain && normalizedChain(state.walletChain) !== normalizedChain(session.walletChain)) {
+      return NextResponse.json({
+        error: "V2.4 chain wallet network does not match Humanity session",
+        reasonCodes: ["SERVER_CHAIN_WALLET_CHAIN_MISMATCH"],
+      }, { status: 403 })
+    }
+
+    const effectiveChain = session.walletChain ?? state.walletChain
+    const walletAddress = normalizeWalletAddress(session.walletAddress, effectiveChain)
     assertTriProofLivenessChainBinding(state, {
       sessionId: session.id,
       campaignId: session.campaignId,
