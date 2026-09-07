@@ -15,12 +15,18 @@ import { deriveTriProofLightChallenge } from "@/lib/humanity/v2/liveness-engine"
 
 export const runtime = "nodejs"
 
+const INITIAL_SESSION_TIMESTAMP_TOLERANCE_MS = 2_000
+
 const requestSchema = z.object({
   sessionId: z.string().trim().min(1).max(200),
   walletAddress: z.string().trim().min(10).max(200),
   walletChain: z.string().trim().min(1).max(32).optional(),
   baseline: triProofRgbFrameSchema,
 })
+
+function sessionHasAlreadyStartedChain(session: { createdAt: Date; updatedAt: Date }) {
+  return session.updatedAt.getTime() - session.createdAt.getTime() > INITIAL_SESSION_TIMESTAMP_TOLERANCE_MS
+}
 
 export async function POST(request: Request) {
   const admin = await getAdminUser()
@@ -49,6 +55,17 @@ export async function POST(request: Request) {
     const sessionWallet = normalizeWalletAddress(session.walletAddress, session.walletChain)
     if (sessionWallet !== walletAddress) return NextResponse.json({ error: "Wallet does not match Humanity session" }, { status: 403 })
 
+    // A newly-created Humanity session has createdAt/updatedAt set together. V2.4 deliberately
+    // advances updatedAt when the chain starts and on every accepted state transition. Rejecting
+    // sessions whose timestamps have already diverged prevents sequential chain restarts from
+    // bypassing the campaign attempt counter without adding biometric or frame persistence.
+    if (sessionHasAlreadyStartedChain(session)) {
+      return NextResponse.json({
+        error: "Tri-Proof Liveness V2.4 server chain has already started for this session",
+        reasonCodes: ["SERVER_CHAIN_ALREADY_STARTED"],
+      }, { status: 409 })
+    }
+
     const effectiveChain = walletChain ?? session.walletChain
     const secret = getHumanityNullifierSecret()
     const challenge = deriveTriProofLightChallenge(session.nonce, secret)
@@ -65,7 +82,10 @@ export async function POST(request: Request) {
       data: { updatedAt: stateVersion },
     })
     if (consumed.count !== 1) {
-      return NextResponse.json({ error: "Humanity liveness chain changed concurrently; restart the scan" }, { status: 409 })
+      return NextResponse.json({
+        error: "Humanity liveness chain changed concurrently; start a new Humanity session",
+        reasonCodes: ["SERVER_CHAIN_STATE_REPLAY_OR_FORK"],
+      }, { status: 409 })
     }
 
     const stateToken = await issueTriProofLivenessChainState({
