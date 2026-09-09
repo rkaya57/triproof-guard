@@ -19,6 +19,10 @@ export const requiredProductionSecretGroups: Record<string, SecretGroup> = {
     name: "HUMANITY_NULLIFIER_SECRET",
     purpose: "Humanity V2 campaign-scoped nullifier derivation",
   },
+  humanGuardProof: {
+    name: "HUMANGUARD_PROOF_SECRET",
+    purpose: "HumanGuard challenge rate limiting and one-time proof signing",
+  },
   worker: {
     name: "WORKER_SECRET",
     aliases: ["ANALYSIS_WORKER_SECRET", "CRON_SECRET"],
@@ -105,6 +109,12 @@ export function getAccessPassSigningSecret() {
 export function getHumanityNullifierSecret() {
   return requireSecret(requiredProductionSecretGroups.humanityNullifier, {
     devFallback: "development-humanity-v2-nullifier-secret-change-me",
+  })
+}
+
+export function getHumanGuardProofSecret() {
+  return requireSecret(requiredProductionSecretGroups.humanGuardProof, {
+    devFallback: "development-humanguard-proof-secret-change-me",
   })
 }
 
