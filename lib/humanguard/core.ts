@@ -39,6 +39,11 @@ function finite(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value)
 }
 
+function finiteArray(value: unknown, length: number): number[] | null {
+  if (!Array.isArray(value) || value.length !== length || !value.every(finite)) return null
+  return value as number[]
+}
+
 function circularError(a: number, b: number) {
   let diff = Math.abs(a - b) % (Math.PI * 2)
   if (diff > Math.PI) diff = Math.PI * 2 - diff
@@ -305,12 +310,12 @@ export function verifyHumanGuardSubmission(input: {
   let evidence: Record<string, unknown> = {}
 
   if (input.type === "QUANTUM_SEAL") {
-    const angles = Array.isArray(input.result.angles) ? input.result.angles : []
+    const angles = finiteArray(input.result.angles, 3)
     const targetAngle = input.expectedAnswer.targetAngle
     const tolerance = input.expectedAnswer.tolerance
     const minDurationMs = input.expectedAnswer.minDurationMs
     const minMoves = input.expectedAnswer.minMoves
-    if (!finite(targetAngle) || !finite(tolerance) || angles.length !== 3 || !angles.every(finite)) {
+    if (!finite(targetAngle) || !finite(tolerance) || !angles) {
       reasons.push("HUMANGUARD_QUANTUM_RESULT_INVALID")
     } else {
       const errors = angles.map((angle) => circularError(angle, targetAngle))
@@ -331,7 +336,10 @@ export function verifyHumanGuardSubmission(input: {
     const elapsedMs = input.result.elapsedMs
     const anomalyAtMs = input.expectedAnswer.anomalyAtMs
     const deadlineMs = input.expectedAnswer.deadlineMs
-    if (![expectedId, selectedId, elapsedMs, anomalyAtMs, deadlineMs].every(finite)) {
+    if (
+      !finite(expectedId) || !finite(selectedId) || !finite(elapsedMs) ||
+      !finite(anomalyAtMs) || !finite(deadlineMs)
+    ) {
       reasons.push("HUMANGUARD_PACKET_RESULT_INVALID")
     } else {
       if (selectedId !== expectedId) reasons.push("HUMANGUARD_PACKET_WRONG_TARGET")
@@ -347,7 +355,7 @@ export function verifyHumanGuardSubmission(input: {
     const position = input.result.timePosition
     const minDurationMs = input.expectedAnswer.minDurationMs
     const minScrubMoves = input.expectedAnswer.minScrubMoves
-    if (![targetT, tolerance, position].every(finite)) {
+    if (!finite(targetT) || !finite(tolerance) || !finite(position)) {
       reasons.push("HUMANGUARD_TIME_RESULT_INVALID")
     } else {
       const error = Math.abs(position - targetT)
@@ -363,14 +371,13 @@ export function verifyHumanGuardSubmission(input: {
     }
   } else {
     const elapsedMs = input.result.elapsedMs
-    const frequencies = Array.isArray(input.expectedAnswer.frequencies) ? input.expectedAnswer.frequencies : []
-    const phases = Array.isArray(input.expectedAnswer.phases) ? input.expectedAnswer.phases : []
+    const frequencies = finiteArray(input.expectedAnswer.frequencies, 3)
+    const phases = finiteArray(input.expectedAnswer.phases, 3)
     const minCoherence = input.expectedAnswer.minCoherence
     const minElapsedMs = input.expectedAnswer.minElapsedMs
     const maxElapsedMs = input.expectedAnswer.maxElapsedMs
     if (
-      !finite(elapsedMs) || frequencies.length !== 3 || phases.length !== 3 ||
-      !frequencies.every(finite) || !phases.every(finite) ||
+      !finite(elapsedMs) || !frequencies || !phases ||
       !finite(minCoherence) || !finite(minElapsedMs) || !finite(maxElapsedMs)
     ) {
       reasons.push("HUMANGUARD_RESONANCE_RESULT_INVALID")
