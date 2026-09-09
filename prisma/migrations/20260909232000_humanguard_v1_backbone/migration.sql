@@ -73,10 +73,6 @@ CREATE INDEX "HumanGuardProof_siteId_createdAt_idx" ON "HumanGuardProof"("siteId
 CREATE INDEX "HumanGuardProof_siteId_consumedAt_expiresAt_idx" ON "HumanGuardProof"("siteId", "consumedAt", "expiresAt");
 CREATE INDEX "HumanGuardProof_walletAddress_createdAt_idx" ON "HumanGuardProof"("walletAddress", "createdAt");
 
-ALTER TABLE "HumanGuardSite"
-ADD CONSTRAINT "HumanGuardSite_ownerUserId_fkey"
-FOREIGN KEY ("ownerUserId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
 ALTER TABLE "HumanGuardChallengeSession"
 ADD CONSTRAINT "HumanGuardChallengeSession_siteId_fkey"
 FOREIGN KEY ("siteId") REFERENCES "HumanGuardSite"("id") ON DELETE CASCADE ON UPDATE CASCADE;
