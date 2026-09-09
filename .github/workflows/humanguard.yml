@@ -1,0 +1,35 @@
+name: HumanGuard V1
+
+on:
+  pull_request:
+    paths:
+      - "app/api/v2/humanguard/**"
+      - "lib/humanguard/**"
+      - "public/humanguard/**"
+      - "prisma/models/humanguard.prisma"
+      - "prisma/migrations/*humanguard*/**"
+      - "lib/env/validation.ts"
+      - ".env.example"
+      - ".github/workflows/humanguard.yml"
+  push:
+    branches: [main]
+    paths:
+      - "app/api/v2/humanguard/**"
+      - "lib/humanguard/**"
+      - "public/humanguard/**"
+      - "prisma/models/humanguard.prisma"
+      - "prisma/migrations/*humanguard*/**"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: node --import tsx --test lib/humanguard/core.test.ts lib/humanguard/proof.test.ts
