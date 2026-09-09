@@ -1,0 +1,68 @@
+model HumanGuardSite {
+  id             String                        @id @default(cuid())
+  ownerUserId    String
+  name           String
+  siteKey        String                        @unique
+  allowedOrigins Json
+  mode           String                        @default("ADAPTIVE")
+  walletRequired Boolean                       @default(false)
+  enabled        Boolean                       @default(true)
+  sessions       HumanGuardChallengeSession[]
+  proofs         HumanGuardProof[]
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+
+  @@index([ownerUserId, enabled])
+  @@index([createdAt])
+}
+
+model HumanGuardChallengeSession {
+  id             String           @id @default(cuid())
+  siteId         String
+  site           HumanGuardSite   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  nonce          String           @unique
+  origin         String
+  action         String
+  walletAddress  String?
+  walletChain    String?
+  challengeType  String
+  challengeSeed  String
+  publicConfig   Json
+  expectedAnswer Json
+  telemetry      Json?
+  resultEvidence Json?
+  riskScore      Float            @default(50)
+  humanScore     Float?
+  status         String           @default("PENDING")
+  expiresAt      DateTime
+  completedAt    DateTime?
+  proof          HumanGuardProof?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([siteId, status, expiresAt])
+  @@index([siteId, walletAddress, createdAt])
+  @@index([createdAt])
+}
+
+model HumanGuardProof {
+  id            String                     @id @default(cuid())
+  siteId        String
+  site          HumanGuardSite             @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  sessionId     String                     @unique
+  session       HumanGuardChallengeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  tokenId       String                     @unique
+  action        String
+  origin        String
+  walletAddress String?
+  walletChain   String?
+  challengeType String
+  humanScore    Float
+  expiresAt     DateTime
+  consumedAt    DateTime?
+  createdAt     DateTime                   @default(now())
+
+  @@index([siteId, createdAt])
+  @@index([siteId, consumedAt, expiresAt])
+  @@index([walletAddress, createdAt])
+}
