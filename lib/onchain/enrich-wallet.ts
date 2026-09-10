@@ -150,6 +150,17 @@ export async function enrichWallets(
   input: EnrichWalletsInput
 ): Promise<EnrichWalletsOutput> {
   const { addresses, chain, mode, options, onProgress } = input
+  // Recovered batches can already contain every successful checkpoint.
+  // No provider configuration or network access is needed for an empty request.
+  if (!addresses.some((address) => address.trim())) {
+    return {
+      results: new Map(),
+      summary: {
+        mode, provider: "none", enrichedCount: 0, failedCount: 0,
+        skippedCount: 0, cacheHits: 0, warnings: [], usedMockFallback: false,
+      },
+    }
+  }
   const config = getOnChainConfig()
   const providers = getOnChainProviders(chain)
     .filter(
